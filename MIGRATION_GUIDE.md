@@ -21,170 +21,762 @@ Owner
 | **Frontend** | Inertia.js 2 + Vue 3 | Vue 3 SPA (Vue Router), tanpa Inertia |
 | **Backend** | Blade + Inertia hybrid | Pure REST API + Web catch-all SPA |
 | **Backend Structure** | `app/Modules/*/` | `app/Modules/*/` (dipertahankan) |
-| **Roles** | super_admin, hr_area, hr_branch, staff | superadmin, hrmanager, adm_manager, hr_ast, hrbranch, admin |
+| **Roles** | super_admin, hr_area, hr_branch, staff | superadmin, hrmanager, adm_manager, hr_ast, hrbranch |
 | **Dashboard** | 1 dashboard (role-based views) | 2 dashboard: Admin + Supervisor |
 | **Company/Branch** | `company_id` + `branch_id` di semua tabel | **Dihapus total.** Tabel companies & branches tetap ada sebagai data master, tanpa relasi ke tabel lain |
 | **Instance** | Tidak ada | Tabel baru: `instances` |
 | **Bahasa** | Mixed ID/EN | Indonesia (technical terms tetap EN: "generate", "import", dll) |
+| **Arsitektur** | Web-only | Backend API + Desktop App (offline-first, sync) |
 
 ---
 
-## Fase 0: Struktur Modular Backend
+## Konsep Arsitektur
 
-### 0.1 Module Structure (Wajib)
+### Dua Mesin Aplikasi
 
-Struktur folder backend **wajib modular**, sama seperti `hris-system`:
+Aplikasi ini memiliki **dua mesin perhitungan** yang berjalan di satu codebase:
+
+| Mesin | Nama | Dashboard | Tujuan |
+|---|---|---|---|
+| **Mesin 1** | Aplikasi Utama | Admin Dashboard | Hitungan real — payroll, attendance, leave, dll |
+| **Mesin 2** | Aplikasi Bayangan | Supervisor Dashboard | Hitungan khusus untuk external auditor/inspector |
+
+- **Aplikasi Utama** menggunakan tabel-tabel utama (`pay_records`, `att_prepares`, dll)
+- **Aplikasi Bayangan** menggunakan tabel-tabel khusus (`pay_audits`, `att_snapshots`, `emp_salary_breakdowns`, dll)
+- Masing-masing memiliki **proses perhitungan sendiri** yang independen
+- `audit_logs` mencatat perubahan di kedua konteks, difilter by `context` column
+
+### Desktop Sync Architecture
+
+Aplikasi ini berfungsi sebagai:
+1. **Backend API** — endpoint utama untuk desktop app dan web
+2. **Online Backup** — fallback jika desktop offline
+3. **Sync Server** — desktop app (offline-first) sync data ke server ini
+
+Untuk mendukung sync, semua tabel data utama memiliki:
+- `uuid` — unique identifier untuk sync antar device
+- `synced_at` — timestamp terakhir sync
+
+> **Catatan:** Detail implementasi sync (conflict resolution, delta sync, dll) akan direncanakan terpisah setelah backend core selesai.
+
+---
+
+## Konvensi Global
+
+### Naming Convention Tabel
+
+| Aspek | Konvensi |
+|---|---|
+| **Prefix tabel** | Per module: `{module}_` (ex: `att_`, `pay_`, `lve_`, `sch_`, `emp_`, `org_`, `set_`) |
+| **Singular/Plural** | **Plural** untuk tabel data, **singular** untuk config |
+| **Soft delete** | `deleted_at` (semua tabel data) |
+| **Timestamps** | `created_at`, `updated_at` (semua tabel) |
+| **Foreign key** | `{name}_id` |
+| **Pivot table** | `{a}_{b}` (singular) |
+| **Sync fields** | `uuid` (char 36) + `synced_at` (nullable timestamp) pada tabel data utama |
+
+### Naming Convention Permission
+
+Format: `{verb} {resource}` — semua lowercase, pakai spasi.
+
+```
+✅ view companies
+✅ create departments
+✅ manage leave types
+❌ manage_leave_types  (jangan pakai underscore)
+❌ view salary_grades   (jangan pakai underscore di resource)
+```
+
+### Konvensi Bahasa
+
+- **Menu & label**: Bahasa Indonesia
+- **Technical terms**: Tetap EN jika terjemahan Indonesia ambigu
+  - `generate` (bukan "generasi"), `import` (bukan "impor"), `export` (bukan "ekspor")
+  - `attendance` → "Kehadiran"
+  - `payroll` → "Generate Gaji" (label menu)
+  - `leave` → "Cuti"
+  - `approval` → "Approval"
+
+### Effective Date Pattern
+
+Data yang berubah seiring waktu disimpan dengan `effective_date`. Untuk mendapatkan data di bulan tertentu, ambil record terbaru sebelum tanggal tersebut.
+
+```php
+class Employee extends Model
+{
+    // $employee->activeContract()
+    public function activeContract()
+    {
+        return $this->contracts()
+            ->where('start_date', '<=', now())
+            ->where(fn($q) => $q->whereNull('end_date')
+                                ->orWhere('end_date', '>=', now()))
+            ->latest('start_date')
+            ->first();
+    }
+
+    // $employee->baseSalary()          → gaji bulan ini
+    // $employee->baseSalary('2026-03') → gaji bulan Maret 2026
+    public function baseSalary(?string $period = null): float
+    {
+        $date = $period
+            ? Carbon::parse($period . '-01')->endOfMonth()
+            : now();
+
+        return $this->salaries()
+            ->where('effective_date', '<=', $date)
+            ->latest('effective_date')
+            ->value('base_salary') ?? 0;
+    }
+
+    // $employee->currentPosition()
+    public function currentPosition()
+    {
+        return $this->positionHistories()
+            ->where('effective_date', '<=', now())
+            ->latest('effective_date')
+            ->first();
+    }
+}
+```
+
+Dengan pattern ini, **tabel `employee_periodes` dihapus** — data bisa dihitung dari `emp_salaries`, `emp_contracts`, dan `emp_position_histories` menggunakan effective date.
+
+---
+
+## Fase Eksekusi
+
+> **Catatan:** Setiap fase mencakup **backend + frontend** secara bersamaan.
+> **Prioritas:** Admin Dashboard dikerjakan terlebih dahulu. Supervisor Dashboard menyusul setelah fase 9.
+
+---
+
+### Fase 0: Pondasi
+
+**Tujuan:** Setup project, struktur modular, infrastruktur dasar frontend, shared traits, audit log.
+
+#### 0.1 Module Structure
+
+Struktur folder backend **wajib modular**:
 
 ```
 app/Modules/{Module}/
 ├── Controllers/
-│   ├── Api/                     ← KHUSUS UNTUK API
+│   ├── Api/
 │   │   └── V1/
 │   │       ├── {Module}ApiController.php
 │   │       └── SubModule/
 │   │           └── {SubModule}ApiController.php
-│   └── Web/                     ← Khusus untuk Controller Web/UI (catch-all SPA)
+│   └── Web/
 │       └── {Module}WebController.php
 ├── Models/
 │   └── {Model}.php
-├── Resources/                   ← Laravel API Resources (JsonResource)
+├── Resources/
 │   └── {Module}Resource.php
-├── Routes/                      ← File route dipindah ke dalam modul
-│   ├── web.php                  ← Route-route Web/UI
-│   └── api.php                  ← Route-route API
+├── Routes/
+│   ├── web.php
+│   └── api.php
 ├── Services/
 │   └── {Module}Service.php
 └── Providers/
     └── {Module}ServiceProvider.php
 ```
 
-### 0.2 Daftar Module
-
-| Module | Path | Deskripsi |
-|---|---|---|
-| **Instance** | `app/Modules/Instance/` | Kelola instance (BARU) |
-| **Auth** | `app/Modules/Auth/` | Autentikasi, login, user management |
-| **Organization** | `app/Modules/Organization/` | Company, Branch, Department, Position, SalaryGrade |
-| **Employee** | `app/Modules/Employee/` | Karyawan, kontrak, keluarga, dokumen, terminasi |
-| **Schedule** | `app/Modules/Schedule/` | WorkPattern, Shift, Roster, Calendar, Holiday |
-| **Attendance** | `app/Modules/Attendance/` | Absensi, log import, lembur |
-| **Leave** | `app/Modules/Leave/` | Cuti, tipe cuti, kebijakan, approval |
-| **Payroll** | `app/Modules/Payroll/` | Penggajian, BPJS, PPH, THR |
-| **AuditSection** | `app/Modules/AuditSection/` | Dashboard Supervisor, audit payroll |
-| **Reports** | `app/Modules/Reports/` | Laporan-laporan |
-| **Settings** | `app/Modules/Settings/` | Pengaturan sistem |
-| **Notification** | `app/Modules/Notification/` | Notifikasi |
-| **Shared** | `app/Modules/Shared/` | Traits, helpers, base classes |
-
-### 0.3 Auto-Load Module Routes
-
-Di `bootstrap/app.php`, tambahkan auto-loader untuk route dari setiap module:
+#### 0.2 Auto-Load Module Routes
 
 ```php
 // bootstrap/app.php
-return Application::configure(basePath: dirname(__DIR__))
-    ->withRouting(
-        web: __DIR__.'/../routes/web.php',
-        api: __DIR__.'/../routes/api.php',
-        commands: __DIR__.'/../routes/console.php',
-        health: '/up',
-        then: function () {
-            // Auto-load module routes
-            $modules = glob(app_path('Modules/*/Routes/api.php'));
-            foreach ($modules as $routeFile) {
-                Route::prefix('api')
-                    ->middleware('api')
-                    ->group($routeFile);
-            }
-        },
-    )
+->withRouting(
+    ...
+    then: function () {
+        Route::prefix('api')
+            ->middleware('api')
+            ->group(function () {
+                $modules = glob(app_path('Modules/*/Routes/api.php'));
+                foreach ($modules as $routeFile) {
+                    require $routeFile;
+                }
+            });
+    },
+)
 ```
 
-> **Catatan:** Di Laravel 13, `then` callback tersedia di `->withRouting()` untuk mendaftarkan route tambahan.
+#### 0.3 Shared Traits (Port dari hris-system)
 
-### 0.4 Konvensi Route Module
+Traits yang akan di-port dari `app/Modules/Shared/Traits/`:
 
-Setiap module mendaftarkan route dengan prefix sesuai nama module (lowercase, kebab-case):
+| Trait | Fungsi | Status |
+|---|---|---|
+| `HasAuditLog` | Auto audit trail logging | `not started` |
+| `HasCache` | Caching helper | `not started` |
+| `HasEffectiveDate` | Effective date scopes & accessors | `not started` |
+| `HasExport` | Export helper (Excel/PDF) | `not started` |
+| `HasHierarchy` | Parent-child tree (departments, dll) | `not started` |
+| `HasSearch` | Search scope | `not started` |
+| `HasStatus` | Status scope/methods | `not started` |
+| `HasUserContext` | Auto-fill created_by/updated_by | `not started` |
 
-```php
-// app/Modules/Employee/Routes/api.php
-use Illuminate\Support\Facades\Route;
-use App\Modules\Employee\Controllers\Api\V1\EmployeeApiController;
+Traits yang **DIHAPUS** (tidak perlu di multi-instance):
+- ~~`HasCompanyScope`~~ — tidak perlu, 1 instance = 1 DB
+- ~~`HasBranchScope`~~ — tidak perlu, 1 instance = 1 branch
 
-Route::prefix('employees')->group(function () {
-    Route::get('/', [EmployeeApiController::class, 'index']);
-    Route::post('/', [EmployeeApiController::class, 'store']);
-    Route::get('/{id}', [EmployeeApiController::class, 'show']);
-    Route::put('/{id}', [EmployeeApiController::class, 'update']);
-    Route::delete('/{id}', [EmployeeApiController::class, 'destroy']);
-});
+#### 0.4 Module AuditLog
+
+Tabel `audit_logs` untuk mencatat perubahan data di kedua konteks (aplikasi utama & bayangan).
+
+| Item | Status |
+|---|---|
+| Migration `audit_logs` | `not started` |
+| Model AuditLog | `not started` |
+
+Struktur tabel:
 ```
+audit_logs
+├── id
+├── context: enum('main', 'shadow')   ← pembeda aplikasi utama vs bayangan
+├── user_id (FK → users)
+├── action: string (create, update, delete)
+├── auditable_type: string (model class)
+├── auditable_id: unsignedBigInteger
+├── old_values: json (nullable)
+├── new_values: json (nullable)
+├── ip_address: string(45)
+├── user_agent: text
+├── timestamps
+```
+
+- Di **Admin Dashboard**: tampil audit_log semua context
+- Di **Supervisor Dashboard**: tampil audit_log hanya `context = 'shadow'`
+
+#### 0.5 Checklist Fase 0
+
+- [x] Laravel 13 project `instance1.uranop.com` terinisialisasi
+- [x] Vue 3 SPA terinstall (Vue Router + Tailwind 4 + theme + dark mode)
+- [x] API routes dasar + Sanctum terinstall
+- [x] `.env` local & production terkonfigurasi
+- [x] Auto-load module routes di `bootstrap/app.php`
+- [x] Global Components: BaseButton, BaseModal, BaseCard, TextInput, SelectInput, Badge, ConfirmDialog, DataTable, Pagination, Dropdown, Icons (27 SVG), NotificationToast
+- [x] Composables: useApi, useAuth, useTheme, useDate, useCurrency, usePagination, useNotification, usePermission
+- [x] Pinia Stores: auth, permission, notification
+- [x] Vue Router (index.js) dengan semua route definitions
+- [x] Spatie Permission middleware aliases (`role`, `permission`, `role_or_permission`)
+- [x] SPA catch-all route (`/{any}` → `welcome.blade.php`)
+- [ ] `config/instance.php` — konfigurasi instance ID, name, slug
+- [ ] Module Instance — migration `instances` + model + seeder (untuk management console multi-instance ke depan)
+- [ ] Setup folder structure untuk semua module (template kosong)
+- [ ] Shared Traits: port 8 traits dari hris-system
+- [ ] Module AuditLog: migration `audit_logs` + model + trait `HasAuditLog`
 
 ---
 
-## Fase 1: Struktur Database Baru
+### Fase 1: Auth, Layout, Dashboard
 
-### 1.1 Tabel Instance (baru)
+**Tujuan:** Autentikasi, layout dasar aplikasi, halaman login, dashboard admin, notifications.
+**Dependencies:** Fase 0
 
-```sql
-instances
-  id                BIGINT PRIMARY KEY
-  company_id        BIGINT FK → companies.id   (hanya di tabel instances)
-  branch_id         BIGINT FK → branches.id    (hanya di tabel instances)
-  name              VARCHAR(255)   — 'Uranop Instance 1'
-  slug              VARCHAR(255)   — 'instance1'
-  domain            VARCHAR(255)   — 'instance1.uranop.com'
-  database_name     VARCHAR(255)   — 'instance1_uranop'
-  db_connection     VARCHAR(100)   — 'sqlite' | 'mysql'
-  is_active         BOOLEAN DEFAULT 1
-  settings          JSON
-  metadata          JSON
-  created_at, updated_at, softDeletes
-```
+#### 1.1 Backend
 
-- Satu instance = satu branch = satu database = satu deploy Laravel.
-- Untuk project ini (`instance1`), data instance di-seed melalui `InstanceSeeder`.
-- Tabel ini akan dipakai kelak saat membuat management console multi-instance.
+| Item | Status | Keterangan |
+|---|---|---|
+| Migration users, password_reset_tokens, sessions | `done` | Custom fields: employee_number, phone, is_active, user_type (enum), softDeletes |
+| Model User (HasApiTokens, HasRoles) | `done` | `app/Modules/Auth/Models/User.php` |
+| Model UserPreference | `done` | `app/Modules/Auth/Models/UserPreference.php` |
+| Controller AuthApiController (login, logout, user) | `done` | `app/Modules/Auth/Controllers/Api/V1/AuthApiController.php` |
+| Routes Auth/Routes/api.php | `done` | POST /login, POST /logout, GET /user |
+| AuthResource | `done` | `app/Modules/Auth/Resources/AuthResource.php` |
+| AuthServiceProvider | `stub` | `app/Modules/Auth/Providers/AuthServiceProvider.php` — masih kosong |
+| Migration `notifications` (Laravel standard) | `not started` | UUID primary key, morphs notifiable, data text, read_at |
+| Model Notification | `not started` | |
+| Controller NotificationApiController | `not started` | |
 
-### 1.2 Hapus Global Scope & Kolom company_id / branch_id
+#### 1.2 Frontend
 
-Karena 1 instance = 1 DB (isolasi penuh), **kolom `company_id` dan `branch_id` dihapus total dari semua tabel**.  
-Tidak ada lagi filter, tidak ada lagi auto-set, tidak ada lagi session.
+| Item | Status | Keterangan |
+|---|---|---|
+| App.vue + app.js (Vue bootstrapper) | `done` | |
+| GuestLayout.vue | `done` | |
+| RootLayout.vue | `done` | Auth fetch on mount, landing page redirect |
+| AuthenticatedLayout (AdminLayout) | `done` | `resources/js/Layouts/Admin/` — Sidebar, Topbar, Footer |
+| Login.vue | `done` | Form login dengan validasi, error handling |
+| Admin/Dashboard.vue | `done` | Stat cards, recent leave, contracts (mock data) |
+| useAuth.js + auth store | `done` | Login/logout/user state + computed role checks |
+| Router auth guard | `done` | `router.beforeEach` — redirect ke /login, role-based redirect |
 
-**Langkah:**
+#### 1.3 Checklist Fase 1
 
-1. Hapus trait `HasCompanyScope` — tidak dipakai lagi
-2. Hapus trait `HasBranchScope` — tidak dipakai lagi
-3. Hapus middleware `BranchContext`
-4. Hapus session `company_id` dan `branch_id` saat login
-5. **Hapus kolom `company_id` dan `branch_id` dari semua migration** (buat migration baru untuk drop column)
-6. Hapus semua `$table->foreignId('company_id')` dan `$table->foreignId('branch_id')` dari migration
-
-### 1.3 Config Instance
-
-```php
-// config/instance.php
-return [
-    'id' => env('INSTANCE_ID', 1),
-    'name' => env('INSTANCE_NAME', 'Instance 1'),
-    'slug' => env('INSTANCE_SLUG', 'instance1'),
-];
-```
-
-```env
-# .env
-INSTANCE_ID=1
-INSTANCE_NAME="Uranop Instance 1"
-INSTANCE_SLUG=instance1
-```
-
-Karena `company_id` dan `branch_id` sudah dihapus dari semua tabel, config instance tidak perlu menyimpan referensi ke company/branch.
+- [x] Auth backend (User, login, logout, user endpoint)
+- [x] Auth frontend (Login page, useAuth, route guard)
+- [x] Layout Admin (Sidebar, Topbar, Footer)
+- [x] Admin Dashboard page (mock data)
+- [ ] AuthServiceProvider — isi dengan logic jika diperlukan
+- [ ] Migration + Model + Controller: Notifications
+- [ ] Frontend: Notification center page
 
 ---
 
-## Fase 2: Roles & Permissions
+### Fase 2: Organization, User Role & Permission
 
-### 2.1 Mapping Roles Lama → Baru
+**Tujuan:** Manajemen organisasi (departemen, jabatan), serta sistem role & permission.
+**Dependencies:** Fase 0, Fase 1
+
+> **Catatan:** Salary Grades dipindahkan ke Fase 3 (Settings) karena bersifat opsional — tidak semua perusahaan menggunakan salary grade.
+
+#### 2.1 Backend
+
+| Item | Status | Keterangan |
+|---|---|---|
+| Migration permission_tables (Spatie) | `done` | roles, permissions, model_has_roles, dll |
+| Seeder RolePermissionSeeder | `done` | 5 roles + permissions (lihat section Roles & Permissions) |
+| Seeder UserSeeder | `done` | 3 default users (superadmin, hr, adm_manager) |
+| Migration Organization (departments, positions) | `not started` | Tanpa company_id/branch_id |
+| Model Department, Position | `not started` | |
+| Controller OrganizationApiController (CRUD) | `not started` | |
+| Routes Organization/Routes/api.php | `not started` | |
+| Resources: DepartmentResource, PositionResource | `not started` | |
+| Seeder Organization (data default) | `not started` | |
+
+#### 2.2 Frontend
+
+| Item | Status | Keterangan |
+|---|---|---|
+| Departments/Index.vue + Form | `done` | CRUD dengan mock data |
+| Positions/Index.vue + Form | `done` | CRUD dengan mock data |
+| SalaryGrades/Index.vue + Form | `done` | CRUD dengan mock data (pindah ke Settings UI) |
+
+#### 2.3 Checklist Fase 2
+
+- [x] Spatie permission tables migration
+- [x] RolePermissionSeeder (5 roles + permissions)
+- [x] UserSeeder (3 default users)
+- [x] Frontend: Departments CRUD (mock data)
+- [x] Frontend: Positions CRUD (mock data)
+- [x] Frontend: SalaryGrades CRUD (mock data — akan masuk Settings)
+- [ ] Organization migration: departments, positions (tanpa company_id/branch_id)
+- [ ] Model: Department, Position
+- [ ] Controller: OrganizationApiController
+- [ ] Routes: Organization/Routes/api.php
+- [ ] Resources: DepartmentResource, PositionResource
+- [ ] Seeder: Organization default data
+- [ ] Frontend: Integrasi Department CRUD dengan API nyata
+- [ ] Frontend: Integrasi Position CRUD dengan API nyata
+
+---
+
+### Fase 3: Data Master, Config, Setting, Konstanta
+
+**Tujuan:** Semua tabel config, setting, konstanta, salary grades (opsional), dan data master.
+**Dependencies:** Fase 0, Fase 1, Fase 2
+
+#### 3.1 Cakupan
+
+Module **Settings** dan semua data master/config:
+
+- System settings
+- Salary grades + salary grade histories (opsional, dikonfigurasi via settings)
+- Employee groups, employee titles
+- Salary components
+- BPJS configs, PPH configs, PTKP rates, TER rates, progressive rates
+- Overtime rules (shared — dipakai attendance & payroll)
+- Service year allowances
+
+#### 3.2 Backend
+
+| Item | Status |
+|---|---|
+| Migration system_settings | `not started` |
+| Migration salary_grades, salary_grade_histories | `not started` |
+| Migration employee_groups, employee_titles | `not started` |
+| Migration salary_components | `not started` |
+| Migration bpjs_configs, pph_configs, ptkp_rates, ter_rates, progressive_rates | `not started` |
+| Migration overtime_rules (shared, satu tabel) | `not started` |
+| Migration service_year_allowances | `not started` |
+| Model: SystemSetting, SalaryGrade, SalaryGradeHistory, EmployeeGroup, EmployeeTitle | `not started` |
+| Controller SettingsApiController | `not started` |
+| Routes Settings/Routes/api.php | `not started` |
+
+#### 3.3 Frontend
+
+| Item | Status |
+|---|---|
+| Settings/Index.vue | `done` (mock data) |
+| Payroll/Configs/Index.vue | `done` (mock data) |
+| SalaryGrades/Index.vue + Form | `done` (mock data, dipindah dari Organization) |
+
+#### 3.4 Checklist Fase 3
+
+- [x] Frontend: Settings page (mock)
+- [x] Frontend: Payroll Configs page (mock)
+- [x] Frontend: SalaryGrades page (mock)
+- [ ] Migration + Model: system_settings
+- [ ] Migration + Model: salary_grades, salary_grade_histories
+- [ ] Migration + Model: employee_groups, employee_titles
+- [ ] Migration + Model: salary_components
+- [ ] Migration + Model: bpjs_configs, pph_configs, ptkp_rates, ter_rates, progressive_rates
+- [ ] Migration + Model: overtime_rules (shared)
+- [ ] Migration + Model: service_year_allowances
+- [ ] Controller: SettingsApiController
+- [ ] Routes: Settings/Routes/api.php
+- [ ] Frontend: Integrasi Settings dengan API nyata
+- [ ] Frontend: Integrasi Configs dengan API nyata
+- [ ] Frontend: Integrasi SalaryGrades dengan API nyata
+
+---
+
+### Fase 4: Employee / Karyawan
+
+**Tujuan:** CRUD karyawan, kontrak, keluarga, dokumen, gaji (effective date pattern), terminasi, riwayat jabatan.
+**Dependencies:** Fase 2 (Organization), Fase 3 (Data Master)
+
+> **Catatan:** Tabel `employee_periodes` **dihapus**. Data per bulan dihitung menggunakan **Effective Date Pattern** dari `emp_salaries`, `emp_contracts`, dan `emp_position_histories`. Snapshot hanya dibuat saat generate payroll.
+
+#### 4.1 Backend
+
+| Item | Status |
+|---|---|
+| Migration employees (+ uuid, synced_at) | `not started` |
+| Migration employee_contracts | `not started` |
+| Migration employee_families | `not started` |
+| Migration employee_documents | `not started` |
+| Migration employee_salaries (+ effective_date) | `not started` |
+| Migration employee_salary_components | `not started` |
+| Migration employee_salary_breakdowns | `not started` |
+| Migration employee_position_histories | `not started` |
+| Migration employee_terminations | `not started` |
+| Migration employee_bpjs | `not started` |
+| Migration employee_thr | `not started` |
+| Model: Employee (+ effective date accessors) | `not started` |
+| Model: Contract, Family, Document, Salary, Termination, dll | `not started` |
+| Controller EmployeeApiController (CRUD + import + export) | `not started` |
+| Routes Employee/Routes/api.php | `not started` |
+| Resources: EmployeeResource | `not started` |
+
+#### 4.2 Frontend
+
+| Item | Status |
+|---|---|
+| Employees/Index.vue | `done` (mock data) |
+| Employees/Create.vue | `done` (mock data) |
+| Employees/Show.vue | `done` (mock data) |
+| Employees/Edit.vue | `done` (mock data) |
+
+#### 4.3 Checklist Fase 4
+
+- [x] Frontend: Employee Index (mock)
+- [x] Frontend: Employee Show (mock)
+- [x] Frontend: Employee Create (mock)
+- [x] Frontend: Employee Edit (mock)
+- [ ] Migration: semua tabel employee (tanpa employee_periodes)
+- [ ] Model Employee: effective date accessors (baseSalary, activeContract, currentPosition)
+- [ ] Model: semua model employee
+- [ ] Controller: EmployeeApiController
+- [ ] Routes: Employee/Routes/api.php
+- [ ] Resources: EmployeeResource
+- [ ] Service: EmployeeService
+- [ ] Frontend: Integrasi Employee Index dengan API
+- [ ] Frontend: Integrasi Employee Create/Edit/Show dengan API
+- [ ] Frontend: Import Excel page terintegrasi
+- [ ] Frontend: Contract, Family, Document sub-pages terintegrasi
+- [ ] Test: import Excel karyawan
+
+---
+
+### Fase 5: Schedule / Jadwal Kerja
+
+**Tujuan:** Work patterns, shift, roster, kalender kerja, hari libur.
+**Dependencies:** Fase 2 (Organization), Fase 4 (Employee)
+
+#### 5.1 Backend
+
+| Item | Status |
+|---|---|
+| Migration work_pattern_types, work_patterns, work_pattern_details | `not started` |
+| Migration shifts | `not started` |
+| Migration employee_shift_rosters | `not started` |
+| Migration working_calendars, holidays | `not started` |
+| Model: WorkPattern, Shift, Roster, Calendar, Holiday | `not started` |
+| Controller ScheduleApiController | `not started` |
+| Routes Schedule/Routes/api.php | `not started` |
+
+#### 5.2 Frontend
+
+| Item | Status |
+|---|---|
+| Schedule/WorkPatterns/Index.vue | `done` (mock data) |
+| Schedule/Shifts/Index.vue | `done` (mock data) |
+| Schedule/Calendars/Index.vue | `done` (mock data) |
+| Schedule/Roster/Index.vue | `done` (mock data) |
+
+#### 5.3 Checklist Fase 5
+
+- [x] Frontend: WorkPatterns page (mock)
+- [x] Frontend: Shifts page (mock)
+- [x] Frontend: Calendars page (mock)
+- [x] Frontend: Roster page (mock)
+- [ ] Migration: semua tabel schedule
+- [ ] Model: semua model schedule
+- [ ] Controller: ScheduleApiController
+- [ ] Routes: Schedule/Routes/api.php
+- [ ] Resources: Schedule resources
+- [ ] Frontend: Integrasi semua halaman schedule dengan API
+
+---
+
+### Fase 6: Leave / Cuti dan Izin
+
+**Tujuan:** Pengajuan cuti & izin, approval, tipe cuti, kebijakan, entitlement, saldo cuti.
+**Dependencies:** Fase 4 (Employee)
+
+> **Catatan:** Izin (permit) ditangani melalui tabel `leave_types` dengan kolom `category`. Tidak ada tabel `permit_requests` terpisah.
+
+#### 6.1 Penanganan Izin via Leave System
+
+Di tabel `lve_types`, kolom `category` membedakan jenis:
+
+| Category | Contoh |
+|---|---|
+| `leave` | Cuti tahunan, cuti bersama |
+| `permit` | Izin pulang awal, izin terlambat, izin tidak masuk |
+| `sick` | Sakit, sakit berkepanjangan |
+| `special` | Cuti menikah, melahirkan, kematian keluarga |
+
+#### 6.2 Backend
+
+| Item | Status |
+|---|---|
+| Migration leave_types (+ category enum) | `not started` |
+| Migration leave_policies | `not started` |
+| Migration leave_period_configs | `not started` |
+| Migration leave_periods | `not started` |
+| Migration leave_requests, leave_documents | `not started` |
+| Migration leave_entitlements (+ leave_period_id FK), leave_balances | `not started` |
+| Model: semua model leave | `not started` |
+| Controller LeaveApiController | `not started` |
+| Routes Leave/Routes/api.php | `not started` |
+
+#### 6.3 Frontend
+
+| Item | Status |
+|---|---|
+| Leave/Index.vue | `done` (mock data) |
+| Leave/Approvals.vue | `done` (mock data) |
+| Leave/Settings.vue | `done` (mock data) |
+
+#### 6.4 Checklist Fase 6
+
+- [x] Frontend: Leave Index (mock)
+- [x] Frontend: Leave Approvals (mock)
+- [x] Frontend: Leave Settings (mock)
+- [ ] Migration: semua tabel leave (termasuk category di leave_types)
+- [ ] Model: semua model leave
+- [ ] Controller: LeaveApiController
+- [ ] Routes: Leave/Routes/api.php
+- [ ] Resources: Leave resources
+- [ ] Service: LeaveService (approval logic, balance calc)
+- [ ] Frontend: Integrasi semua halaman leave dengan API
+
+---
+
+### Fase 7: Attendance / Kehadiran
+
+**Tujuan:** Absensi, log import fingerprint, roster, lembur, snapshot, rekap.
+**Dependencies:** Fase 4 (Employee), Fase 5 (Schedule)
+
+> **Catatan:** `overtime_rules` sudah dibuat di Fase 3 (shared). `permit_requests` dihapus — izin ditangani lewat Leave module.
+
+#### 7.1 Backend
+
+| Item | Status |
+|---|---|
+| Migration raw_logs (data fingerprint mentah) | `not started` |
+| Migration attendance_logs, attendance_autologs | `not started` |
+| Migration attendance_prepares, attendance_records | `not started` |
+| Migration attendance_snapshots, attendance_summaries | `not started` |
+| Migration attendance_consecutive_days, attendance_configs | `not started` |
+| Migration scan_detection_configs | `not started` |
+| Migration overtimes | `not started` |
+| Model: semua model attendance | `not started` |
+| Controller AttendanceApiController | `not started` |
+| Routes Attendance/Routes/api.php | `not started` |
+| Service: FingerprintBinParser (port dari hris-system) | `not started` |
+
+#### 7.2 Frontend
+
+| Item | Status |
+|---|---|
+| Attendance/Index.vue | `done` (mock data) |
+| Attendance/LogImport.vue | `done` (mock data) |
+| Attendance/Roster.vue | `done` (mock data) |
+| Attendance/Overtime/Index.vue | `done` (mock data) |
+
+#### 7.3 Checklist Fase 7
+
+- [x] Frontend: Attendance Index (mock)
+- [x] Frontend: Log Import (mock)
+- [x] Frontend: Roster (mock)
+- [x] Frontend: Overtime (mock)
+- [ ] Migration: semua tabel attendance (tanpa overtime_rules, tanpa permit_requests)
+- [ ] Model: semua model attendance
+- [ ] Controller: AttendanceApiController
+- [ ] Routes: Attendance/Routes/api.php
+- [ ] Resources: Attendance resources
+- [ ] Service: AttendanceService (auto-proses, import logic)
+- [ ] Service: FingerprintBinParser (parsing file .bin mesin fingerprint)
+- [ ] Frontend: Integrasi semua halaman attendance dengan API
+- [ ] Test: import Excel/bin absensi
+
+---
+
+### Fase 8: Payroll
+
+**Tujuan:** Penggajian, periode, generate payroll, komponen gaji, BPJS, PPH, THR.
+**Dependencies:** Fase 4 (Employee), Fase 6 (Leave), Fase 7 (Attendance)
+
+> **Catatan:** Struktur payroll disederhanakan. Snapshot karyawan di-embed langsung ke `pay_records`. Tabel `payroll_results`, `payroll_breakdowns`, `payslips`, `payroll_component_snapshots`, `payroll_employee_snapshots` **dihapus**.
+
+#### 8.1 Struktur Tabel Payroll (Disederhanakan)
+
+| Tabel Baru | Fungsi |
+|---|---|
+| `pay_periods` | Periode payroll |
+| `pay_records` | Payroll utama per karyawan per periode (+ snapshot data karyawan embed) |
+| `pay_component_values` | Nilai komponen per payroll record |
+| `pay_configs` | Konfigurasi payroll |
+| `pay_settings` | Settings payroll |
+| `pay_audits` | Versi aplikasi bayangan (supervisor) — perhitungan terpisah |
+
+Tabel yang **dihapus/digabung**:
+- ~~`payroll_results`~~ → sudah ada di `pay_records`
+- ~~`payroll_breakdowns`~~ → JSON fields di `pay_records` (earnings_breakdown, attendance_breakdown)
+- ~~`payslips`~~ → di-generate/render dari `pay_records`, bukan tabel
+- ~~`payroll_component_snapshots`~~ → data komponen ada di `pay_component_values`
+- ~~`payroll_employee_snapshots`~~ → snapshot embed di kolom-kolom `pay_records`
+
+#### 8.2 Backend
+
+| Item | Status |
+|---|---|
+| Migration pay_settings, pay_configs | `not started` |
+| Migration pay_periods | `not started` |
+| Migration pay_records (+ snapshot embed) | `not started` |
+| Migration pay_component_values | `not started` |
+| Migration pay_audits | `not started` |
+| Model: semua model payroll | `not started` |
+| Controller PayrollApiController | `not started` |
+| Routes Payroll/Routes/api.php | `not started` |
+| Service: PayrollCalculator | `not started` |
+
+#### 8.3 Frontend
+
+| Item | Status |
+|---|---|
+| Payroll/Periods/Index.vue | `done` (mock data) |
+| Payroll/Periods/Detail.vue | `done` (mock data) |
+| Payroll/Configs/Index.vue | `done` (mock data) |
+| Payroll/Thr.vue | `done` (mock data) |
+
+#### 8.4 Checklist Fase 8
+
+- [x] Frontend: Payroll Periods Index (mock)
+- [x] Frontend: Payroll Period Detail (mock)
+- [x] Frontend: Payroll Configs (mock)
+- [x] Frontend: Payroll THR (mock)
+- [ ] Migration: semua tabel payroll (struktur disederhanakan)
+- [ ] Model: semua model payroll
+- [ ] Controller: PayrollApiController
+- [ ] Routes: Payroll/Routes/api.php
+- [ ] Resources: Payroll resources
+- [ ] Service: PayrollCalculator (port logic dari hris-system)
+- [ ] Frontend: Integrasi semua halaman payroll dengan API
+- [ ] Test: generate payroll
+- [ ] Test: export Excel/PDF payslip
+
+---
+
+### Fase 9: Laporan
+
+**Tujuan:** Semua laporan (absensi, payroll, pajak, BPJS, THR, leave).
+**Dependencies:** Semua fase sebelumnya
+
+#### 9.1 Backend
+
+| Item | Status |
+|---|---|
+| Controller ReportApiController (aggregation endpoints) | `not started` |
+| Routes Reports/Routes/api.php | `not started` |
+
+#### 9.2 Frontend
+
+| Item | Status |
+|---|---|
+| Reports/Index.vue (6 tipe laporan) | `done` (mock data) |
+
+#### 9.3 Checklist Fase 9
+
+- [x] Frontend: Reports Index (mock)
+- [ ] Controller: ReportApiController
+- [ ] Routes: Reports/Routes/api.php
+- [ ] Service: ReportService
+- [ ] Frontend: Integrasi laporan dengan API nyata
+- [ ] Frontend: Export Excel/PDF buttons terintegrasi
+
+---
+
+## Supervisor Dashboard (Aplikasi Bayangan)
+
+> **Catatan:** Supervisor Dashboard adalah **aplikasi bayangan** untuk external auditor/inspector. Memiliki perhitungan sendiri yang independen dari aplikasi utama. Akan dikerjakan setelah Fase 9 selesai.
+
+### Cakupan AuditSection
+
+Module AuditSection di aplikasi lama sangat kompleks. Berikut mapping ke aplikasi baru:
+
+| Fungsi Lama (hris-system) | Controller Lama | Fungsi Baru |
+|---|---|---|
+| Salary breakdown management | SalaryBreakdownController (52KB) | Supervisor: salary breakdown CRUD |
+| Staff overtime management | StaffOvertimeController (36KB) | Supervisor: overtime management |
+| Attendance autolog processing | AttendanceAutologController (34KB) | Supervisor: attendance processing |
+| Attendance snapshot management | AttendanceSnapshotController (29KB) | Supervisor: attendance snapshot |
+| Salary management | PengelolaanGajiController (24KB) | Supervisor: payroll management |
+| PPH tax management | PphManagementController (14KB) | Supervisor: PPH management |
+| Attendance recap | RekapAbsensiController (14KB) | Supervisor: attendance recap |
+| THR management | ThrManagementController (14KB) | Supervisor: THR management |
+| BPJS management | BpjsManagementController (12KB) | Supervisor: BPJS management |
+| Attendance audit | AttendanceAuditController (8KB) | Supervisor: attendance audit |
+| Raw log management | RawLogController (6KB) | Supervisor: raw log viewer |
+| File upload management | FileManagerController (6KB) | Supervisor: file manager |
+| Scan detection config | ScanDetectionConfigController (1KB) | Supervisor: scan config |
+
+Services yang akan di-port:
+- **AuditorLogService** (13KB) — logic audit/supervisor
+- **FingerprintBinParser** (7KB) — parsing file .bin fingerprint
+- **AttendanceOvertimeSyncService** (3KB) — sync overtime data
+
+Export/Import classes:
+- **RekapAbsensiExport** (13KB)
+- **SalaryBreakdownExport**
+- **AttendanceDataFixImport** (22KB)
+- **ImportAttendanceData** action
+
+### Halaman Frontend Supervisor
+
+| Halaman | Status |
+|---|---|
+| Supervisor/Dashboard.vue | `done` (mock data) |
+| Supervisor/Attendance/Index.vue | `done` (mock data) |
+| Supervisor/Attendance/Roster/Index.vue | `done` (mock data) |
+| Supervisor/Payroll/Index.vue | `done` (mock data) |
+| Supervisor/Payroll/Thr.vue | `done` (mock data) |
+| Supervisor/Leave/Index.vue | `done` (mock data) |
+| Supervisor/Employee/Index.vue | `done` (mock data) |
+| Supervisor/Reports/Index.vue | `done` (mock data) |
+| Supervisor Layout (Sidebar, Topbar, Footer) | `done` |
+
+---
+
+## Arsitektur Aplikasi
+
+### Roles & Permissions
+
+#### Mapping Roles Lama → Baru
 
 | Role Lama | Role Baru | Dashboard | Deskripsi |
 |---|---|---|---|
@@ -193,9 +785,8 @@ Karena `company_id` dan `branch_id` sudah dihapus dari semua tabel, config insta
 | — | **adm_manager** | Supervisor (full) | Admin Manager — bisa export, manage supervisor |
 | `staff` | **hr_ast** | Admin | HR Assistant — view & input terbatas |
 | `hr_branch` | **hrbranch** | Admin (view-only) | HR Branch — view organisasi & karyawan |
-| — | **admin** | Supervisor (view) | Admin — lihat dashboard supervisor |
 
-### 2.2 Aturan Akses Dashboard
+#### Aturan Akses Dashboard
 
 | Role | Dashboard Admin | Dashboard Supervisor |
 |---|---|---|
@@ -204,12 +795,8 @@ Karena `company_id` dan `branch_id` sudah dihapus dari semua tabel, config insta
 | **adm_manager** | No access | Full access (CRUD + Export) |
 | **hrbranch** | View-only | No access |
 | **hr_ast** | View + Input | No access |
-| **admin** | No access | View-only |
 
-> **Catatan:** Dashboard Admin dan Supervisor **tampilannya sama** (UI layout, sidebar, theme)  
-> tapi **isinya berbeda** — beberapa tabel berbeda, rumus perhitungan berbeda, data berbeda.
-
-### 2.3 Permission Baru
+#### Daftar Permission
 
 ```
 # Organization
@@ -217,7 +804,7 @@ view companies, create companies, edit companies, delete companies
 view branches, create branches, edit branches, delete branches
 view departments, create departments, edit departments, delete departments
 view positions, create positions, edit positions, delete positions
-view salary_grades, create salary_grades, edit salary_grades, delete salary_grades
+view salary grades, create salary grades, edit salary grades, delete salary grades
 
 # Employee
 view employees, create employees, edit employees, delete employees
@@ -245,780 +832,274 @@ manage supervisor data
 export supervisor data
 ```
 
-### 2.4 Role ↔ Permission Matrix
+#### Role ↔ Permission Matrix
 
-| Permission Group | superadmin | hrmanager | adm_manager | hrbranch | hr_ast | admin |
-|---|---|---|---|---|---|---|
-| **Organization** | CRUD | View | — | View | — | — |
-| **Employee** | CRUD | CRUD+Import+Export | — | View | View+Create+Edit | — |
-| **Attendance** | All | View+Import+Edit | — | View | View | — |
-| **Payroll** | All | Generate+View+Export | — | — | — | — |
-| **Leave** | All | Approve+Manage | — | View | View | — |
-| **Approval** | All | Approve+Reject | — | — | — | — |
-| **Supervisor View** | All | — | All | — | — | All |
-| **Supervisor Manage** | All | — | All | — | — | — |
-| **Supervisor Export** | All | — | All | — | — | — |
+| Permission Group | superadmin | hrmanager | adm_manager | hrbranch | hr_ast |
+|---|---|---|---|---|---|
+| **Organization** | CRUD | View | — | View | — |
+| **Employee** | CRUD | CRUD+Import+Export | — | View | View+Create+Edit |
+| **Attendance** | All | View+Import+Edit | — | View | View |
+| **Payroll** | All | Generate+View+Export | — | — | — |
+| **Leave** | All | Approve+Manage | — | View | View |
+| **Approval** | All | Approve+Reject | — | — | — |
+| **Supervisor View** | All | — | All | — | — |
+| **Supervisor Manage** | All | — | All | — | — |
+| **Supervisor Export** | All | — | All | — | — |
 
-### 2.5 Seeder Default
+#### Seeder Default
 
-```php
-// Super Admin
-name: 'Super Admin', email: 'superadmin@uranop.com', role: superadmin
-
-// HR Manager
-name: 'HR Manager', email: 'hr@uranop.com', role: hrmanager
-
-// Admin Manager
-name: 'Admin Manager', email: 'adm@uranop.com', role: adm_manager
+```
+Super Admin  → superadmin@uranop.com  → role: superadmin
+HR Manager   → hr@uranop.com          → role: hrmanager
+Admin Manager → adm@uranop.com        → role: adm_manager
 ```
 
----
-
-## Fase 3: Backend — API Structure
-
-### 3.1 Route API per Module
+### Backend — API Structure
 
 ```
 /api
-├── POST   /login              → Auth Module
-├── POST   /logout             → Auth Module (auth:sanctum)
-├── GET    /user               → Auth Module (auth:sanctum)
-├── GET    /                   → API info
+├── POST   /login                  → Auth
+├── POST   /logout                 → Auth (auth:sanctum)
+├── GET    /user                   → Auth (auth:sanctum)
+├── GET    /                       → API info
 │
-├── /organization              → app/Modules/Organization/Routes/api.php
-│   ├── GET    /departments
-│   ├── POST   /departments
-│   ├── PUT    /departments/{id}
-│   ├── DELETE /departments/{id}
-│   ├── GET    /positions
-│   ├── GET    /salary-grades
-│   └── ...
-│
-├── /employees                 → app/Modules/Employee/Routes/api.php
-│   ├── GET    /
-│   ├── POST   /
-│   ├── GET    /{id}
-│   ├── PUT    /{id}
-│   ├── DELETE /{id}
-│   ├── POST   /import
-│   ├── GET    /export
-│   └── /{id}/contracts, families, documents, salaries, ...
-│
-├── /attendance                → app/Modules/Attendance/Routes/api.php
-├── /leave                     → app/Modules/Leave/Routes/api.php
-├── /payroll                   → app/Modules/Payroll/Routes/api.php
-├── /schedule                  → app/Modules/Schedule/Routes/api.php
-├── /settings                  → app/Modules/Settings/Routes/api.php
-├── /reports                   → app/Modules/Reports/Routes/api.php
-├── /supervisor                → app/Modules/AuditSection/Routes/api.php
-└── /notifications             → app/Modules/Notification/Routes/api.php
+├── /organization                  → app/Modules/Organization/Routes/api.php
+├── /employees                     → app/Modules/Employee/Routes/api.php
+├── /attendance                    → app/Modules/Attendance/Routes/api.php
+├── /leave                         → app/Modules/Leave/Routes/api.php
+├── /payroll                       → app/Modules/Payroll/Routes/api.php
+├── /schedule                      → app/Modules/Schedule/Routes/api.php
+├── /settings                      → app/Modules/Settings/Routes/api.php
+├── /reports                       → app/Modules/Reports/Routes/api.php
+├── /supervisor                    → app/Modules/AuditSection/Routes/api.php
+├── /notifications                 → app/Modules/Notification/Routes/api.php
+└── /audit-logs                    → app/Modules/AuditLog/Routes/api.php
 ```
 
-### 3.2 Konversi Controller — Inertia → API
-
-**Contoh — EmployeeController::index():**
-
-```php
-// LAMA (Inertia)
-public function index()
-{
-    $employees = Employee::with(['department', 'position'])->paginate(25);
-    return Inertia::render('Employee/Index', ['employees' => $employees]);
-}
-
-// BARU (API) — app/Modules/Employee/Controllers/Api/V1/EmployeeApiController.php
-public function index(Request $request)
-{
-    $employees = Employee::with(['department', 'position'])
-        ->when($request->search, fn($q) => $q->where('name', 'like', "%{$request->search}%"))
-        ->paginate($request->per_page ?? 25);
-
-    return EmployeeResource::collection($employees);
-}
-```
-
-### 3.3 API Resources (JsonResource)
-
-Setiap module wajib punya Resource class untuk response konsisten:
-
-```php
-// app/Modules/Employee/Resources/EmployeeResource.php
-class EmployeeResource extends JsonResource
-{
-    public function toArray(Request $request): array
-    {
-        return [
-            'id' => $this->id,
-            'employee_code' => $this->employee_code,
-            'name' => $this->name,
-            'email' => $this->email,
-            'phone' => $this->phone,
-            'department' => new DepartmentResource($this->whenLoaded('department')),
-            'position' => new PositionResource($this->whenLoaded('position')),
-            'employment_status' => $this->employment_status,
-            'join_date' => $this->join_date?->format('Y-m-d'),
-            'is_active' => $this->is_active,
-            'created_at' => $this->created_at?->toISOString(),
-        ];
-    }
-}
-```
-
-### 3.4 Hapus Dependensi yang Tidak Diperlukan
-
-```bash
-composer remove inertiajs/inertia-laravel
-npm remove @inertiajs/vue3
-```
-
----
-
-## Fase 4: Frontend — Vue 3 SPA
-
-### 4.1 Struktur Folder Target
+### Frontend — Struktur Folder
 
 ```
 resources/js/
-├── App.vue                          ← Layout root (sidebar + dark toggle)
-├── app.js                            ← Vue bootstrapper
-│
-├── Components/                       ← GLOBAL UI COMPONENTS (Agnostik)
-│   ├── BaseButton.vue
-│   ├── BaseModal.vue
-│   ├── BaseCard.vue
-│   ├── TextInput.vue
-│   ├── SelectInput.vue
-│   ├── DatePicker.vue
-│   ├── Badge.vue
-│   ├── ConfirmDialog.vue
-│   └── Table/
-│       ├── DataTable.vue
-│       └── Pagination.vue
-│
-├── Layouts/                          ← GLOBAL LAYOUTS
-│   ├── AuthenticatedLayout.vue       ← Sidebar + header + main content
-│   └── GuestLayout.vue               ← Login & public pages
-│
-├── Pages/                            ← HALAMAN PER MODUL
+├── App.vue
+├── app.js
+├── Components/           ← Global UI Components (12 komponen)
+├── Layouts/
+│   ├── Admin/            ← Sidebar, Topbar, Footer
+│   ├── Supervisor/       ← Sidebar, Topbar, Footer
+│   ├── RootLayout.vue
+│   ├── AuthenticatedLayout.vue
+│   └── GuestLayout.vue
+├── Pages/
 │   ├── Auth/
-│   │   └── Login.vue
-│   │
-│   ├── Admin/                        ← Dashboard Admin
-│   │   ├── Dashboard.vue
-│   │   ├── Organization/
-│   │   │   ├── Departments/
-│   │   │   │   ├── Index.vue
-│   │   │   │   └── Components/
-│   │   │   │       └── DepartmentForm.vue
-│   │   │   ├── Positions/
-│   │   │   │   ├── Index.vue
-│   │   │   │   └── Components/
-│   │   │   │       └── PositionForm.vue
-│   │   │   └── SalaryGrades/
-│   │   │       ├── Index.vue
-│   │   │       └── Components/
-│   │   │           └── SalaryGradeForm.vue
-│   │   ├── Employees/
-│   │   │   ├── Index.vue
-│   │   │   ├── Show.vue
-│   │   │   ├── Create.vue
-│   │   │   ├── Edit.vue
-│   │   │   └── Components/
-│   │   │       ├── EmployeeForm.vue
-│   │   │       ├── ContractForm.vue
-│   │   │       ├── FamilyForm.vue
-│   │   │       └── DocumentUpload.vue
-│   │   ├── Attendance/
-│   │   │   ├── Index.vue
-│   │   │   ├── LogImport.vue
-│   │   │   ├── Roster.vue
-│   │   │   ├── Overtime/
-│   │   │   │   ├── Index.vue
-│   │   │   │   └── Components/
-│   │   │   │       └── OvertimeForm.vue
-│   │   │   └── Components/
-│   │   ├── Leave/
-│   │   │   ├── Index.vue
-│   │   │   ├── Approvals.vue
-│   │   │   ├── Settings.vue
-│   │   │   └── Components/
-│   │   │       └── LeaveRequestForm.vue
-│   │   ├── Payroll/
-│   │   │   ├── Periods/
-│   │   │   │   ├── Index.vue
-│   │   │   │   └── Detail.vue
-│   │   │   ├── Configs/
-│   │   │   │   └── Index.vue
-│   │   │   └── Components/
-│   │   │       ├── PayslipModal.vue
-│   │   │       └── BpjsCard.vue
-│   │   ├── Schedule/
-│   │   │   ├── WorkPatterns/
-│   │   │   │   └── Index.vue
-│   │   │   ├── Shifts/
-│   │   │   │   └── Index.vue
-│   │   │   ├── Calendars/
-│   │   │   │   └── Index.vue
-│   │   │   └── Roster/
-│   │   │       └── Index.vue
-│   │   ├── Reports/
-│   │   │   ├── Index.vue
-│   │   │   └── Components/
-│   │   └── Settings/
-│   │       ├── Index.vue
-│   │       └── Components/
-│   │
-│   └── Supervisor/                   ← Dashboard Supervisor
-│       ├── Dashboard.vue
-│       ├── Attendance/
-│       │   ├── Index.vue
-│       │   ├── Roster/
-│       │   │   └── Index.vue
-│       │   └── Components/
-│       ├── Payroll/
-│       │   ├── Index.vue
-│       │   └── Components/
-│       ├── Leave/
-│       │   └── Index.vue
-│       ├── Employee/
-│       │   └── Index.vue
-│       └── Reports/
-│           └── Index.vue
-│
-├── Composables/                      ← GLOBAL VUE COMPOSABLES
-│   ├── useApi.js                     ← Sudah ada
-│   ├── useAuth.js                    ← Login/logout/user state
-│   ├── usePermission.js              ← Permission checker
-│   ├── useCurrency.js                ← Rupiah formatter
-│   ├── useDate.js                    ← Date formatting
-│   ├── useTheme.js                   ← Dark/light mode (sudah ada)
-│   ├── usePagination.js              ← Pagination logic
-│   └── useNotification.js            ← Toast notification
-│
-├── Stores/                           ← Pinia stores
-│   ├── auth.js
-│   ├── permission.js
-│   └── notification.js
-│
+│   ├── Admin/            ← 19 halaman (mock data)
+│   └── Supervisor/       ← 8 halaman (mock data)
+├── Composables/          ← 8 composables
+├── Stores/               ← 3 pinia stores
 └── router/
-    └── index.js                       ← Vue Router routes
+    └── index.js
 ```
-
-### 4.2 Router Structure
-
-```js
-// resources/js/router/index.js
-
-const routes = [
-    // Guest
-    { path: '/login', component: Login, meta: { guest: true, layout: 'guest' } },
-
-    // Admin Dashboard (default) — superadmin, hrmanager, hrbranch, hr_ast
-    {
-        path: '/',
-        component: AuthenticatedLayout,
-        meta: { auth: true },
-        children: [
-            { path: '', name: 'admin.dashboard', component: AdminDashboard },
-            { path: 'organization/departments', component: DepartmentsIndex },
-            { path: 'organization/positions', component: PositionsIndex },
-            { path: 'organization/salary-grades', component: SalaryGradesIndex },
-            { path: 'employees', component: EmployeesIndex },
-            { path: 'employees/:id', component: EmployeeShow },
-            { path: 'employees/create', component: EmployeeCreate },
-            { path: 'employees/:id/edit', component: EmployeeEdit },
-            { path: 'attendance', component: AttendanceIndex },
-            { path: 'attendance/import', component: LogImport },
-            { path: 'attendance/roster', component: RosterIndex },
-            { path: 'attendance/overtime', component: OvertimeIndex },
-            { path: 'leave', component: LeaveIndex },
-            { path: 'leave/approvals', component: LeaveApprovals },
-            { path: 'leave/settings', component: LeaveSettings },
-            { path: 'payroll', component: PayrollPeriodsIndex },
-            { path: 'payroll/periods/:id', component: PayrollPeriodDetail },
-            { path: 'schedule/work-patterns', component: WorkPatternsIndex },
-            { path: 'schedule/shifts', component: ShiftsIndex },
-            { path: 'schedule/calendars', component: CalendarsIndex },
-            { path: 'reports', component: ReportsIndex },
-            { path: 'settings', component: SettingsIndex },
-        ],
-    },
-
-    // Supervisor Dashboard — adm_manager, admin, superadmin
-    {
-        path: '/supervisor',
-        component: AuthenticatedLayout,
-        meta: { auth: true, role: ['adm_manager', 'admin', 'superadmin'] },
-        children: [
-            { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard },
-            { path: 'attendance', component: SupervisorAttendance },
-            { path: 'attendance/roster', component: SupervisorRoster },
-            { path: 'payroll', component: SupervisorPayroll },
-            { path: 'leave', component: SupervisorLeave },
-            { path: 'employee', component: SupervisorEmployee },
-            { path: 'reports', component: SupervisorReports },
-        ],
-    },
-]
-```
-
-### 4.3 Sidebar Menu (Dynamic by Role)
-
-```js
-// Admin Dashboard — visible to: superadmin, hrmanager, hrbranch, hr_ast
-const adminMenu = [
-    { label: 'Dashboard', icon: 'home', route: 'admin.dashboard' },
-    {
-        label: 'Organisasi',
-        icon: 'building',
-        children: [
-            { label: 'Departemen', route: '/organization/departments' },
-            { label: 'Jabatan', route: '/organization/positions' },
-            { label: 'Grade Gaji', route: '/organization/salary-grades' },
-        ],
-    },
-    { label: 'Karyawan', icon: 'users', route: '/employees' },
-    {
-        label: 'Kehadiran',
-        icon: 'calendar-check',
-        children: [
-            { label: 'Absensi', route: '/attendance' },
-            { label: 'Import Log', route: '/attendance/import' },
-            { label: 'Roster', route: '/attendance/roster' },
-            { label: 'Lembur', route: '/attendance/overtime' },
-        ],
-    },
-    {
-        label: 'Cuti',
-        icon: 'umbrella',
-        children: [
-            { label: 'Daftar Cuti', route: '/leave' },
-            { label: 'Approval', route: '/leave/approvals' },
-            { label: 'Pengaturan', route: '/leave/settings' },
-        ],
-    },
-    { label: 'Generate Gaji', icon: 'file-invoice', route: '/payroll' },
-    { label: 'THR', icon: 'gift', route: '/payroll/thr' },
-    { label: 'Generate Jadwal', icon: 'clock', route: '/schedule/work-patterns' },
-    { label: 'Laporan', icon: 'chart-bar', route: '/reports' },
-];
-
-// Supervisor Dashboard — visible to: adm_manager, admin, superadmin
-const supervisorMenu = [
-    { label: 'Dashboard', icon: 'home', route: 'supervisor.dashboard' },
-    { label: 'Kehadiran', icon: 'calendar-check', route: '/supervisor/attendance' },
-    { label: 'Roster', icon: 'user-clock', route: '/supervisor/attendance/roster' },
-    { label: 'Generate Gaji', icon: 'file-invoice', route: '/supervisor/payroll' },
-    { label: 'THR', icon: 'gift', route: '/supervisor/payroll/thr' },
-    { label: 'Cuti', icon: 'umbrella', route: '/supervisor/leave' },
-    { label: 'Karyawan', icon: 'users', route: '/supervisor/employee' },
-    { label: 'Laporan', icon: 'chart-bar', route: '/supervisor/reports' },
-];
-```
-
-User dengan role `superadmin` akan melihat **dua sidebar** (switch via dropdown/tab di header).  
-User lain hanya melihat satu sidebar sesuai peran mereka.
-
-### 4.4 Konvensi Bahasa
-
-- **Menu & label**: Bahasa Indonesia
-- **Technical terms**: Tetap EN jika terjemahan Indonesia ambigu
-  - Contoh: `generate` (bukan "generasi"), `import` (bukan "impor"), `export` (bukan "ekspor")
-  - `attendance` → "Kehadiran" (clear)
-  - `payroll` → "Generate Gaji" (label menu)
-  - `leave` → "Cuti"
-  - `approval` → "Approval" (bukan "persetujuan" — terlalu panjang untuk menu)
 
 ---
 
 ## Rencana Renaming & Remapping Tabel
 
-> **Catatan:** Setelah semua tabel di-port, akan dilakukan **renaming dan remapping** tabel secara bertahap per phase.  
+> **Catatan:** Setelah semua tabel di-port, akan dilakukan **renaming dan remapping** tabel secara bertahap per fase.
 > Tujuannya: menyederhanakan nama, konsistensi naming convention, dan menyesuaikan dengan struktur modul baru.
 
-### Konvensi Naming Baru
+### Attendance Module (`att_`)
 
-| Aspek | Lama (hris-system) | Baru (instance1) |
+| Nama Lama | Nama Baru |
+|---|---|
+| `raw_logs` / `attendances` (refactored) | `att_raw_logs` |
+| `attendance_logs` | `att_logs` |
+| `attendance_autologs` | `att_autologs` |
+| `attendance_prepares` | `att_prepares` |
+| `attendance_records` | `att_records` |
+| `attendance_snapshots` | `att_snapshots` |
+| `attendance_summaries` | `att_summaries` |
+| `attendance_consecutive_days` | `att_consecutive_days` |
+| `attendance_configs` | `att_configs` |
+| `scan_detection_configs` | `att_scan_configs` |
+| `overtime_rules` | `att_overtime_rules` (shared, satu tabel) |
+| `overtimes` | `att_overtimes` |
+
+### Schedule Module (`sch_`)
+
+| Nama Lama | Nama Baru |
+|---|---|
+| `work_pattern_types` | `sch_pattern_types` |
+| `work_patterns` | `sch_patterns` |
+| `work_pattern_details` | `sch_pattern_details` |
+| `shifts` | `sch_shifts` |
+| `employee_shift_rosters` | `sch_rosters` |
+| `working_calendars` | `sch_calendars` |
+| `holidays` | `sch_holidays` |
+
+### Leave Module (`lve_`)
+
+| Nama Lama | Nama Baru |
+|---|---|
+| `leave_period_configs` | `lve_period_configs` |
+| `leave_periods` | `lve_periods` |
+| `leave_types` | `lve_types` (+ category column) |
+| `leave_policies` | `lve_policies` |
+| `leave_requests` | `lve_requests` |
+| `leave_documents` | `lve_documents` |
+| `leave_entitlements` | `lve_entitlements` |
+| `leave_balances` | `lve_balances` |
+
+### Payroll Module (`pay_`)
+
+| Nama Lama | Nama Baru | Catatan |
 |---|---|---|
-| **Prefix tabel** | Tidak konsisten | Per module: `{module}_` (ex: `att_`, `pay_`, `lve_`) |
-| **Singular/Plural** | Mixed | **Plural** untuk tabel data, **singular** untuk konfig |
-| **Soft delete** | `deleted_at` (all) | Tetap |
-| **Timestamps** | `created_at`, `updated_at` (all) | Tetap |
-| **Foreign key** | `{name}_id` | Tetap |
-| **Pivot table** | `{a}_{b}` (singular) | Tetap |
+| `payroll_settings` | `pay_settings` | |
+| `payroll_configs` | `pay_configs` | |
+| `payroll_periods` | `pay_periods` | |
+| `payrolls` | `pay_records` | + snapshot embed |
+| `payroll_audits` | `pay_audits` | Aplikasi bayangan |
+| `payroll_component_values` | `pay_component_values` | |
+| `salary_components` | `pay_components` | |
+| `bpjs_configs` | `pay_bpjs_configs` | |
+| `pph_configs` | `pay_pph_configs` | |
+| `ptkp_rates` | `pay_ptkp_rates` | |
+| `ter_rates` | `pay_ter_rates` | |
+| `progressive_rates` | `pay_progressive_rates` | |
+| `service_year_allowances` | `pay_service_allowances` | |
 
-### Daftar Rencana Rename
+Tabel payroll yang **DIHAPUS**:
+- ~~`payroll_results`~~ → digabung ke `pay_records`
+- ~~`payroll_breakdowns`~~ → JSON di `pay_records`
+- ~~`payslips`~~ → generated dari `pay_records`
+- ~~`payroll_component_snapshots`~~ → di `pay_component_values`
+- ~~`payroll_employee_snapshots`~~ → embed di `pay_records`
+- ~~`pay_overtime_rules`~~ → cukup `att_overtime_rules` (shared)
 
-> **Dikerjakan per phase, setelah module ter-port dan berfungsi.**
+### Employee Module (`emp_`)
 
-#### Phase Rename #1: Attendance Module
-| Nama Lama | Nama Baru | Alasan |
+| Nama Lama | Nama Baru | Catatan |
 |---|---|---|
-| `raw_logs` | `att_raw_logs` | Prefix module |
-| `attendance_logs` | `att_logs` | Singkat, prefix att_ |
-| `attendance_autologs` | `att_autologs` | Singkat |
-| `attendance_prepares` | `att_prepares` | Singkat |
-| `attendance_records` | `att_records` | Singkat |
-| `attendance_snapshots` | `att_snapshots` | Singkat |
-| `attendance_summaries` | `att_summaries` | Singkat |
-| `attendance_consecutive_days` | `att_consecutive_days` | Singkat |
-| `attendance_configs` | `att_configs` | Singkat |
-| `scan_detection_configs` | `att_scan_configs` | Prefix module |
-| `overtime_rules` | `att_overtime_rules` | Prefix module |
-| `overtimes` | `att_overtimes` | Prefix module |
-| `permit_requests` | `att_permits` | Singkat |
+| `employees` | Tetap | + uuid, synced_at |
+| `employee_groups` | `emp_groups` | |
+| `employee_titles` | `emp_titles` | |
+| `employee_contracts` | `emp_contracts` | |
+| `employee_position_histories` | `emp_position_histories` | |
+| `employee_families` | `emp_families` | |
+| `employee_documents` | `emp_documents` | |
+| `employee_salaries` | `emp_salaries` | + effective_date |
+| `employee_salary_components` | `emp_salary_components` | |
+| `employee_salary_breakdowns` | `emp_salary_breakdowns` | |
+| `employee_terminations` | `emp_terminations` | |
+| `employee_bpjs` | `emp_bpjs` | |
+| `employee_thr` | `emp_thr` | |
 
-#### Phase Rename #2: Schedule Module
-| Nama Lama | Nama Baru | Alasan |
-|---|---|---|
-| `work_pattern_types` | `sch_pattern_types` | Prefix module |
-| `work_patterns` | `sch_patterns` | Prefix module |
-| `work_pattern_details` | `sch_pattern_details` | Prefix module |
-| `shifts` | `sch_shifts` | Prefix module |
-| `employee_shift_rosters` | `sch_rosters` | Singkat |
-| `working_calendars` | `sch_calendars` | Prefix module |
-| `holidays` | `sch_holidays` | Prefix module |
+Tabel employee yang **DIHAPUS**:
+- ~~`employee_periodes`~~ → diganti effective date pattern
 
-#### Phase Rename #3: Leave Module
-| Nama Lama | Nama Baru | Alasan |
-|---|---|---|
-| `leave_period_configs` | `lve_period_configs` | Prefix module |
-| `leave_periods` | `lve_periods` | Prefix module |
-| `leave_types` | `lve_types` | Prefix module |
-| `leave_policies` | `lve_policies` | Prefix module |
-| `leave_requests` | `lve_requests` | Prefix module |
-| `leave_documents` | `lve_documents` | Prefix module |
-| `leave_entitlements` | `lve_entitlements` | Prefix module |
-| `leave_balances` | `lve_balances` | Prefix module |
+### Organization Module (`org_`)
 
-#### Phase Rename #4: Payroll Module
-| Nama Lama | Nama Baru | Alasan |
-|---|---|---|
-| `payroll_settings` | `pay_settings` | Singkat |
-| `payroll_configs` | `pay_configs` | Singkat |
-| `payroll_periods` | `pay_periods` | Singkat |
-| `payrolls` | `pay_records` | Hindari plural ambiguity |
-| `payroll_audits` | `pay_audits` | Singkat |
-| `payroll_component_values` | `pay_component_values` | Singkat |
-| `payroll_employee_snapshots` | `pay_emp_snapshots` | Singkat |
-| `payroll_component_snapshots` | `pay_comp_snapshots` | Singkat |
-| `payroll_results` | `pay_results` | Singkat |
-| `payroll_breakdowns` | `pay_breakdowns` | Singkat |
-| `payslips` | `pay_slips` | Prefix module |
-| `salary_components` | `pay_components` | Pindah ke module payroll |
-| `bpjs_configs` | `pay_bpjs_configs` | Prefix module |
-| `pph_configs` | `pay_pph_configs` | Prefix module |
-| `ptkp_rates` | `pay_ptkp_rates` | Prefix module |
-| `ter_rates` | `pay_ter_rates` | Prefix module |
-| `progressive_rates` | `pay_progressive_rates` | Prefix module |
-| `overtime_rules` (payroll) | `pay_overtime_rules` | Prefix module |
-| `service_year_allowances` | `pay_service_allowances` | Prefix module |
+| Nama Lama | Nama Baru |
+|---|---|
+| `companies` | Tetap (data referensi) |
+| `branches` | Tetap (data referensi) |
+| `departments` | `org_departments` |
+| `positions` | `org_positions` |
 
-#### Phase Rename #5: Employee Module
-| Nama Lama | Nama Baru | Alasan |
-|---|---|---|
-| `employees` | Tetap | Sudah baik |
-| `employee_groups` | `emp_groups` | Singkat |
-| `employee_titles` | `emp_titles` | Singkat |
-| `employee_periodes` | `emp_periodes` | Singkat |
-| `employee_contracts` | `emp_contracts` | Singkat |
-| `employee_position_histories` | `emp_position_histories` | Singkat |
-| `employee_families` | `emp_families` | Singkat |
-| `employee_documents` | `emp_documents` | Singkat |
-| `employee_salaries` | `emp_salaries` | Singkat |
-| `employee_salary_components` | `emp_salary_components` | Singkat |
-| `employee_salary_breakdowns` | `emp_salary_breakdowns` | Singkat |
-| `employee_terminations` | `emp_terminations` | Singkat |
-| `employee_bpjs` | `emp_bpjs` | Singkat |
-| `employee_thr` | `emp_thr` | Singkat |
+Tabel organization yang **DIHAPUS**:
+- ~~`company_settings`~~ → digabung ke `system_settings`
+- ~~`branch_settings`~~ → digabung ke `system_settings`
 
-#### Phase Rename #6: Organization Module
-| Nama Lama | Nama Baru | Alasan |
-|---|---|---|
-| `companies` | Tetap | Sudah baik |
-| `company_settings` | `org_company_settings` | Prefix module |
-| `branches` | Tetap | Sudah baik |
-| `branch_settings` | `org_branch_settings` | Prefix module |
-| `departments` | `org_departments` | Prefix module |
-| `positions` | `org_positions` | Prefix module |
-| `salary_grades` | `org_salary_grades` | Prefix module |
-| `salary_grade_histories` | `org_salary_grade_histories` | Prefix module |
+### Settings Module (`set_`)
 
-#### Phase Rename #7: User & Auth
-| Nama Lama | Nama Baru | Alasan |
+| Nama Lama | Nama Baru |
+|---|---|
+| `system_settings` | `set_system` |
+| `salary_grades` | `set_salary_grades` |
+| `salary_grade_histories` | `set_salary_grade_histories` |
+
+### User & Auth
+
+| Nama Lama | Nama Baru | Catatan |
 |---|---|---|
-| `users` | Tetap | Sudah baik |
-| `user_branches` | Tetap | Sudah baik |
-| `user_preferences` | Tetap | Sudah baik |
-| `personal_access_tokens` | Tetap | Sanctum default |
+| `users` | Tetap | |
+| `user_preferences` | Tetap | |
+| `personal_access_tokens` | Tetap | |
+| `audit_logs` | Tetap | + context column |
+| `notifications` | Tetap | Laravel standard |
+
+Tabel auth yang **DIHAPUS**:
+- ~~`user_branches`~~ → tidak perlu (1 instance = 1 branch)
 
 ---
 
-## Fase 5: Step-by-Step Eksekusi
+## Daftar Module & Prioritas
 
-### Step 1 — Setup Foundation (IN PROGRESS)
+| # | Module | Fase | Kompleksitas | Ketergantungan | Status Backend | Status Frontend |
+|---|---|---|---|---|---|---|
+| 0 | **Shared** | Fase 0 | Rendah | — | ❌ Belum | — |
+| 0 | **AuditLog** | Fase 0 | Rendah | — | ❌ Belum | — |
+| 1 | **Auth** | Fase 1 | Rendah | — | ✅ Complete | ✅ Complete |
+| 1 | **Notification** | Fase 1 | Rendah | Auth | ❌ Belum | ❌ Belum |
+| 2 | **Organization** | Fase 2 | Rendah | Fase 1 | ❌ Belum | ✅ Mock |
+| 3 | **Settings** | Fase 3 | Rendah | Fase 1, 2 | ❌ Belum | ✅ Mock |
+| 4 | **Employee** | Fase 4 | Tinggi | Fase 2, 3 | ❌ Belum | ✅ Mock |
+| 5 | **Schedule** | Fase 5 | Sedang | Fase 2, 4 | ❌ Belum | ✅ Mock |
+| 6 | **Leave** | Fase 6 | Sedang | Fase 4 | ❌ Belum | ✅ Mock |
+| 7 | **Attendance** | Fase 7 | Tinggi | Fase 4, 5 | ❌ Belum | ✅ Mock |
+| 8 | **Payroll** | Fase 8 | Sangat Tinggi | Fase 4, 6, 7 | ❌ Belum | ✅ Mock |
+| 9 | **Reports** | Fase 9 | Rendah | Semua module | ❌ Belum | ✅ Mock |
+| 10 | **AuditSection** | Supervisor | Sangat Tinggi | Fase 8, 7 | ❌ Belum | ✅ Mock |
 
-- [x] Laravel 13 project `instance1.uranop.com` terinisialisasi
-- [x] Vue 3 SPA terinstall (Vue Router + Tailwind 4 + theme + dark mode)
-- [x] API routes dasar + Sanctum terinstall
-- [x] `.env` local & production terkonfigurasi
-- [x] Symlink ke `hris-system` untuk referensi
-- [ ] Buat tabel `instances` migration + model + seeder
-- [ ] Buat `config/instance.php`
-- [ ] Restruktur backend ke `app/Modules/...`
-- [ ] Setup auto-load module routes di `bootstrap/app.php`
+---
 
-### Step 2 — Port Migrations & Models (P0 → P1)
+## Daftar Module Backend
 
-**Module Instance (BARU):**
-- [ ] `app/Modules/Instance/Models/Instance.php`
-- [ ] `app/Modules/Instance/database/migrations/*_create_instances_table.php`
-- [ ] `app/Modules/Instance/database/seeders/InstanceSeeder.php`
+| Module | Path | Deskripsi | Status |
+|---|---|---|---|
+| **Shared** | `app/Modules/Shared/` | Traits, helpers, base classes | ❌ Belum |
+| **AuditLog** | `app/Modules/AuditLog/` | Audit trail logging (main + shadow) | ❌ Belum |
+| **Auth** | `app/Modules/Auth/` | Autentikasi, login, user management | ✅ Complete |
+| **Notification** | `app/Modules/Notification/` | Notifikasi | ❌ Belum |
+| **Organization** | `app/Modules/Organization/` | Department, Position | ❌ Belum |
+| **Settings** | `app/Modules/Settings/` | SystemSettings, SalaryGrade, configs | ❌ Belum |
+| **Employee** | `app/Modules/Employee/` | Karyawan, kontrak, keluarga, dokumen, terminasi | ❌ Belum |
+| **Schedule** | `app/Modules/Schedule/` | WorkPattern, Shift, Roster, Calendar, Holiday | ❌ Belum |
+| **Attendance** | `app/Modules/Attendance/` | Absensi, log import, lembur | ❌ Belum |
+| **Leave** | `app/Modules/Leave/` | Cuti & izin, tipe, kebijakan, approval | ❌ Belum |
+| **Payroll** | `app/Modules/Payroll/` | Penggajian, BPJS, PPH, THR | ❌ Belum |
+| **AuditSection** | `app/Modules/AuditSection/` | Dashboard Supervisor (aplikasi bayangan) | ❌ Belum |
+| **Reports** | `app/Modules/Reports/` | Laporan-laporan | ❌ Belum |
 
-**Module Auth:**
-- [ ] Copy & modifikasi migration: users, password_reset_tokens, sessions
-- [ ] Copy model: `User.php` → hapus `HasCompanyScope`, tambah `HasApiTokens`
-- [ ] Copy Spatie permissions tables (roles, permissions, model_has_roles, dll)
-- [ ] Buat `RolePermissionSeeder` dengan mapping role baru
-- [ ] Buat `UserSeeder` dengan default user (superadmin, hrmanager, adm_manager)
-- [ ] Copy model: `UserPreference.php`
+---
 
-**Module Organization:**
-- [ ] Copy migration: companies, branches, company_settings, branch_settings, departments, positions, salary_grades, salary_grade_histories
-- [ ] **Modifikasi migration:** Hapus semua kolom `company_id` dan `branch_id` dari migration
-- [ ] Copy semua model → hapus `HasCompanyScope`, `HasBranchScope`, hapus relasi `company()` dan `branch()`
-- [ ] Copy seeder: Company, OrganizationMaster, dll → sesuaikan data
+## Checklist Global
 
-**Module Employee:**
-- [ ] Copy migration: employees, employee_contracts, employee_families, employee_documents, employee_salaries, employee_position_histories, employee_terminations, employee_groups, employee_titles, employee_periodes, employee_salary_components, employee_salary_breakdowns
-- [ ] Copy semua model → hapus global scope traits, hapus relasi company/branch
-- [ ] **Modifikasi migration:** Hapus semua kolom `company_id` dan `branch_id`
-
-### Step 3 — Port Controllers → API (P1 → P2)
-
-**Setiap module, lakukan:**
-- [ ] Copy controller dari `hris-system/app/Modules/{Module}/Controllers/`
-- [ ] Konversi ke API controller:
-  - `Inertia::render()` → `response()->json()` atau `new Resource()`
-  - `redirect()->route()` → return JSON response
-  - `request()->validate()` → tetap (Laravel auto-return 422 JSON)
-- [ ] Buat `Resources/{Module}Resource.php` untuk setiap model utama
-- [ ] Buat `Routes/api.php` di setiap module
-- [ ] Test endpoint via Postman/Bruno
-
-**Module yang perlu prioritas controller:**
-1. Auth (login, logout, user)
-2. Organization (departments, positions, salary-grades — sering dipakai dropdown)
-3. Employee (CRUD + import/export)
-4. Schedule (work patterns, shifts, calendars)
-5. Attendance (logs, roster, overtime)
-6. Leave (requests, approvals)
-7. Payroll (periods, generation, bpjs, pph)
-8. AuditSection/Supervisor
-9. Reports
-10. Settings
-
-### Step 4 — Build UI (Vue SPA) (P1 → P4)
-
-**Komponen Global:**
-- [ ] `BaseButton.vue` — button dengan variant (primary, secondary, danger, ghost)
-- [ ] `BaseModal.vue` — modal dialog
-- [ ] `BaseCard.vue` — card container
-- [ ] `TextInput.vue` — text input dengan label, error, icon
-- [ ] `SelectInput.vue` — select dropdown
-- [ ] `DatePicker.vue` — date input
-- [ ] `Badge.vue` — status badge
-- [ ] `ConfirmDialog.vue` — konfirmasi delete/action
-- [ ] `DataTable.vue` — tabel dengan sort, search, column toggle
-- [ ] `Pagination.vue` — pagination
-
-**Layouts:**
-- [ ] `AuthenticatedLayout.vue` — sidebar dinamis + header + main slot
-- [ ] `GuestLayout.vue` — centered card untuk login
-
-**Auth:**
-- [ ] `Login.vue` — form login dengan validasi, error handling
-- [ ] `useAuth.js` composable — login, logout, get user, token management
-
-**Admin Pages:**
-- [ ] `Dashboard.vue` — stat cards (total karyawan, hadir hari ini, dll)
-- [ ] `Employees/Index.vue` — datatable + search + filter + create button
-- [ ] `Employees/Show.vue` — detail karyawan + tabs (contract, family, docs)
-- [ ] `Employees/Create.vue` — form wizard
-- [ ] `Attendance/Index.vue` — kalender absensi + tabel
-- [ ] `Leave/Index.vue` — tabel pengajuan cuti
-- [ ] `Payroll/Periods/Index.vue` — daftar periode + generate
-
-**Supervisor Pages:**
-- [ ] `Dashboard.vue` — stat cards khusus supervisor
-- [ ] `Attendance/Index.vue` — absensi + roster
-- [ ] `Payroll/Index.vue` — hasil generate + export
-- [ ] `Reports/Index.vue` — laporan
-
-### Step 5 — Testing & QA
+### Testing & QA
 
 - [ ] Test semua API endpoint via Bruno/Postman
 - [ ] Test UI flow: login → dashboard → CRUD → logout
-- [ ] Test role-based access (login as 6 different roles)
+- [ ] Test role-based access (login as 5 different roles)
 - [ ] Test dark/light mode toggle
 - [ ] Test responsive layout (mobile sidebar collapse)
 - [ ] Test error handling (invalid login, 401, 403, 422, 500)
 - [ ] Test import Excel (karyawan, absensi)
 - [ ] Test export Excel/PDF
 
-### Step 6 — Deploy ke VPS (CloudPanel / Ubuntu 24)
+### Deploy
 
 - [ ] Push code ke repository
 - [ ] Setup database MySQL di VPS: `CREATE DATABASE instance1_uranop`
-- [ ] Copy `.env.production` → `.env` di VPS, isi semua credentials
+- [ ] Copy `.env.production` → `.env` di VPS
 - [ ] `composer install --no-dev --optimize-autoloader`
 - [ ] `php artisan key:generate`
 - [ ] `php artisan migrate --force`
-- [ ] `php artisan db:seed --class=InstanceSeeder`
 - [ ] `php artisan db:seed --class=RolePermissionSeeder`
 - [ ] `php artisan db:seed --class=UserSeeder`
 - [ ] `npm ci && npm run build`
 - [ ] Set document root ke `public/`
 - [ ] Setup SSL via CloudPanel (Let's Encrypt)
-- [ ] Konfigurasi Nginx: redirect semua request ke `index.php` (SPA fallback)
+- [ ] Konfigurasi Nginx: SPA fallback
 - [ ] Setup cron job: `* * * * * php artisan schedule:run`
 - [ ] Setup queue worker: `php artisan queue:work --daemon`
-
----
-
-## Daftar Module & Prioritas Migrasi
-
-| # | Module | Tabel | Prioritas | Kompleksitas | Ketergantungan |
-|---|---|---|---|---|---|
-| 1 | **Instance** | instances (BARU) | **P0** | Rendah | — |
-| 2 | **Auth + User** | users, roles, permissions, user_branches, user_preferences | **P0** | Rendah | Instance |
-| 3 | **Organization** | companies, branches, departments, positions, salary_grades | **P1** | Rendah | Instance |
-| 4 | **Employee** | employees, employee_contracts, employee_families, employee_documents, employee_salaries, employee_terminations, employee_groups | **P1** | Tinggi | Organization |
-| 5 | **Schedule** | work_patterns, shifts, employee_shift_rosters, working_calendars, holidays | **P1** | Sedang | Organization |
-| 6 | **Attendance** | attendance_logs, attendance_prepares, attendance_records, attendance_autologs, overtime_rules, raw_logs | **P2** | Tinggi | Employee, Schedule |
-| 7 | **Leave** | leave_types, leave_policies, leave_requests, leave_periods, leave_entitlements, leave_balances | **P2** | Sedang | Employee |
-| 8 | **Payroll** | payroll_periods, payrolls, salary_components, bpjs_configs, pph_configs, ter_rates, ptkp_rates | **P3** | Sangat Tinggi | Employee, Attendance, Leave |
-| 9 | **AuditSection** | payroll_audits, attendance_snapshots, employee_thr, employee_salary_breakdowns | **P3** | Sedang | Payroll, Attendance |
-| 10 | **Reports** | (aggregasi dari module lain) | **P4** | Rendah | Semua module |
-| 11 | **Settings** | system_settings, employee_groups, employee_titles | **P4** | Rendah | — |
-
----
-
-## Lampiran: Checklist Module Completion
-
-Salin checklist ini ke tracking tool (Linear/Notion/GitHub Projects):
-
-```
-### Fase 0: Foundation
-- [ ] Module Instance: migration + model + seeder + config
-- [ ] Auto-load module routes dari bootstrap/app.php
-- [ ] Setup module folder structure untuk semua module (template kosong)
-
-### Fase P0: Auth
-- [ ] Migration: users, roles, permissions, user_branches, user_preferences
-- [ ] Model: User (dengan HasApiTokens, HasRoles)
-- [ ] Seeder: RolePermissionSeeder, UserSeeder
-- [ ] Controller: AuthApiController (login, logout, user)
-- [ ] Routes: Auth/Routes/api.php
-- [ ] Frontend: Login page, useAuth composable
-- [ ] Frontend: Auth route guard (redirect ke /login jika belum login)
-
-### Fase P1: Organization
-- [ ] Migration: companies, branches, departments, positions, salary_grades
-- [ ] Model: Company, Branch, Department, Position, SalaryGrade
-- [ ] Controller: OrganizationApiController (CRUD departments, positions, grades)
-- [ ] Routes: Organization/Routes/api.php
-- [ ] Resources: DepartmentResource, PositionResource, SalaryGradeResource
-- [ ] Frontend: Departments CRUD pages
-- [ ] Frontend: Positions CRUD pages
-- [ ] Frontend: SalaryGrades CRUD pages
-
-### Fase P1: Employee
-- [ ] Migration: semua tabel employee
-- [ ] Model: semua model employee
-- [ ] Controller: EmployeeApiController (CRUD + import + export)
-- [ ] Routes: Employee/Routes/api.php
-- [ ] Resources: EmployeeResource
-- [ ] Frontend: Employee Index (datatable)
-- [ ] Frontend: Employee Show (detail + tabs)
-- [ ] Frontend: Employee Create/Edit (form)
-- [ ] Frontend: Import Excel page
-- [ ] Frontend: Contract, Family, Document sub-pages
-
-### Fase P1: Schedule
-- [ ] Migration: work_patterns, shifts, rosters, calendars, holidays
-- [ ] Model: semua model schedule
-- [ ] Controller: ScheduleApiController
-- [ ] Routes: Schedule/Routes/api.php
-- [ ] Frontend: WorkPatterns Index
-- [ ] Frontend: Shifts Index
-- [ ] Frontend: Calendars Index
-- [ ] Frontend: Roster page
-
-### Fase P2: Attendance
-- [ ] Migration: semua tabel attendance
-- [ ] Model: semua model attendance
-- [ ] Controller: AttendanceApiController
-- [ ] Routes: Attendance/Routes/api.php
-- [ ] Frontend: Attendance Index (kalender + tabel)
-- [ ] Frontend: Log Import page
-- [ ] Frontend: Roster page
-- [ ] Frontend: Overtime management
-
-### Fase P2: Leave
-- [ ] Migration: leave_types, leave_policies, leave_requests, leave_periods, etc.
-- [ ] Model: semua model leave
-- [ ] Controller: LeaveApiController
-- [ ] Routes: Leave/Routes/api.php
-- [ ] Frontend: Leave Index (daftar pengajuan)
-- [ ] Frontend: Leave Approval page
-- [ ] Frontend: Leave Settings page
-
-### Fase P3: Payroll
-- [ ] Migration: payroll_periods, payrolls, salary_components, configs
-- [ ] Model: semua model payroll
-- [ ] Controller: PayrollApiController
-- [ ] Routes: Payroll/Routes/api.php
-- [ ] Service: PayrollCalculator (port logic dari hris-system)
-- [ ] Frontend: Payroll Periods Index
-- [ ] Frontend: Payroll Period Detail (hasil generate)
-- [ ] Frontend: BPJS Config page
-- [ ] Frontend: PPH Config page
-
-### Fase P3: AuditSection (Supervisor)
-- [ ] Migration: payroll_audits, employee_thr, employee_salary_breakdowns
-- [ ] Migration: attendance_snapshots (supervisor version)
-- [ ] Model: semua model audit
-- [ ] Controller: AuditApiController (endpoint supervisor)
-- [ ] Routes: AuditSection/Routes/api.php
-- [ ] Frontend: Supervisor Dashboard
-- [ ] Frontend: Supervisor Attendance + Roster
-- [ ] Frontend: Supervisor Payroll (generate + export)
-- [ ] Frontend: Supervisor Employee list
-- [ ] Frontend: Supervisor Reports
-
-### Fase P4: Reports
-- [ ] Controller: ReportApiController (aggregation endpoints)
-- [ ] Routes: Reports/Routes/api.php
-- [ ] Frontend: Attendance Report
-- [ ] Frontend: Payroll Report
-- [ ] Frontend: Tax Report
-- [ ] Frontend: Export Excel/PDF buttons
-
-### Fase P4: Settings
-- [ ] Migration: system_settings
-- [ ] Model: SystemSetting
-- [ ] Controller: SettingsApiController
-- [ ] Routes: Settings/Routes/api.php
-- [ ] Frontend: Settings page
-
-### Deploy
-- [ ] Setup VPS database + env
-- [ ] Run migrations + seeders
-- [ ] Build frontend
-- [ ] SSL + Nginx config
-- [ ] Smoke test semua endpoint + UI
-```
 
 ---
 
@@ -1029,9 +1110,23 @@ Salin checklist ini ke tracking tool (Linear/Notion/GitHub Projects):
 | 1 | Tabel instances sekarang atau nanti? | **Sekarang.** Dibuat lengkap dengan model, migration, seeder, config |
 | 2 | Struktur backend? | **Tetap modular** `app/Modules/{Module}/...` seperti hris-system |
 | 3 | Company/branch tetap ada? | **Ya**, sebagai tabel referensi data, tanpa global scope |
-| 4 | Role hrbranch & admin? | Masing-masing **terpisah**: hrbranch ke Admin dashboard, admin ke Supervisor dashboard. Superadmin bisa akses **keduanya** |
-| 5 | Modul Supervisor? | **Tampilan sama** dengan Admin tapi **isi berbeda** (tabel & perhitungan berbeda) |
-| 6 | Import fingerprint? | **Tetap di module Attendance** |
-| 7 | Renaming & remapping tabel? | **Ya, bertahap per phase.** Semua tabel akan di-rename dengan prefix module (lihat bagian Rencana Renaming) |
+| 4 | Role hrbranch? | **Terpisah**: hrbranch ke Admin dashboard (view-only). Superadmin bisa akses **keduanya** |
+| 5 | Modul Supervisor? | **Tampilan sama** dengan Admin tapi **isi berbeda** (tabel & perhitungan berbeda) — "aplikasi bayangan" |
+| 6 | Import fingerprint? | **Tetap di module Attendance** + port FingerprintBinParser |
+| 7 | Renaming & remapping tabel? | **Ya, bertahap per fase.** Semua tabel akan di-rename dengan prefix module |
 | 8 | THR di dashboard mana? | **Kedua dashboard** (Admin + Supervisor) |
 | 9 | Bahasa aplikasi? | **Bahasa Indonesia** untuk menu. Technical terms tetap EN (generate, import, export) |
+| 10 | Enum di handle bagaimana? | **Enum dibuat tabel** di Fase 3 (Data Master, Config, Setting, Konstanta) |
+| 11 | Guard Sanctum vs Web? | **Tetap `web`** — Sanctum SPA mode menggunakan session (guard `web`) |
+| 12 | audit_logs? | **Satu tabel** dengan kolom `context: enum('main', 'shadow')`. Module sendiri `app/Modules/AuditLog/` |
+| 13 | Notifications? | **Masuk Fase 1** bersamaan Auth & Layout |
+| 14 | overtime_rules ownership? | **Satu tabel: `att_overtime_rules`** (shared antara attendance & payroll) |
+| 15 | payroll_results, payroll_breakdowns, payslips? | **Dihapus.** Sudah ada di `pay_records` (data + JSON breakdowns). Payslip di-render, bukan tabel |
+| 16 | payroll_component_snapshots? | **Dihapus.** Data komponen ada di `pay_component_values` |
+| 17 | employee_periodes naming? | **Dihapus total.** Diganti effective date pattern pada `emp_salaries`, `emp_contracts`, `emp_position_histories` |
+| 18 | salary_grade_histories module? | **Settings module (Fase 3)** — bersifat opsional, tidak semua perusahaan pakai |
+| 19 | permit_requests? | **Tidak ada tabel terpisah.** Izin ditangani via `lve_types` dengan `category: 'permit'` |
+| 20 | user_branches, company_settings, branch_settings? | **Semua dihapus.** 1 instance = 1 branch. Settings digabung ke `system_settings` |
+| 21 | Sync desktop? | **Ya.** Tambah `uuid` + `synced_at` di tabel data utama. Detail sync direncanakan terpisah |
+| 22 | Shared traits? | **Port 8 traits** dari hris-system. Hapus HasCompanyScope & HasBranchScope |
+| 23 | Arsitektur dua mesin? | **Aplikasi Utama** (Admin) + **Aplikasi Bayangan** (Supervisor) — perhitungan independen |

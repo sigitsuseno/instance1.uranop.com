@@ -30,9 +30,6 @@ export const usePermissionStore = defineStore('permission', () => {
       'view attendances',
       'view leave',
     ],
-    admin: [
-      'view supervisor dashboard',
-    ],
   }
 
   function can(permission) {

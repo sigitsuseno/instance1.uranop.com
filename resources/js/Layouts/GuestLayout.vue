@@ -1,12 +1,17 @@
 <script setup>
-import NotificationToast from '../Components/NotificationToast.vue'
+import { ref, onMounted } from 'vue'
+
+onMounted(() => {
+  if (localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+})
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-(--bg-main) p-4">
-    <div class="w-full max-w-md bg-(--bg-card) rounded-md shadow-lg border border-(--border-soft) p-8">
-      <slot />
-    </div>
-    <NotificationToast />
+  <div class="min-h-screen bg-(--bg-main) text-(--text-main)">
+    <slot />
   </div>
 </template>

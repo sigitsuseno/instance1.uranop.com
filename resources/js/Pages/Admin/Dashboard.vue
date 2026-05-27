@@ -6,58 +6,58 @@
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden">
-        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--primary) rounded-l-md"></div>
+      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden group hover:border-(--primary) transition-colors duration-300 shadow-sm hover:shadow-md">
+        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--primary) rounded-l-md group-hover:w-1.5 transition-all"></div>
         <div class="flex items-start justify-between pl-1">
           <div>
-            <p class="text-sm text-(--text-muted)">Total Karyawan</p>
-            <p class="text-2xl font-bold text-(--text-main) mt-1">{{ stats.totalKaryawan }}</p>
+            <p class="text-sm font-medium text-(--text-muted)">Total Karyawan</p>
+            <p class="text-3xl font-bold text-(--text-main) mt-2 tracking-tight">{{ stats.totalKaryawan }}</p>
             <p class="text-xs text-(--text-muted) mt-1">Karyawan aktif</p>
           </div>
-          <div class="p-2.5 rounded-md bg-(--primary)/10 text-(--primary)">
-            <IconUsers class="w-5 h-5" />
+          <div class="p-3 rounded-md bg-(--primary)/10 text-(--primary) group-hover:scale-110 transition-transform">
+            <IconUsers class="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden">
-        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--success) rounded-l-md"></div>
+      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden group hover:border-(--success) transition-colors duration-300 shadow-sm hover:shadow-md">
+        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--success) rounded-l-md group-hover:w-1.5 transition-all"></div>
         <div class="flex items-start justify-between pl-1">
           <div>
-            <p class="text-sm text-(--text-muted)">Hadir Hari Ini</p>
-            <p class="text-2xl font-bold text-(--text-main) mt-1">{{ stats.hadirHariIni }}</p>
+            <p class="text-sm font-medium text-(--text-muted)">Hadir Hari Ini</p>
+            <p class="text-3xl font-bold text-(--text-main) mt-2 tracking-tight">{{ stats.hadirHariIni }}</p>
             <p class="text-xs text-(--text-muted) mt-1">dari {{ stats.totalKaryawan }} karyawan</p>
           </div>
-          <div class="p-2.5 rounded-md bg-(--success)/10 text-(--success)">
-            <IconCalendarCheck class="w-5 h-5" />
+          <div class="p-3 rounded-md bg-(--success)/10 text-(--success) group-hover:scale-110 transition-transform">
+            <IconCalendarCheck class="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden">
-        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--warning) rounded-l-md"></div>
+      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden group hover:border-(--warning) transition-colors duration-300 shadow-sm hover:shadow-md">
+        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--warning) rounded-l-md group-hover:w-1.5 transition-all"></div>
         <div class="flex items-start justify-between pl-1">
           <div>
-            <p class="text-sm text-(--text-muted)">Menunggu Cuti</p>
-            <p class="text-2xl font-bold text-(--text-main) mt-1">{{ stats.menungguCuti }}</p>
+            <p class="text-sm font-medium text-(--text-muted)">Menunggu Cuti</p>
+            <p class="text-3xl font-bold text-(--text-main) mt-2 tracking-tight">{{ stats.menungguCuti }}</p>
             <p class="text-xs text-(--text-muted) mt-1">Perlu persetujuan</p>
           </div>
-          <div class="p-2.5 rounded-md bg-(--warning)/10 text-(--warning)">
-            <IconClock class="w-5 h-5" />
+          <div class="p-3 rounded-md bg-(--warning)/10 text-(--warning) group-hover:scale-110 transition-transform">
+            <IconClock class="w-6 h-6" />
           </div>
         </div>
       </div>
 
-      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden">
-        <div class="absolute left-0 top-0 bottom-0 w-1 bg-purple-500 rounded-l-md"></div>
+      <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-6 relative overflow-hidden group hover:border-(--primary-hover) transition-colors duration-300 shadow-sm hover:shadow-md">
+        <div class="absolute left-0 top-0 bottom-0 w-1 bg-(--primary-hover) rounded-l-md group-hover:w-1.5 transition-all"></div>
         <div class="flex items-start justify-between pl-1">
           <div>
-            <p class="text-sm text-(--text-muted)">Total Payroll</p>
-            <p class="text-2xl font-bold text-(--text-main) mt-1">{{ stats.totalPayroll }}</p>
+            <p class="text-sm font-medium text-(--text-muted)">Total Payroll</p>
+            <p class="text-2xl font-bold text-(--text-main) mt-2 tracking-tight">{{ stats.totalPayroll }}</p>
             <p class="text-xs text-(--text-muted) mt-1">Bulan ini</p>
           </div>
-          <div class="p-2.5 rounded-md bg-purple-500/10 text-purple-500">
-            <IconDollarSign class="w-5 h-5" />
+          <div class="p-3 rounded-md bg-(--primary-hover)/10 text-(--primary-hover) group-hover:scale-110 transition-transform">
+            <IconDollarSign class="w-6 h-6" />
           </div>
         </div>
       </div>

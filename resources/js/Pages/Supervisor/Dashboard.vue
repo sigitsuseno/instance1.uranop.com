@@ -13,10 +13,10 @@ import {
 } from '../../Components/Icons/index.js'
 
 const stats = ref([
-  { label: 'Total Karyawan', value: 45, icon: IconUsers, color: 'blue', accent: 'bg-blue-500' },
-  { label: 'Hadir Hari Ini', value: 42, icon: IconCalendarCheck, color: 'green', accent: 'bg-green-500' },
-  { label: 'Terlambat', value: 3, icon: IconClock, color: 'yellow', accent: 'bg-amber-500' },
-  { label: 'Izin', value: 2, icon: IconFileInvoice, color: 'orange', accent: 'bg-orange-500' },
+  { label: 'Total Karyawan', value: 45, icon: IconUsers, colorText: 'text-(--primary)', bgSoft: 'bg-(--primary)/10', accent: 'bg-(--primary)' },
+  { label: 'Hadir Hari Ini', value: 42, icon: IconCalendarCheck, colorText: 'text-(--success)', bgSoft: 'bg-(--success)/10', accent: 'bg-(--success)' },
+  { label: 'Terlambat', value: 3, icon: IconClock, colorText: 'text-(--warning)', bgSoft: 'bg-(--warning)/10', accent: 'bg-(--warning)' },
+  { label: 'Izin', value: 2, icon: IconFileInvoice, colorText: 'text-(--danger)', bgSoft: 'bg-(--danger)/10', accent: 'bg-(--danger)' },
 ])
 
 const attendanceCompliance = ref(93)
@@ -57,17 +57,17 @@ function offset(r, pct) {
       <div
         v-for="stat in stats"
         :key="stat.label"
-        class="bg-(--bg-card) rounded-md border border-(--border-soft) overflow-hidden shadow-sm"
+        class="bg-(--bg-card) rounded-md border border-(--border-soft) overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300 group"
       >
-        <div :class="`h-1 w-full ${stat.accent}`"></div>
+        <div :class="`h-1 w-full ${stat.accent} opacity-80 group-hover:opacity-100 transition-opacity`"></div>
         <div class="p-5">
           <div class="flex items-center justify-between">
             <div>
-              <p class="text-xs text-(--text-muted) uppercase tracking-wider">{{ stat.label }}</p>
-              <p class="text-2xl font-bold text-(--text-main) mt-1">{{ stat.value }}</p>
+              <p class="text-xs font-semibold text-(--text-muted) uppercase tracking-wider">{{ stat.label }}</p>
+              <p class="text-3xl font-bold text-(--text-main) mt-2 tracking-tight">{{ stat.value }}</p>
             </div>
-            <div :class="`p-2.5 rounded-md bg-${stat.color}-100/10`">
-              <component :is="stat.icon" :class="`w-6 h-6 text-${stat.color}-500`" />
+            <div :class="`p-3 rounded-md ${stat.bgSoft} group-hover:scale-110 transition-transform`">
+              <component :is="stat.icon" :class="`w-6 h-6 ${stat.colorText}`" />
             </div>
           </div>
         </div>

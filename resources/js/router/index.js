@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../Stores/auth'
 
+const Index = () => import('../Pages/Index.vue')
 const Login = () => import('../Pages/Auth/Login.vue')
 
 const AdminDashboard = () => import('../Pages/Admin/Dashboard.vue')
@@ -47,55 +48,64 @@ const routes = [
   },
 
   {
-    path: '/admin',
-    redirect: '/',
-  },
-  {
     path: '/',
-    component: () => import('../Layouts/AuthenticatedLayout.vue'),
-    meta: { requiresAuth: true, requiresAdmin: true },
+    name: 'landing',
+    component: Index,
+    meta: { guest: true },
+  },
+
+  {
+    path: '/admin',
+    component: () => import('../Layouts/RootLayout.vue'),
     children: [
-      { path: '', name: 'admin.dashboard', component: AdminDashboard },
-      { path: 'organization/departments', name: 'departments', component: DepartmentsIndex },
-      { path: 'organization/positions', name: 'positions', component: PositionsIndex },
-      { path: 'organization/salary-grades', name: 'salary-grades', component: SalaryGradesIndex },
-      { path: 'employees', name: 'employees', component: EmployeesIndex },
-      { path: 'employees/create', name: 'employees.create', component: EmployeeCreate },
-      { path: 'employees/:id', name: 'employees.show', component: EmployeeShow },
-      { path: 'employees/:id/edit', name: 'employees.edit', component: EmployeeEdit },
-      { path: 'attendance', name: 'attendance', component: AttendanceIndex },
-      { path: 'attendance/import', name: 'attendance.import', component: LogImport },
-      { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex },
-      { path: 'attendance/overtime', name: 'attendance.overtime', component: OvertimeIndex },
-      { path: 'leave', name: 'leave', component: LeaveIndex },
-      { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals },
-      { path: 'leave/settings', name: 'leave.settings', component: LeaveSettings },
-      { path: 'payroll', name: 'payroll', component: PayrollPeriodsIndex },
-      { path: 'payroll/thr', name: 'payroll.thr', component: PayrollThr },
-      { path: 'payroll/configs', name: 'payroll.configs', component: PayrollConfigsIndex },
-      { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail },
-      { path: 'schedule/work-patterns', name: 'schedule.work-patterns', component: WorkPatternsIndex },
-      { path: 'schedule/shifts', name: 'schedule.shifts', component: ShiftsIndex },
-      { path: 'schedule/calendars', name: 'schedule.calendars', component: CalendarsIndex },
-      { path: 'schedule/roster', name: 'schedule.roster', component: ScheduleRoster },
-      { path: 'reports', name: 'reports', component: ReportsIndex },
-      { path: 'settings', name: 'settings', component: SettingsIndex },
+      {
+        path: '',
+        component: () => import('../Layouts/Admin/AdminLayout.vue'),
+        meta: { requiresAuth: true, requiresAdmin: true },
+        children: [
+          { path: '', name: 'admin.dashboard', component: AdminDashboard, meta: { title: 'Dashboard' } },
+      { path: 'organization/departments', name: 'departments', component: DepartmentsIndex, meta: { title: 'Departemen' } },
+      { path: 'organization/positions', name: 'positions', component: PositionsIndex, meta: { title: 'Jabatan' } },
+      { path: 'organization/salary-grades', name: 'salary-grades', component: SalaryGradesIndex, meta: { title: 'Grade Gaji' } },
+      { path: 'employees', name: 'employees', component: EmployeesIndex, meta: { title: 'Karyawan' } },
+      { path: 'employees/create', name: 'employees.create', component: EmployeeCreate, meta: { title: 'Tambah Karyawan' } },
+      { path: 'employees/:id', name: 'employees.show', component: EmployeeShow, meta: { title: 'Detail Karyawan' } },
+      { path: 'employees/:id/edit', name: 'employees.edit', component: EmployeeEdit, meta: { title: 'Edit Karyawan' } },
+      { path: 'attendance', name: 'attendance', component: AttendanceIndex, meta: { title: 'Absensi' } },
+      { path: 'attendance/import', name: 'attendance.import', component: LogImport, meta: { title: 'Import Log' } },
+      { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
+      { path: 'attendance/overtime', name: 'attendance.overtime', component: OvertimeIndex, meta: { title: 'Lembur' } },
+      { path: 'leave', name: 'leave', component: LeaveIndex, meta: { title: 'Cuti' } },
+      { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals, meta: { title: 'Approval Cuti' } },
+      { path: 'leave/settings', name: 'leave.settings', component: LeaveSettings, meta: { title: 'Pengaturan Cuti' } },
+      { path: 'payroll', name: 'payroll', component: PayrollPeriodsIndex, meta: { title: 'Generate Gaji' } },
+      { path: 'payroll/thr', name: 'payroll.thr', component: PayrollThr, meta: { title: 'THR' } },
+      { path: 'payroll/configs', name: 'payroll.configs', component: PayrollConfigsIndex, meta: { title: 'Konfigurasi Payroll' } },
+      { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail, meta: { title: 'Detail Periode' } },
+      { path: 'schedule/work-patterns', name: 'schedule.work-patterns', component: WorkPatternsIndex, meta: { title: 'Pola Kerja' } },
+      { path: 'schedule/shifts', name: 'schedule.shifts', component: ShiftsIndex, meta: { title: 'Shift' } },
+      { path: 'schedule/calendars', name: 'schedule.calendars', component: CalendarsIndex, meta: { title: 'Kalender' } },
+      { path: 'schedule/roster', name: 'schedule.roster', component: ScheduleRoster, meta: { title: 'Roster' } },
+      { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
+      { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
+    ],
+  },
     ],
   },
 
   {
     path: '/supervisor',
-    component: () => import('../Layouts/AuthenticatedLayout.vue'),
+    component: () => import('../Layouts/Supervisor/SupervisorLayout.vue'),
     meta: { requiresAuth: true, requiresSupervisor: true },
     children: [
-      { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard },
-      { path: 'attendance', name: 'supervisor.attendance', component: SupervisorAttendance },
-      { path: 'attendance/roster', name: 'supervisor.attendance.roster', component: SupervisorRoster },
-      { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll },
-      { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr },
-      { path: 'leave', name: 'supervisor.leave', component: SupervisorLeave },
-      { path: 'employee', name: 'supervisor.employee', component: SupervisorEmployee },
-      { path: 'reports', name: 'supervisor.reports', component: SupervisorReports },
+      { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard, meta: { title: 'Dashboard Supervisor' } },
+      { path: 'attendance', name: 'supervisor.attendance', component: SupervisorAttendance, meta: { title: 'Kehadiran' } },
+      { path: 'attendance/roster', name: 'supervisor.attendance.roster', component: SupervisorRoster, meta: { title: 'Roster' } },
+      { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll, meta: { title: 'Generate Gaji' } },
+      { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr, meta: { title: 'THR' } },
+      { path: 'leave', name: 'supervisor.leave', component: SupervisorLeave, meta: { title: 'Cuti' } },
+      { path: 'employee', name: 'supervisor.employee', component: SupervisorEmployee, meta: { title: 'Karyawan' } },
+      { path: 'reports', name: 'supervisor.reports', component: SupervisorReports, meta: { title: 'Laporan' } },
     ],
   },
 
@@ -121,7 +131,8 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guest && auth.isAuthenticated) {
-    return '/'
+    if (auth.canAccessAdmin) return '/admin'
+    return '/supervisor'
   }
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
@@ -133,7 +144,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.requiresSupervisor && auth.isAuthenticated && !auth.canAccessSupervisor) {
-    return '/'
+    return '/admin'
   }
 
   return true
