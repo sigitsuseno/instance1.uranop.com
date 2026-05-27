@@ -1,0 +1,86 @@
+
+> build
+> vite build
+
+[36mvite v8.0.14 [32mbuilding client environment for production...[36m[39m
+[2K
+transforming...Γ£ô 77 modules transformed.
+Γ£ù Build failed in 1.05s
+error during build:
+Build failed with 66 errors:
+
+[plugin vite:vue] H:/laragon/www/instance1.uranop.com/resources/js/Pages/Admin/Schedule/Calendars/Index.vue:132:17
+RolldownError: Error parsing JavaScript expression: Unterminated template. (1:2)
+SyntaxError: Error parsing JavaScript expression: Unterminated template. (1:2)
+    at createCompilerError (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1374:17)
+    at emitError (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2980:5)
+    at createExp (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2973:7)
+    at Object.onattribend (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2528:29)
+    at Tokenizer.handleInAttrValue (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:959:16)
+    at Tokenizer.stateInAttrValueDoubleQuotes (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:969:10)
+    at Tokenizer.parse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1113:16)
+    at Object.baseParse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:3012:13)
+    at Object.parse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-dom\dist\compiler-dom.cjs.prod.js:665:23)
+    at Object.parse$1 [as parse] (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:1824:24)
+[plugin vite:vue] H:/laragon/www/instance1.uranop.com/resources/js/Pages/Admin/Schedule/WorkPatterns/Index.vue:101:17
+RolldownError: Error parsing JavaScript expression: Unterminated template. (1:2)
+SyntaxError: Error parsing JavaScript expression: Unterminated template. (1:2)
+    at createCompilerError (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1374:17)
+    at emitError (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2980:5)
+    at createExp (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2973:7)
+    at Object.onattribend (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2528:29)
+    at Tokenizer.handleInAttrValue (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:959:16)
+    at Tokenizer.stateInAttrValueDoubleQuotes (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:969:10)
+    at Tokenizer.parse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1113:16)
+    at Object.baseParse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:3012:13)
+    at Object.parse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-dom\dist\compiler-dom.cjs.prod.js:665:23)
+    at Object.parse$1 [as parse] (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:1824:24)
+[plugin vite:vue] H:/laragon/www/instance1.uranop.com/resources/js/Pages/Admin/Schedule/Shifts/Index.vue:99:17
+RolldownError: Error parsing JavaScript expression: Unterminated template. (1:2)
+SyntaxError: Error parsing JavaScript expression: Unterminated template. (1:2)
+    at createCompilerError (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1374:17)
+    at emitError (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2980:5)
+    at createExp (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2973:7)
+    at Object.onattribend (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:2528:29)
+    at Tokenizer.handleInAttrValue (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:959:16)
+    at Tokenizer.stateInAttrValueDoubleQuotes (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:969:10)
+    at Tokenizer.parse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:1113:16)
+    at Object.baseParse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-core\dist\compiler-core.cjs.prod.js:3012:13)
+    at Object.parse (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-dom\dist\compiler-dom.cjs.prod.js:665:23)
+    at Object.parse$1 [as parse] (H:\laragon\www\instance1.uranop.com\node_modules\@vue\compiler-sfc\dist\compiler-sfc.cjs.js:1824:24)
+[UNRESOLVED_IMPORT] Could not resolve '../../../../Components/BaseCard.vue' in resources/js/Pages/Supervisor/Attendance/Index.vue
+    Γò¡ΓöÇ[ resources/js/Pages/Supervisor/Attendance/Index.vue:39:22 ]
+    Γöé
+ 39 Γöé import BaseCard from '../../../../Components/BaseCard.vue'
+    Γöé                      ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+    Γöé                                        Γò░ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ Module not found.
+    Γöé 
+    Γöé Help: 'resources/js/Pages/Supervisor/Attendance/Index.vue' is imported by the following path:
+    Γöé         - resources/js/Pages/Supervisor/Attendance/Index.vue
+    Γöé         - resources/js/router/index.js
+    Γöé         - resources/js/app.js
+ΓöÇΓöÇΓöÇΓöÇΓò»
+
+[UNRESOLVED_IMPORT] Could not resolve '../../../../Components/BaseButton.vue' in resources/js/Pages/Supervisor/Attendance/Index.vue
+    Γò¡ΓöÇ[ resources/js/Pages/Supervisor/Attendance/Index.vue:40:24 ]
+    Γöé
+ 40 Γöé import BaseButton from '../../../../Components/BaseButton.vue'
+    Γöé                        ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓö¼ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ  
+    Γöé                                           Γò░ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ Module not found.
+    Γöé 
+    Γöé Help: 'resources/js/Pages/Supervisor/Attendance/Index.vue' is imported by the following path:
+    Γöé         - resources/js/Pages/Supervisor/Attendance/Index.vue
+    Γöé         - resources/js/router/index.js
+    Γöé         - resources/js/app.js
+ΓöÇΓöÇΓöÇΓöÇΓò»
+
+...
+    at aggregateBindingErrorsIntoJsError (file:///H:/laragon/www/instance1.uranop.com/node_modules/rolldown/dist/shared/error-B8po7KiL.mjs:48:18)
+    at unwrapBindingResult (file:///H:/laragon/www/instance1.uranop.com/node_modules/rolldown/dist/shared/error-B8po7KiL.mjs:18:128)
+    at #build (file:///H:/laragon/www/instance1.uranop.com/node_modules/rolldown/dist/shared/rolldown-build-9MccaWPU.mjs:3236:34)
+    at async buildEnvironment (file:///H:/laragon/www/instance1.uranop.com/node_modules/vite/dist/node/chunks/node.js:33137:64)
+    at async Object.build (file:///H:/laragon/www/instance1.uranop.com/node_modules/vite/dist/node/chunks/node.js:33559:19)
+    at async Object.buildApp (file:///H:/laragon/www/instance1.uranop.com/node_modules/vite/dist/node/chunks/node.js:33556:153)
+    at async CAC.<anonymous> (file:///H:/laragon/www/instance1.uranop.com/node_modules/vite/dist/node/cli.js:777:3) {
+  errors: [Getter/Setter]
+}
