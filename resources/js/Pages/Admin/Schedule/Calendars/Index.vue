@@ -129,7 +129,7 @@
     <ConfirmDialog
       :show="!!confirmDeleteHoliday"
       title="Hapus Hari Libur"
-      :message="'Apakah Anda yakin ingin menghapus \x22' + confirmDeleteHoliday?.name + '\x22?'"
+      :message="`Apakah Anda yakin ingin menghapus '${confirmDeleteHoliday?.name}'?`"
       confirm-text="Hapus"
       variant="danger"
       @confirm="deleteHoliday"

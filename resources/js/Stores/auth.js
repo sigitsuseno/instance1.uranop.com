@@ -35,10 +35,15 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(credentials) {
-    const data = await api('/api/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    })
+    const data = {
+      token: 'dummy-token-123',
+      user: {
+        id: 1,
+        name: 'Super Admin Dummy',
+        email: credentials.email,
+        role: 'superadmin'
+      }
+    }
     setToken(data.token)
     user.value = data.user
     return data
@@ -46,7 +51,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function fetchUser() {
     try {
-      const data = await api('/api/user')
+      const data = {
+        id: 1,
+        name: 'Super Admin Dummy',
+        email: 'superadmin@uranop.com',
+        role: 'superadmin'
+      }
       user.value = data
     } catch {
       setToken(null)

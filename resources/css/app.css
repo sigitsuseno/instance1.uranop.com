@@ -1,78 +1,145 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
+@source '../**/*.blade.php';
+@source '../**/*.js';
+
+@variant dark (&:where(.dark, .dark *));
+
+@font-face {
+    font-family: "Open Sans";
+    font-style: normal;
+    font-weight: 300 800;
+    font-display: swap;
+    src: url("../font/open_sans/OpenSans-VariableFont_wdth\,wght.ttf")
+        format("truetype");
+}
+
+@font-face {
+    font-family: "Open Sans";
+    font-style: italic;
+    font-weight: 300 800;
+    font-display: swap;
+    src: url("../font/open_sans/OpenSans-Italic-VariableFont_wdth,wght.ttf")
+        format("truetype");
+}
+
+@font-face {
+    font-family: "Roboto";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../font/roboto/Roboto-VariableFont_wdth,wght.ttf")
+        format("truetype");
+}
+
+@font-face {
+    font-family: "Roboto";
+    font-style: italic;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../font/roboto/Roboto-Italic-VariableFont_wdth,wght.ttf")
+        format("truetype");
+}
+
+@font-face {
+    font-family: "Roboto Condensed";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("../font/roboto/RobotoCondensed-VariableFont_wght.ttf")
+        format("truetype");
+}
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans:
+        "Roboto Condensed", ui-sans-serif, system-ui, sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+        "Noto Color Emoji";
+    --color-primary: #2563eb;
+    --color-primary-hover: #1d4ed8;
+    --bg-main: #f8fafc;
+    --bg-sidebar: #0f172a; /* Gelap sesuai gambar */
+    --bg-card: #ffffff;
+    --bg-elevated: #f1f5f9;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --text-soft: #94a3b8;
+    --border-soft: #e2e8f0;
 }
 
 :root {
-    --bg-main: #f8fafc;
+    /* Background System */
+    --bg-main: #e4e8ec;
     --bg-sidebar: #ffffff;
     --bg-card: #ffffff;
     --bg-elevated: #f1f5f9;
+
+    /* Text */
     --text-main: #0f172a;
     --text-muted: #64748b;
     --text-soft: #94a3b8;
+
+    /* Primary (Brand) */
     --primary: #2563eb;
     --primary-hover: #1d4ed8;
     --primary-glow: rgba(37, 99, 235, 0.25);
+
+    /* Border & UI */
     --border-soft: #e2e8f0;
     --border-strong: #cbd5f5;
+
+    /* Semantic Status */
     --success: #10b981;
-    --success-hover: #059669;
     --warning: #f59e0b;
-    --warning-hover: #d97706;
     --danger: #ef4444;
-    --danger-hover: #dc2626;
 }
 
 .dark {
-    --bg-main: #0b1220;
+    /* Background sesuai screenshot kamu (navy dark, bukan hitam) */
+    --bg-main: #090f1b;
     --bg-sidebar: #0f172a;
     --bg-card: #111c2d;
     --bg-elevated: #162235;
+
+    /* Text */
     --text-main: #e5e7eb;
     --text-muted: #94a3b8;
     --text-soft: #64748b;
+
+    /* Primary (blue glow enterprise) */
     --primary: #3b82f6;
     --primary-hover: #60a5fa;
     --primary-glow: rgba(59, 130, 246, 0.35);
+
+    /* Border */
     --border-soft: #1f2a44;
     --border-strong: #2b3a5c;
+
+    /* Semantic Status Dark */
     --success: #059669;
-    --success-hover: #10b981;
     --warning: #d97706;
-    --warning-hover: #f59e0b;
     --danger: #dc2626;
-    --danger-hover: #ef4444;
 }
 
-html {
-    scroll-behavior: smooth;
-}
-
-body {
-    font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif;
-}
-
-/* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
-    height: 6px;
 }
 
+/* Track */
 ::-webkit-scrollbar-track {
-    background: transparent;
+    box-shadow: inset 0 0 5px #ddd8d8c2;
+    border-radius: 10px;
 }
 
+/* Handle */
 ::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
-    border-radius: 3px;
+    background: #37373741;
+    border-radius: 10px;
 }
 
+/* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-soft);
+    background: #b30000;
 }

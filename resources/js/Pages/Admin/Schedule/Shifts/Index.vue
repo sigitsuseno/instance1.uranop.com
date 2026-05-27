@@ -96,7 +96,7 @@
     <ConfirmDialog
       :show="!!confirmDelete"
       title="Hapus Shift"
-      :message="'Apakah Anda yakin ingin menghapus shift \x22' + confirmDelete?.name + '\x22?'"
+      :message="`Apakah Anda yakin ingin menghapus shift '${confirmDelete?.name}'?`"
       confirm-text="Hapus"
       variant="danger"
       @confirm="deleteShift"

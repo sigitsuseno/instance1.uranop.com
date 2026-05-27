@@ -98,7 +98,7 @@
     <ConfirmDialog
       :show="!!confirmDelete"
       title="Hapus Pola Kerja"
-      :message="'Apakah Anda yakin ingin menghapus pola \x22' + confirmDelete?.name + '\x22?'"
+      :message="`Apakah Anda yakin ingin menghapus pola '${confirmDelete?.name}'?`"
       confirm-text="Hapus"
       variant="danger"
       @confirm="deletePattern"

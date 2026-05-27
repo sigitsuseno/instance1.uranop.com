@@ -116,6 +116,10 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
+  if (auth.isAuthenticated && !auth.user) {
+    await auth.fetchUser()
+  }
+
   if (to.meta.guest && auth.isAuthenticated) {
     return '/'
   }
