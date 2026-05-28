@@ -5,6 +5,8 @@ const Index = () => import('../Pages/Index.vue')
 const Login = () => import('../Pages/Auth/Login.vue')
 
 const AdminDashboard = () => import('../Pages/Admin/Dashboard.vue')
+const CompanyProfile = () => import('../Pages/Admin/Company/Profile.vue')
+const AdminsIndex = () => import('../Pages/Admin/Organization/Admins/Index.vue')
 const DepartmentsIndex = () => import('../Pages/Admin/Organization/Departments/Index.vue')
 const PositionsIndex = () => import('../Pages/Admin/Organization/Positions/Index.vue')
 const SalaryGradesIndex = () => import('../Pages/Admin/Organization/SalaryGrades/Index.vue')
@@ -65,6 +67,8 @@ const routes = [
         meta: { requiresAuth: true, requiresAdmin: true },
         children: [
           { path: '', name: 'admin.dashboard', component: AdminDashboard, meta: { title: 'Dashboard' } },
+      { path: 'organization/company-profile', name: 'company-profile', component: CompanyProfile, meta: { title: 'Profil Perusahaan' } },
+      { path: 'organization/admins', name: 'admins', component: AdminsIndex, meta: { title: 'Pengaturan Admin' } },
       { path: 'organization/departments', name: 'departments', component: DepartmentsIndex, meta: { title: 'Departemen' } },
       { path: 'organization/positions', name: 'positions', component: PositionsIndex, meta: { title: 'Jabatan' } },
       { path: 'organization/salary-grades', name: 'salary-grades', component: SalaryGradesIndex, meta: { title: 'Grade Gaji' } },

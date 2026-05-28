@@ -5,6 +5,7 @@ import { useTheme } from '../../composables/useTheme'
 import Sidebar from './Sidebar.vue'
 import Topbar from './Topbar.vue'
 import Footer from './Footer.vue'
+import NotificationToast from '../../Components/NotificationToast.vue'
 
 defineProps({
   title: { type: String, default: 'Dashboard' },
@@ -40,5 +41,8 @@ function toggleSidebar() {
 
       <Footer />
     </div>
+
+    <!-- Global Notification Toast -->
+    <NotificationToast />
   </div>
 </template>

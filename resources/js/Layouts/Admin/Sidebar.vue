@@ -40,9 +40,8 @@ const allMenus = [
     icon: 'bx bx-building-house',
     visible: isSuperadmin.value || isHrmanager.value,
     children: [
-      { title: 'Profil Perusahaan', icon: 'bx bx-building', route: '#' },
-      { title: 'Pengaturan Cabang', icon: 'bx bx-buildings', route: '#' },
-      { title: 'Admin', icon: 'bx bx-user-pin', route: '#', visible: isSuperadmin.value },
+      { title: 'Profil Perusahaan', icon: 'bx bx-building', route: '/admin/organization/company-profile' },
+      { title: 'Admin', icon: 'bx bx-user-pin', route: '/admin/organization/admins', visible: isSuperadmin.value },
     ],
   },
   {

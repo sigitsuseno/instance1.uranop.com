@@ -207,14 +207,14 @@ Traits yang akan di-port dari `app/Modules/Shared/Traits/`:
 
 | Trait | Fungsi | Status |
 |---|---|---|
-| `HasAuditLog` | Auto audit trail logging | `not started` |
-| `HasCache` | Caching helper | `not started` |
-| `HasEffectiveDate` | Effective date scopes & accessors | `not started` |
-| `HasExport` | Export helper (Excel/PDF) | `not started` |
-| `HasHierarchy` | Parent-child tree (departments, dll) | `not started` |
-| `HasSearch` | Search scope | `not started` |
-| `HasStatus` | Status scope/methods | `not started` |
-| `HasUserContext` | Auto-fill created_by/updated_by | `not started` |
+| `HasAuditLog` | Auto audit trail logging | `done` |
+| `HasCache` | Caching helper | `done` |
+| `HasEffectiveDate` | Effective date scopes & accessors | `done` |
+| `HasExport` | Export helper (Excel/PDF) | `done` |
+| `HasHierarchy` | Parent-child tree (departments, dll) | `done` |
+| `HasSearch` | Search scope | `done` |
+| `HasStatus` | Status scope/methods | `done` |
+| `HasUserContext` | Auto-fill created_by/updated_by | `done` |
 
 Traits yang **DIHAPUS** (tidak perlu di multi-instance):
 - ~~`HasCompanyScope`~~ — tidak perlu, 1 instance = 1 DB
@@ -226,8 +226,10 @@ Tabel `audit_logs` untuk mencatat perubahan data di kedua konteks (aplikasi utam
 
 | Item | Status |
 |---|---|
-| Migration `audit_logs` | `not started` |
-| Model AuditLog | `not started` |
+| Migration `audit_logs` | `done` |
+| Model AuditLog | `done` |
+| Controller AuditLogApiController | `done` |
+| Routes AuditLog/Routes/api.php | `done` |
 
 Struktur tabel:
 ```
@@ -285,9 +287,9 @@ audit_logs
 | Routes Auth/Routes/api.php | `done` | POST /login, POST /logout, GET /user |
 | AuthResource | `done` | `app/Modules/Auth/Resources/AuthResource.php` |
 | AuthServiceProvider | `stub` | `app/Modules/Auth/Providers/AuthServiceProvider.php` — masih kosong |
-| Migration `notifications` (Laravel standard) | `not started` | UUID primary key, morphs notifiable, data text, read_at |
-| Model Notification | `not started` | |
-| Controller NotificationApiController | `not started` | |
+| Migration `notifications` (Laravel standard) | `done` | UUID primary key, morphs notifiable, data text, read_at |
+| Model Notification | `done` | |
+| Controller NotificationApiController | `done` | |
 
 #### 1.2 Frontend
 
@@ -328,12 +330,12 @@ audit_logs
 | Migration permission_tables (Spatie) | `done` | roles, permissions, model_has_roles, dll |
 | Seeder RolePermissionSeeder | `done` | 5 roles + permissions (lihat section Roles & Permissions) |
 | Seeder UserSeeder | `done` | 3 default users (superadmin, hr, adm_manager) |
-| Migration Organization (departments, positions) | `not started` | Tanpa company_id/branch_id |
-| Model Department, Position | `not started` | |
-| Controller OrganizationApiController (CRUD) | `not started` | |
-| Routes Organization/Routes/api.php | `not started` | |
-| Resources: DepartmentResource, PositionResource | `not started` | |
-| Seeder Organization (data default) | `not started` | |
+| Migration Organization (departments, positions) | `done` | Tanpa company_id/branch_id |
+| Model Department, Position | `done` | |
+| Controller OrganizationApiController (CRUD) | `done` | |
+| Routes Organization/Routes/api.php | `done` | |
+| Resources: DepartmentResource, PositionResource | `done` | |
+| Seeder Organization (data default) | `done` | |
 
 #### 2.2 Frontend
 

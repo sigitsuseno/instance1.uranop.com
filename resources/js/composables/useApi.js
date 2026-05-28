@@ -13,10 +13,18 @@ export async function api(path, options = {}) {
         defaultHeaders['Authorization'] = `Bearer ${token}`
     }
 
-    const response = await fetch(url, {
-        headers: defaultHeaders,
+    const mergedHeaders = { ...defaultHeaders, ...(options.headers || {}) }
+
+    if (options.body instanceof FormData) {
+        delete mergedHeaders['Content-Type'];
+    }
+
+    const fetchOptions = {
         ...options,
-    })
+        headers: mergedHeaders,
+    }
+
+    const response = await fetch(url, fetchOptions)
 
     if (!response.ok) {
         let message = `API error: ${response.status}`
@@ -37,8 +45,8 @@ export async function api(path, options = {}) {
 
 export function useApi() {
     const get = (path, options = {}) => api(path, { ...options, method: 'GET' })
-    const post = (path, body, options = {}) => api(path, { ...options, method: 'POST', body: JSON.stringify(body) })
-    const put = (path, body, options = {}) => api(path, { ...options, method: 'PUT', body: JSON.stringify(body) })
+    const post = (path, body, options = {}) => api(path, { ...options, method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) })
+    const put = (path, body, options = {}) => api(path, { ...options, method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body) })
     const destroy = (path, options = {}) => api(path, { ...options, method: 'DELETE' })
 
     return { get, post, put, destroy, api }

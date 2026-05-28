@@ -64,18 +64,18 @@
       </div>
     </BaseCard>
 
-    <BaseModal :show="modalOpen" :title="isEditing ? 'Edit Departemen' : 'Tambah Departemen'" @close="closeModal">
+    <BaseModal :show="modalOpen" :title="isEditing ? 'Edit Bagian' : 'Tambah Bagian'" @close="closeModal">
       <form @submit.prevent="handleSave" class="space-y-4">
-        <TextInput v-model="form.name" label="Nama Departemen" placeholder="Masukkan nama departemen" required :error="errors.name" />
-        <TextInput v-model="form.code" label="Kode Departemen" placeholder="Contoh: IT" required :error="errors.code" />
+        <TextInput v-model="form.name" label="Nama Bagian" placeholder="Masukkan nama Bagian" required :error="errors.name" />
+        <TextInput v-model="form.code" label="Kode Bagian" placeholder="Contoh: IT" required :error="errors.code" />
         <TextInput v-model="form.description" label="Deskripsi" placeholder="Deskripsi opsional" :error="errors.description" />
         
         <!-- Parent Department Select -->
         <div>
-          <label class="block text-sm font-medium mb-1 text-(--text-main)">Induk Departemen</label>
+          <label class="block text-sm font-medium mb-1 text-(--text-main)">Induk Bagian</label>
           <select 
             v-model="form.parent_id"
-            class="w-full rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
+            class="w-full h-10 px-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
           >
             <option :value="null">-- Tidak Ada --</option>
             <option v-for="dept in parentOptions" :key="dept.id" :value="dept.id">

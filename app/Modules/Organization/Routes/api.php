@@ -17,4 +17,8 @@ Route::middleware(['auth:sanctum'])->prefix('organization')->group(function () {
     Route::get('/positions/{id}', [OrganizationApiController::class, 'showPosition']);
     Route::put('/positions/{id}', [OrganizationApiController::class, 'updatePosition']);
     Route::delete('/positions/{id}', [OrganizationApiController::class, 'destroyPosition']);
+
+    // Company Profile (Single Record)
+    Route::get('/company-profile', [\App\Modules\Organization\Controllers\Api\V1\CompanyProfileApiController::class, 'show']);
+    Route::post('/company-profile', [\App\Modules\Organization\Controllers\Api\V1\CompanyProfileApiController::class, 'update']);
 });

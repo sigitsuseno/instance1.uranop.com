@@ -15,7 +15,7 @@
 
     <BaseCard :padding="'p-0'">
       <div class="p-6 pb-0 flex gap-4">
-        <div class="relative w-64">
+        <div class="relative w-64 mb-4">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-(--text-muted)">
             <IconSearch class="w-4 h-4" />
           </div>
@@ -73,13 +73,13 @@
         <TextInput v-model="form.description" label="Deskripsi" placeholder="Deskripsi opsional" :error="errors.description" />
         
         <div>
-          <label class="block text-sm font-medium mb-1 text-(--text-main)">Departemen <span class="text-red-500">*</span></label>
+          <label class="block text-sm font-medium mb-1 text-(--text-main)">Bagian <span class="text-red-500">*</span></label>
           <select 
             v-model="form.department_id"
             required
-            class="w-full rounded-md border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
+            class="w-full h-10 px-2 rounded-md border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
           >
-            <option :value="null" disabled>Pilih departemen</option>
+            <option :value="null" disabled>Pilih Bagian</option>
             <option v-for="dept in departmentOptions" :key="dept.id" :value="dept.id">
               {{ dept.name }}
             </option>
@@ -91,7 +91,7 @@
           <label class="block text-sm font-medium mb-1 text-(--text-main)">Atasan Langsung (Reports To)</label>
           <select 
             v-model="form.reports_to_position_id"
-            class="w-full rounded-md border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
+            class="w-full h-10 px-2 rounded-md border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
           >
             <option :value="null">-- Tidak Ada --</option>
             <option v-for="pos in parentPositionOptions" :key="pos.id" :value="pos.id">
