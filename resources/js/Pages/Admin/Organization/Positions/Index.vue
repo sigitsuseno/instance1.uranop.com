@@ -24,7 +24,7 @@
             type="text"
             placeholder="Cari jabatan..."
             @keyup.enter="fetchPositions()"
-            class="w-full pl-10 pr-3 py-2 text-sm rounded-md border bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
+            class="w-full pl-10 pr-3 py-2 text-sm rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
           />
         </div>
         <BaseButton variant="secondary" @click="fetchPositions()">Cari</BaseButton>

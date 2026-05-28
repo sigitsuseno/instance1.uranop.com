@@ -12,7 +12,7 @@
           v-model="searchQuery"
           type="text"
           placeholder="Cari..."
-          class="w-full pl-10 pr-3 py-2 text-sm rounded-md border bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
+          class="w-full pl-10 pr-3 py-2 text-sm rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
         />
       </div>
       <div class="text-sm text-(--text-muted)">
@@ -29,7 +29,7 @@
                 type="checkbox"
                 :checked="allSelected"
                 @change="toggleAll"
-                class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)"
+                class="rounded border border-(--border-soft) text-(--primary) focus:ring-(--primary)"
               />
             </th>
             <th
@@ -105,7 +105,7 @@
                   type="checkbox"
                   :checked="isSelected(item)"
                   @change="toggleItem(item)"
-                  class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)"
+                  class="rounded border border-(--border-soft) text-(--primary) focus:ring-(--primary)"
                 />
               </td>
               <td

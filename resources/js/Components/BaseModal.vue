@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div v-if="show" class="fixed inset-0 z-40 bg-black/50" @click.self="handleBackdropClick" />
+    <div v-if="show" class="fixed inset-0 z-40 bg-gray-900/50 backdrop-blur-sm transition-opacity" @click.self="handleBackdropClick" />
     <div v-if="show" class="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
       <div :class="panelClasses">
         <div class="flex justify-between items-center px-6 py-4 border-b border-(--border-soft)">
@@ -49,7 +49,7 @@ const sizeClasses = {
 }
 
 const panelClasses = computed(() => {
-  return `bg-(--bg-card) rounded-md shadow-xl w-full pointer-events-auto ${sizeClasses[props.size] || sizeClasses.md} max-h-[90vh] overflow-y-auto`
+  return `bg-(--bg-card) rounded-xl shadow-2xl w-full pointer-events-auto ${sizeClasses[props.size] || sizeClasses.md} max-h-[90vh] overflow-y-auto`
 })
 
 function close() {

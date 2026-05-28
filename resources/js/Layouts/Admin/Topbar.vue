@@ -119,7 +119,7 @@ async function handleLogout() {
 
             <div class="border-t border-(--border-soft) my-2"></div>
 
-            <button @click.stop="close(); handleLogout()" class="flex items-center w-full px-4 py-2 text-sm text-\(--danger\) hover:bg-(--bg-elevated) transition-colors">
+            <button @click.stop="close(); handleLogout()" class="flex items-center w-full px-4 py-2 text-sm text-(--danger) hover:bg-(--bg-elevated) transition-colors">
               <i class="bx bx-log-out mr-3 text-lg"></i>
               Logout
             </button>

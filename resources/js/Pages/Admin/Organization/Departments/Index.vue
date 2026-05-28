@@ -1,5 +1,5 @@
 <template>
-  <div class="p-6 space-y-6">
+  <div class="space-y-6">
     <div class="flex items-center justify-between">
       <div>
         <h1 class="text-2xl font-bold text-(--text-main)">Departemen</h1>
@@ -14,8 +14,8 @@
     </div>
 
     <BaseCard :padding="'p-0'">
-      <div class="p-6 pb-0 flex gap-4">
-        <div class="relative w-64">
+      <div class="p-4 pb-0 flex gap-4">
+        <div class="relative w-64 mb-4">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-(--text-muted)">
             <IconSearch class="w-4 h-4" />
           </div>
@@ -24,7 +24,7 @@
             type="text"
             placeholder="Cari departemen..."
             @keyup.enter="fetchDepartments()"
-            class="w-full pl-10 pr-3 py-2 text-sm rounded-md border bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
+            class="w-full pl-10 pr-3 py-2 text-sm rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
           />
         </div>
         <BaseButton variant="secondary" @click="fetchDepartments()">Cari</BaseButton>
@@ -75,7 +75,7 @@
           <label class="block text-sm font-medium mb-1 text-(--text-main)">Induk Departemen</label>
           <select 
             v-model="form.parent_id"
-            class="w-full rounded-md border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
+            class="w-full rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
           >
             <option :value="null">-- Tidak Ada --</option>
             <option v-for="dept in parentOptions" :key="dept.id" :value="dept.id">

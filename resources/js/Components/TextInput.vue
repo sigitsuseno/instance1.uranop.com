@@ -42,7 +42,7 @@ defineEmits(['update:modelValue'])
 const slots = useSlots()
 
 const inputClasses = computed(() => {
-  const base = 'w-full px-3 py-2 rounded-md border bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors'
+  const base = 'w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors'
 
   const iconPadding = slots.icon ? 'pl-10' : ''
 

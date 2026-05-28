@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Pusat Notifikasi</h1>
+      <h1 class="text-2xl font-bold text-(--text-main)">Pusat Notifikasi</h1>
       <BaseButton v-if="unreadCount > 0" variant="secondary" @click="markAllAsRead">
         Tandai Semua Sudah Dibaca
       </BaseButton>
@@ -12,8 +12,8 @@
         <span class="loading loading-spinner loading-md text-primary"></span>
       </div>
 
-      <div v-else-if="notifications.length === 0" class="text-center py-8 text-gray-500 dark:text-gray-400">
-        <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div v-else-if="notifications.length === 0" class="text-center py-8 text-(--text-muted)">
+        <svg class="w-12 h-12 mx-auto mb-3 text-(--text-soft)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
         </svg>
         <p>Tidak ada notifikasi saat ini.</p>
@@ -24,25 +24,25 @@
           v-for="notification in notifications" 
           :key="notification.id"
           class="p-4 rounded-lg border transition-colors flex items-start gap-4"
-          :class="notification.read_at ? 'bg-white border-gray-100 dark:bg-gray-800 dark:border-gray-700' : 'bg-blue-50 border-blue-100 dark:bg-blue-900/20 dark:border-blue-800'"
+          :class="notification.read_at ? 'bg-(--bg-card) border-(--border-soft)' : 'bg-(--primary)/5 border-(--primary)/20'"
         >
           <div class="flex-shrink-0 mt-1">
-            <span class="w-2 h-2 rounded-full inline-block" :class="notification.read_at ? 'bg-gray-300 dark:bg-gray-600' : 'bg-primary'"></span>
+            <span class="w-2 h-2 rounded-full inline-block" :class="notification.read_at ? 'bg-(--border-strong)' : 'bg-(--primary)'"></span>
           </div>
           
           <div class="flex-grow">
-            <h3 class="font-medium text-gray-900 dark:text-white">
+            <h3 class="font-medium text-(--text-main)">
               {{ notification.data.title || 'Pemberitahuan Baru' }}
             </h3>
-            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">
+            <p class="text-sm text-(--text-muted) mt-1">
               {{ notification.data.message || 'Anda mendapatkan notifikasi baru.' }}
             </p>
-            <div class="text-xs text-gray-400 mt-2 flex items-center gap-4">
+            <div class="text-xs text-(--text-soft) mt-2 flex items-center gap-4">
               <span>{{ formatDate(notification.created_at) }}</span>
               <button 
                 v-if="!notification.read_at"
                 @click="markAsRead(notification.id)"
-                class="text-primary hover:underline"
+                class="text-(--primary) hover:underline"
               >
                 Tandai dibaca
               </button>

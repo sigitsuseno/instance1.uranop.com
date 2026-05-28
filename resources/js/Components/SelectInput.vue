@@ -49,7 +49,7 @@ const props = defineProps({
 defineEmits(['update:modelValue'])
 
 const selectClasses = computed(() => {
-  const base = 'w-full px-3 py-2 pr-10 rounded-md border bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors appearance-none'
+  const base = 'w-full px-3 py-2 pr-10 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors appearance-none'
 
   if (props.disabled) {
     return `${base} opacity-50 bg-(--bg-elevated) cursor-not-allowed`
