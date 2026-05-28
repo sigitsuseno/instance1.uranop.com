@@ -29,6 +29,7 @@ const CalendarsIndex = () => import('../Pages/Admin/Schedule/Calendars/Index.vue
 const ScheduleRoster = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
+const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
 
 const SupervisorDashboard = () => import('../Pages/Supervisor/Dashboard.vue')
 const SupervisorAttendance = () => import('../Pages/Supervisor/Attendance/Index.vue')
@@ -88,6 +89,7 @@ const routes = [
       { path: 'schedule/roster', name: 'schedule.roster', component: ScheduleRoster, meta: { title: 'Roster' } },
       { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
+      { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],
   },
     ],

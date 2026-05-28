@@ -261,11 +261,11 @@ audit_logs
 - [x] Vue Router (index.js) dengan semua route definitions
 - [x] Spatie Permission middleware aliases (`role`, `permission`, `role_or_permission`)
 - [x] SPA catch-all route (`/{any}` → `welcome.blade.php`)
-- [ ] `config/instance.php` — konfigurasi instance ID, name, slug
-- [ ] Module Instance — migration `instances` + model + seeder (untuk management console multi-instance ke depan)
-- [ ] Setup folder structure untuk semua module (template kosong)
-- [ ] Shared Traits: port 8 traits dari hris-system
-- [ ] Module AuditLog: migration `audit_logs` + model + trait `HasAuditLog`
+- [x] `config/instance.php` — konfigurasi instance ID, name, slug
+- [x] Module Instance — migration `instances` + model + seeder (untuk management console multi-instance ke depan)
+- [x] Setup folder structure untuk semua module (template kosong)
+- [x] Shared Traits: port 8 traits dari hris-system
+- [x] Module AuditLog: migration `audit_logs` + model + trait `HasAuditLog`
 
 ---
 
@@ -308,9 +308,9 @@ audit_logs
 - [x] Auth frontend (Login page, useAuth, route guard)
 - [x] Layout Admin (Sidebar, Topbar, Footer)
 - [x] Admin Dashboard page (mock data)
-- [ ] AuthServiceProvider — isi dengan logic jika diperlukan
-- [ ] Migration + Model + Controller: Notifications
-- [ ] Frontend: Notification center page
+- [x] AuthServiceProvider — isi dengan logic jika diperlukan
+- [x] Migration + Model + Controller: Notifications
+- [x] Frontend: Notification center page
 
 ---
 
@@ -351,14 +351,14 @@ audit_logs
 - [x] Frontend: Departments CRUD (mock data)
 - [x] Frontend: Positions CRUD (mock data)
 - [x] Frontend: SalaryGrades CRUD (mock data — akan masuk Settings)
-- [ ] Organization migration: departments, positions (tanpa company_id/branch_id)
-- [ ] Model: Department, Position
-- [ ] Controller: OrganizationApiController
-- [ ] Routes: Organization/Routes/api.php
-- [ ] Resources: DepartmentResource, PositionResource
-- [ ] Seeder: Organization default data
-- [ ] Frontend: Integrasi Department CRUD dengan API nyata
-- [ ] Frontend: Integrasi Position CRUD dengan API nyata
+- [x] Organization migration: departments, positions (tanpa company_id/branch_id)
+- [x] Model: Department, Position
+- [x] Controller: OrganizationApiController
+- [x] Routes: Organization/Routes/api.php
+- [x] Resources: DepartmentResource, PositionResource
+- [x] Seeder: Organization default data
+- [x] Frontend: Integrasi Department CRUD dengan API nyata
+- [x] Frontend: Integrasi Position CRUD dengan API nyata
 
 ---
 

@@ -14,7 +14,7 @@
     </div>
 
     <BaseCard :padding="'p-0'">
-      <div class="p-6 pb-0">
+      <div class="p-6 pb-0 flex gap-4">
         <div class="relative w-64">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-(--text-muted)">
             <IconSearch class="w-4 h-4" />
@@ -23,14 +23,23 @@
             v-model="searchQuery"
             type="text"
             placeholder="Cari departemen..."
+            @keyup.enter="fetchDepartments()"
             class="w-full pl-10 pr-3 py-2 text-sm rounded-md border bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
           />
         </div>
+        <BaseButton variant="secondary" @click="fetchDepartments()">Cari</BaseButton>
       </div>
-      <DataTable :headers="headers" :items="filteredDepartments">
-        <template #item.status="{ value }">
-          <Badge :variant="value === 'active' ? 'success' : 'warning'">
-            {{ value === 'active' ? 'Aktif' : 'Nonaktif' }}
+      
+      <div v-if="loading" class="p-6 flex justify-center">
+        <span class="loading loading-spinner text-primary"></span>
+      </div>
+      <DataTable v-else :headers="headers" :items="departments">
+        <template #item.manager_name="{ item }">
+          {{ item.manager_name || '-' }}
+        </template>
+        <template #item.is_active="{ value }">
+          <Badge :variant="value ? 'success' : 'warning'">
+            {{ value ? 'Aktif' : 'Nonaktif' }}
           </Badge>
         </template>
         <template #item.aksi="{ item }">
@@ -42,7 +51,7 @@
               <IconPencil class="w-4 h-4" />
             </button>
             <button
-              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10 transition-colors"
+              class="p-1.5 rounded-md text-(--text-muted) hover:text-red-600 hover:bg-red-600/10 transition-colors"
               @click="openDeleteConfirm(item)"
             >
               <IconTrash class="w-4 h-4" />
@@ -50,17 +59,43 @@
           </div>
         </template>
       </DataTable>
+      <div v-if="totalPages > 1" class="p-6 pt-0">
+        <Pagination :current-page="currentPage" :total-pages="totalPages" @page-change="fetchDepartments" />
+      </div>
     </BaseCard>
 
     <BaseModal :show="modalOpen" :title="isEditing ? 'Edit Departemen' : 'Tambah Departemen'" @close="closeModal">
       <form @submit.prevent="handleSave" class="space-y-4">
-        <TextInput v-model="form.name" label="Nama Departemen" placeholder="Masukkan nama departemen" required />
-        <TextInput v-model="form.code" label="Kode Departemen" placeholder="Contoh: IT" required />
-        <TextInput v-model="form.head" label="Kepala Departemen" placeholder="Nama kepala departemen" required />
+        <TextInput v-model="form.name" label="Nama Departemen" placeholder="Masukkan nama departemen" required :error="errors.name" />
+        <TextInput v-model="form.code" label="Kode Departemen" placeholder="Contoh: IT" required :error="errors.code" />
+        <TextInput v-model="form.description" label="Deskripsi" placeholder="Deskripsi opsional" :error="errors.description" />
+        
+        <!-- Parent Department Select -->
+        <div>
+          <label class="block text-sm font-medium mb-1 text-(--text-main)">Induk Departemen</label>
+          <select 
+            v-model="form.parent_id"
+            class="w-full rounded-md border-(--border-soft) bg-(--bg-card) text-(--text-main) shadow-sm focus:border-(--primary) focus:ring-(--primary) sm:text-sm"
+          >
+            <option :value="null">-- Tidak Ada --</option>
+            <option v-for="dept in parentOptions" :key="dept.id" :value="dept.id">
+              {{ dept.name }}
+            </option>
+          </select>
+          <p v-if="errors.parent_id" class="mt-1 text-sm text-red-600">{{ errors.parent_id[0] }}</p>
+        </div>
+        
+        <div class="flex items-center gap-2 mt-4">
+          <input type="checkbox" id="isActive" v-model="form.is_active" class="rounded text-(--primary) focus:ring-(--primary) border-(--border-soft) bg-(--bg-card)" />
+          <label for="isActive" class="text-sm font-medium text-(--text-main)">Status Aktif</label>
+        </div>
       </form>
       <template #footer>
         <BaseButton variant="ghost" @click="closeModal">Batal</BaseButton>
-        <BaseButton variant="primary" @click="handleSave">{{ isEditing ? 'Simpan' : 'Tambah' }}</BaseButton>
+        <BaseButton variant="primary" @click="handleSave" :disabled="saving">
+          <span v-if="saving" class="loading loading-spinner loading-sm mr-2"></span>
+          {{ isEditing ? 'Simpan' : 'Tambah' }}
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -77,7 +112,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useApi } from '../../../../composables/useApi'
+import { useNotificationStore } from '../../../../Stores/notification'
+
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
@@ -85,58 +123,70 @@ import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
 import TextInput from '../../../../Components/TextInput.vue'
 import DataTable from '../../../../Components/Table/DataTable.vue'
 import Badge from '../../../../Components/Badge.vue'
+import Pagination from '../../../../Components/Table/Pagination.vue'
 import { IconPlus, IconPencil, IconTrash, IconSearch } from '../../../../Components/Icons/index.js'
 
+const { get, post, put, destroy } = useApi()
+const notificationStore = useNotificationStore()
+
 const searchQuery = ref('')
+const loading = ref(true)
+const saving = ref(false)
+const departments = ref([])
+const parentOptions = ref([])
+
+const currentPage = ref(1)
+const totalPages = ref(1)
+
 const modalOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const isEditing = ref(false)
 const selectedItem = ref(null)
-
-const departments = ref([
-  { id: 1, name: 'Departemen Teknologi Informasi', code: 'IT', head: 'Budi Santoso', employee_count: 25, status: 'active' },
-  { id: 2, name: 'Departemen Sumber Daya Manusia', code: 'HRD', head: 'Siti Rahayu', employee_count: 12, status: 'active' },
-  { id: 3, name: 'Departemen Keuangan', code: 'FIN', head: 'Rudi Hermawan', employee_count: 18, status: 'active' },
-  { id: 4, name: 'Departemen Pemasaran', code: 'MKT', head: 'Dewi Lestari', employee_count: 15, status: 'active' },
-  { id: 5, name: 'Departemen Operasional', code: 'OPS', head: 'Agus Wijaya', employee_count: 30, status: 'active' },
-  { id: 6, name: 'Departemen Hukum', code: 'LG', head: 'Hendra Gunawan', employee_count: 8, status: 'active' },
-  { id: 7, name: 'Departemen Riset & Pengembangan', code: 'RND', head: 'Ratna Dewi', employee_count: 14, status: 'active' },
-  { id: 8, name: 'Departemen Layanan Pelanggan', code: 'CS', head: 'Fitriani', employee_count: 22, status: 'active' },
-  { id: 9, name: 'Departemen Logistik', code: 'LOG', head: 'Dimas Ardian', employee_count: 16, status: 'inactive' },
-  { id: 10, name: 'Departemen Kepatuhan', code: 'COMP', head: 'Andi Pratama', employee_count: 6, status: 'active' },
-])
+const errors = ref({})
 
 const headers = [
   { key: 'code', label: 'Kode' },
   { key: 'name', label: 'Nama' },
-  { key: 'head', label: 'Kepala' },
-  { key: 'employee_count', label: 'Jumlah Karyawan', align: 'center' },
-  { key: 'status', label: 'Status' },
+  { key: 'parent_name', label: 'Induk' },
+  { key: 'manager_name', label: 'Kepala' },
+  { key: 'is_active', label: 'Status' },
   { key: 'aksi', label: 'Aksi', sortable: false, align: 'center' },
 ]
-
-const filteredDepartments = computed(() => {
-  if (!searchQuery.value) return departments.value
-  const q = searchQuery.value.toLowerCase()
-  return departments.value.filter((d) =>
-    d.name.toLowerCase().includes(q) ||
-    d.code.toLowerCase().includes(q) ||
-    d.head.toLowerCase().includes(q)
-  )
-})
 
 const emptyForm = () => ({
   name: '',
   code: '',
-  head: '',
+  description: '',
+  parent_id: null,
+  is_active: true,
 })
 
 const form = ref(emptyForm())
+
+const fetchDepartments = async (page = 1) => {
+  loading.value = true
+  try {
+    const response = await get(`/api/organization/departments?page=${page}&search=${searchQuery.value}`)
+    departments.value = response.data
+    currentPage.value = response.meta.current_page
+    totalPages.value = response.meta.last_page
+    
+    // Also update parentOptions for the select dropdown (we can just fetch all or use the same list)
+    if (page === 1 && !searchQuery.value) {
+      parentOptions.value = response.data
+    }
+  } catch (error) {
+    notificationStore.addNotification('Gagal mengambil data departemen', 'error')
+  } finally {
+    loading.value = false
+  }
+}
 
 function openCreateModal() {
   isEditing.value = false
   selectedItem.value = null
   form.value = emptyForm()
+  errors.value = {}
   modalOpen.value = true
 }
 
@@ -146,8 +196,11 @@ function openEditModal(item) {
   form.value = {
     name: item.name,
     code: item.code,
-    head: item.head,
+    description: item.description,
+    parent_id: item.parent_id,
+    is_active: item.is_active,
   }
+  errors.value = {}
   modalOpen.value = true
 }
 
@@ -155,34 +208,31 @@ function closeModal() {
   modalOpen.value = false
   form.value = emptyForm()
   selectedItem.value = null
+  errors.value = {}
 }
 
-function handleSave() {
-  if (!form.value.name || !form.value.code || !form.value.head) return
-
-  if (isEditing.value && selectedItem.value) {
-    const idx = departments.value.findIndex((d) => d.id === selectedItem.value.id)
-    if (idx !== -1) {
-      departments.value[idx] = {
-        ...departments.value[idx],
-        name: form.value.name,
-        code: form.value.code,
-        head: form.value.head,
-      }
+async function handleSave() {
+  saving.value = true
+  errors.value = {}
+  try {
+    if (isEditing.value) {
+      await put(`/api/organization/departments/${selectedItem.value.id}`, form.value)
+      notificationStore.addNotification('Departemen berhasil diperbarui', 'success')
+    } else {
+      await post('/api/organization/departments', form.value)
+      notificationStore.addNotification('Departemen berhasil ditambahkan', 'success')
     }
-  } else {
-    const newId = Math.max(...departments.value.map((d) => d.id), 0) + 1
-    departments.value.push({
-      id: newId,
-      name: form.value.name,
-      code: form.value.code,
-      head: form.value.head,
-      employee_count: 0,
-      status: 'active',
-    })
+    closeModal()
+    fetchDepartments(currentPage.value)
+  } catch (error) {
+    if (error.response?.status === 422) {
+      errors.value = error.response.data.errors
+    } else {
+      notificationStore.addNotification('Gagal menyimpan departemen', 'error')
+    }
+  } finally {
+    saving.value = false
   }
-
-  closeModal()
 }
 
 function openDeleteConfirm(item) {
@@ -190,11 +240,20 @@ function openDeleteConfirm(item) {
   deleteDialogOpen.value = true
 }
 
-function handleDelete() {
-  if (selectedItem.value) {
-    departments.value = departments.value.filter((d) => d.id !== selectedItem.value.id)
+async function handleDelete() {
+  try {
+    await destroy(`/api/organization/departments/${selectedItem.value.id}`)
+    notificationStore.addNotification('Departemen berhasil dihapus', 'success')
+    fetchDepartments(currentPage.value)
+  } catch (error) {
+    notificationStore.addNotification('Gagal menghapus departemen', 'error')
+  } finally {
+    deleteDialogOpen.value = false
+    selectedItem.value = null
   }
-  deleteDialogOpen.value = false
-  selectedItem.value = null
 }
+
+onMounted(() => {
+  fetchDepartments()
+})
 </script>

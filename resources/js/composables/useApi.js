@@ -34,3 +34,12 @@ export async function api(path, options = {}) {
 
     return response.json()
 }
+
+export function useApi() {
+    const get = (path, options = {}) => api(path, { ...options, method: 'GET' })
+    const post = (path, body, options = {}) => api(path, { ...options, method: 'POST', body: JSON.stringify(body) })
+    const put = (path, body, options = {}) => api(path, { ...options, method: 'PUT', body: JSON.stringify(body) })
+    const destroy = (path, options = {}) => api(path, { ...options, method: 'DELETE' })
+
+    return { get, post, put, destroy, api }
+}

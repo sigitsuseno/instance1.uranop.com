@@ -23,5 +23,9 @@ export const useNotificationStore = defineStore('notification', () => {
   function warning(message) { add('warning', message) }
   function info(message) { add('info', message) }
 
-  return { notifications, add, remove, success, error, warning, info }
+  function addNotification(message, type = 'info', duration = 4000) {
+    add(type, message, duration)
+  }
+
+  return { notifications, add, remove, success, error, warning, info, addNotification }
 })
