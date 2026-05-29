@@ -9,6 +9,16 @@ THEME UI "CLEAN ELEGANT ENTERPRISE APLICATION"
 - light & dark mode didukung via localStorage.
 - sudut jangan terlalu curvy tapi tidak terlalu tajam juga (recommended: rounded-md).
 
+## ATURAN SPESIFIK WHITESPACE/SPACING, TINGGI ELEMENT SLL
+
+- SPACING : gunakan tailwind standar 4 atau 16px contoh : p-4, px-4, dst (maksimal 6)
+- TINGGI ELEMENT seperti tombol, input, select,
+    1. untuk kelas sm = h-8, px-2
+    2. untuk kelas md = h-10, px-3
+    3. untuk kelas lg dan xl = h-12, px-4
+- SEMUA ELEMENT TEXT, BUTTON, INPUT, SELECT HARUS MENGIKUTI TINGGI ELEMENT YANG SUDAH DITENTUKAN
+- Jangan multiple padding, contoh, di parennt element sudah ada p-4 atau p-6, child element tidan usah gunakan padding lagi, atau sebaliknya jika child berupa card harus menggunakan padding maka parent element gunakan space-y, space-x, atau gap- saja.
+
 ## 🎨 UI THEME TOKENS
 
 ```css

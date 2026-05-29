@@ -36,9 +36,9 @@ const props = defineProps({
 })
 
 const cardClasses = computed(() => {
-  const base = `${props.padding} bg-(--bg-card) border border-(--border-soft) rounded-lg shadow-md`
+  const base = `${props.padding} bg-(--bg-card) border border-(--border-soft) rounded-md shadow-sm transition-all duration-300`
   if (props.hoverable) {
-    return `${base} hover:shadow-md transition-shadow cursor-pointer`
+    return `${base} hover:shadow-lg hover:-translate-y-1 hover:border-(--primary)/50 cursor-pointer`
   }
   return base
 })

@@ -29,7 +29,7 @@ async function handleLogout() {
 </script>
 
 <template>
-  <header class="h-14 bg-(--bg-sidebar) flex items-center justify-between pl-12 pr-6 sticky top-0 z-20">
+  <header class="h-14 bg-(--bg-sidebar)/90 backdrop-blur-md border-b border-(--border-soft) flex items-center justify-between pl-12 pr-6 sticky top-0 z-20 transition-colors duration-300">
     <div class="flex items-center">
       <button
         @click="emit('toggle-sidebar')"

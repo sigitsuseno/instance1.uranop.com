@@ -247,7 +247,7 @@ watch(
             class="relative group w-full h-10 flex items-center justify-start px-3 rounded-md transition-all duration-200"
             :class="[
               isMenuOpen(item.title) || hasActiveChild(item.children)
-                ? 'bg-(--primary-glow) text-(--primary) font-semibold'
+                ? 'bg-(--primary)/10 text-(--primary) font-semibold shadow-[inset_3px_0_0_0_var(--primary)]'
                 : 'text-(--text-muted) hover:bg-(--bg-elevated) hover:text-(--text-main)',
             ]"
           >
@@ -282,7 +282,7 @@ watch(
                 child.route === '#'
                   ? 'opacity-40 pointer-events-none text-(--text-muted)'
                   : isActive(child.route)
-                    ? 'bg-(--primary-glow) text-(--primary) font-semibold'
+                    ? 'bg-(--primary)/10 text-(--primary) font-semibold shadow-[inset_3px_0_0_0_var(--primary)]'
                     : 'text-(--text-muted) hover:bg-(--bg-elevated) hover:text-(--text-main)',
               ]"
               @click.prevent="child.route === '#' ? null : undefined"
@@ -299,7 +299,7 @@ watch(
           class="relative group w-full h-10 flex items-center justify-start px-3 rounded-md transition-all duration-200"
           :class="
             isActive(item.route)
-              ? 'bg-(--primary-glow) text-(--primary) font-semibold'
+              ? 'bg-(--primary)/10 text-(--primary) font-semibold shadow-[inset_3px_0_0_0_var(--primary)]'
               : 'text-(--text-muted) hover:bg-(--bg-elevated) hover:text-(--text-main)'
           "
         >

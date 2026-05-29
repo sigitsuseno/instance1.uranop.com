@@ -42,16 +42,16 @@ defineEmits(['update:modelValue'])
 const slots = useSlots()
 
 const inputClasses = computed(() => {
-  const base = 'w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors'
+  const base = 'w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) hover:border-(--text-soft) focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all duration-300'
 
   const iconPadding = slots.icon ? 'pl-10' : ''
 
   if (props.disabled) {
-    return `${base} ${iconPadding} opacity-50 bg-(--bg-elevated) cursor-not-allowed`
+    return `${base} ${iconPadding} opacity-50 bg-(--bg-elevated) cursor-not-allowed hover:border-(--border-soft)`
   }
 
   if (props.error) {
-    return `${base} ${iconPadding} border-(--danger) ring-(--danger)/25`
+    return `${base} ${iconPadding} border-(--danger) hover:border-(--danger) focus:ring-(--danger)/20`
   }
 
   return `${base} ${iconPadding}`

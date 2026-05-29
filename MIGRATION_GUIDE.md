@@ -148,6 +148,7 @@ Dengan pattern ini, **tabel `employee_periodes` dihapus** — data bisa dihitung
 
 > **Catatan:** Setiap fase mencakup **backend + frontend** secara bersamaan.
 > **Prioritas:** Admin Dashboard dikerjakan terlebih dahulu. Supervisor Dashboard menyusul setelah fase 9.
+> **Panduan UI Frontend:** Saat mengerjakan bagian frontend/UI di setiap fasenya, Anda **diperbolehkan langsung copy-paste** dari template/aplikasi lama (`hris-system`) atau melakukan *improvement*. Namun, pastikan Anda menyesuaikan link navigasi dan integrasi API (Vue Router & Pinia/composables), serta **wajib** menyelaraskan struktur class dengan aturan yang tertulis di `uistyle.md` agar tampilan UI seragam.
 
 ---
 
@@ -1140,3 +1141,9 @@ Tabel auth yang **DIHAPUS**:
 | 22 | Shared traits? | **Port 8 traits** dari hris-system. Hapus HasCompanyScope & HasBranchScope |
 | 23 | Arsitektur dua mesin? | **Aplikasi Utama** (Admin) + **Aplikasi Bayangan** (Supervisor) — perhitungan independen |
 | 24 | Fungsi Employee Group? | **2 Mode: Grouping murni & Relasi dinamis.** Jangan hardcode `shift_id` di employees. Gunakan `reference_code` di `employee_groups` untuk relasi ke modul lain. |
+
+
+## Progress UI Upgrade (Premium Dashboard)
+
+- [x] **Organization Module**: Departments, Positions, Salary Grades, Admin Settings (Index UI Upgraded ke desain premium)
+- [x] **Employee Module**: Data Karyawan (Index UI Upgraded ke desain premium dengan grid card dan BoxIcons)

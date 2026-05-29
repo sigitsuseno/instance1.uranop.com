@@ -64,15 +64,15 @@ defineExpose({ open, close, toggle, isOpen })
       <slot name="trigger" :toggle="toggle" :isOpen="isOpen" />
     </div>
 
-    <Transition enter-active-class="transition duration-200 ease-out"
-      enter-from-class="transform scale-95 opacity-0"
-      enter-to-class="transform scale-100 opacity-100"
-      leave-active-class="transition duration-150 ease-in"
-      leave-from-class="transform scale-100 opacity-100"
-      leave-to-class="transform scale-95 opacity-0">
+    <Transition enter-active-class="transition duration-300 ease-out"
+      enter-from-class="transform scale-95 opacity-0 translate-y-2"
+      enter-to-class="transform scale-100 opacity-100 translate-y-0"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="transform scale-100 opacity-100 translate-y-0"
+      leave-to-class="transform scale-95 opacity-0 translate-y-2">
       <div v-if="isOpen" @click.stop
         :class="[
-          'absolute z-50 mt-2 bg-(--bg-card) border border-(--border-soft) rounded-lg shadow-lg py-1',
+          'absolute z-50 mt-2 bg-(--bg-card)/95 backdrop-blur-md border border-(--border-soft) rounded-md shadow-xl py-1',
           position === 'left' ? 'left-0' : 'right-0',
           width
         ]">

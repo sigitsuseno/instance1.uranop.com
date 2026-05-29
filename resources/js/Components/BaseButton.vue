@@ -42,21 +42,21 @@ const sizeClasses = {
 }
 
 const buttonClasses = computed(() => {
-  const base = 'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-(--primary)/25'
+  const base = 'inline-flex items-center justify-center font-medium rounded-md transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-(--bg-main) active:scale-95'
 
   if (props.disabled || props.loading) {
     return `${base} opacity-50 cursor-not-allowed ${sizeClasses[props.size]} ${variantClasses[props.variant] || variantClasses.primary}`
   }
 
-  return `${base} ${sizeClasses[props.size]} ${variantClasses[props.variant] || variantClasses.primary}`
+  return `${base} hover:-translate-y-[1px] hover:shadow-md ${sizeClasses[props.size]} ${variantClasses[props.variant] || variantClasses.primary}`
 })
 
 const variantClasses = {
-  primary: 'bg-(--primary) text-white shadow-sm hover:shadow hover:bg-(--primary-hover)',
-  secondary: 'bg-(--bg-elevated) text-(--text-main) border border-(--border-soft) shadow-sm hover:bg-(--border-soft)',
-  danger: 'bg-(--danger) text-white shadow-sm hover:shadow hover:bg-(--danger)/90',
-  success: 'bg-(--success) text-white shadow-sm hover:shadow hover:bg-(--success)/90',
-  warning: 'bg-(--warning) text-white shadow-sm hover:shadow hover:bg-(--warning)/90',
-  ghost: 'text-(--text-muted) hover:text-(--text-main) hover:bg-(--bg-elevated)',
+  primary: 'bg-(--primary) text-white shadow-sm hover:shadow-lg hover:shadow-(--primary-glow) hover:bg-(--primary-hover) focus:ring-(--primary-glow) border border-transparent',
+  secondary: 'bg-(--bg-card) text-(--text-main) border border-(--border-strong) shadow-sm hover:bg-(--bg-elevated) focus:ring-(--border-soft)',
+  danger: 'bg-(--danger) text-white shadow-sm hover:shadow-lg hover:shadow-red-500/20 hover:bg-red-600 focus:ring-red-500/50 border border-transparent',
+  success: 'bg-(--success) text-white shadow-sm hover:shadow-lg hover:shadow-green-500/20 hover:bg-green-600 focus:ring-green-500/50 border border-transparent',
+  warning: 'bg-(--warning) text-white shadow-sm hover:shadow-lg hover:shadow-yellow-500/20 hover:bg-yellow-600 focus:ring-yellow-500/50 border border-transparent',
+  ghost: 'text-(--text-muted) hover:text-(--text-main) hover:bg-(--bg-elevated) focus:ring-(--border-soft) border border-transparent hover:shadow-none',
 }
 </script>
