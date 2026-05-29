@@ -25,6 +25,12 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
         Route::get('/',    [EmployeeApiController::class, 'index'])->name('employees.index');
         Route::post('/',   [EmployeeApiController::class, 'store'])->name('employees.store');
 
+        // Global Contracts
+        Route::prefix('contracts')->group(function () {
+            Route::get('/stats', [ContractApiController::class, 'stats'])->name('employees.contracts.global.stats');
+            Route::post('/import', [ContractApiController::class, 'import'])->name('employees.contracts.global.import');
+        });
+
         // Submodules
         require __DIR__ . '/../Submodules/Import/Routes/api.php';
 
@@ -34,6 +40,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::put('/',    [EmployeeApiController::class, 'update'])->name('employees.update');
             Route::delete('/', [EmployeeApiController::class, 'destroy'])->name('employees.destroy');
             Route::patch('/toggle-status', [EmployeeApiController::class, 'toggleStatus'])->name('employees.toggle-status');
+            Route::patch('/deactivate', [EmployeeApiController::class, 'deactivate'])->name('employees.deactivate');
 
             // Sub-resource: Contracts
             Route::prefix('contracts')->group(function () {

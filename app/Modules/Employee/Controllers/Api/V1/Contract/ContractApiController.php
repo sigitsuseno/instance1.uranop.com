@@ -119,4 +119,62 @@ class ContractApiController extends Controller
 
         return response()->json(['message' => 'Status kompensasi dikembalikan.']);
     }
+
+    /**
+     * GET /api/contracts/stats
+     */
+    public function stats(): JsonResponse
+    {
+        $now = now();
+        $fourteenDaysLater = now()->addDays(14);
+
+        // We count from employees' latest contracts
+        $active = EmployeeContract::where('is_latest', true)
+            ->where('end_date', '>', $fourteenDaysLater->format('Y-m-d'))
+            ->count();
+
+        $expiringSoon = EmployeeContract::where('is_latest', true)
+            ->whereBetween('end_date', [$now->format('Y-m-d'), $fourteenDaysLater->format('Y-m-d')])
+            ->count();
+
+        $expired = EmployeeContract::where('is_latest', true)
+            ->where('end_date', '<', $now->format('Y-m-d'))
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'active' => $active,
+                'expiring_soon' => $expiringSoon,
+                'expired' => $expired,
+            ]
+        ]);
+    }
+
+    /**
+     * POST /api/contracts/import
+     */
+    public function import(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120' // max 5MB
+        ]);
+
+        $import = new \App\Modules\Employee\Imports\EmployeeContractImport();
+        \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
+
+        $result = $import->getResult();
+
+        if (count($result['failed']) > 0) {
+            return response()->json([
+                'message' => 'Import selesai dengan beberapa error.',
+                'stats' => $result['stats'],
+                'errors' => $result['failed']
+            ], 422);
+        }
+
+        return response()->json([
+            'message' => 'Import kontrak berhasil.',
+            'stats' => $result['stats']
+        ]);
+    }
 }

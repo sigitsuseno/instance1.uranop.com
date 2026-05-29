@@ -47,7 +47,8 @@ export function useApi() {
     const get = (path, options = {}) => api(path, { ...options, method: 'GET' })
     const post = (path, body, options = {}) => api(path, { ...options, method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) })
     const put = (path, body, options = {}) => api(path, { ...options, method: 'PUT', body: body instanceof FormData ? body : JSON.stringify(body) })
+    const patch = (path, body, options = {}) => api(path, { ...options, method: 'PATCH', body: body instanceof FormData ? body : JSON.stringify(body) })
     const destroy = (path, options = {}) => api(path, { ...options, method: 'DELETE' })
 
-    return { get, post, put, destroy, api }
+    return { get, post, put, patch, destroy, api }
 }

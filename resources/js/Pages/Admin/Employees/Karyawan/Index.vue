@@ -5,13 +5,14 @@ import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
+import BaseModal from '../../../../Components/BaseModal.vue'
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
 import Pagination from '../../../../Components/Table/Pagination.vue'
 import Badge from '../../../../Components/Badge.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
-const { get, destroy: apiDelete } = useApi()
+const { get, patch, destroy: apiDelete } = useApi()
 
 // State
 const loading = ref(false)
@@ -19,13 +20,31 @@ const employees = ref([])
 const stats = ref({ total: 0, active: 0, permanent: 0, contract: 0 })
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
 const showDeleteDialog = ref(false)
+const showDeactivateDialog = ref(false)
 const selectedEmployee = ref(null)
+const deactivateForm = ref({ date: '', reason: '' })
+
+const generateDeactivateDates = () => {
+  const dates = []
+  const currentYear = new Date().getFullYear()
+  for (let month = 0; month < 12; month++) {
+    const d = new Date(currentYear, month, 24)
+    dates.push({
+      value: `${currentYear}-${String(month + 1).padStart(2, '0')}-24`,
+      label: `24 ${d.toLocaleString('id-ID', { month: 'long' })} ${currentYear}`
+    })
+  }
+  return dates
+}
+const deactivateDates = generateDeactivateDates()
 
 // Filters
 const searchQuery = ref('')
 const filterDepartment = ref('')
 const filterStatus = ref('')
 const filterEmploymentStatus = ref('')
+const periodStartFilter = ref('')
+const periodEndFilter = ref('')
 const currentPage = ref(1)
 
 // Options dari API
@@ -50,7 +69,13 @@ async function fetchEmployees() {
     if (searchQuery.value) params.set('search', searchQuery.value)
     if (filterDepartment.value) params.set('department_id', filterDepartment.value)
     if (filterEmploymentStatus.value) params.set('employment_status', filterEmploymentStatus.value)
-    if (filterStatus.value !== '') params.set('is_active', filterStatus.value)
+    
+    if (periodStartFilter.value && periodEndFilter.value) {
+      params.set('period_start', periodStartFilter.value)
+      params.set('period_end', periodEndFilter.value)
+    } else if (filterStatus.value !== '') {
+      params.set('is_active', filterStatus.value)
+    }
 
     const res = await get(`/api/v1/employees?${params}`)
     // Note: use the correct API path if your backend is `/api/v1/employees` vs `/api/employees`. I'll try without v1 first as most other endpoints are without v1 in the new setup.
@@ -120,6 +145,32 @@ function cancelDelete() {
   selectedEmployee.value = null
 }
 
+function confirmDeactivate(employee) {
+  selectedEmployee.value = employee
+  deactivateForm.value = { date: '', reason: '' }
+  showDeactivateDialog.value = true
+}
+
+function cancelDeactivate() {
+  showDeactivateDialog.value = false
+  selectedEmployee.value = null
+}
+
+async function handleDeactivate() {
+  if (!selectedEmployee.value || !deactivateForm.value.date || !deactivateForm.value.reason) return
+  try {
+    await patch(`/api/v1/employees/${selectedEmployee.value.id}/deactivate`, deactivateForm.value)
+    notification.addNotification(`Karyawan ${selectedEmployee.value.name} berhasil dinonaktifkan.`, 'success')
+    fetchEmployees()
+    fetchStats()
+  } catch (e) {
+    notification.addNotification('Gagal menonaktifkan karyawan.', 'error')
+  } finally {
+    showDeactivateDialog.value = false
+    selectedEmployee.value = null
+  }
+}
+
 function handlePageChange(page) {
   currentPage.value = page
 }
@@ -129,6 +180,8 @@ function resetFilters() {
   filterDepartment.value = ''
   filterStatus.value = ''
   filterEmploymentStatus.value = ''
+  periodStartFilter.value = ''
+  periodEndFilter.value = ''
   currentPage.value = 1
   fetchEmployees()
 }
@@ -174,7 +227,7 @@ watch(searchQuery, () => {
   }, 400)
 })
 
-watch([filterDepartment, filterStatus, filterEmploymentStatus], () => {
+watch([filterDepartment, filterStatus, filterEmploymentStatus, periodStartFilter, periodEndFilter], () => {
   currentPage.value = 1
   fetchEmployees()
 })
@@ -193,7 +246,7 @@ onMounted(() => {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div class="flex items-center gap-4">
-        <div class="w-12 h-12 rounded-xl bg-(--primary)/10 flex items-center justify-center text-(--primary) shadow-sm">
+        <div class="w-12 h-12 rounded-md bg-(--primary)/10 flex items-center justify-center text-(--primary) shadow-sm">
           <i class="bx bx-group text-2xl"></i>
         </div>
         <div>
@@ -232,7 +285,7 @@ onMounted(() => {
             <p class="text-sm font-medium text-(--text-muted)">Total Karyawan</p>
             <p class="text-3xl font-bold text-(--text-main) mt-1">{{ stats.total }}</p>
           </div>
-          <div class="w-12 h-12 bg-(--primary)/10 text-(--primary) rounded-xl flex items-center justify-center">
+          <div class="w-12 h-12 bg-(--primary)/10 text-(--primary) rounded-md flex items-center justify-center">
             <i class="bx bx-group text-2xl"></i>
           </div>
         </div>
@@ -245,7 +298,7 @@ onMounted(() => {
             <p class="text-sm font-medium text-(--text-muted)">Karyawan Aktif</p>
             <p class="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{{ stats.active }}</p>
           </div>
-          <div class="w-12 h-12 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center">
+          <div class="w-12 h-12 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-md flex items-center justify-center">
             <i class="bx bx-user-check text-2xl"></i>
           </div>
         </div>
@@ -258,7 +311,7 @@ onMounted(() => {
             <p class="text-sm font-medium text-(--text-muted)">Karyawan Tetap</p>
             <p class="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-1">{{ stats.permanent }}</p>
           </div>
-          <div class="w-12 h-12 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center">
+          <div class="w-12 h-12 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md flex items-center justify-center">
             <i class="bx bx-badge-check text-2xl"></i>
           </div>
         </div>
@@ -271,7 +324,7 @@ onMounted(() => {
             <p class="text-sm font-medium text-(--text-muted)">Karyawan Kontrak</p>
             <p class="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">{{ stats.contract }}</p>
           </div>
-          <div class="w-12 h-12 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl flex items-center justify-center">
+          <div class="w-12 h-12 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-md flex items-center justify-center">
             <i class="bx bx-time text-2xl"></i>
           </div>
         </div>
@@ -326,11 +379,26 @@ onMounted(() => {
           >
             <option value="">Aktif/Non</option>
             <option value="1">Aktif</option>
-            <option value="0">Nonaktif</option>
+            <option value="0">Non-Aktif</option>
           </select>
           <div class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-(--text-muted)">
             <i class="bx bx-chevron-down text-lg"></i>
           </div>
+        </div>
+
+        <div class="w-36">
+          <input 
+            type="date" 
+            v-model="periodStartFilter"
+            class="w-full px-3 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm"
+          >
+        </div>
+        <div class="w-36">
+          <input 
+            type="date" 
+            v-model="periodEndFilter"
+            class="w-full px-3 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm"
+          >
         </div>
 
         <BaseButton variant="ghost" @click="resetFilters" class="px-3" title="Reset Filter">
@@ -351,22 +419,22 @@ onMounted(() => {
         <div 
           v-for="emp in employees" 
           :key="emp.id" 
-          class="bg-(--bg-card) rounded-xl border border-(--border-soft) p-4 hover:border-(--primary)/50 hover:shadow-md transition-all duration-300 group flex gap-4 relative"
+          class="bg-(--bg-card) rounded-md border border-(--border-soft) p-4 hover:border-(--primary)/50 hover:shadow-md transition-all duration-300 group flex gap-4 relative"
         >
           <!-- Left Section: Photo -->
           <div class="relative shrink-0 w-24 h-24 sm:w-28 sm:h-28">
-            <div class="w-full h-full rounded-xl border border-(--border-soft) overflow-hidden bg-(--bg-elevated) shadow-sm">
+            <div class="w-full h-full rounded-md border border-(--border-soft) overflow-hidden bg-(--bg-elevated) shadow-sm">
               <img v-if="emp.photo_url" :src="emp.photo_url" :alt="emp.name" class="w-full h-full object-cover">
               <div v-else class="w-full h-full flex items-center justify-center bg-(--primary)/10 text-(--primary) font-bold text-3xl">
                 {{ getInitials(emp.name) }}
               </div>
             </div>
             <!-- Status Badge Checkmark -->
-            <div v-if="emp.is_active" class="absolute -top-2 -right-2 w-6 h-6 bg-(--bg-card) rounded-full flex items-center justify-center border-2 border-emerald-500 shadow-sm" title="Aktif">
+            <button v-if="emp.is_active" @click="confirmDeactivate(emp)" class="absolute -top-2 -right-2 w-7 h-7 bg-(--bg-card) rounded-full flex items-center justify-center border-2 border-emerald-500 shadow-sm hover:bg-emerald-50 transition-colors cursor-pointer" title="Klik untuk nonaktifkan">
               <i class="bx bx-check text-emerald-500 text-sm font-bold"></i>
-            </div>
+            </button>
             <div v-else class="absolute -top-2 -right-2 w-6 h-6 bg-(--bg-card) rounded-full flex items-center justify-center border-2 border-red-500 shadow-sm" title="Nonaktif">
-              <i class="bx bx-x text-red-500 text-sm font-bold"></i>
+              <i class="bx bx-power-off text-red-500 text-sm font-bold"></i>
             </div>
           </div>
 
@@ -437,7 +505,7 @@ onMounted(() => {
     </div>
 
     <!-- Empty State -->
-    <div v-else class="bg-(--bg-card) rounded-xl border border-(--border-soft) p-16 text-center shadow-sm">
+    <div v-else class="bg-(--bg-card) rounded-md border border-(--border-soft) p-16 text-center shadow-sm">
       <div class="w-20 h-20 bg-(--primary)/5 rounded-full flex items-center justify-center mx-auto mb-4 text-(--primary)/40">
         <i class="bx bx-user-x text-4xl"></i>
       </div>
@@ -467,5 +535,41 @@ onMounted(() => {
       @confirm="handleDelete"
       @cancel="cancelDelete"
     />
+
+    <!-- Deactivate Modal -->
+    <BaseModal
+      :show="showDeactivateDialog"
+      title="Nonaktifkan Karyawan"
+      @close="cancelDeactivate"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">Silakan tentukan tanggal dan alasan penonaktifan untuk <strong class="text-(--text-main)">{{ selectedEmployee?.name }}</strong>.</p>
+        
+        <div>
+          <label class="block text-sm font-medium text-(--text-main) mb-1">Tanggal Non-Aktif</label>
+          <select v-model="deactivateForm.date" class="w-full h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary) outline-none transition-all">
+            <option value="" disabled>Pilih Tanggal</option>
+            <option v-for="d in deactivateDates" :key="d.value" :value="d.value">{{ d.label }}</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="block text-sm font-medium text-(--text-main) mb-1">Keterangan</label>
+          <select v-model="deactivateForm.reason" class="w-full h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary) outline-none transition-all">
+            <option value="" disabled>Pilih Keterangan</option>
+            <option value="resign">Resign</option>
+            <option value="phk">PHK</option>
+            <option value="mangkir">Mangkir</option>
+          </select>
+        </div>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="ghost" @click="cancelDeactivate">Batal</BaseButton>
+        <BaseButton variant="danger" :disabled="!deactivateForm.date || !deactivateForm.reason" @click="handleDeactivate">
+          Nonaktifkan Karyawan
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>

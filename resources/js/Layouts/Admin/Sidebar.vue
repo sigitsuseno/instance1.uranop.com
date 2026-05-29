@@ -51,7 +51,7 @@ const allMenus = [
       { title: 'Import Karyawan', icon: 'bx bx-upload', route: '/admin/employees/import' },
       { title: 'Grouping Karyawan', icon: 'bx bx-layer', route: '/admin/employees' },
       { title: 'Gaji Karyawan', icon: 'bx bx-money', route: '/admin/employees' },
-      { title: 'Kontrak Kerja', icon: 'bx bx-file', route: '/admin/employees' },
+      { title: 'Kontrak Kerja', icon: 'bx bx-file', route: '/admin/employees/contracts' },
       { title: 'Kompensasi', icon: 'bx bx-money-withdraw', route: '/admin/employees' },
       { title: 'Riwayat Pekerjaan', icon: 'bx bx-history', route: '/admin/employees' },
       { title: 'Keluarga & Tanggungan', icon: 'bx bx-heart', route: '/admin/employees' },

@@ -36,8 +36,22 @@ class EmployeeService
             $query->where('employment_status', $filters['employment_status']);
         }
 
-        if (isset($filters['is_active']) && $filters['is_active'] !== '') {
+        if (! empty($filters['period_start']) && ! empty($filters['period_end'])) {
+            $query->activeInPeriod($filters['period_start'], $filters['period_end']);
+        } elseif (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $query->where('is_active', (bool) $filters['is_active']);
+        }
+
+        if (! empty($filters['contract_type'])) {
+            $query->whereHas('latestContract', function ($q) use ($filters) {
+                $q->where('contract_type', $filters['contract_type']);
+            });
+        }
+
+        if (! empty($filters['contract_status'])) {
+            $query->whereHas('latestContract', function ($q) use ($filters) {
+                $q->where('status', $filters['contract_status']);
+            });
         }
 
         return $query->paginate($filters['per_page'] ?? 15);
@@ -148,6 +162,43 @@ class EmployeeService
         $employee->save();
 
         return $employee->fresh();
+    }
+
+    /**
+     * Deactivate employee.
+     */
+    public function deactivate(Employee $employee, array $data): Employee
+    {
+        return DB::transaction(function () use ($employee, $data) {
+            $reason = $data['reason'];
+            $date   = $data['date'];
+
+            // 1. Update status kontrak menjadi reason (resign/phk/mangkir)
+            $employee->contracts()->update(['status' => $reason]);
+
+            // 2. Tentukan employment_status
+            $employmentStatus = match ($reason) {
+                'resign'  => 'resigned',
+                'phk', 'mangkir' => 'terminated',
+                default   => 'resigned',
+            };
+
+            // 3. Update employee
+            $updateData = [
+                'is_active'         => false,
+                'end_date'          => $date,
+                'employment_status' => $employmentStatus,
+                'updated_by'        => Auth::id(),
+            ];
+
+            if ($reason === 'resign') {
+                $updateData['resign_date'] = $date;
+            }
+
+            $employee->update($updateData);
+
+            return $employee->fresh();
+        });
     }
 
     /**

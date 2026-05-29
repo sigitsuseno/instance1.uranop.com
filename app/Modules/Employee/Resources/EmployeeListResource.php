@@ -34,6 +34,7 @@ class EmployeeListResource extends JsonResource
             'base_salary'            => (float) $this->base_salary,
             'premi'                  => (float) $this->premi,
             'tunjangan'              => (float) $this->tunjangan,
+            'latest_contract'        => $this->whenLoaded('latestContract', fn () => $this->latestContract),
         ];
     }
 }

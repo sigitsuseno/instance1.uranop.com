@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from '../../composables/useTheme'
+import { useWebPush } from '../../composables/useWebPush'
 import Sidebar from './Sidebar.vue'
 import Topbar from './Topbar.vue'
 import Footer from './Footer.vue'
@@ -13,6 +14,7 @@ defineProps({
 
 const route = useRoute()
 const { isDark, toggle: toggleTheme } = useTheme()
+const { subscribe, isSupported } = useWebPush()
 
 const pageTitle = computed(() => route.meta?.title || 'Dashboard')
 const sidebarCollapsed = ref(false)
@@ -20,6 +22,12 @@ const sidebarCollapsed = ref(false)
 function toggleSidebar() {
   sidebarCollapsed.value = !sidebarCollapsed.value
 }
+
+onMounted(() => {
+  if (isSupported.value) {
+    subscribe()
+  }
+})
 </script>
 
 <template>

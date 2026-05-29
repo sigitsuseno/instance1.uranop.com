@@ -436,22 +436,22 @@ Module **Settings** dan semua data master/config:
 
 | Item | Status |
 |---|---|
-| Migration employees (+ uuid, synced_at) | `not started` |
-| Migration employee_contracts | `not started` |
-| Migration employee_families | `not started` |
-| Migration employee_documents | `not started` |
-| Migration employee_salaries (+ effective_date) | `not started` |
-| Migration employee_salary_components | `not started` |
-| Migration employee_salary_breakdowns | `not started` |
-| Migration employee_position_histories | `not started` |
-| Migration employee_terminations | `not started` |
-| Migration employee_bpjs | `not started` |
-| Migration employee_thr | `not started` |
-| Model: Employee (+ effective date accessors) | `not started` |
-| Model: Contract, Family, Document, Salary, Termination, dll | `not started` |
-| Controller EmployeeApiController (CRUD + import + export) | `not started` |
-| Routes Employee/Routes/api.php | `not started` |
-| Resources: EmployeeResource | `not started` |
+| Migration employees (+ uuid, synced_at) | `done` |
+| Migration employee_contracts | `done` |
+| Migration employee_families | `done` |
+| Migration employee_documents | `done` |
+| Migration employee_salaries (+ effective_date) | `done` |
+| Migration employee_salary_components | `done` |
+| Migration employee_salary_breakdowns | `done` |
+| Migration employee_position_histories | `done` |
+| Migration employee_terminations | `done` |
+| Migration employee_bpjs | `done` |
+| Migration employee_thr | `done` |
+| Model: Employee (+ effective date accessors) | `done` |
+| Model: Contract, Family, Document, Salary, Termination, dll | `done` |
+| Controller EmployeeApiController (CRUD + import + export) | `done` |
+| Routes Employee/Routes/api.php | `done` |
+| Resources: EmployeeResource | `done` |
 
 #### 4.2 Frontend
 
@@ -798,6 +798,19 @@ Export/Import classes:
 | **adm_manager** | No access | Full access (CRUD + Export) |
 | **hrbranch** | View-only | No access |
 | **hr_ast** | View + Input | No access |
+
+---
+
+## Daftar Scope Employee
+
+Berikut adalah daftar Custom Query Scopes yang terdapat di model `Employee` (`app/Modules/Employee/Models/Employee.php`) untuk mempermudah pengambilan data:
+
+1. **`scopeActiveInPeriod($query, $startDate, $endDate)`**
+   * **Fungsi:** Mengambil data karyawan yang aktif *di dalam* suatu periode (berguna untuk perhitungan *payroll*, dsb).
+   * **Aturan:** 
+     - Tanggal bergabung (`join_date`) harus `<= $endDate`.
+     - Tidak memiliki tanggal keluar (`end_date` adalah `NULL`) **ATAU** tanggal keluarnya `>= $startDate`.
+   * **Catatan:** Scope ini mengabaikan kolom `is_active` saat ini, sehingga karyawan yang sekarang sudah *resign* tetap bisa dipanggil jika mereka masih aktif pada periode lampau tersebut.
 
 #### Daftar Permission
 

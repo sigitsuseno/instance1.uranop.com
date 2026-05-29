@@ -24,7 +24,7 @@ return new class extends Migration
             $table->integer('version')->default(1);
             $table->boolean('is_latest')->default(true)->comment('Flag kontrak terbaru karyawan');
 
-            $table->enum('status', ['draft', 'active', 'expired', 'terminated'])->default('draft');
+            $table->string('status')->nullable();
             $table->timestamp('expiry_notified_at')->nullable();
             $table->timestamp('compensation_paid_at')->nullable()->comment('Tanggal kompensasi PKWT dibayar');
 

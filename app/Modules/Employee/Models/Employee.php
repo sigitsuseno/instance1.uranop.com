@@ -285,6 +285,19 @@ class Employee extends Model
         return $query->where('is_active', true);
     }
 
+    /**
+     * Mengambil karyawan yang aktif pada suatu rentang periode tertentu.
+     * Menggunakan join_date dan end_date (kapan karyawan resign/berakhir), tanpa melihat is_active.
+     */
+    public function scopeActiveInPeriod($query, $startDate, $endDate)
+    {
+        return $query->where('join_date', '<=', $endDate)
+            ->where(function ($q) use ($startDate) {
+                $q->whereNull('end_date')
+                  ->orWhere('end_date', '>=', $startDate);
+            });
+    }
+
     public function scopeByStatus($query, string $status)
     {
         return $query->where('employment_status', $status);

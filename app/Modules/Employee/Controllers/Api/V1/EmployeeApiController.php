@@ -31,6 +31,10 @@ class EmployeeApiController extends Controller
             'position_id'       => 'nullable|integer|exists:positions,id',
             'employment_status' => 'nullable|string',
             'is_active'         => 'nullable|boolean',
+            'contract_type'     => 'nullable|string',
+            'contract_status'   => 'nullable|string',
+            'period_start'      => 'nullable|date',
+            'period_end'        => 'nullable|date|after_or_equal:period_start',
             'per_page'          => 'nullable|integer|min:5|max:100',
         ]);
 
@@ -177,6 +181,24 @@ class EmployeeApiController extends Controller
 
         return response()->json([
             'message' => "Karyawan {$employee->name} berhasil {$status}.",
+            'data'    => ['id' => $employee->id, 'is_active' => $employee->is_active],
+        ]);
+    }
+
+    /**
+     * PATCH /api/employees/{id}/deactivate
+     */
+    public function deactivate(Request $request, Employee $employee): JsonResponse
+    {
+        $data = $request->validate([
+            'date'   => 'required|date',
+            'reason' => 'required|string|in:resign,phk,mangkir',
+        ]);
+
+        $employee = $this->employeeService->deactivate($employee, $data);
+
+        return response()->json([
+            'message' => "Karyawan {$employee->name} berhasil dinonaktifkan dengan status {$data['reason']}.",
             'data'    => ['id' => $employee->id, 'is_active' => $employee->is_active],
         ]);
     }
