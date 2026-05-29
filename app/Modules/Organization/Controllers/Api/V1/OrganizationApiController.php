@@ -162,4 +162,28 @@ class OrganizationApiController extends Controller
         
         return response()->json(['message' => 'Position deleted successfully']);
     }
+
+    // --- Dropdown Options (ringan, tanpa pagination) ---
+
+    public function optionsDepartments()
+    {
+        $departments = Department::where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+
+        return response()->json(['data' => $departments]);
+    }
+
+    public function optionsPositions(Request $request)
+    {
+        $query = Position::where('is_active', true)->orderBy('name');
+
+        if ($request->has('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
+
+        return response()->json([
+            'data' => $query->get(['id', 'name', 'code', 'department_id']),
+        ]);
+    }
 }

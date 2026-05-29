@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum'])->prefix('organization')->group(function () {
     // Departments
+    Route::get('/departments/options', [OrganizationApiController::class, 'optionsDepartments'])->name('organization.departments.options');
     Route::get('/departments', [OrganizationApiController::class, 'indexDepartments']);
     Route::post('/departments', [OrganizationApiController::class, 'storeDepartment']);
     Route::get('/departments/{id}', [OrganizationApiController::class, 'showDepartment']);
@@ -12,6 +13,7 @@ Route::middleware(['auth:sanctum'])->prefix('organization')->group(function () {
     Route::delete('/departments/{id}', [OrganizationApiController::class, 'destroyDepartment']);
     
     // Positions
+    Route::get('/positions/options', [OrganizationApiController::class, 'optionsPositions'])->name('organization.positions.options');
     Route::get('/positions', [OrganizationApiController::class, 'indexPositions']);
     Route::post('/positions', [OrganizationApiController::class, 'storePosition']);
     Route::get('/positions/{id}', [OrganizationApiController::class, 'showPosition']);

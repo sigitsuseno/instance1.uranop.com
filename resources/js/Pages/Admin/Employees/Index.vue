@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useApi } from '../../../composables/useApi'
 import { useNotificationStore } from '../../../Stores/notification'
 import BaseButton from '../../../Components/BaseButton.vue'
 import BaseCard from '../../../Components/BaseCard.vue'
@@ -17,132 +18,96 @@ import {
   IconDownload,
   IconUpload,
   IconUsers,
+  IconRefresh,
 } from '../../../Components/Icons/index.js'
 
 const router = useRouter()
 const notification = useNotificationStore()
+const { get, destroy: apiDelete, post } = useApi()
 
-const currentPage = ref(1)
-const perPage = 10
+// State
+const loading = ref(false)
+const employees = ref([])
+const stats = ref({ total: 0, active: 0, permanent: 0, contract: 0 })
+const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
+const showDeleteDialog = ref(false)
+const selectedEmployee = ref(null)
+
+// Filters
 const searchQuery = ref('')
 const filterDepartment = ref('')
 const filterStatus = ref('')
 const filterEmploymentStatus = ref('')
-const showDeleteDialog = ref(false)
-const selectedEmployee = ref(null)
+const currentPage = ref(1)
 
-const employees = ref(
-  Array.from({ length: 25 }, (_, i) => {
-    const id = i + 1
-    const departments = ['IT', 'HR', 'Finance', 'Marketing', 'Operations']
-    const positionsByDept = {
-      IT: ['Junior Developer', 'Senior Developer', 'Tech Lead', 'DevOps Engineer', 'QA Engineer'],
-      HR: ['HR Staff', 'HR Supervisor', 'Recruitment Officer', 'Training Coordinator', 'HR Manager'],
-      Finance: ['Finance Staff', 'Accountant', 'Finance Analyst', 'Tax Officer', 'Finance Manager'],
-      Marketing: ['Marketing Staff', 'Content Writer', 'Graphic Designer', 'SEO Specialist', 'Marketing Manager'],
-      Operations: ['Operations Staff', 'Admin Officer', 'Logistics Coordinator', 'Procurement Officer', 'Ops Manager'],
-    }
-    const statuses = ['Tetap', 'Kontrak', 'Probation']
-    const names = [
-      'Budi Santoso', 'Siti Aminah', 'Ahmad Fauzi', 'Dewi Lestari', 'Eko Prasetyo',
-      'Fitri Handayani', 'Gunawan Wibowo', 'Hana Safira', 'Irfan Maulana', 'Joko Susilo',
-      'Kartika Sari', 'Lukman Hakim', 'Mega Putri', 'Nanda Pratama', 'Olivia Rahma',
-      'Putra Wijaya', 'Qori Andini', 'Rizky Fadilah', 'Sari Dewanti', 'Teguh Santosa',
-      'Umar Faruq', 'Vina Melani', 'Wahyu Nugroho', 'Yuni Astuti', 'Zaki Mubarak',
-    ]
-    const emails = names.map((n) => n.toLowerCase().replace(/\s/g, '.') + '@example.com')
-    const dept = departments[i % 5]
-    const positions = positionsByDept[dept]
-    const pos = positions[i % 5]
-    const status = statuses[i % 3]
-    const joinDate = new Date(2020, 0, 1 + i * 15)
-    const isActive = i < 3 || (i > 4 && i < 20)
+// Departments dari API
+const departments = ref([])
 
-    return {
-      id,
-      nip: `EMP${String(id).padStart(3, '0')}`,
-      name: names[i],
-      email: emails[i],
-      department: dept,
-      position: pos,
-      employment_status: status,
-      join_date: joinDate.toISOString().split('T')[0],
-      is_active: isActive,
-    }
-  })
+const departmentOptions = computed(() =>
+  departments.value.map(d => ({ value: d.id, label: d.name }))
 )
 
-const filteredEmployees = computed(() => {
-  let result = [...employees.value]
-
-  if (searchQuery.value) {
-    const q = searchQuery.value.toLowerCase()
-    result = result.filter(
-      (e) =>
-        e.name.toLowerCase().includes(q) ||
-        e.nip.toLowerCase().includes(q) ||
-        e.email.toLowerCase().includes(q)
-    )
-  }
-
-  if (filterDepartment.value) {
-    result = result.filter((e) => e.department === filterDepartment.value)
-  }
-
-  if (filterStatus.value === 'active') {
-    result = result.filter((e) => e.is_active)
-  } else if (filterStatus.value === 'inactive') {
-    result = result.filter((e) => !e.is_active)
-  }
-
-  if (filterEmploymentStatus.value) {
-    result = result.filter((e) => e.employment_status === filterEmploymentStatus.value)
-  }
-
-  return result
-})
-
-const totalPages = computed(() => Math.ceil(filteredEmployees.value.length / perPage) || 1)
-
-const paginatedEmployees = computed(() => {
-  const start = (currentPage.value - 1) * perPage
-  return filteredEmployees.value.slice(start, start + perPage)
-})
-
-const totalKaryawan = computed(() => employees.value.length)
-const totalAktif = computed(() => employees.value.filter((e) => e.is_active).length)
-const totalNonaktif = computed(() => employees.value.filter((e) => !e.is_active).length)
-const totalKontrak = computed(() => employees.value.filter((e) => e.employment_status === 'Kontrak').length)
-
-const tableHeaders = [
-  { key: 'nip', label: 'NIP' },
-  { key: 'name', label: 'Nama' },
-  { key: 'email', label: 'Email' },
-  { key: 'department', label: 'Departemen' },
-  { key: 'position', label: 'Jabatan' },
-  { key: 'is_active', label: 'Status' },
-  { key: 'employment_status', label: 'Status Karyawan' },
-  { key: 'actions', label: 'Aksi', sortable: false, width: '140px' },
-]
-
-const departmentOptions = [
-  { value: 'IT', label: 'IT' },
-  { value: 'HR', label: 'HR' },
-  { value: 'Finance', label: 'Finance' },
-  { value: 'Marketing', label: 'Marketing' },
-  { value: 'Operations', label: 'Operations' },
-]
-
 const statusOptions = [
-  { value: 'active', label: 'Aktif' },
-  { value: 'inactive', label: 'Nonaktif' },
+  { value: '1', label: 'Aktif' },
+  { value: '0', label: 'Nonaktif' },
 ]
 
 const employmentStatusOptions = [
-  { value: 'Tetap', label: 'Tetap' },
-  { value: 'Kontrak', label: 'Kontrak' },
-  { value: 'Probation', label: 'Probation' },
+  { value: 'permanent', label: 'Tetap' },
+  { value: 'contract', label: 'Kontrak' },
+  { value: 'probation', label: 'Probation' },
+  { value: 'outsource', label: 'Outsource' },
+  { value: 'freelance', label: 'Freelance' },
 ]
+
+const tableHeaders = [
+  { key: 'employee_code', label: 'Kode' },
+  { key: 'name', label: 'Nama Karyawan' },
+  { key: 'department', label: 'Departemen' },
+  { key: 'position', label: 'Jabatan' },
+  { key: 'employment_status', label: 'Status' },
+  { key: 'is_active', label: 'Aktif', width: '90px' },
+  { key: 'join_date', label: 'Bergabung', width: '110px' },
+  { key: 'actions', label: 'Aksi', sortable: false, width: '120px' },
+]
+
+// ========== API CALLS ==========
+
+async function fetchEmployees() {
+  loading.value = true
+  try {
+    const params = new URLSearchParams()
+    params.set('page', currentPage.value)
+    if (searchQuery.value)         params.set('search', searchQuery.value)
+    if (filterDepartment.value)    params.set('department_id', filterDepartment.value)
+    if (filterEmploymentStatus.value) params.set('employment_status', filterEmploymentStatus.value)
+    if (filterStatus.value !== '')  params.set('is_active', filterStatus.value)
+
+    const res = await get(`/api/v1/employees?${params}`)
+    employees.value = res.data
+    pagination.value = res.meta || {}
+  } catch (e) {
+    notification.error(e.message || 'Gagal memuat data karyawan.')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchStats() {
+  try {
+    const res = await get('/api/v1/employees/stats')
+    stats.value = res.data
+  } catch {}
+}
+
+async function fetchDepartments() {
+  try {
+    const res = await get('/api/organization/departments/options')
+    departments.value = res.data || []
+  } catch {}
+}
+
+// ========== ACTIONS ==========
 
 function viewEmployee(id) {
   router.push(`/employees/${id}`)
@@ -157,13 +122,19 @@ function confirmDelete(employee) {
   showDeleteDialog.value = true
 }
 
-function handleDelete() {
-  if (selectedEmployee.value) {
-    employees.value = employees.value.filter((e) => e.id !== selectedEmployee.value.id)
-    notification.success('Karyawan berhasil dihapus')
+async function handleDelete() {
+  if (!selectedEmployee.value) return
+  try {
+    await apiDelete(`/api/v1/employees/${selectedEmployee.value.id}`)
+    notification.success(`Karyawan ${selectedEmployee.value.name} berhasil dihapus.`)
+    fetchEmployees()
+    fetchStats()
+  } catch (e) {
+    notification.error(e.message || 'Gagal menghapus karyawan.')
+  } finally {
+    showDeleteDialog.value = false
+    selectedEmployee.value = null
   }
-  showDeleteDialog.value = false
-  selectedEmployee.value = null
 }
 
 function cancelDelete() {
@@ -182,10 +153,36 @@ function clearFilters() {
   filterEmploymentStatus.value = ''
   currentPage.value = 1
 }
+
+function formatDate(date) {
+  if (!date) return '-'
+  return new Date(date).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+// ========== WATCHERS ==========
+
+let searchTimeout = null
+watch(searchQuery, () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    currentPage.value = 1
+    fetchEmployees()
+  }, 400)
+})
+
+watch([filterDepartment, filterStatus, filterEmploymentStatus, currentPage], () => {
+  fetchEmployees()
+})
+
+// ========== INIT ==========
+onMounted(async () => {
+  await Promise.all([fetchEmployees(), fetchStats(), fetchDepartments()])
+})
 </script>
 
 <template>
   <div class="space-y-6">
+    <!-- Header -->
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-(--text-main)">Data Karyawan</h1>
       <div class="flex items-center gap-3">
@@ -210,6 +207,7 @@ function clearFilters() {
       </div>
     </div>
 
+    <!-- Stats Cards -->
     <div class="grid grid-cols-4 gap-4">
       <BaseCard>
         <div class="flex items-center gap-3">
@@ -218,7 +216,7 @@ function clearFilters() {
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Total Karyawan</p>
-            <p class="text-xl font-bold text-(--text-main)">{{ totalKaryawan }}</p>
+            <p class="text-xl font-bold text-(--text-main)">{{ stats.total }}</p>
           </div>
         </div>
       </BaseCard>
@@ -229,18 +227,18 @@ function clearFilters() {
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Aktif</p>
-            <p class="text-xl font-bold text-(--text-main)">{{ totalAktif }}</p>
+            <p class="text-xl font-bold text-(--text-main)">{{ stats.active }}</p>
           </div>
         </div>
       </BaseCard>
       <BaseCard>
         <div class="flex items-center gap-3">
-          <div class="p-2.5 rounded-md bg-(--danger)/10 text-(--danger)">
+          <div class="p-2.5 rounded-md bg-(--primary)/10 text-(--primary)">
             <IconUsers class="w-5 h-5" />
           </div>
           <div>
-            <p class="text-xs text-(--text-muted)">Nonaktif</p>
-            <p class="text-xl font-bold text-(--text-main)">{{ totalNonaktif }}</p>
+            <p class="text-xs text-(--text-muted)">Tetap</p>
+            <p class="text-xl font-bold text-(--text-main)">{{ stats.permanent }}</p>
           </div>
         </div>
       </BaseCard>
@@ -251,13 +249,15 @@ function clearFilters() {
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Kontrak</p>
-            <p class="text-xl font-bold text-(--text-main)">{{ totalKontrak }}</p>
+            <p class="text-xl font-bold text-(--text-main)">{{ stats.contract }}</p>
           </div>
         </div>
       </BaseCard>
     </div>
 
+    <!-- Table -->
     <BaseCard>
+      <!-- Filters -->
       <div class="flex items-center gap-4 mb-4 flex-wrap">
         <div class="relative w-64">
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-(--text-muted)">
@@ -269,9 +269,8 @@ function clearFilters() {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Cari NIP, Nama, Email..."
+            placeholder="Cari kode, nama, NIK, email..."
             class="w-full pl-10 pr-3 py-2 text-sm rounded-md border bg-(--bg-card) text-(--text-main) placeholder:text-(--text-soft) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors"
-            @input="currentPage = 1"
           />
         </div>
         <SelectInput
@@ -279,48 +278,67 @@ function clearFilters() {
           :options="departmentOptions"
           placeholder="Semua Departemen"
           class="w-48"
-          @update:model-value="currentPage = 1"
-        />
-        <SelectInput
-          v-model="filterStatus"
-          :options="statusOptions"
-          placeholder="Semua Status"
-          class="w-40"
-          @update:model-value="currentPage = 1"
         />
         <SelectInput
           v-model="filterEmploymentStatus"
           :options="employmentStatusOptions"
           placeholder="Status Karyawan"
           class="w-44"
-          @update:model-value="currentPage = 1"
+        />
+        <SelectInput
+          v-model="filterStatus"
+          :options="statusOptions"
+          placeholder="Semua Status"
+          class="w-40"
         />
         <BaseButton variant="ghost" @click="clearFilters">
           Reset Filter
         </BaseButton>
+        <BaseButton variant="ghost" @click="fetchEmployees" :disabled="loading">
+          <template #icon-left>
+            <IconRefresh class="w-4 h-4" :class="{ 'animate-spin': loading }" />
+          </template>
+        </BaseButton>
       </div>
 
+      <!-- Loading State -->
+      <div v-if="loading" class="flex items-center justify-center py-16 text-(--text-muted)">
+        <IconRefresh class="w-5 h-5 animate-spin mr-2" />
+        <span class="text-sm">Memuat data...</span>
+      </div>
+
+      <!-- Table -->
       <DataTable
+        v-else
         :headers="tableHeaders"
-        :items="paginatedEmployees"
+        :items="employees"
       >
+        <template #item.department="{ item }">
+          {{ item.department?.name ?? '-' }}
+        </template>
+        <template #item.position="{ item }">
+          {{ item.position?.name ?? '-' }}
+        </template>
+        <template #item.employment_status="{ value }">
+          <Badge
+            :variant="value === 'permanent' ? 'primary' : value === 'contract' ? 'warning' : value === 'probation' ? 'info' : 'secondary'"
+          >
+            {{ value === 'permanent' ? 'Tetap' : value === 'contract' ? 'Kontrak' : value === 'probation' ? 'Probation' : value }}
+          </Badge>
+        </template>
         <template #item.is_active="{ value }">
           <Badge :variant="value ? 'success' : 'danger'">
             {{ value ? 'Aktif' : 'Nonaktif' }}
           </Badge>
         </template>
-        <template #item.employment_status="{ value }">
-          <Badge
-            :variant="value === 'Tetap' ? 'primary' : value === 'Kontrak' ? 'warning' : 'info'"
-          >
-            {{ value }}
-          </Badge>
+        <template #item.join_date="{ value }">
+          <span class="text-sm text-(--text-muted)">{{ formatDate(value) }}</span>
         </template>
         <template #item.actions="{ item }">
           <div class="flex items-center gap-1">
             <button
               class="p-1.5 rounded-md text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors"
-              title="Lihat"
+              title="Lihat Detail"
               @click="viewEmployee(item.id)"
             >
               <IconEye class="w-4 h-4" />
@@ -341,21 +359,34 @@ function clearFilters() {
             </button>
           </div>
         </template>
+        <!-- Empty state -->
+        <template #empty>
+          <div class="text-center py-12 text-(--text-muted)">
+            <IconUsers class="w-10 h-10 mx-auto mb-3 opacity-30" />
+            <p class="text-sm">Tidak ada karyawan ditemukan.</p>
+            <BaseButton class="mt-4" @click="router.push('/employees/create')">
+              <template #icon-left><IconPlus class="w-4 h-4" /></template>
+              Tambah Karyawan
+            </BaseButton>
+          </div>
+        </template>
       </DataTable>
 
+      <!-- Pagination -->
       <Pagination
-        :current-page="currentPage"
-        :total-pages="totalPages"
-        :total="filteredEmployees.length"
-        :per-page="perPage"
+        :current-page="pagination.current_page ?? 1"
+        :total-pages="pagination.last_page ?? 1"
+        :total="pagination.total ?? 0"
+        :per-page="pagination.per_page ?? 15"
         @page-change="handlePageChange"
       />
     </BaseCard>
 
+    <!-- Delete Confirm Dialog -->
     <ConfirmDialog
       :show="showDeleteDialog"
       title="Hapus Karyawan"
-      :message="'Apakah Anda yakin ingin menghapus karyawan ' + selectedEmployee?.name + ' (' + selectedEmployee?.nip + ')?'"
+      :message="'Apakah Anda yakin ingin menghapus karyawan ' + selectedEmployee?.name + ' (' + selectedEmployee?.employee_code + ')? Tindakan ini tidak dapat dibatalkan.'"
       confirm-text="Ya, Hapus"
       cancel-text="Batal"
       variant="danger"

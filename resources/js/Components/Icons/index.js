@@ -206,3 +206,9 @@ export const IconArrowLeft = makeIcon([
   'M19 12H5',
   'M12 19l-7-7 7-7',
 ])
+
+export const IconRefresh = makeIcon([
+  'M23 4v6h-6',
+  'M20.49 15a9 9 0 1 1-2.12-9.36L23 10',
+])
+

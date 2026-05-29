@@ -467,17 +467,17 @@ Module **Settings** dan semua data master/config:
 - [x] Frontend: Employee Show (mock)
 - [x] Frontend: Employee Create (mock)
 - [x] Frontend: Employee Edit (mock)
-- [ ] Migration: semua tabel employee (tanpa employee_periodes)
-- [ ] Model Employee: effective date accessors (baseSalary, activeContract, currentPosition)
-- [ ] Model: semua model employee
-- [ ] Controller: EmployeeApiController
-- [ ] Routes: Employee/Routes/api.php
-- [ ] Resources: EmployeeResource
-- [ ] Service: EmployeeService
-- [ ] Frontend: Integrasi Employee Index dengan API
-- [ ] Frontend: Integrasi Employee Create/Edit/Show dengan API
+- [x] Migration: semua tabel employee (tanpa employee_periodes)
+- [x] Model Employee: effective date accessors (baseSalary, activeContract, currentPosition)
+- [x] Model: semua model employee
+- [x] Controller: EmployeeApiController
+- [x] Routes: Employee/Routes/api.php
+- [x] Resources: EmployeeResource
+- [x] Service: EmployeeService
+- [x] Frontend: Integrasi Employee Index dengan API
+- [x] Frontend: Integrasi Employee Create/Edit/Show dengan API
 - [ ] Frontend: Import Excel page terintegrasi
-- [ ] Frontend: Contract, Family, Document sub-pages terintegrasi
+- [x] Frontend: Contract, Family, Document sub-pages terintegrasi
 - [ ] Test: import Excel karyawan
 
 ---
