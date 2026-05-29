@@ -25,6 +25,10 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
         Route::get('/',    [EmployeeApiController::class, 'index'])->name('employees.index');
         Route::post('/',   [EmployeeApiController::class, 'store'])->name('employees.store');
 
+        // Submodules
+        require __DIR__ . '/../Submodules/Import/Routes/api.php';
+
+
         Route::prefix('{employee}')->group(function () {
             Route::get('/',    [EmployeeApiController::class, 'show'])->name('employees.show');
             Route::put('/',    [EmployeeApiController::class, 'update'])->name('employees.update');

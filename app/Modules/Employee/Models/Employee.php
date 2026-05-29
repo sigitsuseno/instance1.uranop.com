@@ -26,6 +26,7 @@ class Employee extends Model
         'department_id',
         'position_id',
         'employee_code',
+        'nip',
         'nik',
         'name',
         'photo',

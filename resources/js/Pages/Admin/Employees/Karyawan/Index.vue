@@ -1,15 +1,15 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { useApi } from '../../../composables/useApi'
-import { useNotificationStore } from '../../../Stores/notification'
-import BaseButton from '../../../Components/BaseButton.vue'
-import BaseCard from '../../../Components/BaseCard.vue'
-import SelectInput from '../../../Components/SelectInput.vue'
-import Badge from '../../../Components/Badge.vue'
-import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
-import DataTable from '../../../Components/Table/DataTable.vue'
-import Pagination from '../../../Components/Table/Pagination.vue'
+import { useApi } from '../../../../composables/useApi'
+import { useNotificationStore } from '../../../../Stores/notification'
+import BaseButton from '../../../../Components/BaseButton.vue'
+import BaseCard from '../../../../Components/BaseCard.vue'
+import SelectInput from '../../../../Components/SelectInput.vue'
+import Badge from '../../../../Components/Badge.vue'
+import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
+import DataTable from '../../../../Components/Table/DataTable.vue'
+import Pagination from '../../../../Components/Table/Pagination.vue'
 import {
   IconPlus,
   IconPencil,
@@ -19,7 +19,7 @@ import {
   IconUpload,
   IconUsers,
   IconRefresh,
-} from '../../../Components/Icons/index.js'
+} from '../../../../Components/Icons/index.js'
 
 const router = useRouter()
 const notification = useNotificationStore()
@@ -32,6 +32,8 @@ const stats = ref({ total: 0, active: 0, permanent: 0, contract: 0 })
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
 const showDeleteDialog = ref(false)
 const selectedEmployee = ref(null)
+
+
 
 // Filters
 const searchQuery = ref('')
@@ -137,6 +139,8 @@ async function handleDelete() {
   }
 }
 
+
+
 function cancelDelete() {
   showDeleteDialog.value = false
   selectedEmployee.value = null
@@ -186,7 +190,7 @@ onMounted(async () => {
     <div class="flex items-center justify-between">
       <h1 class="text-2xl font-bold text-(--text-main)">Data Karyawan</h1>
       <div class="flex items-center gap-3">
-        <BaseButton variant="secondary">
+        <BaseButton variant="secondary" @click="$router.push('/admin/employees/import')">
           <template #icon-left>
             <IconUpload class="w-4 h-4" />
           </template>
@@ -198,7 +202,7 @@ onMounted(async () => {
           </template>
           Export Excel
         </BaseButton>
-        <BaseButton @click="router.push('/employees/create')">
+        <BaseButton variant="primary" @click="$router.push('/admin/employees/create')">
           <template #icon-left>
             <IconPlus class="w-4 h-4" />
           </template>
@@ -393,5 +397,7 @@ onMounted(async () => {
       @confirm="handleDelete"
       @cancel="cancelDelete"
     />
+
+
   </div>
 </template>

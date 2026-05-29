@@ -10,10 +10,11 @@ const AdminsIndex = () => import('../Pages/Admin/Organization/Admins/Index.vue')
 const DepartmentsIndex = () => import('../Pages/Admin/Organization/Departments/Index.vue')
 const PositionsIndex = () => import('../Pages/Admin/Organization/Positions/Index.vue')
 const SalaryGradesIndex = () => import('../Pages/Admin/Organization/SalaryGrades/Index.vue')
-const EmployeesIndex = () => import('../Pages/Admin/Employees/Index.vue')
-const EmployeeShow = () => import('../Pages/Admin/Employees/Show.vue')
-const EmployeeCreate = () => import('../Pages/Admin/Employees/Create.vue')
-const EmployeeEdit = () => import('../Pages/Admin/Employees/Edit.vue')
+const EmployeesIndex = () => import('../Pages/Admin/Employees/Karyawan/Index.vue')
+const EmployeeImport = () => import('../Pages/Admin/Employees/Import.vue')
+const EmployeeShow = () => import('../Pages/Admin/Employees/Karyawan/Show.vue')
+const EmployeeCreate = () => import('../Pages/Admin/Employees/Karyawan/Create.vue')
+const EmployeeEdit = () => import('../Pages/Admin/Employees/Karyawan/Edit.vue')
 const AttendanceIndex = () => import('../Pages/Admin/Attendance/Index.vue')
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Attendance/Roster.vue')
@@ -73,6 +74,7 @@ const routes = [
       { path: 'organization/positions', name: 'positions', component: PositionsIndex, meta: { title: 'Jabatan' } },
       { path: 'organization/salary-grades', name: 'salary-grades', component: SalaryGradesIndex, meta: { title: 'Grade Gaji' } },
       { path: 'employees', name: 'employees', component: EmployeesIndex, meta: { title: 'Karyawan' } },
+      { path: 'employees/import', name: 'employees.import', component: EmployeeImport, meta: { title: 'Import Karyawan' } },
       { path: 'employees/create', name: 'employees.create', component: EmployeeCreate, meta: { title: 'Tambah Karyawan' } },
       { path: 'employees/:id', name: 'employees.show', component: EmployeeShow, meta: { title: 'Detail Karyawan' } },
       { path: 'employees/:id/edit', name: 'employees.edit', component: EmployeeEdit, meta: { title: 'Edit Karyawan' } },

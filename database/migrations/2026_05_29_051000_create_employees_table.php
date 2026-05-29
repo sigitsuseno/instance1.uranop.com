@@ -24,9 +24,10 @@ return new class extends Migration
             $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
 
-            // Identitas
-            $table->string('employee_code', 50)->unique();
-            $table->string('nik', 50)->nullable()->unique()->comment('NIK KTP');
+            // Kode dan Identitas
+            $table->string('employee_code')->unique()->comment('Kode Karyawan / NIP Internal');
+            $table->string('nip')->nullable()->unique()->comment('Nomor Induk Pegawai');
+            $table->string('nik', 16)->nullable()->unique()->comment('NIK KTP');
             $table->string('name', 200);
             $table->string('photo', 255)->nullable();
             $table->enum('gender', ['L', 'P']);

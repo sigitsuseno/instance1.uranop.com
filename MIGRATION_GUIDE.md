@@ -476,9 +476,9 @@ Module **Settings** dan semua data master/config:
 - [x] Service: EmployeeService
 - [x] Frontend: Integrasi Employee Index dengan API
 - [x] Frontend: Integrasi Employee Create/Edit/Show dengan API
-- [ ] Frontend: Import Excel page terintegrasi
+- [x] Frontend: Import Excel page terintegrasi (Submodule Import)
 - [x] Frontend: Contract, Family, Document sub-pages terintegrasi
-- [ ] Test: import Excel karyawan
+- [x] Test: import Excel karyawan
 
 ---
 
