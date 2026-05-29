@@ -31,6 +31,15 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::post('/import', [ContractApiController::class, 'import'])->name('employees.contracts.global.import');
         });
 
+        // Compensation
+        Route::prefix('compensation')->group(function () {
+            Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'index'])->name('employees.compensation.index');
+            Route::get('/export', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'export'])->name('employees.compensation.export');
+            Route::get('/print', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'print'])->name('employees.compensation.print');
+            Route::patch('/{contract}/mark-paid', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'markPaid'])->name('employees.compensation.mark-paid');
+            Route::patch('/{contract}/mark-unpaid', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'markUnpaid'])->name('employees.compensation.mark-unpaid');
+        });
+
         // Submodules
         require __DIR__ . '/../Submodules/Import/Routes/api.php';
 

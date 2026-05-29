@@ -79,6 +79,7 @@ const routes = [
       { path: 'employees/import', name: 'employees.import', component: EmployeeImport, meta: { title: 'Import Karyawan' } },
       { path: 'employees/contracts', name: 'employees.contracts', component: EmployeeContractsIndex, meta: { title: 'Kontrak Kerja' } },
       { path: 'employees/contracts/import', name: 'employees.contracts.import', component: EmployeeContractsImport, meta: { title: 'Import Kontrak' } },
+      { path: 'employees/kompensasi', name: 'employees.kompensasi', component: () => import('../Pages/Admin/Employees/Kompensasi/Index.vue'), meta: { title: 'Kompensasi Kontrak' } },
       { path: 'employees/create', name: 'employees.create', component: EmployeeCreate, meta: { title: 'Tambah Karyawan' } },
       { path: 'employees/:id', name: 'employees.show', component: EmployeeShow, meta: { title: 'Detail Karyawan' } },
       { path: 'employees/:id/edit', name: 'employees.edit', component: EmployeeEdit, meta: { title: 'Edit Karyawan' } },
