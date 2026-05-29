@@ -45,8 +45,12 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         
         Route::get('/progressive', [PayrollConfigApiController::class, 'getProgressive']);
 
+        Route::get('/work-patterns', [PayrollConfigApiController::class, 'getWorkPatterns']);
+
         Route::get('/overtime', [PayrollConfigApiController::class, 'getOvertime']);
-        Route::post('/overtime', [PayrollConfigApiController::class, 'updateOvertime']);
+        Route::post('/overtime', [PayrollConfigApiController::class, 'storeOvertime']);
+        Route::put('/overtime/{id}', [PayrollConfigApiController::class, 'updateOvertime']);
+        Route::delete('/overtime/{id}', [PayrollConfigApiController::class, 'destroyOvertime']);
         
         Route::get('/thr', [PayrollConfigApiController::class, 'getThrConfigs']);
         Route::post('/thr', [PayrollConfigApiController::class, 'storeThrConfig']);

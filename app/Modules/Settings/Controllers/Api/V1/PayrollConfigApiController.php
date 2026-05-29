@@ -11,6 +11,8 @@ use App\Modules\Settings\Models\PtkpRate;
 use App\Modules\Settings\Models\TerRate;
 use App\Modules\Settings\Models\ProgressiveRate;
 use App\Modules\Settings\Models\OvertimeRule;
+use App\Modules\Settings\Models\OvertimeRuleDetail;
+use App\Modules\Settings\Models\WorkPattern;
 use App\Modules\Settings\Models\ServiceYearAllowance;
 use App\Modules\Settings\Models\ThrConfig;
 
@@ -113,24 +115,95 @@ class PayrollConfigApiController extends Controller
         return response()->json(['data' => ProgressiveRate::orderBy('layer')->get()]);
     }
 
+    // === Work Patterns ===
+    public function getWorkPatterns()
+    {
+        return response()->json(['data' => WorkPattern::where('is_active', true)->get()]);
+    }
+
     // === Overtime Rules ===
     public function getOvertime()
     {
-        return response()->json(['data' => OvertimeRule::orderBy('hour')->get()]);
+        return response()->json([
+            'data' => OvertimeRule::with(['details', 'workPattern'])->get()
+        ]);
     }
 
-    public function updateOvertime(Request $request)
+    public function storeOvertime(Request $request)
     {
         $validated = $request->validate([
-            'rules' => 'required|array',
-            'rules.*.id' => 'required|exists:overtime_rules,id',
-            'rules.*.multiplier' => 'required|numeric',
+            'code' => 'required|string|unique:overtime_rules,code',
+            'name' => 'required|string',
+            'work_pattern_id' => 'nullable|exists:work_patterns,id',
+            'is_holiday' => 'boolean',
+            'description' => 'nullable|string',
+            'details' => 'required|array',
+            'details.*.hour' => 'required|integer|min:1',
+            'details.*.multiplier' => 'required|numeric|min:0'
         ]);
 
-        foreach ($validated['rules'] as $ruleData) {
-            OvertimeRule::where('id', $ruleData['id'])->update(['multiplier' => $ruleData['multiplier']]);
+        $rule = OvertimeRule::create([
+            'uuid' => (string) \Illuminate\Support\Str::uuid(),
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'work_pattern_id' => $validated['work_pattern_id'] ?? null,
+            'is_holiday' => $validated['is_holiday'] ?? false,
+            'description' => $validated['description'] ?? null,
+            'is_active' => true
+        ]);
+
+        foreach ($validated['details'] as $detail) {
+            $rule->details()->create([
+                'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                'hour' => $detail['hour'],
+                'multiplier' => $detail['multiplier']
+            ]);
         }
-        return response()->json(['message' => 'Overtime rules updated']);
+
+        return response()->json(['message' => 'Overtime rule created', 'data' => $rule->load('details')], 201);
+    }
+
+    public function updateOvertime(Request $request, $id)
+    {
+        $rule = OvertimeRule::findOrFail($id);
+
+        $validated = $request->validate([
+            'code' => 'required|string|unique:overtime_rules,code,'.$id,
+            'name' => 'required|string',
+            'work_pattern_id' => 'nullable|exists:work_patterns,id',
+            'is_holiday' => 'boolean',
+            'description' => 'nullable|string',
+            'details' => 'required|array',
+            'details.*.hour' => 'required|integer|min:1',
+            'details.*.multiplier' => 'required|numeric|min:0'
+        ]);
+
+        $rule->update([
+            'code' => $validated['code'],
+            'name' => $validated['name'],
+            'work_pattern_id' => $validated['work_pattern_id'] ?? null,
+            'is_holiday' => $validated['is_holiday'] ?? false,
+            'description' => $validated['description'] ?? null,
+        ]);
+
+        // Sync details (delete old, insert new to keep it simple and ensure correct hours)
+        $rule->details()->delete();
+        foreach ($validated['details'] as $detail) {
+            $rule->details()->create([
+                'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                'hour' => $detail['hour'],
+                'multiplier' => $detail['multiplier']
+            ]);
+        }
+
+        return response()->json(['message' => 'Overtime rule updated', 'data' => $rule->load('details')]);
+    }
+
+    public function destroyOvertime($id)
+    {
+        $rule = OvertimeRule::findOrFail($id);
+        $rule->delete(); // details will cascade delete
+        return response()->json(['message' => 'Overtime rule deleted']);
     }
 
     // === THR Configs ===

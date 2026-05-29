@@ -409,18 +409,18 @@ Module **Settings** dan semua data master/config:
 - [x] Frontend: Settings page (mock)
 - [x] Frontend: Payroll Configs page (mock)
 - [x] Frontend: SalaryGrades page (mock)
-- [ ] Migration + Model: system_settings
-- [ ] Migration + Model: salary_grades, salary_grade_histories
-- [ ] Migration + Model: employee_groups, employee_titles
-- [ ] Migration + Model: salary_components
-- [ ] Migration + Model: bpjs_configs, pph_configs, ptkp_rates, ter_rates, progressive_rates
-- [ ] Migration + Model: overtime_rules (shared)
-- [ ] Migration + Model: service_year_allowances
-- [ ] Controller: SettingsApiController
-- [ ] Routes: Settings/Routes/api.php
-- [ ] Frontend: Integrasi Settings dengan API nyata
-- [ ] Frontend: Integrasi Configs dengan API nyata
-- [ ] Frontend: Integrasi SalaryGrades dengan API nyata
+- [x] Migration + Model: system_settings
+- [x] Migration + Model: salary_grades, salary_grade_histories
+- [x] Migration + Model: employee_groups, employee_titles
+- [x] Migration + Model: salary_components
+- [x] Migration + Model: bpjs_configs, pph_configs, ptkp_rates, ter_rates, progressive_rates
+- [x] Migration + Model: overtime_rules (shared)
+- [x] Migration + Model: service_year_allowances
+- [x] Controller: SettingsApiController
+- [x] Routes: Settings/Routes/api.php
+- [x] Frontend: Integrasi Settings dengan API nyata
+- [x] Frontend: Integrasi Configs dengan API nyata
+- [x] Frontend: Integrasi SalaryGrades dengan API nyata
 
 ---
 
@@ -856,6 +856,13 @@ HR Manager   → hr@uranop.com          → role: hrmanager
 Admin Manager → adm@uranop.com        → role: adm_manager
 ```
 
+### Aturan Khusus Employee Group
+
+`EmployeeGroup` memiliki **2 Mode / Peran Ganda** yang sangat fleksibel:
+1. **Mode Grouping (Metadata Murni):** Hanya untuk data demografi/informasi karyawan tanpa memengaruhi fitur operasional (misal: Golongan Darah, Ukuran Seragam).
+2. **Mode Relasi (Functional Mapping):** Sebagai jembatan relasi dinamis karyawan dengan tabel sistem operasional (misal: `shifts`, `work_patterns`) melalui kolom `reference_code`. 
+> **Aturan AI (CRITICAL):** DILARANG menambahkan kolom hardcoded seperti `shift_id`, `work_pattern_id`, dll. secara langsung di tabel `employees`. Selalu gunakan `EmployeeGroup` dan kolom `reference_code` untuk *Soft Relationship* (Dictionary-driven Relationships) antar modul. Untuk mengakses data, buatlah Accessor di model `Employee` (contoh: `getShiftGroupAttribute()`) alih-alih mencoba query relasi secara langsung.
+
 ### Backend — API Structure
 
 ```
@@ -1132,3 +1139,4 @@ Tabel auth yang **DIHAPUS**:
 | 21 | Sync desktop? | **Ya.** Tambah `uuid` + `synced_at` di tabel data utama. Detail sync direncanakan terpisah |
 | 22 | Shared traits? | **Port 8 traits** dari hris-system. Hapus HasCompanyScope & HasBranchScope |
 | 23 | Arsitektur dua mesin? | **Aplikasi Utama** (Admin) + **Aplikasi Bayangan** (Supervisor) — perhitungan independen |
+| 24 | Fungsi Employee Group? | **2 Mode: Grouping murni & Relasi dinamis.** Jangan hardcode `shift_id` di employees. Gunakan `reference_code` di `employee_groups` untuk relasi ke modul lain. |

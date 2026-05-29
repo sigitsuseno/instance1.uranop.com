@@ -8,15 +8,14 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('employee_groups', function (Blueprint $table) {
+        Schema::create('work_patterns', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->foreignId('category_id')->constrained('employee_group_categories')->cascadeOnDelete();
-            $table->string('name');
             $table->string('code')->unique();
-            $table->string('reference_code')->nullable()->index()->comment('Relasi dinamis ke tabel lain misal shift/work_pattern');
+            $table->string('name');
             $table->string('description')->nullable();
             $table->boolean('is_active')->default(true);
+            
             $table->foreignId('created_by')->nullable()->constrained('users');
             $table->foreignId('updated_by')->nullable()->constrained('users');
             $table->timestamp('synced_at')->nullable();
@@ -27,6 +26,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('employee_groups');
+        Schema::dropIfExists('work_patterns');
     }
 };

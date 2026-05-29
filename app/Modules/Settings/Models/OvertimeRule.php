@@ -12,4 +12,14 @@ class OvertimeRule extends Model
     // use SoftDeletes; // uncomment if table has softDeletes
 
     protected $guarded = ['id'];
+
+    public function details()
+    {
+        return $this->hasMany(OvertimeRuleDetail::class, 'overtime_rule_id')->orderBy('hour');
+    }
+
+    public function workPattern()
+    {
+        return $this->belongsTo(WorkPattern::class, 'work_pattern_id');
+    }
 }
