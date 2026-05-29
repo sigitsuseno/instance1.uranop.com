@@ -1,27 +1,43 @@
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import SelectInput from '../../../../Components/SelectInput.vue'
 import { IconPencil } from '../../../../Components/Icons/index.js'
 import { useNotification } from '../../../../composables/useNotification'
+import { useApi } from '../../../../composables/useApi'
 
 const notification = useNotification()
+const api = useApi()
 const isEditing = ref(false)
 
-// Mock Data
 const generalSettings = reactive({
-  timezone: 'Asia/Jakarta (WIB)',
-  date_format: 'DD/MM/YYYY',
-  language: 'Bahasa Indonesia',
-  currency: 'IDR',
-})
-
-const form = reactive({
   timezone: 'Asia/Jakarta',
   date_format: 'DD/MM/YYYY',
   language: 'id',
   currency: 'IDR',
+})
+
+const form = reactive({
+  timezone: '',
+  date_format: '',
+  language: '',
+  currency: '',
+})
+
+async function fetchSettings() {
+  try {
+    const response = await api.get('/api/v1/settings/general')
+    if (response.data) {
+      Object.assign(generalSettings, response.data)
+    }
+  } catch (error) {
+    notification.error('Gagal mengambil pengaturan umum')
+  }
+}
+
+onMounted(() => {
+  fetchSettings()
 })
 
 function toggleEdit() {
@@ -29,20 +45,19 @@ function toggleEdit() {
     isEditing.value = false
   } else {
     isEditing.value = true
-    form.timezone = generalSettings.timezone.includes('Jakarta') ? 'Asia/Jakarta' : generalSettings.timezone
-    form.date_format = generalSettings.date_format
-    form.language = generalSettings.language === 'Bahasa Indonesia' ? 'id' : 'en'
-    form.currency = generalSettings.currency
+    Object.assign(form, generalSettings)
   }
 }
 
-function save() {
-  generalSettings.timezone = form.timezone + (form.timezone === 'Asia/Jakarta' ? ' (WIB)' : form.timezone === 'Asia/Makassar' ? ' (WITA)' : ' (WIT)')
-  generalSettings.date_format = form.date_format
-  generalSettings.language = form.language === 'id' ? 'Bahasa Indonesia' : 'English'
-  generalSettings.currency = form.currency
-  isEditing.value = false
-  notification.success('Pengaturan umum berhasil disimpan')
+async function save() {
+  try {
+    await api.post('/api/v1/settings/general', form)
+    Object.assign(generalSettings, form)
+    isEditing.value = false
+    notification.success('Pengaturan umum berhasil disimpan')
+  } catch (error) {
+    notification.error('Gagal menyimpan pengaturan umum')
+  }
 }
 </script>
 
@@ -74,7 +89,7 @@ function save() {
         </div>
         <div>
           <span class="text-xs text-(--text-muted)">Bahasa</span>
-          <p class="text-sm text-(--text-main) font-medium">{{ generalSettings.language }}</p>
+          <p class="text-sm text-(--text-main) font-medium">{{ generalSettings.language === 'id' ? 'Bahasa Indonesia' : 'English' }}</p>
         </div>
         <div>
           <span class="text-xs text-(--text-muted)">Mata Uang Default</span>

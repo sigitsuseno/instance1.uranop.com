@@ -32,7 +32,6 @@ const allMenus = [
       { title: 'Pengaturan Cuti', icon: 'bx bx-cog', route: '/admin/leave/settings', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'PPh 21', icon: 'bx bx-receipt', route: '/admin/payroll/configs' },
       { title: 'BPJS', icon: 'bx bx-health', route: '/admin/payroll/configs' },
-      { title: 'Aturan Lembur', icon: 'bx bx-timer', route: '/admin/attendance/overtime' },
     ],
   },
   {
