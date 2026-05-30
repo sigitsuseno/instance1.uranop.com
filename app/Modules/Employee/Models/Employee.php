@@ -234,6 +234,38 @@ class Employee extends Model
     }
 
     /**
+     * Hitung tunjangan masa kerja berdasarkan join_date dan periode.
+     * 0-11 bulan = 0
+     * 12-23 bulan = 1000
+     * 24-35 bulan = 2000
+     * 36-47 bulan = 3000
+     * 48-59 bulan = 4000
+     * >= 60 bulan = 5000
+     */
+    public function tjMasaKerja(?string $period = null): float
+    {
+        if (!$this->join_date) {
+            return 0;
+        }
+
+        $endDate = $period ? Carbon::parse($period.'-01')->endOfMonth() : now();
+        
+        // Jika join_date lebih dari endDate, artinya belum join
+        if ($this->join_date->gt($endDate)) {
+            return 0;
+        }
+
+        $months = $this->join_date->diffInMonths($endDate);
+
+        if ($months < 12) return 0;
+        if ($months < 24) return 1000;
+        if ($months < 36) return 2000;
+        if ($months < 48) return 3000;
+        if ($months < 60) return 4000;
+        return 5000;
+    }
+
+    /**
      * Ambil tunjangan tetap dari employee_salary_components.
      */
     public function tunjangan_tetap(?string $period = null): float

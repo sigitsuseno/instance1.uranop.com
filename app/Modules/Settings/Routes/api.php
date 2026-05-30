@@ -12,6 +12,9 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     
     Route::get('/employee', [SettingsApiController::class, 'getEmployeeDefaults']);
     Route::post('/employee', [SettingsApiController::class, 'updateEmployeeDefaults']);
+
+    Route::get('/payroll', [SettingsApiController::class, 'getPayrollSettings']);
+    Route::post('/payroll', [SettingsApiController::class, 'updatePayrollSettings']);
     
     Route::apiResource('salary-grades', SalaryGradeApiController::class);
 

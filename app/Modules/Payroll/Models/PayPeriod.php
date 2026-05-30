@@ -3,6 +3,7 @@
 namespace App\Modules\Payroll\Models;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Settings\Models\SystemSetting;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
@@ -23,9 +24,11 @@ class PayPeriod extends Model
         'name',
         'period_year',
         'period_month',
+        'is_split',
+        'system_setting_id',
         'status',
-        'started_at',
-        'closed_at',
+        'start_date',
+        'end_date',
         'created_by',
         'updated_by',
     ];
@@ -33,8 +36,9 @@ class PayPeriod extends Model
     protected $casts = [
         'period_year'  => 'integer',
         'period_month' => 'integer',
-        'started_at'   => 'date',
-        'closed_at'    => 'date',
+        'is_split'     => 'boolean',
+        'start_date'   => 'date',
+        'end_date'     => 'date',
     ];
 
     protected static function booted(): void
@@ -65,5 +69,15 @@ class PayPeriod extends Model
     public function scopeActive($query)
     {
         return $query->whereIn('status', ['draft', 'processing']);
+    }
+
+    public function systemSetting()
+    {
+        return $this->belongsTo(SystemSetting::class, 'system_setting_id');
+    }
+
+    public static function getPeriods()
+    {
+        return static::orderBy('start_date', 'desc')->get();
     }
 }

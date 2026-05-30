@@ -21,7 +21,7 @@
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Total Periode</p>
-            <p class="text-lg font-semibold text-(--text-main)">12</p>
+            <p class="text-lg font-semibold text-(--text-main)">{{ periods.length }}</p>
           </div>
         </div>
       </BaseCard>
@@ -32,7 +32,7 @@
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Selesai</p>
-            <p class="text-lg font-semibold text-(--text-main)">8</p>
+            <p class="text-lg font-semibold text-(--text-main)">{{ completedPeriods }}</p>
           </div>
         </div>
       </BaseCard>
@@ -43,7 +43,7 @@
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Dalam Proses</p>
-            <p class="text-lg font-semibold text-(--text-main)">3</p>
+            <p class="text-lg font-semibold text-(--text-main)">{{ inProgressPeriods }}</p>
           </div>
         </div>
       </BaseCard>
@@ -54,7 +54,7 @@
           </div>
           <div>
             <p class="text-xs text-(--text-muted)">Total Pengeluaran</p>
-            <p class="text-lg font-semibold text-(--text-main)">Rp 5,2 M</p>
+            <p class="text-lg font-semibold text-(--text-main)">Rp 0</p>
           </div>
         </div>
       </BaseCard>
@@ -66,7 +66,7 @@
           <span class="font-medium text-(--primary)">{{ value }}</span>
         </template>
         <template #item.total_amount="{ value }">
-          <span class="font-medium">Rp {{ value.toLocaleString('id-ID') }}</span>
+          <span class="font-medium">Rp {{ (value || 0).toLocaleString('id-ID') }}</span>
         </template>
         <template #item.status="{ value }">
           <Badge :variant="statusVariant(value)">{{ statusLabel(value) }}</Badge>
@@ -81,7 +81,7 @@
               <IconEye class="w-4 h-4" />
             </button>
             <button
-              v-if="item.status !== 'completed'"
+              v-if="item.status !== 'completed' && item.status !== 'closed'"
               class="p-1.5 rounded-md text-(--text-muted) hover:text-(--warning) hover:bg-(--warning)/10 transition-colors"
               title="Kunci Periode"
               @click="confirmLock = item"
@@ -92,11 +92,11 @@
               </svg>
             </button>
             <button
-              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--success) hover:bg-(--success)/10 transition-colors"
-              title="Export"
-              @click="exportPeriod(item)"
+              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10 transition-colors"
+              title="Hapus"
+              @click="confirmDelete = item"
             >
-              <IconDownload class="w-4 h-4" />
+               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
             </button>
           </div>
         </template>
@@ -112,7 +112,7 @@
 
     <BaseModal :show="showCreateModal" title="Generate Periode Baru" @close="showCreateModal = false">
       <div class="space-y-4">
-        <TextInput v-model="form.period_name" label="Nama Periode" placeholder="Contoh: Juni 2026" />
+        <TextInput v-model="form.name" label="Nama Periode" placeholder="Contoh: Juni 2026" />
         <div class="grid grid-cols-2 gap-4">
           <TextInput v-model="form.start_date" label="Tanggal Mulai" type="date" />
           <TextInput v-model="form.end_date" label="Tanggal Selesai" type="date" />
@@ -120,7 +120,7 @@
       </div>
       <template #footer>
         <BaseButton variant="ghost" @click="showCreateModal = false">Batal</BaseButton>
-        <BaseButton variant="primary" @click="handleCreate">Generate</BaseButton>
+        <BaseButton variant="primary" @click="handleCreate" :disabled="loading">Generate</BaseButton>
       </template>
     </BaseModal>
 
@@ -133,11 +133,21 @@
       @confirm="handleLock"
       @cancel="confirmLock = null"
     />
+
+    <ConfirmDialog
+      :show="!!confirmDelete"
+      title="Hapus Periode"
+      :message="'Apakah Anda yakin ingin menghapus periode ' + confirmDelete?.name + '?'"
+      confirm-text="Ya, Hapus"
+      variant="danger"
+      @confirm="handleDelete"
+      @cancel="confirmDelete = null"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import DataTable from '../../../../Components/Table/DataTable.vue'
 import Pagination from '../../../../Components/Table/Pagination.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
@@ -158,59 +168,108 @@ const headers = [
   { key: 'actions', label: 'Aksi', sortable: false, width: '120px' },
 ]
 
-const periods = ref([
-  { id: 1, period_code: 'PAY-2026-01', name: 'Januari 2026', start_date: '2026-01-01', end_date: '2026-01-31', status: 'completed', total_employees: 152, total_amount: 418500000, date_range: '01 Jan - 31 Jan 2026' },
-  { id: 2, period_code: 'PAY-2026-02', name: 'Februari 2026', start_date: '2026-02-01', end_date: '2026-02-28', status: 'completed', total_employees: 154, total_amount: 421200000, date_range: '01 Feb - 28 Feb 2026' },
-  { id: 3, period_code: 'PAY-2026-03', name: 'Maret 2026', start_date: '2026-03-01', end_date: '2026-03-31', status: 'completed', total_employees: 155, total_amount: 423000000, date_range: '01 Mar - 31 Mar 2026' },
-  { id: 4, period_code: 'PAY-2026-04', name: 'April 2026', start_date: '2026-04-01', end_date: '2026-04-30', status: 'completed', total_employees: 157, total_amount: 448700000, date_range: '01 Apr - 30 Apr 2026' },
-  { id: 5, period_code: 'PAY-2026-05', name: 'Mei 2026', start_date: '2026-05-01', end_date: '2026-05-31', status: 'completed', total_employees: 156, total_amount: 425000000, date_range: '01 Mei - 31 Mei 2026' },
-  { id: 6, period_code: 'PAY-2026-06', name: 'Juni 2026', start_date: '2026-06-01', end_date: '2026-06-30', status: 'in_progress', total_employees: 158, total_amount: 435800000, date_range: '01 Jun - 30 Jun 2026' },
-])
+const periods = ref([])
+const loading = ref(false)
 
 const showCreateModal = ref(false)
 const confirmLock = ref(null)
+const confirmDelete = ref(null)
 
 const form = ref({
-  period_name: '',
+  name: '',
   start_date: '',
   end_date: '',
 })
 
+const completedPeriods = computed(() => periods.value.filter(p => p.status === 'closed' || p.status === 'completed').length)
+const inProgressPeriods = computed(() => periods.value.filter(p => p.status === 'in_progress' || p.status === 'processing').length)
+
+async function fetchPeriods() {
+  try {
+    const response = await fetch('/api/v1/payroll/periods', {
+      headers: {
+        'Accept': 'application/json'
+      }
+    })
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    const data = await response.json()
+    periods.value = data.data || data
+  } catch (error) {
+    console.error('Error fetching periods', error)
+  }
+}
+
+onMounted(() => {
+  fetchPeriods()
+})
+
 function statusVariant(status) {
-  const map = { completed: 'success', in_progress: 'warning', draft: 'neutral' }
+  const map = { completed: 'success', closed: 'success', in_progress: 'warning', processing: 'warning', draft: 'neutral', locked: 'warning' }
   return map[status] || 'neutral'
 }
 
 function statusLabel(status) {
-  const map = { completed: 'Selesai', in_progress: 'Dalam Proses', draft: 'Draft' }
+  const map = { completed: 'Selesai', closed: 'Ditutup', in_progress: 'Dalam Proses', processing: 'Diproses', draft: 'Draft', locked: 'Terkunci' }
   return map[status] || status
 }
 
-function handleCreate() {
-  periods.value.unshift({
-    id: periods.value.length + 1,
-    period_code: `PAY-${form.value.start_date?.substring(0, 7)?.replace('-', '-') || '2026-07'}`,
-    name: form.value.period_name || 'Periode Baru',
-    start_date: form.value.start_date,
-    end_date: form.value.end_date,
-    status: 'draft',
-    total_employees: 0,
-    total_amount: 0,
-    date_range: `${form.value.start_date || '-'} - ${form.value.end_date || '-'}`,
-  })
-  showCreateModal.value = false
-  form.value = { period_name: '', start_date: '', end_date: '' }
-}
-
-function handleLock() {
-  if (confirmLock.value) {
-    const idx = periods.value.findIndex((p) => p.id === confirmLock.value.id)
-    if (idx !== -1) periods.value[idx].status = 'completed'
-    confirmLock.value = null
+async function handleCreate() {
+  loading.value = true
+  try {
+    const response = await fetch('/api/v1/payroll/periods', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(form.value)
+    })
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    showCreateModal.value = false
+    form.value = { name: '', start_date: '', end_date: '' }
+    fetchPeriods()
+  } catch (error) {
+    console.error('Error creating period', error)
+  } finally {
+    loading.value = false
   }
 }
 
-function exportPeriod(item) {
-  alert(`Export data untuk periode ${item.name}`)
+async function handleLock() {
+  if (confirmLock.value) {
+    try {
+      const response = await fetch(`/api/v1/payroll/periods/${confirmLock.value.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({ status: 'closed' })
+      })
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      confirmLock.value = null
+      fetchPeriods()
+    } catch (error) {
+      console.error('Error locking period', error)
+    }
+  }
+}
+
+async function handleDelete() {
+  if (confirmDelete.value) {
+    try {
+      const response = await fetch(`/api/v1/payroll/periods/${confirmDelete.value.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Accept': 'application/json'
+        }
+      })
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+      confirmDelete.value = null
+      fetchPeriods()
+    } catch (error) {
+      console.error('Error deleting period', error)
+    }
+  }
 }
 </script>

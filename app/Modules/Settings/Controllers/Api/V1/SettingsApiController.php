@@ -95,4 +95,51 @@ class SettingsApiController extends Controller
 
         return response()->json(['message' => 'Employee settings updated successfully']);
     }
+
+    public function getPayrollSettings()
+    {
+        // For payroll settings, we store them as physical columns in a specific row.
+        $setting = SystemSetting::where('group', 'payroll')->where('key', 'payroll_config')->first();
+
+        if (!$setting) {
+            return response()->json([
+                'data' => [
+                    'cut_off_date' => null,
+                    'working_day_type' => 'fixed',
+                    'fixed_working_day' => 21,
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'data' => [
+                'cut_off_date' => $setting->cut_off_date,
+                'working_day_type' => $setting->working_day_type,
+                'fixed_working_day' => $setting->fixed_working_day,
+            ]
+        ]);
+    }
+
+    public function updatePayrollSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'cut_off_date' => 'nullable|integer|min:1|max:31',
+            'working_day_type' => 'required|string|in:fixed,calendar,flexible',
+            'fixed_working_day' => 'nullable|integer|min:1|max:31',
+        ]);
+
+        $setting = SystemSetting::firstOrCreate(
+            ['group' => 'payroll', 'key' => 'payroll_config'],
+            ['uuid' => (string) Str::uuid()]
+        );
+
+        $setting->update([
+            'cut_off_date' => $validated['cut_off_date'] ?? null,
+            'working_day_type' => $validated['working_day_type'],
+            'fixed_working_day' => $validated['fixed_working_day'] ?? null,
+            'updated_by' => auth()->id() ?? 1,
+        ]);
+
+        return response()->json(['message' => 'Payroll settings updated successfully']);
+    }
 }

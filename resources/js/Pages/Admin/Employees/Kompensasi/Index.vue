@@ -597,8 +597,20 @@ onMounted(() => {
                         <div v-for="(slip, slipIdx) in chunk" :key="slip.contract_id" class="slip">
                             <!-- HEADER -->
                             <div class="slip-header">
-                                <div class="company-name">{{ (printData.company?.name || '').toUpperCase() }}</div>
-                                <div class="company-addr">{{ printData.company?.address || '' }}</div>
+                                <div class="kop-left" v-if="printData.company?.logo_url">
+                                    <img :src="printData.company.logo_url" alt="Logo" class="kop-logo" />
+                                </div>
+                                <div class="kop-main" :class="{'w-full text-center items-center': !printData.company?.logo_url}">
+                                    <div class="company-name">{{ (printData.company?.name || '').toUpperCase() }}</div>
+                                    <div class="company-addr">{{ printData.company?.address || '' }}</div>
+                                    <div class="company-contact" v-if="printData.company?.phone || printData.company?.email || printData.company?.website">
+                                        <span v-if="printData.company?.phone">Telp: {{ printData.company.phone }}</span>
+                                        <span v-if="printData.company?.phone && (printData.company?.email || printData.company?.website)"> | </span>
+                                        <span v-if="printData.company?.email">Email: {{ printData.company.email }}</span>
+                                        <span v-if="printData.company?.email && printData.company?.website"> | </span>
+                                        <span v-if="printData.company?.website">Web: {{ printData.company.website }}</span>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- TITLE BAR -->
@@ -807,8 +819,30 @@ onMounted(() => {
 
 /* ---- HEADER ---- */
 .slip-header {
-    padding: 1px 3px;
+    display: flex;
+    align-items: center;
+    padding: 2px 3px;
     border-bottom: 0.5px solid #000;
+}
+
+.kop-left {
+    margin-right: 6px;
+}
+
+.kop-logo {
+    max-width: 22px;
+    max-height: 22px;
+    object-fit: contain;
+}
+
+.kop-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.kop-main.text-center {
+    align-items: center;
     text-align: center;
 }
 
@@ -819,7 +853,12 @@ onMounted(() => {
 }
 
 .company-addr {
-    font-size: 5.5px;
+    font-size: 5px;
+}
+
+.company-contact {
+    font-size: 4.5px;
+    color: #444;
 }
 
 /* ---- TITLE BAR ---- */

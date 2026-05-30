@@ -1,6 +1,49 @@
 <script setup>
+import { ref, onMounted } from 'vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
+import TextInput from '../../../../Components/TextInput.vue'
+import SelectInput from '../../../../Components/SelectInput.vue'
+import { useApi } from '../../../../composables/useApi'
+
+const { get, post } = useApi()
+
+const form = ref({
+  cut_off_date: '',
+  working_day_type: 'fixed',
+  fixed_working_day: 21,
+})
+const loading = ref(false)
+
+async function fetchSettings() {
+  try {
+    const data = await get('/api/v1/settings/payroll')
+    if (data.data) {
+      form.value.cut_off_date = data.data.cut_off_date
+      form.value.working_day_type = data.data.working_day_type || 'fixed'
+      form.value.fixed_working_day = data.data.fixed_working_day
+    }
+  } catch (e) {
+    console.error('Failed to load settings', e)
+  }
+}
+
+async function saveSettings() {
+  loading.value = true
+  try {
+    await post('/api/v1/settings/payroll', form.value)
+    // You can add success notification here
+  } catch (e) {
+    console.error('Failed to save settings', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchSettings()
+})
+
 </script>
 
 <template>
@@ -9,6 +52,39 @@ import BaseCard from '../../../../Components/BaseCard.vue'
       <h2 class="text-lg font-medium text-(--text-main)">Pengaturan Penggajian & Pajak</h2>
       <p class="text-sm text-(--text-muted)">Atur komponen dasar untuk perhitungan gaji, grade, dan pajak penghasilan.</p>
     </div>
+
+    <!-- Form Konfigurasi Dasar -->
+    <BaseCard>
+      <template #title>Konfigurasi Dasar Penggajian</template>
+      <div class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <TextInput 
+            v-model="form.cut_off_date" 
+            label="Tanggal Cut Off (Misal: 25)" 
+            type="number" 
+            min="1" max="31" 
+          />
+          <SelectInput 
+            v-model="form.working_day_type" 
+            label="Tipe Hari Kerja"
+            :options="[
+              { value: 'fixed', label: 'Fixed (Tetap)' },
+              { value: 'calendar', label: 'Kalender (Senin-Jumat)' },
+              { value: 'flexible', label: 'Fleksibel' }
+            ]"
+          />
+          <TextInput 
+            v-if="form.working_day_type === 'fixed'"
+            v-model="form.fixed_working_day" 
+            label="Jumlah Hari Kerja Tetap" 
+            type="number" 
+          />
+        </div>
+        <div class="flex justify-end">
+          <BaseButton variant="primary" @click="saveSettings" :disabled="loading">Simpan Pengaturan</BaseButton>
+        </div>
+      </div>
+    </BaseCard>
 
     <!-- Master Data Enums / Tables -->
     <BaseCard>
