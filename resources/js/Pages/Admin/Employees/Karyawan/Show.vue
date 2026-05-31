@@ -198,6 +198,17 @@ onMounted(async () => {
               <dt class="text-sm text-(--text-muted)">Bank</dt>
               <dd class="text-sm font-medium text-(--text-main)">{{ employee.bank_name || '-' }} - {{ employee.bank_account_number || '-' }}</dd>
             </div>
+            <div class="flex flex-col gap-2 pt-2 border-t border-(--border-soft)">
+              <dt class="text-sm text-(--text-muted)">Kelompok / Shift</dt>
+              <dd class="text-sm font-medium text-(--text-main)">
+                <div v-if="employee.groups?.length" class="flex flex-wrap gap-2 mt-1">
+                  <Badge v-for="grp in employee.groups" :key="grp.reference_code" variant="neutral">
+                    {{ grp.master_name || grp.reference_code }} <span class="text-xs opacity-75" v-if="grp.group_label">({{ grp.group_label }})</span>
+                  </Badge>
+                </div>
+                <span v-else class="text-(--text-muted)">-</span>
+              </dd>
+            </div>
           </dl>
         </BaseCard>
       </div>

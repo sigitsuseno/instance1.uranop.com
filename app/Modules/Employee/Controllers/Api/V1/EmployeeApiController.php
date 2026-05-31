@@ -78,7 +78,8 @@ class EmployeeApiController extends Controller
             'bank_account_name'      => 'nullable|string|max:200',
             'department_id'          => 'nullable|integer|exists:departments,id',
             'position_id'            => 'nullable|integer|exists:positions,id',
-            'employee_group_id'      => 'nullable|integer|exists:employee_groups,id',
+            'employee_group_codes'   => 'nullable|array',
+            'employee_group_codes.*' => 'string',
             'user_id'                => 'nullable|integer|exists:users,id',
         ]);
 
@@ -86,7 +87,7 @@ class EmployeeApiController extends Controller
 
         return response()->json([
             'message' => "Karyawan {$employee->name} berhasil ditambahkan.",
-            'data'    => new EmployeeResource($employee->load(['department', 'position', 'latestContract', 'group'])),
+            'data'    => new EmployeeResource($employee->load(['department', 'position', 'latestContract', 'groups.master'])),
         ], 201);
     }
 
@@ -98,7 +99,7 @@ class EmployeeApiController extends Controller
         $employee->load([
             'department',
             'position',
-            'group',
+            'groups.master',
             'latestContract',
             'contracts' => fn ($q) => $q->latest('start_date'),
             'positionHistories' => fn ($q) => $q->with(['oldPosition', 'newPosition', 'oldDepartment', 'newDepartment'])->latest('effective_date'),
@@ -146,7 +147,8 @@ class EmployeeApiController extends Controller
             'bank_account_name'      => 'nullable|string|max:200',
             'department_id'          => 'nullable|integer|exists:departments,id',
             'position_id'            => 'nullable|integer|exists:positions,id',
-            'employee_group_id'      => 'nullable|integer|exists:employee_groups,id',
+            'employee_group_codes'   => 'nullable|array',
+            'employee_group_codes.*' => 'string',
             'change_reason'          => 'nullable|string',
             'position_change_date'   => 'nullable|date',
         ]);
@@ -155,7 +157,7 @@ class EmployeeApiController extends Controller
 
         return response()->json([
             'message' => "Data karyawan {$employee->name} berhasil diperbarui.",
-            'data'    => new EmployeeResource($employee->load(['department', 'position', 'latestContract', 'group'])),
+            'data'    => new EmployeeResource($employee->load(['department', 'position', 'latestContract', 'groups.master'])),
         ]);
     }
 

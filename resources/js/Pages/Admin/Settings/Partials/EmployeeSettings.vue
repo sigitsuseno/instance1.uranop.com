@@ -1,16 +1,14 @@
 <script setup>
 import { ref } from 'vue'
 import EmployeeDefaultsTab from './Tabs/EmployeeDefaultsTab.vue'
-import EmployeeGroupCategoriesTab from './Tabs/EmployeeGroupCategoriesTab.vue'
-import EmployeeGroupsTab from './Tabs/EmployeeGroupsTab.vue'
+import EmployeeGroupMastersTab from './Tabs/EmployeeGroupMastersTab.vue'
 import EmployeeStatusTab from './Tabs/EmployeeStatusTab.vue'
 
 const activeTab = ref('defaults')
 
 const tabs = [
   { key: 'defaults', label: 'Pengaturan Default' },
-  { key: 'categories', label: 'Kategori Grup' },
-  { key: 'groups', label: 'Grup Karyawan' },
+  { key: 'masters', label: 'Master Group' },
   { key: 'status', label: 'Tipe & Status' },
 ]
 </script>
@@ -45,12 +43,8 @@ const tabs = [
       <EmployeeDefaultsTab />
     </div>
 
-    <div v-if="activeTab === 'categories'">
-      <EmployeeGroupCategoriesTab />
-    </div>
-    
-    <div v-if="activeTab === 'groups'">
-      <EmployeeGroupsTab />
+    <div v-if="activeTab === 'masters'">
+      <EmployeeGroupMastersTab />
     </div>
 
     <div v-if="activeTab === 'status'">

@@ -11,17 +11,15 @@ return new class extends Migration
         Schema::create('employee_groups', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
-            $table->foreignId('category_id')->constrained('employee_group_categories')->cascadeOnDelete();
-            $table->string('name');
-            $table->string('code')->unique();
-            $table->string('reference_code')->nullable()->index()->comment('Relasi dinamis ke tabel lain misal shift/work_pattern');
-            $table->string('description')->nullable();
-            $table->boolean('is_active')->default(true);
+            $table->foreignId('employee_id')->constrained('employees')->cascadeOnDelete();
+            $table->string('reference_code')->index()->comment('Relasi dinamis ke tabel lain misal shift/work_pattern atau employee_group_masters');
             $table->foreignId('created_by')->nullable()->constrained('users');
             $table->foreignId('updated_by')->nullable()->constrained('users');
             $table->timestamp('synced_at')->nullable();
             $table->timestamps();
-            $table->softDeletes();
+            
+            // Mencegah duplikasi referensi yang sama untuk satu karyawan
+            $table->unique(['employee_id', 'reference_code']);
         });
     }
 

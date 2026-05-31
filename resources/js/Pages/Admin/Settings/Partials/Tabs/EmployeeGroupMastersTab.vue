@@ -3,7 +3,6 @@ import { ref, reactive, onMounted } from 'vue'
 import BaseButton from '../../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../../Components/BaseCard.vue'
 import TextInput from '../../../../../Components/TextInput.vue'
-import SelectInput from '../../../../../Components/SelectInput.vue'
 import DataTable from '../../../../../Components/Table/DataTable.vue'
 import { IconPencil, IconPlus } from '../../../../../Components/Icons/index.js'
 import { useNotification } from '../../../../../composables/useNotification'
@@ -14,85 +13,76 @@ const notification = useNotification()
 const api = useApi()
 
 const groups = ref([])
-const categories = ref([])
-const groupForm = reactive({ id: null, category_id: '', name: '', code: '', description: '', is_active: true })
+const form = reactive({ id: null, group_label: '', name: '', code: '', description: '', is_active: true })
 const isEditing = ref(false)
 
 const tableHeaders = [
-  { key: 'category.name', label: 'Kategori / Dimensi' },
-  { key: 'code', label: 'Kode Grup' },
-  { key: 'name', label: 'Nama Grup' },
+  { key: 'group_label', label: 'Label/Kelompok' },
+  { key: 'code', label: 'Kode' },
+  { key: 'name', label: 'Nama Master' },
+  { key: 'description', label: 'Deskripsi' },
+  { key: 'is_active', label: 'Status' },
   { key: 'actions', label: 'Aksi', sortable: false, width: '80px' },
 ]
-
-async function fetchCategories() {
-  try {
-    const response = await api.get('/api/v1/settings/employee-data/categories')
-    categories.value = response.data || []
-  } catch (err) {
-    // silently fail or log
-  }
-}
 
 async function fetchGroups() {
   try {
     const response = await api.get('/api/v1/settings/employee-data/groups')
     groups.value = response.data || []
   } catch (err) {
-    notification.error('Gagal mengambil data grup')
+    notification.error('Gagal mengambil data master group')
   }
 }
 
 onMounted(() => {
-  fetchCategories()
   fetchGroups()
 })
 
 function editGroup(item) {
   isEditing.value = true
-  groupForm.id = item.id
-  groupForm.category_id = item.category_id
-  groupForm.name = item.name
-  groupForm.code = item.code
-  groupForm.description = item.description || ''
-  groupForm.is_active = item.is_active
+  form.id = item.id
+  form.group_label = item.group_label
+  form.name = item.name
+  form.code = item.code
+  form.description = item.description || ''
+  form.is_active = item.is_active
 }
 
-function resetGroupForm() {
+function resetForm() {
   isEditing.value = false
-  groupForm.id = null
-  groupForm.category_id = ''
-  groupForm.name = ''
-  groupForm.code = ''
-  groupForm.description = ''
-  groupForm.is_active = true
+  form.id = null
+  form.group_label = ''
+  form.name = ''
+  form.code = ''
+  form.description = ''
+  form.is_active = true
 }
 
 async function saveGroup() {
   try {
-    const payload = { ...groupForm }
-    if (groupForm.id) {
-      await api.put(`/api/v1/settings/employee-data/groups/${groupForm.id}`, payload)
-      notification.success('Grup berhasil diupdate')
+    const payload = { ...form }
+    if (form.id) {
+      await api.put(`/api/v1/settings/employee-data/groups/${form.id}`, payload)
+      notification.success('Master Group berhasil diupdate')
     } else {
       await api.post(`/api/v1/settings/employee-data/groups`, payload)
-      notification.success('Grup berhasil ditambahkan')
+      notification.success('Master Group berhasil ditambahkan')
     }
-    resetGroupForm()
+    resetForm()
     fetchGroups()
   } catch (err) {
-    notification.error('Gagal menyimpan grup')
+    notification.error('Gagal menyimpan Master Group')
   }
 }
 
 async function deleteGroup(id) {
-  if (confirm('Hapus grup ini?')) {
+  if (confirm('Hapus master group ini?')) {
     try {
       await api.delete(`/api/v1/settings/employee-data/groups/${id}`)
-      notification.success('Grup berhasil dihapus')
+      notification.success('Master Group berhasil dihapus')
       fetchGroups()
     } catch (err) {
-      notification.error('Gagal menghapus grup')
+      notification.error('Gagal menghapus master group')
     }
   }
 }
@@ -101,32 +91,27 @@ async function deleteGroup(id) {
 <template>
   <div class="space-y-6">
     <BaseCard>
-      <template #title>Kelola Grup Karyawan</template>
+      <template #title>Kelola Master Group</template>
       <div class="space-y-4">
         <!-- Form Add/Edit -->
         <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end bg-(--bg-soft) p-4 rounded-md">
-          <SelectInput 
-            v-model="groupForm.category_id" 
-            label="Pilih Kategori" 
-            :options="categories.map(c => ({ value: c.id, label: c.name }))"
-            class="sm:col-span-1"
-          />
-          <TextInput v-model="groupForm.code" label="Kode Grup" placeholder="Ex: JKT" />
-          <TextInput v-model="groupForm.name" label="Nama Grup" placeholder="Ex: Jakarta" />
+          <TextInput v-model="form.group_label" label="Label Group" placeholder="Ex: Shift" />
+          <TextInput v-model="form.code" label="Kode" placeholder="Ex: SFT_PAGI" />
+          <TextInput v-model="form.name" label="Nama Master" placeholder="Ex: Shift Pagi" />
           
           <div class="flex gap-2">
-            <BaseButton variant="primary" size="sm" @click="saveGroup" :disabled="!groupForm.category_id">
-              {{ groupForm.id ? 'Update' : 'Tambah' }}
+            <BaseButton variant="primary" size="sm" @click="saveGroup">
+              {{ form.id ? 'Update' : 'Tambah' }}
             </BaseButton>
-            <BaseButton v-if="isEditing" variant="secondary" size="sm" @click="resetGroupForm">
+            <BaseButton v-if="isEditing" variant="secondary" size="sm" @click="resetForm">
               Batal
             </BaseButton>
           </div>
         </div>
 
         <DataTable :headers="tableHeaders" :items="groups" class="mt-4">
-          <template #item.category.name="{ item }">
-            <Badge variant="primary">{{ item.category?.name || '-' }}</Badge>
+          <template #item.is_active="{ value }">
+            <Badge :variant="value ? 'success' : 'neutral'">{{ value ? 'Aktif' : 'Nonaktif' }}</Badge>
           </template>
           <template #item.actions="{ item }">
             <div class="flex items-center gap-2">

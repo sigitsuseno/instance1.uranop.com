@@ -6,16 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
-class EmployeeGroupCategory extends Model
+class EmployeeGroupMaster extends Model
 {
     use SoftDeletes;
 
     protected $fillable = [
         'uuid',
+        'group_label',
         'name',
         'code',
         'description',
-        'is_multiple_choice',
         'is_active',
         'created_by',
         'updated_by',
@@ -23,7 +23,6 @@ class EmployeeGroupCategory extends Model
     ];
 
     protected $casts = [
-        'is_multiple_choice' => 'boolean',
         'is_active' => 'boolean',
         'synced_at' => 'datetime',
     ];
@@ -36,10 +35,5 @@ class EmployeeGroupCategory extends Model
                 $model->uuid = (string) Str::uuid();
             }
         });
-    }
-
-    public function groups()
-    {
-        return $this->hasMany(EmployeeGroup::class, 'category_id');
     }
 }

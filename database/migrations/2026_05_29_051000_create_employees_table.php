@@ -20,7 +20,6 @@ return new class extends Migration
 
             // Relasi
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
-            $table->foreignId('employee_group_id')->nullable()->constrained('employee_groups')->nullOnDelete();
             $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();
             $table->foreignId('position_id')->nullable()->constrained('positions')->nullOnDelete();
 
@@ -85,7 +84,6 @@ return new class extends Migration
             $table->index(['department_id', 'position_id']);
             $table->index(['is_active', 'employment_status']);
             $table->index('join_date');
-            $table->index('employee_group_id');
         });
     }
 

@@ -92,7 +92,7 @@ class EmployeeImport implements ToCollection, WithHeadingRow
                 
                 // Pada sistem lama, 'JKT' -> 1, selain itu 2. Kita buat dinamis berdasarkan nama shift.
                 $groupName = ($row['shift'] ?? '') === 'JKT' ? 'JKT' : ($row['shift'] ?? 'Non-JKT');
-                $group_id = $this->ensureEmployeeGroupExists($groupName);
+                $groupCode = $this->ensureEmployeeGroupExists($groupName);
 
                 // ===== 6. UPDATE ATAU CREATE EMPLOYEE =====
                 $nip = $row['nip'];
@@ -122,9 +122,13 @@ class EmployeeImport implements ToCollection, WithHeadingRow
                         'bank_account_name' => $row['nama_di_rekening'] ?? null,
                         'is_active' => true,
                         'ptkp' => (string) ($row['ptkp'] ?? 'TK/0'),
-                        'employee_group_id' => $group_id,
+
                     ]
                 );
+
+                // Handle Group
+                $employee->groups()->where('reference_code', 'LIKE', 'GRP-%')->delete(); // or we can just delete all if this is the only group source
+                $employee->groups()->updateOrCreate(['reference_code' => $groupCode]);
 
                 // ===== 7. HANDLE POSITION HISTORY =====
                 if ($employee->wasRecentlyCreated) {
@@ -159,26 +163,18 @@ class EmployeeImport implements ToCollection, WithHeadingRow
         }
     }
 
-    /**
-     * Pastikan EmployeeGroup ada agar tidak foreign key error.
-     */
     protected function ensureEmployeeGroupExists($name)
     {
-        $category = \App\Modules\Settings\Models\EmployeeGroupCategory::firstOrCreate(
-            ['name' => 'Imported Category'],
-            ['code' => 'CAT-IMP', 'description' => 'Auto generated category for imports']
-        );
-
-        $group = \App\Modules\Settings\Models\EmployeeGroup::firstOrCreate(
+        $group = \App\Modules\Settings\Models\EmployeeGroupMaster::firstOrCreate(
             ['name' => $name],
             [
+                'group_label' => 'Imported Shift/Group',
                 'code' => 'GRP-' . strtoupper(preg_replace('/[^A-Za-z0-9]/', '', $name)),
-                'category_id' => $category->id, 
                 'description' => "Auto generated from import"
             ]
         );
         
-        return $group->id;
+        return $group->code;
     }
 
     /**

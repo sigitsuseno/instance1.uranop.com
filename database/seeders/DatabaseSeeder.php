@@ -15,7 +15,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             UserSeeder::class,
             InstanceSeeder::class,
-            // OrganizationSeeder::class,
+            PayPeriodSeeder::class,
         ]);
     }
 }

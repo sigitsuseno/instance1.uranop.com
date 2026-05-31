@@ -22,7 +22,7 @@ class Employee extends Model
     protected $fillable = [
         'uuid',
         'user_id',
-        'employee_group_id',
+
         'department_id',
         'position_id',
         'employee_code',
@@ -96,9 +96,14 @@ class Employee extends Model
         return $this->belongsTo(User::class);
     }
 
-    public function group()
+    public function groups()
     {
-        return $this->belongsTo(EmployeeGroup::class, 'employee_group_id');
+        return $this->hasMany(EmployeeGroup::class, 'employee_id');
+    }
+
+    public function hasGroup(string $referenceCode): bool
+    {
+        return $this->groups()->where('reference_code', $referenceCode)->exists();
     }
 
     public function department()

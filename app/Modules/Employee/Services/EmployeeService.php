@@ -17,7 +17,7 @@ class EmployeeService
      */
     public function getPaginated(array $filters = []): LengthAwarePaginator
     {
-        $query = Employee::with(['department', 'position', 'latestContract', 'group']);
+        $query = Employee::with(['department', 'position', 'latestContract', 'groups']);
 
         // Default sorting if not provided
         $sortBy = $filters['sort_by'] ?? 'nip';
@@ -108,6 +108,11 @@ class EmployeeService
 
             $employee = Employee::create($data);
 
+            if (isset($data['employee_group_codes']) && is_array($data['employee_group_codes'])) {
+                $groupsData = array_map(fn($code) => ['reference_code' => $code], $data['employee_group_codes']);
+                $employee->groups()->createMany($groupsData);
+            }
+
             // Create initial position history
             if ($employee->department_id || $employee->position_id) {
                 $employee->positionHistories()->create([
@@ -150,6 +155,12 @@ class EmployeeService
             $oldPositionId = $employee->position_id;
 
             $employee->update($data);
+
+            if (isset($data['employee_group_codes']) && is_array($data['employee_group_codes'])) {
+                $employee->groups()->delete();
+                $groupsData = array_map(fn($code) => ['reference_code' => $code], $data['employee_group_codes']);
+                $employee->groups()->createMany($groupsData);
+            }
 
             // Create position history if position or department changed
             if ($positionChanged || $departmentChanged) {

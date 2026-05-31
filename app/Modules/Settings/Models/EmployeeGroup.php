@@ -3,29 +3,24 @@
 namespace App\Modules\Settings\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use App\Modules\Shared\Traits\HasAuditLog;
 use Illuminate\Support\Str;
+use App\Modules\Employee\Models\Employee;
 
 class EmployeeGroup extends Model
 {
     use HasAuditLog;
-    // use SoftDeletes; // uncomment if table has softDeletes
 
     protected $fillable = [
         'uuid',
-        'category_id',
-        'name',
-        'code',
-        'description',
-        'is_active',
+        'employee_id',
+        'reference_code',
         'created_by',
         'updated_by',
         'synced_at',
     ];
 
     protected $casts = [
-        'is_active' => 'boolean',
         'synced_at' => 'datetime',
     ];
 
@@ -39,8 +34,13 @@ class EmployeeGroup extends Model
         });
     }
 
-    public function category()
+    public function employee()
     {
-        return $this->belongsTo(EmployeeGroupCategory::class, 'category_id');
+        return $this->belongsTo(Employee::class, 'employee_id');
+    }
+
+    public function master()
+    {
+        return $this->belongsTo(EmployeeGroupMaster::class, 'reference_code', 'code');
     }
 }

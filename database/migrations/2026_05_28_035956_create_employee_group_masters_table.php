@@ -8,13 +8,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('employee_group_categories', function (Blueprint $table) {
+        Schema::create('employee_group_masters', function (Blueprint $table) {
             $table->id();
             $table->uuid('uuid')->unique();
+            $table->string('group_label')->comment('Misal: Kelompok Pengelolaan Penggajian');
             $table->string('name');
             $table->string('code')->unique();
             $table->string('description')->nullable();
-            $table->boolean('is_multiple_choice')->default(false);
             $table->boolean('is_active')->default(true);
             $table->foreignId('created_by')->nullable()->constrained('users');
             $table->foreignId('updated_by')->nullable()->constrained('users');
@@ -26,6 +26,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('employee_group_categories');
+        Schema::dropIfExists('employee_group_masters');
     }
 };

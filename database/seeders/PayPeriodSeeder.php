@@ -32,8 +32,12 @@ class PayPeriodSeeder extends Seeder
         ];
 
         foreach ($months as $monthNumber => $monthName) {
-            $startDate = Carbon::create($year, $monthNumber, 1);
-            $endDate = $startDate->copy()->endOfMonth();
+            $endDate = Carbon::create($year, $monthNumber, 24);
+            $startDate = $endDate->copy()->subMonth()->day(25);
+            $isSplit = false;
+            if ($monthName === 'Januari') {
+                $isSplit = true;
+            }
 
             PayPeriod::updateOrCreate(
                 [
@@ -43,9 +47,9 @@ class PayPeriodSeeder extends Seeder
                 [
                     'uuid' => (string) Str::uuid(),
                     'name' => "{$monthName} {$year}",
-                    'is_split' => false,
+                    'is_split' => $isSplit,
                     'system_setting_id' => null,
-                    'status' => 'draft',
+                    'status' => 'inactive',
                     'start_date' => $startDate->toDateString(),
                     'end_date' => $endDate->toDateString(),
                 ]

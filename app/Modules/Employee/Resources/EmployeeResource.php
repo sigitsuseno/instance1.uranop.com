@@ -13,7 +13,7 @@ class EmployeeResource extends JsonResource
             'id'                     => $this->id,
             'uuid'                   => $this->uuid,
             'user_id'                => $this->user_id,
-            'employee_group_id'      => $this->employee_group_id,
+
             'employee_code'          => $this->employee_code,
             'nik'                    => $this->nik,
             'name'                   => $this->name,
@@ -71,11 +71,12 @@ class EmployeeResource extends JsonResource
                 'id'   => $this->position->id,
                 'name' => $this->position->name,
             ]),
-            'group'                  => $this->whenLoaded('group', fn () => [
-                'id'   => $this->group->id,
-                'name' => $this->group->name,
-                'code' => $this->group->code,
-            ]),
+            'groups'                 => $this->whenLoaded('groups', fn () => $this->groups->map(fn($g) => [
+                'id' => $g->id,
+                'reference_code' => $g->reference_code,
+                'master_name' => $g->master ? $g->master->name : null,
+                'group_label' => $g->master ? $g->master->group_label : null,
+            ])),
             'latest_contract'        => $this->whenLoaded('latestContract', fn () => $this->latestContract ? [
                 'id'              => $this->latestContract->id,
                 'contract_number' => $this->latestContract->contract_number,
