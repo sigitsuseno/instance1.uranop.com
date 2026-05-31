@@ -50,6 +50,13 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::patch('/{contract}/mark-unpaid', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'markUnpaid'])->name('employees.compensation.mark-unpaid');
         });
 
+        // Grouping & Kanban
+        Route::prefix('grouping')->group(function () {
+            Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'index'])->name('employees.grouping.index');
+            Route::post('/bulk-update', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'bulkUpdate'])->name('employees.grouping.bulk-update');
+            Route::post('/auto-enroll', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'autoEnroll'])->name('employees.grouping.auto-enroll');
+        });
+
         // Submodules
         require __DIR__ . '/../Submodules/Import/Routes/api.php';
 

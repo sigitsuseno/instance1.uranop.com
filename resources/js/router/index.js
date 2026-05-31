@@ -11,6 +11,7 @@ const DepartmentsIndex = () => import('../Pages/Admin/Organization/Departments/I
 const PositionsIndex = () => import('../Pages/Admin/Organization/Positions/Index.vue')
 const SalaryGradesIndex = () => import('../Pages/Admin/Organization/SalaryGrades/Index.vue')
 const EmployeesIndex = () => import('../Pages/Admin/Employees/Karyawan/Index.vue')
+const EmployeeGroupingIndex = () => import('../Pages/Admin/Employees/Grouping/Index.vue')
 const EmployeeImport = () => import('../Pages/Admin/Employees/Import.vue')
 const EmployeeContractsIndex = () => import('../Pages/Admin/Employees/Contracts/Index.vue')
 const EmployeeContractsImport = () => import('../Pages/Admin/Employees/Contracts/Import.vue')
@@ -85,6 +86,7 @@ const routes = [
       { path: 'employees/contracts', name: 'employees.contracts', component: EmployeeContractsIndex, meta: { title: 'Kontrak Kerja' } },
       { path: 'employees/contracts/import', name: 'employees.contracts.import', component: EmployeeContractsImport, meta: { title: 'Import Kontrak' } },
       { path: 'employees/kompensasi', name: 'employees.kompensasi', component: () => import('../Pages/Admin/Employees/Kompensasi/Index.vue'), meta: { title: 'Kompensasi Kontrak' } },
+      { path: 'employees/grouping', name: 'employees.grouping', component: EmployeeGroupingIndex, meta: { title: 'Grouping Karyawan' } },
       { path: 'employees/create', name: 'employees.create', component: EmployeeCreate, meta: { title: 'Tambah Karyawan' } },
       { path: 'employees/:id', name: 'employees.show', component: EmployeeShow, meta: { title: 'Detail Karyawan' } },
       { path: 'employees/:id/edit', name: 'employees.edit', component: EmployeeEdit, meta: { title: 'Edit Karyawan' } },

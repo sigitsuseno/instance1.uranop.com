@@ -126,15 +126,18 @@ class Employee extends Model
     public function gaji_pokok(?string $period = null): float;
 
     // 2. Premi / Bonus Tetap
-    // $employee->premi_component('2026-05')
+    // $employee->premi('2026-05') atau $employee->premi_component('2026-05')
+    public function premi(?string $period = null): float;
     public function premi_component(?string $period = null): float;
 
     // 3. Tunjangan Masa Kerja (dihitung dinamis berdasar join_date s.d. periode)
-    // $employee->tunjangan_masa_kerja('2026-05') atau $employee->tjMasaKerja('2026-05')
+    // $employee->tunjanganMasaKerja('2026-05') atau $employee->tjMasaKerja('2026-05')
+    public function tunjanganMasaKerja(?string $period = null): float;
     public function tunjangan_masa_kerja(?string $period = null): float;
 
     // 4. Tunjangan Tetap / Tunjangan Lainnya
-    // $employee->tunjangan_tetap('2026-05')
+    // $employee->tunjangan('2026-05') atau $employee->tunjangan_tetap('2026-05')
+    public function tunjangan(?string $period = null): float;
     public function tunjangan_tetap(?string $period = null): float;
 
     // 5. Total Gaji (Gaji Pokok + Premi + Tunjangan Masa Kerja + Tunjangan)
@@ -393,7 +396,7 @@ Module **Settings** dan semua data master/config:
 
 - System settings
 - Salary grades + salary grade histories (opsional, dikonfigurasi via settings)
-- Employee groups, employee titles
+- Employee group masters, employee groups, employee titles
 - Salary components
 - BPJS configs, PPH configs, PTKP rates, TER rates, progressive rates
 - Overtime rules (shared — dipakai attendance & payroll)
@@ -405,12 +408,12 @@ Module **Settings** dan semua data master/config:
 |---|---|
 | Migration system_settings | `not started` |
 | Migration salary_grades, salary_grade_histories | `not started` |
-| Migration employee_groups, employee_titles | `not started` |
+| Migration employee_group_masters, employee_groups, employee_titles | `not started` |
 | Migration salary_components | `not started` |
 | Migration bpjs_configs, pph_configs, ptkp_rates, ter_rates, progressive_rates | `not started` |
 | Migration overtime_rules (shared, satu tabel) | `not started` |
 | Migration service_year_allowances | `not started` |
-| Model: SystemSetting, SalaryGrade, SalaryGradeHistory, EmployeeGroup, EmployeeTitle | `not started` |
+| Model: SystemSetting, SalaryGrade, SalaryGradeHistory, EmployeeGroupMaster, EmployeeGroup, EmployeeTitle | `not started` |
 | Controller SettingsApiController | `not started` |
 | Routes Settings/Routes/api.php | `not started` |
 
@@ -429,7 +432,7 @@ Module **Settings** dan semua data master/config:
 - [x] Frontend: SalaryGrades page (mock)
 - [x] Migration + Model: system_settings
 - [x] Migration + Model: salary_grades, salary_grade_histories
-- [x] Migration + Model: employee_groups, employee_titles
+- [x] Migration + Model: employee_group_masters, employee_groups, employee_titles
 - [x] Migration + Model: salary_components
 - [x] Migration + Model: bpjs_configs, pph_configs, ptkp_rates, ter_rates, progressive_rates
 - [x] Migration + Model: overtime_rules (shared)
@@ -459,14 +462,14 @@ Module **Settings** dan semua data master/config:
 | Migration employee_documents | `done` |
 | Migration employee_salaries (+ effective_date) | `done` |
 | Migration employee_salary_components | `done` |
-| Migration employee_salary_breakdowns | `done` |
 | Migration employee_position_histories | `done` |
 | Migration employee_terminations | `done` |
 | Migration employee_bpjs | `done` |
 | Migration employee_thr | `done` |
 | Model: Employee (+ effective date accessors) | `done` |
 | Model: Contract, Family, Document, Salary, Termination, dll | `done` |
-| Controller EmployeeApiController (CRUD + import + export) | `done` |
+| Controller EmployeeApiController (CRUD) | `done` |
+| Submodule ImportApiController (Import Excel) | `done` |
 | Routes Employee/Routes/api.php | `done` |
 | Resources: EmployeeResource | `done` |
 
@@ -474,17 +477,17 @@ Module **Settings** dan semua data master/config:
 
 | Item | Status |
 |---|---|
-| Employees/Index.vue | `done` (mock data) |
-| Employees/Create.vue | `done` (mock data) |
-| Employees/Show.vue | `done` (mock data) |
-| Employees/Edit.vue | `done` (mock data) |
+| Admin/Employees/Karyawan/Index.vue | `done` (API) |
+| Admin/Employees/Karyawan/Create.vue | `done` (API) |
+| Admin/Employees/Karyawan/Show.vue | `done` (API) |
+| Admin/Employees/Karyawan/Edit.vue | `done` (API) |
 
 #### 4.3 Checklist Fase 4
 
-- [x] Frontend: Employee Index (mock)
-- [x] Frontend: Employee Show (mock)
-- [x] Frontend: Employee Create (mock)
-- [x] Frontend: Employee Edit (mock)
+- [x] Frontend: Employee Index (API)
+- [x] Frontend: Employee Show (API)
+- [x] Frontend: Employee Create (API)
+- [x] Frontend: Employee Edit (API)
 - [x] Migration: semua tabel employee (tanpa employee_periodes)
 - [x] Model Employee: effective date accessors (baseSalary, activeContract, currentPosition)
 - [x] Model: semua model employee

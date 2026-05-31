@@ -49,7 +49,7 @@ const allMenus = [
     children: [
       { title: 'Karyawan', icon: 'bx bx-user', route: '/admin/employees' },
       { title: 'Import Karyawan', icon: 'bx bx-upload', route: '/admin/employees/import' },
-      { title: 'Grouping Karyawan', icon: 'bx bx-layer', route: '/admin/employees' },
+      { title: 'Grouping Karyawan', icon: 'bx bx-layer', route: '/admin/employees/grouping' },
       { title: 'Gaji Karyawan', icon: 'bx bx-money', route: '/admin/employees/salaries' },
       { title: 'Kontrak Kerja', icon: 'bx bx-file', route: '/admin/employees/contracts' },
       { title: 'Kompensasi', icon: 'bx bx-money-withdraw', route: '/admin/employees/kompensasi' },

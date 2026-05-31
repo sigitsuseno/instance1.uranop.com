@@ -215,19 +215,35 @@ class Employee extends Model
     }
 
     /**
-     * Ambil premi dari employee_salaries.
+     * Ambil premi / bonus tetap dari employee_salaries.
+     */
+    public function premi(?string $period = null): float
+    {
+        return (float) ($this->activeSalary($period)?->premi ?? $this->attributes['premi'] ?? 0);
+    }
+
+    /**
+     * Alias untuk premi()
      */
     public function premi_component(?string $period = null): float
     {
-        return (float) ($this->activeSalary($period)?->premi ?? $this->premi ?? 0);
+        return $this->premi($period);
     }
 
     /**
      * Ambil tunjangan masa kerja (dinamis berdasarkan join_date).
      */
-    public function tunjangan_masa_kerja(?string $period = null): float
+    public function tunjanganMasaKerja(?string $period = null): float
     {
         return $this->tjMasaKerja($period);
+    }
+
+    /**
+     * Alias untuk tunjanganMasaKerja()
+     */
+    public function tunjangan_masa_kerja(?string $period = null): float
+    {
+        return $this->tunjanganMasaKerja($period);
     }
 
     /**
@@ -276,9 +292,17 @@ class Employee extends Model
     /**
      * Ambil tunjangan tetap dari employee_salaries.
      */
+    public function tunjangan(?string $period = null): float
+    {
+        return (float) ($this->activeSalary($period)?->tunjangan ?? $this->attributes['tunjangan'] ?? 0);
+    }
+
+    /**
+     * Alias untuk tunjangan()
+     */
     public function tunjangan_tetap(?string $period = null): float
     {
-        return (float) ($this->activeSalary($period)?->tunjangan ?? $this->tunjangan ?? 0);
+        return $this->tunjangan($period);
     }
 
     /**
@@ -336,6 +360,26 @@ class Employee extends Model
                 $q->whereNull('end_date')
                   ->orWhere('end_date', '>=', $startDate);
             });
+    }
+
+    /**
+     * Cek apakah karyawan terdaftar di periode payroll tertentu
+     */
+    public function scopeEnrolledInPeriod($query, string $periodCode)
+    {
+        return $query->whereHas('groups', function($q) use ($periodCode) {
+            $q->where('reference_code', $periodCode);
+        });
+    }
+
+    /**
+     * Cek berdasarkan Otoritas Manajemen
+     */
+    public function scopeInManagementAuthority($query, string $authCode)
+    {
+        return $query->whereHas('groups', function($q) use ($authCode) {
+            $q->where('reference_code', $authCode);
+        });
     }
 
     public function scopeByStatus($query, string $status)
