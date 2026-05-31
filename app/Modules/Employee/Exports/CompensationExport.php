@@ -26,7 +26,15 @@ class CompensationExport implements FromCollection, WithHeadings, WithMapping, S
 
     public function collection()
     {
-        $dateInfo = $this->calculateCompensationDates($this->year, $this->month, $this->periode);
+        $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
+
+        try {
+            $dateInfo = $compensationService->calculateCompensationDates($this->year, $this->month, $this->periode);
+        } catch (\Exception $e) {
+            // If exception, just return empty collection
+            return collect([]);
+        }
+
         $startDate = $dateInfo['start'];
         $endDate = $dateInfo['end'];
 
@@ -89,41 +97,5 @@ class CompensationExport implements FromCollection, WithHeadings, WithMapping, S
             'freelance' => 'Freelance',
         ];
         return $types[$type] ?? strtoupper($type);
-    }
-
-    private function calculateCompensationDates($year, $month, $periode)
-    {
-        if ($periode === 'auto') {
-            $today = (int) date('d');
-            $periode = $today <= 7 || $today >= 25 ? 'awal' : 'akhir';
-        }
-
-        $periodStart = Carbon::create($year, $month, 25)->subMonth();
-        $periodEnd = Carbon::create($year, $month, 24);
-        
-        $totalDays = $periodStart->diffInDays($periodEnd) + 1; 
-        $halfDays = (int) floor($totalDays / 2);
-        
-        $midPeriod = $periodStart->copy()->addDays($halfDays - 1); 
-
-        if ($periode === 'awal') {
-            $startDate = $midPeriod->copy()->addDay();
-            $endDate = $periodEnd->copy();
-        } else {
-            $nextPeriodStart = Carbon::create($year, $month, 25);
-            $nextPeriodEnd = Carbon::create($year, $month, 24)->addMonth();
-            
-            $nextTotalDays = $nextPeriodStart->diffInDays($nextPeriodEnd) + 1;
-            $nextHalfDays = (int) floor($nextTotalDays / 2);
-            $nextMidPeriod = $nextPeriodStart->copy()->addDays($nextHalfDays - 1);
-            
-            $startDate = $nextPeriodStart->copy();
-            $endDate = $nextMidPeriod->copy();
-        }
-
-        return [
-            'start' => $startDate,
-            'end' => $endDate
-        ];
     }
 }

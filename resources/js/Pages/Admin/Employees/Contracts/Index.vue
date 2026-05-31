@@ -30,6 +30,10 @@ const periodStartFilter = ref('')
 const periodEndFilter = ref('')
 const currentPage = ref(1)
 
+// Sorting
+const sortBy = ref('contract_end_date')
+const sortDir = ref('asc')
+
 // Options
 const contractTypeOptions = [
   { value: 'pkwt', label: 'PKWT' },
@@ -71,7 +75,16 @@ async function fetchEmployees() {
     
     if (searchQuery.value) params.set('search', searchQuery.value)
     if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
-    if (contractStatusFilter.value) params.set('contract_status', contractStatusFilter.value)
+    
+    if (contractStatusFilter.value) {
+      params.set('contract_status', contractStatusFilter.value)
+    } else {
+      // By default, exclude contracts that expired > 30 days ago
+      params.set('exclude_expired_contracts', '1')
+    }
+    
+    if (sortBy.value) params.set('sort_by', sortBy.value)
+    if (sortDir.value) params.set('sort_dir', sortDir.value)
 
     const res = await get(`/api/v1/employees?${params}`)
     employees.value = res.data || []
@@ -109,6 +122,16 @@ async function fetchContractHistory(employee) {
 // ========== ACTIONS ==========
 function handlePageChange(page) {
   currentPage.value = page
+  fetchEmployees()
+}
+
+function handleSort(column) {
+  if (sortBy.value === column) {
+    sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    sortBy.value = column
+    sortDir.value = 'asc'
+  }
   fetchEmployees()
 }
 
@@ -362,10 +385,37 @@ onMounted(() => {
         <table class="w-full text-left border-collapse">
           <thead>
             <tr class="bg-(--bg-elevated)/50 border-b border-(--border-soft)">
-              <th class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[35%]">Karyawan</th>
+              <th 
+                class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[35%] cursor-pointer select-none hover:text-(--text-main) transition-colors"
+                @click="handleSort('name')"
+              >
+                <div class="flex items-center gap-2">
+                  Karyawan
+                  <i v-if="sortBy === 'name'" :class="['bx', sortDir === 'asc' ? 'bx-up-arrow-alt' : 'bx-down-arrow-alt']" class="text-sm"></i>
+                  <i v-else class="bx bx-sort text-sm opacity-30"></i>
+                </div>
+              </th>
               <th class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[20%]">Kontrak Terakhir</th>
-              <th class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[20%]">Periode Kontrak</th>
-              <th class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[15%]">Status</th>
+              <th 
+                class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[20%] cursor-pointer select-none hover:text-(--text-main) transition-colors"
+                @click="handleSort('contract_end_date')"
+              >
+                <div class="flex items-center gap-2">
+                  Periode Kontrak
+                  <i v-if="sortBy === 'contract_end_date'" :class="['bx', sortDir === 'asc' ? 'bx-up-arrow-alt' : 'bx-down-arrow-alt']" class="text-sm"></i>
+                  <i v-else class="bx bx-sort text-sm opacity-30"></i>
+                </div>
+              </th>
+              <th 
+                class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider w-[15%] cursor-pointer select-none hover:text-(--text-main) transition-colors"
+                @click="handleSort('contract_end_date')"
+              >
+                <div class="flex items-center gap-2">
+                  Status
+                  <i v-if="sortBy === 'contract_end_date'" :class="['bx', sortDir === 'asc' ? 'bx-up-arrow-alt' : 'bx-down-arrow-alt']" class="text-sm"></i>
+                  <i v-else class="bx bx-sort text-sm opacity-30"></i>
+                </div>
+              </th>
               <th class="px-6 py-3 text-xs font-bold text-(--text-muted) uppercase tracking-wider text-right w-[10%]">Aksi</th>
             </tr>
           </thead>
@@ -455,7 +505,7 @@ onMounted(() => {
     </div>
 
     <!-- History Modal -->
-    <BaseModal :show="showHistoryModal" @close="showHistoryModal = false" :title="`Riwayat Kontrak - ${selectedEmployee?.name}`" size="3xl">
+    <BaseModal :show="showHistoryModal" @close="showHistoryModal = false" :title="`Riwayat Kontrak - ${selectedEmployee?.name}`" size="lg">
       <div v-if="loadingHistory" class="p-8 flex justify-center">
         <div class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin"></div>
       </div>

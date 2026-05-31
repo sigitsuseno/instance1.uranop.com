@@ -90,7 +90,9 @@ async function fetchData() {
             period.value = res.data.period || { start: '', end: '', label: '' }
         }
     } catch (e) {
-        notification.addNotification('Gagal memuat data kompensasi.', 'error')
+        notification.addNotification(e.message || 'Gagal memuat data kompensasi.', 'error')
+        contracts.value = []
+        period.value = { start: '', end: '', label: '' }
     } finally {
         loading.value = false
     }
@@ -199,7 +201,7 @@ async function bulkPrint() {
             showPrintModal.value = true
         }
     } catch (e) {
-        notification.addNotification('Gagal memuat data slip kompensasi.', 'error')
+        notification.addNotification(e.message || 'Gagal memuat data slip kompensasi.', 'error')
     } finally {
         printLoading.value = false
     }

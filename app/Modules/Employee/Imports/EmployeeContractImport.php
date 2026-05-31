@@ -40,25 +40,26 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
         foreach ($rows as $index => $row) {
             $rowNumber = $index + 2; // header di baris 1
 
-            // Skip baris yang benar-benar kosong
-            $isEmptyRow = true;
-            foreach ($row->toArray() as $value) {
-                if ($value !== null && trim((string) $value) !== '') {
-                    $isEmptyRow = false;
-                    break;
-                }
-            }
+            $nipVal = trim((string) ($row['nip'] ?? ''));
+            $tglVal = trim((string) ($row['tanggal_masuk'] ?? ''));
+            $stsVal = trim((string) ($row['status'] ?? ''));
+            $durVal = trim((string) ($row['durasi'] ?? ''));
 
-            if ($isEmptyRow) {
+            // Skip baris jika NIP kosong (biasanya ghost rows di Excel)
+            if ($nipVal === '') {
                 $this->stats['total']--;
-
                 continue;
             }
 
             // Validasi minimal kolom
             if (empty($row['nip']) || empty($row['tanggal_masuk']) || empty($row['status']) || empty($row['durasi'])) {
                 $this->stats['failed']++;
-                $this->failed[] = "Baris {$rowNumber}: NIP / TANGGAL_MASUK / STATUS / DURASI wajib diisi";
+                $this->failed[] = [
+                    'row' => $rowNumber,
+                    'nik' => $row['nip'] ?? '-',
+                    'errors' => ['NIP / TANGGAL_MASUK / STATUS / DURASI wajib diisi']
+                ];
+                Log::warning("Baris {$rowNumber} gagal validasi", $row->toArray());
 
                 continue;
             }
@@ -81,7 +82,11 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
 
                 if (! $employee) {
                     $this->stats['failed']++;
-                    $this->failed[] = "Baris {$rowNumber}: Karyawan dengan NIP {$row['nip']} tidak ditemukan";
+                    $this->failed[] = [
+                        'row' => $rowNumber,
+                        'nik' => $row['nip'],
+                        'errors' => ['Karyawan dengan NIP tersebut tidak ditemukan']
+                    ];
 
                     continue;
                 }
@@ -114,7 +119,11 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
 
                 if ($duration <= 0) {
                     $this->stats['failed']++;
-                    $this->failed[] = "Baris {$rowNumber}: DURASI harus lebih besar dari 0";
+                    $this->failed[] = [
+                        'row' => $rowNumber,
+                        'nik' => $row['nip'],
+                        'errors' => ['DURASI harus lebih besar dari 0']
+                    ];
 
                     continue;
                 }
@@ -123,7 +132,11 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
 
                 if (! $contractType) {
                     $this->stats['failed']++;
-                    $this->failed[] = "Baris {$rowNumber}: STATUS kontrak tidak dikenali";
+                    $this->failed[] = [
+                        'row' => $rowNumber,
+                        'nik' => $row['nip'],
+                        'errors' => ['STATUS kontrak tidak dikenali']
+                    ];
 
                     continue;
                 }
@@ -170,6 +183,7 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
                             'status' => $finalEnd->greaterThanOrEqualTo($now) ? 'active' : 'expired',
                             'version' => $currentVersion,
                             'is_latest' => true,
+                            'compensation_paid_at' => null,
                             'created_by' => Auth::id(),
                             'created_at' => now(),
                             'updated_at' => now(),
@@ -188,6 +202,7 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
                         'status' => 'expired',
                         'version' => $currentVersion,
                         'is_latest' => false,
+                        'compensation_paid_at' => now(),
                         'created_by' => Auth::id(),
                         'created_at' => now(),
                         'updated_at' => now(),
@@ -205,7 +220,11 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
             } catch (\Exception $e) {
                 DB::rollBack();
                 $this->stats['failed']++;
-                $this->failed[] = "Baris {$rowNumber}: ".$e->getMessage();
+                $this->failed[] = [
+                    'row' => $rowNumber,
+                    'nik' => $row['nip'] ?? '-',
+                    'errors' => [$e->getMessage()]
+                ];
                 Log::error('EmployeeContractImport error: '.$e->getMessage(), [
                     'row' => $row->toArray(),
                 ]);

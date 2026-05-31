@@ -115,19 +115,33 @@ class Employee extends Model
             ->first();
     }
 
-    // $employee->baseSalary()          → gaji bulan ini
-    // $employee->baseSalary('2026-03') → gaji bulan Maret 2026
-    public function baseSalary(?string $period = null): float
-    {
-        $date = $period
-            ? Carbon::parse($period . '-01')->endOfMonth()
-            : now();
+    // --- SALARY CALCULATION METHODS ---
+    // Gunakan fungsi-fungsi di bawah ini untuk mengambil komponen gaji per periode.
+    // Jika $period tidak diberikan, akan mengambil data bulan ini (current).
+    // Parameter $period berformat 'YYYY-MM' (contoh: '2026-05').
+    
+    // 1. Gaji Pokok
+    // $employee->baseSalary('2026-05') atau $employee->gaji_pokok('2026-05')
+    public function baseSalary(?string $period = null): float;
+    public function gaji_pokok(?string $period = null): float;
 
-        return $this->salaries()
-            ->where('effective_date', '<=', $date)
-            ->latest('effective_date')
-            ->value('base_salary') ?? 0;
-    }
+    // 2. Premi / Bonus Tetap
+    // $employee->premi_component('2026-05')
+    public function premi_component(?string $period = null): float;
+
+    // 3. Tunjangan Masa Kerja (dihitung dinamis berdasar join_date s.d. periode)
+    // $employee->tunjangan_masa_kerja('2026-05') atau $employee->tjMasaKerja('2026-05')
+    public function tunjangan_masa_kerja(?string $period = null): float;
+
+    // 4. Tunjangan Tetap / Tunjangan Lainnya
+    // $employee->tunjangan_tetap('2026-05')
+    public function tunjangan_tetap(?string $period = null): float;
+
+    // 5. Total Gaji (Gaji Pokok + Premi + Tunjangan Masa Kerja + Tunjangan)
+    // $employee->totalGaji('2026-05')
+    public function totalGaji(?string $period = null): float;
+
+    // --- OTHER METHODS ---
 
     // $employee->currentPosition()
     public function currentPosition()
@@ -139,6 +153,9 @@ class Employee extends Model
     }
 }
 ```
+
+**Daftar Fungsi Kalkulasi Siap Pakai:**
+Gunakan metode di atas ketika membuat halaman Generate Payroll atau mencetak Rekap Gaji (Slip Gaji), **jangan melakukan hardcode query `employee_salaries` secara manual**. Fungsi di atas sudah dirancang untuk membaca history (ignoring `is_active`) dengan tepat sesuai parameter `$period` yang diminta.
 
 Dengan pattern ini, **tabel `employee_periodes` dihapus** — data bisa dihitung dari `emp_salaries`, `emp_contracts`, dan `emp_position_histories` menggunakan effective date.
 

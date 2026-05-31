@@ -17,8 +17,29 @@ class EmployeeService
      */
     public function getPaginated(array $filters = []): LengthAwarePaginator
     {
-        $query = Employee::with(['department', 'position', 'latestContract', 'group'])
-            ->orderBy('name');
+        $query = Employee::with(['department', 'position', 'latestContract', 'group']);
+
+        // Default sorting if not provided
+        $sortBy = $filters['sort_by'] ?? 'nip';
+        $sortDir = strtolower($filters['sort_dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
+        if (in_array($sortBy, ['name', 'nik', 'nip', 'employee_code'])) {
+            $query->orderBy($sortBy, $sortDir);
+        } elseif ($sortBy === 'contract_end_date') {
+            $subquery = \App\Modules\Employee\Models\EmployeeContract::select('end_date')
+                ->whereColumn('employee_id', 'employees.id')
+                ->where('is_latest', true)
+                ->limit(1);
+
+            if ($sortDir === 'asc') {
+                $query->orderByRaw("({$subquery->toSql()}) IS NULL ASC", $subquery->getBindings())
+                      ->orderByRaw("({$subquery->toSql()}) ASC", $subquery->getBindings());
+            } else {
+                $query->orderByRaw("({$subquery->toSql()}) DESC", $subquery->getBindings());
+            }
+        } else {
+            $query->orderBy('nip', 'asc');
+        }
 
         if (! empty($filters['search'])) {
             $query->search($filters['search']);
@@ -52,6 +73,15 @@ class EmployeeService
             $query->whereHas('latestContract', function ($q) use ($filters) {
                 $q->where('status', $filters['contract_status']);
             });
+        }
+
+        if (! empty($filters['exclude_expired_contracts'])) {
+            // Sembunyikan karyawan yang kontrak terakhirnya sudah expired > 30 hari
+            $query->whereDoesntHave('latestContract', function ($q) {
+                $q->where('end_date', '<', now()->subDays(30)->toDateString());
+            });
+            // Sembunyikan juga karyawan yang sudah keluar (punya end_date atau resign_date)
+            $query->whereNull('end_date')->whereNull('resign_date');
         }
 
         return $query->paginate($filters['per_page'] ?? 15);

@@ -17,6 +17,11 @@ const EmployeeContractsImport = () => import('../Pages/Admin/Employees/Contracts
 const EmployeeShow = () => import('../Pages/Admin/Employees/Karyawan/Show.vue')
 const EmployeeCreate = () => import('../Pages/Admin/Employees/Karyawan/Create.vue')
 const EmployeeEdit = () => import('../Pages/Admin/Employees/Karyawan/Edit.vue')
+const SalariesIndex = () => import('../Pages/Admin/Employees/Salaries/Index.vue')
+const SalariesCreate = () => import('../Pages/Admin/Employees/Salaries/Create.vue')
+const SalariesEdit = () => import('../Pages/Admin/Employees/Salaries/Edit.vue')
+const SalariesShow = () => import('../Pages/Admin/Employees/Salaries/Show.vue')
+const SalariesImport = () => import('../Pages/Admin/Employees/Salaries/Import.vue')
 const AttendanceIndex = () => import('../Pages/Admin/Attendance/Index.vue')
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Attendance/Roster.vue')
@@ -83,6 +88,11 @@ const routes = [
       { path: 'employees/create', name: 'employees.create', component: EmployeeCreate, meta: { title: 'Tambah Karyawan' } },
       { path: 'employees/:id', name: 'employees.show', component: EmployeeShow, meta: { title: 'Detail Karyawan' } },
       { path: 'employees/:id/edit', name: 'employees.edit', component: EmployeeEdit, meta: { title: 'Edit Karyawan' } },
+      { path: 'employees/salaries', name: 'employees.salaries', component: SalariesIndex, meta: { title: 'Gaji Karyawan' } },
+      { path: 'employees/salaries/create', name: 'employees.salaries.create', component: SalariesCreate, meta: { title: 'Tambah Gaji' } },
+      { path: 'employees/salaries/import', name: 'employees.salaries.import', component: SalariesImport, meta: { title: 'Import Gaji' } },
+      { path: 'employees/salaries/:id', name: 'employees.salaries.show', component: SalariesShow, meta: { title: 'Detail Gaji' } },
+      { path: 'employees/salaries/:id/edit', name: 'employees.salaries.edit', component: SalariesEdit, meta: { title: 'Edit Gaji' } },
       { path: 'attendance', name: 'attendance', component: AttendanceIndex, meta: { title: 'Absensi' } },
       { path: 'attendance/import', name: 'attendance.import', component: LogImport, meta: { title: 'Import Log' } },
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
@@ -90,7 +100,7 @@ const routes = [
       { path: 'leave', name: 'leave', component: LeaveIndex, meta: { title: 'Cuti' } },
       { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals, meta: { title: 'Approval Cuti' } },
       { path: 'leave/settings', name: 'leave.settings', component: LeaveSettings, meta: { title: 'Pengaturan Cuti' } },
-      { path: 'payroll', name: 'payroll', component: PayrollPeriodsIndex, meta: { title: 'Generate Gaji' } },
+      { path: 'payroll/payroll-periode', name: 'payroll.periods', component: PayrollPeriodsIndex, meta: { title: 'Periode Gaji' } },
       { path: 'payroll/thr', name: 'payroll.thr', component: PayrollThr, meta: { title: 'THR' } },
       { path: 'payroll/configs', name: 'payroll.configs', component: PayrollConfigsIndex, meta: { title: 'Konfigurasi Payroll' } },
       { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail, meta: { title: 'Detail Periode' } },

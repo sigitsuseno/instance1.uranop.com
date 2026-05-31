@@ -128,16 +128,20 @@ class ContractApiController extends Controller
         $now = now();
         $fourteenDaysLater = now()->addDays(14);
 
-        // We count from employees' latest contracts
-        $active = EmployeeContract::where('is_latest', true)
+        $baseQuery = \App\Modules\Employee\Models\EmployeeContract::where('is_latest', true)
+            ->whereHas('employee', function ($q) {
+                $q->whereNull('end_date')->whereNull('resign_date');
+            });
+
+        $active = (clone $baseQuery)
             ->where('end_date', '>', $fourteenDaysLater->format('Y-m-d'))
             ->count();
 
-        $expiringSoon = EmployeeContract::where('is_latest', true)
+        $expiringSoon = (clone $baseQuery)
             ->whereBetween('end_date', [$now->format('Y-m-d'), $fourteenDaysLater->format('Y-m-d')])
             ->count();
 
-        $expired = EmployeeContract::where('is_latest', true)
+        $expired = (clone $baseQuery)
             ->where('end_date', '<', $now->format('Y-m-d'))
             ->count();
 

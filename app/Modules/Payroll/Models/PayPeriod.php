@@ -58,17 +58,15 @@ class PayPeriod extends Model
     public function getStatusLabelAttribute(): string
     {
         return match ($this->status) {
-            'draft'      => 'Draft',
-            'processing' => 'Diproses',
-            'locked'     => 'Terkunci',
-            'closed'     => 'Ditutup',
-            default      => $this->status,
+            'active'   => 'Aktif',
+            'inactive' => 'Tidak Aktif',
+            default    => $this->status,
         };
     }
 
     public function scopeActive($query)
     {
-        return $query->whereIn('status', ['draft', 'processing']);
+        return $query->where('status', 'active');
     }
 
     public function systemSetting()

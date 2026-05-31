@@ -28,16 +28,23 @@ export async function api(path, options = {}) {
 
     if (!response.ok) {
         let message = `API error: ${response.status}`
+        let responseData = null
         try {
-            const body = await response.json()
-            if (body.message) {
-                message = body.message
-            } else if (body.errors) {
-                const first = Object.values(body.errors).flat()
+            responseData = await response.json()
+            if (responseData.message) {
+                message = responseData.message
+            } else if (responseData.errors) {
+                const first = Object.values(responseData.errors).flat()
                 message = first.length ? first[0] : message
             }
         } catch {}
-        throw new Error(message)
+        
+        const error = new Error(message)
+        error.response = {
+            status: response.status,
+            data: responseData
+        }
+        throw error
     }
 
     return response.json()

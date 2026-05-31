@@ -22,15 +22,25 @@ class CompensationApiController extends Controller
         $year = $request->query('year', date('Y'));
         $periode = $request->query('periode', 'auto');
 
-        $dateInfo = $this->calculateCompensationDates($year, $month, $periode);
+        $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
+
+        try {
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+        } catch (\Exception $e) {
+            return response()->json([
+                'data' => [
+                    'period' => null,
+                    'contracts' => []
+                ],
+                'message' => $e->getMessage()
+            ], 400);
+        }
+
         $startDate = $dateInfo['start'];
         $endDate = $dateInfo['end'];
         $label = $dateInfo['label'];
 
         // Get contracts that fall into this period (e.g. expiring in this period)
-        // Adjust logic based on how compensation is defined in old system.
-        // Usually, compensation is paid at the end of contract. So we look for end_date within this period.
-        
         $contracts = EmployeeContract::with(['employee'])
             ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->orderBy('end_date', 'asc')
@@ -120,7 +130,14 @@ class CompensationApiController extends Controller
         $year = $request->query('year', date('Y'));
         $periode = $request->query('periode', 'auto');
 
-        $dateInfo = $this->calculateCompensationDates($year, $month, $periode);
+        $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
+
+        try {
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+
         $startDate = $dateInfo['start'];
         $endDate = $dateInfo['end'];
 
@@ -190,51 +207,5 @@ class CompensationApiController extends Controller
                 'slips' => $slips,
             ]
         ]);
-    }
-
-    /**
-     * Helper to calculate the advanced compensation dates
-     */
-    private function calculateCompensationDates($year, $month, $periode)
-    {
-        if ($periode === 'auto') {
-            $today = (int) date('d');
-            $periode = $today <= 7 || $today >= 25 ? 'awal' : 'akhir';
-        }
-
-        $periodStart = \Carbon\Carbon::create($year, $month, 25)->subMonth();
-        $periodEnd = \Carbon\Carbon::create($year, $month, 24);
-        
-        // e.g. Jan 25 to Feb 24 is 31 days. Mid is 15.5 -> 15 days.
-        $totalDays = $periodStart->diffInDays($periodEnd) + 1; 
-        $halfDays = (int) floor($totalDays / 2);
-        
-        // $midPeriod is the last day of the first half
-        $midPeriod = $periodStart->copy()->addDays($halfDays - 1); 
-
-        if ($periode === 'awal') {
-            // Awal kompensasi menampilkan kontrak yg berakhir dari tengah periode hingga end_date
-            $startDate = $midPeriod->copy()->addDay();
-            $endDate = $periodEnd->copy();
-            $label = 'Awal (Pembayaran Maju)';
-        } else {
-            // Akhir kompensasi menampilkan kontrak yg berakhir dari start_date (periode selanjutnya) hingga tengah periode selanjutnya
-            $nextPeriodStart = \Carbon\Carbon::create($year, $month, 25);
-            $nextPeriodEnd = \Carbon\Carbon::create($year, $month, 24)->addMonth();
-            
-            $nextTotalDays = $nextPeriodStart->diffInDays($nextPeriodEnd) + 1;
-            $nextHalfDays = (int) floor($nextTotalDays / 2);
-            $nextMidPeriod = $nextPeriodStart->copy()->addDays($nextHalfDays - 1);
-            
-            $startDate = $nextPeriodStart->copy();
-            $endDate = $nextMidPeriod->copy();
-            $label = 'Akhir (Pembayaran Maju)';
-        }
-
-        return [
-            'start' => $startDate,
-            'end' => $endDate,
-            'label' => $label
-        ];
     }
 }

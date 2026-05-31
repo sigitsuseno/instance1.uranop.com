@@ -19,9 +19,11 @@ return new class extends Migration
             $table->string('name'); // e.g. "Mei 2026"
             $table->smallInteger('period_year');
             $table->tinyInteger('period_month');
-            $table->enum('status', ['draft', 'processing', 'locked', 'closed'])->default('draft');
-            $table->date('started_at')->nullable();
-            $table->date('closed_at')->nullable();
+            $table->enum('status', ['active', 'inactive'])->default('active');
+            $table->date('start_date')->nullable();
+            $table->date('end_date')->nullable();
+            $table->boolean('is_split')->default(false);
+            $table->foreignId('system_setting_id')->nullable()->constrained('system_settings')->nullOnDelete();
             $table->foreignId('created_by')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamps();

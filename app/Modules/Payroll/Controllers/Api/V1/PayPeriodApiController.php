@@ -41,20 +41,22 @@ class PayPeriodApiController extends Controller
             'name' => 'required|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
+            'is_split' => 'boolean',
+            'status' => 'in:active,inactive',
         ]);
 
-        $startDate = Carbon::parse($validated['start_date']);
+        $endDate = Carbon::parse($validated['end_date']);
         
         $period = PayPeriod::create([
             'uuid' => (string) Str::uuid(),
             'name' => $validated['name'],
-            'period_year' => $startDate->year,
-            'period_month' => $startDate->month,
+            'period_year' => $endDate->year,
+            'period_month' => $endDate->month,
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
-            'is_split' => false, // Default to false
-            'status' => 'draft',
-            'created_by' => auth()->id() ?? 1, // Fallback if auth missing in dev
+            'is_split' => $validated['is_split'] ?? false,
+            'status' => $validated['status'] ?? 'active',
+            'created_by' => auth()->id() ?? 1,
         ]);
 
         return response()->json([
@@ -68,19 +70,29 @@ class PayPeriodApiController extends Controller
         $period = PayPeriod::findOrFail($id);
 
         $validated = $request->validate([
-            'status' => 'required|in:draft,in_progress,locked,closed,completed'
+            'name' => 'sometimes|required|string|max:255',
+            'start_date' => 'sometimes|required|date',
+            'end_date' => 'sometimes|required|date|after_or_equal:start_date',
+            'is_split' => 'sometimes|boolean',
+            'status' => 'sometimes|required|in:active,inactive'
         ]);
 
-        // Map frontend "completed" to "closed" or keep as is.
-        $status = $validated['status'];
-        if ($status === 'completed') {
-            $status = 'closed';
+        $updateData = $validated;
+        
+        if (isset($validated['end_date'])) {
+            $endDate = Carbon::parse($validated['end_date']);
+            $updateData['period_year'] = $endDate->year;
+            $updateData['period_month'] = $endDate->month;
+        } else if (isset($validated['start_date'])) {
+            // fallback if only start_date is updated (which shouldn't happen usually but just in case)
+            $startDate = Carbon::parse($validated['start_date']);
+            $updateData['period_year'] = $startDate->year;
+            $updateData['period_month'] = $startDate->month;
         }
 
-        $period->update([
-            'status' => $status,
-            'updated_by' => auth()->id() ?? 1,
-        ]);
+        $updateData['updated_by'] = auth()->id() ?? 1;
+
+        $period->update($updateData);
 
         return response()->json([
             'message' => 'Pay period updated successfully',

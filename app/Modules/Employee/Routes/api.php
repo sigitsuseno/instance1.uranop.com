@@ -31,6 +31,16 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::post('/import', [ContractApiController::class, 'import'])->name('employees.contracts.global.import');
         });
 
+        // Global Salaries
+        Route::prefix('salaries')->group(function () {
+            Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Salary\SalaryApiController::class, 'globalIndex'])->name('employees.salaries.global.index');
+            Route::post('/', [\App\Modules\Employee\Controllers\Api\V1\Salary\SalaryApiController::class, 'globalStore'])->name('employees.salaries.global.store');
+            Route::post('/import', [\App\Modules\Employee\Controllers\Api\V1\Salary\SalaryApiController::class, 'import'])->name('employees.salaries.global.import');
+            Route::get('/{salary}', [\App\Modules\Employee\Controllers\Api\V1\Salary\SalaryApiController::class, 'globalShow'])->name('employees.salaries.global.show');
+            Route::put('/{salary}', [\App\Modules\Employee\Controllers\Api\V1\Salary\SalaryApiController::class, 'globalUpdate'])->name('employees.salaries.global.update');
+            Route::delete('/{salary}', [\App\Modules\Employee\Controllers\Api\V1\Salary\SalaryApiController::class, 'globalDestroy'])->name('employees.salaries.global.destroy');
+        });
+
         // Compensation
         Route::prefix('compensation')->group(function () {
             Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'index'])->name('employees.compensation.index');

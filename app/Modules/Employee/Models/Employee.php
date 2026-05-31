@@ -174,63 +174,55 @@ class Employee extends Model
     // ========== EFFECTIVE DATE PATTERN — METHODS ==========
 
     /**
+     * Ambil data EmployeeSalary aktif pada periode tertentu.
+     * Mengabaikan is_active agar histori masa lalu tetap terbaca dengan valid.
+     */
+    public function activeSalary(?string $period = null)
+    {
+        $query = $this->salaries();
+
+        if ($period) {
+            $date = Carbon::parse($period.'-01')->endOfMonth();
+            $query->where('effective_date', '<=', $date);
+        } else {
+            $query->where('effective_date', '<=', now());
+        }
+
+        return $query->orderBy('effective_date', 'desc')->orderBy('id', 'desc')->first();
+    }
+
+    /**
      * Ambil gaji pokok per periode.
      * Contoh: $employee->baseSalary()        → gaji bulan ini
      *         $employee->baseSalary('2026-05') → gaji Mei 2026
      */
     public function baseSalary(?string $period = null): float
     {
-        $date = $period
-            ? Carbon::parse($period.'-01')->endOfMonth()
-            : now();
-
-        return (float) ($this->salaries()
-            ->where('effective_date', '<=', $date)
-            ->where('is_active', true)
-            ->latest('effective_date')
-            ->value('base_salary') ?? $this->base_salary ?? 0);
+        return (float) ($this->activeSalary($period)?->base_salary ?? $this->base_salary ?? 0);
     }
 
     /**
-     * Ambil komponen gaji aktif terbaru.
-     * Dipakai oleh method-method di bawah.
-     */
-    public function activeSalaryComponent(?string $period = null): ?EmployeeSalaryComponent
-    {
-        $query = $this->salaryComponents()->where('is_active', true);
-
-        if ($period) {
-            $date = Carbon::parse($period.'-01')->endOfMonth();
-            $query->where('effective_date', '<=', $date);
-        }
-
-        return $query->latest('effective_date')->first();
-    }
-
-    /**
-     * Ambil gaji pokok dari employee_salary_components.
-     * $employee->gaji_pokok()        → komponen aktif saat ini
-     * $employee->gaji_pokok('2026-05') → komponen Mei 2026
+     * Alias untuk baseSalary()
      */
     public function gaji_pokok(?string $period = null): float
     {
-        return (float) ($this->activeSalaryComponent($period)?->gaji_pokok ?? $this->base_salary ?? 0);
+        return $this->baseSalary($period);
     }
 
     /**
-     * Ambil premi dari employee_salary_components.
+     * Ambil premi dari employee_salaries.
      */
     public function premi_component(?string $period = null): float
     {
-        return (float) ($this->activeSalaryComponent($period)?->premi ?? $this->premi ?? 0);
+        return (float) ($this->activeSalary($period)?->premi ?? $this->premi ?? 0);
     }
 
     /**
-     * Ambil tunjangan masa kerja dari employee_salary_components.
+     * Ambil tunjangan masa kerja (dinamis berdasarkan join_date).
      */
     public function tunjangan_masa_kerja(?string $period = null): float
     {
-        return (float) ($this->activeSalaryComponent($period)?->tunjangan_masa_kerja ?? 0);
+        return $this->tjMasaKerja($period);
     }
 
     /**
@@ -248,7 +240,18 @@ class Employee extends Model
             return 0;
         }
 
-        $endDate = $period ? Carbon::parse($period.'-01')->endOfMonth() : now();
+        $endDate = now();
+        if ($period) {
+            $parts = explode('-', $period);
+            if (count($parts) === 2) {
+                $payPeriod = \App\Modules\Payroll\Models\PayPeriod::where('period_year', $parts[0])
+                    ->where('period_month', $parts[1])
+                    ->first();
+                $endDate = $payPeriod?->end_date ? Carbon::parse($payPeriod->end_date) : Carbon::parse($period.'-01')->endOfMonth();
+            } else {
+                $endDate = Carbon::parse($period.'-01')->endOfMonth();
+            }
+        }
         
         // Jika join_date lebih dari endDate, artinya belum join
         if ($this->join_date->gt($endDate)) {
@@ -266,11 +269,11 @@ class Employee extends Model
     }
 
     /**
-     * Ambil tunjangan tetap dari employee_salary_components.
+     * Ambil tunjangan tetap dari employee_salaries.
      */
     public function tunjangan_tetap(?string $period = null): float
     {
-        return (float) ($this->activeSalaryComponent($period)?->tunjangan ?? $this->tunjangan ?? 0);
+        return (float) ($this->activeSalary($period)?->tunjangan ?? $this->tunjangan ?? 0);
     }
 
     /**
@@ -302,12 +305,12 @@ class Employee extends Model
      */
     public function totalGaji(?string $period = null): float
     {
-        $comp = $this->activeSalaryComponent($period);
-        if (! $comp) {
-            return (float) ($this->base_salary + $this->premi + $this->tunjangan);
+        $salary = $this->activeSalary($period);
+        if (! $salary) {
+            return (float) ($this->base_salary + $this->premi + $this->tjMasaKerja($period) + $this->tunjangan);
         }
 
-        return (float) ($comp->gaji_pokok + $comp->premi + $comp->tunjangan_masa_kerja + $comp->tunjangan);
+        return (float) ($salary->base_salary + $salary->premi + $this->tjMasaKerja($period) + $salary->tunjangan);
     }
 
     // ========== SCOPES ==========

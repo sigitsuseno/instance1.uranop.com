@@ -36,6 +36,7 @@ class EmployeeApiController extends Controller
             'period_start'      => 'nullable|date',
             'period_end'        => 'nullable|date|after_or_equal:period_start',
             'per_page'          => 'nullable|integer|min:5|max:100',
+            'exclude_expired_contracts' => 'nullable|boolean',
         ]);
 
         $employees = $this->employeeService->getPaginated($filters);

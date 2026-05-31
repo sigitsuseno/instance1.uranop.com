@@ -173,6 +173,7 @@ async function handleDeactivate() {
 
 function handlePageChange(page) {
   currentPage.value = page
+  fetchEmployees()
 }
 
 function resetFilters() {
