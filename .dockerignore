@@ -1,0 +1,45 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment variables (Do not bake secrets into the image)
+.env
+.env.*
+!.env.example
+!.env.production
+
+# Dependencies (will be built inside the container)
+/vendor/
+/node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build outputs
+/public/build/
+/public/hot
+
+# Laravel Storage & Cache
+/storage/*.key
+/storage/logs/*.log
+/storage/framework/cache/data/*
+/storage/framework/sessions/*
+/storage/framework/testing/*
+/storage/framework/views/*
+/public/storage
+
+# Testing & Dev
+.phpunit.result.cache
+/tests/
+phpunit.xml
+phpunit.xml.dist
+
+# Documentation & Miscellaneous
+*.md
+/scratch/
