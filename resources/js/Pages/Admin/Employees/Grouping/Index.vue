@@ -9,7 +9,8 @@ const { get, post } = useApi();
 const notification = useNotificationStore();
 
 const employees = ref([]);
-const groups = ref([]);
+const groupsMaster = ref([]);
+const tabSettings = ref([]);
 const enrolledData = ref({});
 const filters = ref({ month: new Date().getMonth() + 1, year: new Date().getFullYear() });
 const isLoading = ref(true);
@@ -29,11 +30,24 @@ const batchForm = ref({
     processing: false
 });
 
-const tabs = [
-    { id: 'employment_type', name: 'Tipe Karyawan', icon: 'bx-user-voice' },
-    { id: 'group_es', name: 'Otoritas Manajemen', icon: 'bx-shield-quarter' },
-    { id: 'payroll_cycle', name: 'Siklus Payroll', icon: 'bx-time' },
-];
+const tabs = computed(() => {
+    const defaultTabs = [
+        { id: 'employment_type', name: 'Tipe Karyawan', icon: 'bx-user-voice' }
+    ];
+    
+    const dynamicTabs = tabSettings.value.map(setting => ({
+        id: setting.tab_id,
+        name: setting.tab_name,
+        icon: setting.icon || 'bx-folder',
+        setting: setting
+    }));
+    
+    return [
+        ...defaultTabs,
+        ...dynamicTabs,
+        { id: 'payroll_cycle', name: 'Siklus Payroll', icon: 'bx-time' },
+    ];
+});
 
 // --- DRAG & DROP & STAGING LOGIC ---
 const draggedEmployeeId = ref(null);
@@ -47,7 +61,8 @@ const fetchData = async () => {
         const data = await get(`/api/v1/employees/grouping?month=${activeMonth.value}&year=${activeYear.value}`);
         
         employees.value = data.employees;
-        groups.value = data.groups;
+        groupsMaster.value = data.groupsMaster || [];
+        tabSettings.value = data.tabSettings || [];
         enrolledData.value = data.enrolledData;
         
         localEmployees.value = JSON.parse(JSON.stringify(employees.value));
@@ -82,16 +97,6 @@ const onDrop = (value) => {
         ? [...selectedIds.value]
         : [draggedEmployeeId.value];
     
-    if (activeTab.value === 'group_es') {
-        localEmployees.value = localEmployees.value.map(emp => {
-            if (employeeIds.includes(emp.id)) {
-                return { ...emp, employee_group_id: value };
-            }
-            return emp;
-        });
-        hasChanges.value = true;
-    } 
-    
     if (activeTab.value === 'payroll_cycle') {
         employeeIds.forEach(id => {
             if (value === 'available') {
@@ -105,11 +110,22 @@ const onDrop = (value) => {
         });
         hasChanges.value = true;
     }
-    
-    if (activeTab.value === 'employment_type') {
+    else if (activeTab.value === 'employment_type') {
         localEmployees.value = localEmployees.value.map(emp => {
             if (employeeIds.includes(emp.id)) {
                 return { ...emp, employment_status: value };
+            }
+            return emp;
+        });
+        hasChanges.value = true;
+    } 
+    else {
+        // Dynamic tabs
+        localEmployees.value = localEmployees.value.map(emp => {
+            if (employeeIds.includes(emp.id)) {
+                if (!emp.dynamic_groups) emp.dynamic_groups = {};
+                emp.dynamic_groups[activeTab.value] = value;
+                return { ...emp };
             }
             return emp;
         });
@@ -122,21 +138,6 @@ const onDrop = (value) => {
 const saveChanges = async () => {
     let payload = { tab: activeTab.value };
     
-    if (activeTab.value === 'group_es') {
-        const changes = localEmployees.value
-            .filter(emp => {
-                const original = employees.value.find(e => e.id === emp.id);
-                return original && original.employee_group_id !== emp.employee_group_id;
-            })
-            .map(emp => ({
-                employee_id: emp.id,
-                employee_group_id: emp.employee_group_id
-            }));
-
-        if (changes.length === 0) return;
-        payload.changes = changes;
-    }
-
     if (activeTab.value === 'payroll_cycle') {
         const enrollments = [];
         const disenrollments = [];
@@ -165,8 +166,7 @@ const saveChanges = async () => {
         payload.enrollments = enrollments;
         payload.disenrollments = disenrollments;
     }
-    
-    if (activeTab.value === 'employment_type') {
+    else if (activeTab.value === 'employment_type') {
         const changes = localEmployees.value
             .filter(emp => {
                 const original = employees.value.find(e => e.id === emp.id);
@@ -175,6 +175,23 @@ const saveChanges = async () => {
             .map(emp => ({
                 employee_id: emp.id,
                 employment_status: emp.employment_status
+            }));
+
+        if (changes.length === 0) return;
+        payload.changes = changes;
+    }
+    else {
+        // Dynamic tabs
+        const changes = localEmployees.value
+            .filter(emp => {
+                const original = employees.value.find(e => e.id === emp.id);
+                const oldVal = original && original.dynamic_groups ? original.dynamic_groups[activeTab.value] : null;
+                const newVal = emp.dynamic_groups ? emp.dynamic_groups[activeTab.value] : null;
+                return oldVal !== newVal;
+            })
+            .map(emp => ({
+                employee_id: emp.id,
+                group_id: emp.dynamic_groups ? emp.dynamic_groups[activeTab.value] : null
             }));
 
         if (changes.length === 0) return;
@@ -206,21 +223,25 @@ const filteredData = computed(() => {
             { label: 'PKWT (Kontrak)', value: 'contract', icon: 'bx-file', color: 'var(--primary)' },
             { label: 'Harian / Freelance', value: 'freelance', icon: 'bx-walk', color: 'var(--warning)' },
         ];
-    } else if (activeTab.value === 'group_es') {
-        const list = groups.value.map(g => ({
-            label: g.name,
-            value: g.id,
-            icon: 'bx-shield-quarter',
-            color: 'var(--primary)'
-        }));
-        list.push({ label: 'Belum Ada Otoritas', value: null, icon: 'bx-help-circle', color: 'var(--text-soft)' });
-        return list;
-    } else {
+    } else if (activeTab.value === 'payroll_cycle') {
         return [
             { label: 'Tersedia (Belum Terdaftar)', value: 'available', icon: 'bx-user-plus', color: 'var(--text-soft)' },
             { label: 'Terdaftar - Bulanan', value: 'monthly', icon: 'bx-calendar-check', color: 'var(--success)' },
             { label: 'Terdaftar - Non Bulanan', value: 'non_monthly', icon: 'bx-time-five', color: 'var(--warning)' },
         ];
+    } else {
+        const setting = tabSettings.value.find(t => t.tab_id === activeTab.value);
+        if (!setting) return [];
+        
+        const myGroups = groupsMaster.value.filter(g => g.group_label === setting.group_label);
+        const list = myGroups.map(g => ({
+            label: g.name,
+            value: g.id,
+            icon: setting.icon || 'bx-folder',
+            color: 'var(--primary)'
+        }));
+        list.push({ label: 'Belum Ada Grup', value: null, icon: 'bx-help-circle', color: 'var(--text-soft)' });
+        return list;
     }
 });
 
@@ -244,9 +265,16 @@ const getEmployeesByValue = (value) => {
 
     if (activeTab.value === 'employment_type') {
         return filtered.filter(e => e.employment_status === value);
-    } else if (activeTab.value === 'group_es') {
-        return filtered.filter(e => e.employee_group_id === value);
-    } else {
+    } else if (activeTab.value === 'payroll_cycle') {
+        // Filter join_date dan end_date (aktif di periode)
+        filtered = filtered.filter(e => e.is_active_in_period);
+        
+        // Filter selain otoritas JKT
+        const jktGroup = groupsMaster.value.find(g => (g.name && g.name.toUpperCase().includes('JKT')) || (g.code && g.code.toUpperCase().includes('JKT')));
+        if (jktGroup) {
+            filtered = filtered.filter(e => !e.dynamic_groups || e.dynamic_groups['group_es'] !== jktGroup.id);
+        }
+        
         if (value === 'available') {
             return filtered.filter(e => !enrolledList.value[e.id]);
         } else if (value === 'monthly') {
@@ -254,6 +282,26 @@ const getEmployeesByValue = (value) => {
         } else {
             return filtered.filter(e => enrolledList.value[e.id] && enrolledList.value[e.id].payroll_type !== 'monthly');
         }
+    } else {
+        // Dynamic Tabs
+        const setting = tabSettings.value.find(t => t.tab_id === activeTab.value);
+        
+        if (setting && setting.filters) {
+            Object.keys(setting.filters).forEach(key => {
+                const allowedValues = setting.filters[key] || [];
+                if (allowedValues.length > 0) {
+                    filtered = filtered.filter(e => {
+                        const val = e[key] ? e[key].toLowerCase() : '';
+                        return allowedValues.includes(val);
+                    });
+                }
+            });
+        }
+        
+        return filtered.filter(e => {
+            const groupId = e.dynamic_groups ? e.dynamic_groups[activeTab.value] : null;
+            return groupId === value;
+        });
     }
 };
 
@@ -302,8 +350,15 @@ const handleAutoEnroll = async () => {
 const openBatchAssign = () => {
     if (selectedIds.value.length === 0) return;
     batchForm.value.employee_ids = selectedIds.value;
+    batchForm.value.employee_group_id = null;
     isBatchModalOpen.value = true;
 };
+
+const activeTabGroups = computed(() => {
+    const setting = tabSettings.value.find(t => t.tab_id === activeTab.value);
+    if (!setting) return [];
+    return groupsMaster.value.filter(g => g.group_label === setting.group_label);
+});
 
 const submitBatch = async () => {
     batchForm.value.processing = true;
@@ -312,11 +367,13 @@ const submitBatch = async () => {
             employee_ids: batchForm.value.employee_ids,
             employee_group_id: batchForm.value.employee_group_id,
         };
-        // Simulated batch submission by manually applying drops locally then saving
         batchForm.value.employee_ids.forEach(id => {
-            if (batchForm.value.employee_group_id !== null) {
+            if (batchForm.value.employee_group_id !== undefined) {
                 const emp = localEmployees.value.find(e => e.id === id);
-                if (emp) emp.employee_group_id = batchForm.value.employee_group_id;
+                if (emp) {
+                    if (!emp.dynamic_groups) emp.dynamic_groups = {};
+                    emp.dynamic_groups[activeTab.value] = batchForm.value.employee_group_id;
+                }
             }
         });
         hasChanges.value = true;
@@ -336,7 +393,7 @@ const submitBatch = async () => {
         <div class="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
                 <h1 class="text-3xl font-extrabold text-(--text-main) tracking-tight">Grouping Karyawan</h1>
-                <p class="text-(--text-muted) mt-1">Kelola penempatan administratif dan siklus penggajian secara massal.</p>
+                <p class="text-(--text-muted) mt-1">Kelola penempatan administratif secara fleksibel dan dinamis.</p>
             </div>
             
             <div class="flex items-center gap-3">
@@ -389,7 +446,7 @@ const submitBatch = async () => {
 
         <div v-else>
             <!-- Tab Navigation -->
-            <div class="flex items-center gap-1 bg-(--bg-card) p-1 rounded-md border border-(--border-soft) w-fit mb-8 shadow-sm">
+            <div class="flex items-center gap-1 bg-(--bg-card) p-1 rounded-md border border-(--border-soft) w-fit mb-8 shadow-sm flex-wrap">
                 <button 
                     v-for="tab in tabs" 
                     :key="tab.id"
@@ -495,11 +552,11 @@ const submitBatch = async () => {
                     </div>
 
                     <form @submit.prevent="submitBatch" class="space-y-6">
-                        <div class="space-y-2" v-if="activeTab === 'group_es'">
-                            <label class="text-sm font-bold text-(--text-muted) ml-1">Pindahkan ke Otoritas Manajemen</label>
+                        <div class="space-y-2" v-if="activeTab !== 'employment_type' && activeTab !== 'payroll_cycle'">
+                            <label class="text-sm font-bold text-(--text-muted) ml-1">Pindahkan ke Grup</label>
                             <select v-model="batchForm.employee_group_id" class="w-full bg-(--bg-main) border border-(--border-soft) rounded-md px-5 py-3 text-sm font-medium focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-(--text-main)">
                                 <option :value="null">-- Tetap / Tanpa Group --</option>
-                                <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
+                                <option v-for="g in activeTabGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
                             </select>
                         </div>
 

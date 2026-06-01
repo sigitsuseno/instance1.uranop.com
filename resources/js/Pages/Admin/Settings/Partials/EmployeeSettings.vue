@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import EmployeeDefaultsTab from './Tabs/EmployeeDefaultsTab.vue'
 import EmployeeGroupMastersTab from './Tabs/EmployeeGroupMastersTab.vue'
+import EmployeeGroupSettingsTab from './Tabs/EmployeeGroupSettingsTab.vue'
 import EmployeeStatusTab from './Tabs/EmployeeStatusTab.vue'
 
 const activeTab = ref('defaults')
@@ -9,6 +10,7 @@ const activeTab = ref('defaults')
 const tabs = [
   { key: 'defaults', label: 'Pengaturan Default' },
   { key: 'masters', label: 'Master Group' },
+  { key: 'group_settings', label: 'Pengaturan Tab Grouping' },
   { key: 'status', label: 'Tipe & Status' },
 ]
 </script>
@@ -45,6 +47,10 @@ const tabs = [
 
     <div v-if="activeTab === 'masters'">
       <EmployeeGroupMastersTab />
+    </div>
+
+    <div v-if="activeTab === 'group_settings'">
+      <EmployeeGroupSettingsTab />
     </div>
 
     <div v-if="activeTab === 'status'">

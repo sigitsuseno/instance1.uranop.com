@@ -23,6 +23,10 @@ const SalariesCreate = () => import('../Pages/Admin/Employees/Salaries/Create.vu
 const SalariesEdit = () => import('../Pages/Admin/Employees/Salaries/Edit.vue')
 const SalariesShow = () => import('../Pages/Admin/Employees/Salaries/Show.vue')
 const SalariesImport = () => import('../Pages/Admin/Employees/Salaries/Import.vue')
+const PositionHistoriesIndex = () => import('../Pages/Admin/Employees/PositionHistories/Index.vue')
+const FamiliesIndex = () => import('../Pages/Admin/Employees/Families/Index.vue')
+const DocumentsIndex = () => import('../Pages/Admin/Employees/Documents/Index.vue')
+const TerminationsIndex = () => import('../Pages/Admin/Employees/Terminations/Index.vue')
 const AttendanceIndex = () => import('../Pages/Admin/Attendance/Index.vue')
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Attendance/Roster.vue')
@@ -95,6 +99,10 @@ const routes = [
       { path: 'employees/salaries/import', name: 'employees.salaries.import', component: SalariesImport, meta: { title: 'Import Gaji' } },
       { path: 'employees/salaries/:id', name: 'employees.salaries.show', component: SalariesShow, meta: { title: 'Detail Gaji' } },
       { path: 'employees/salaries/:id/edit', name: 'employees.salaries.edit', component: SalariesEdit, meta: { title: 'Edit Gaji' } },
+      { path: 'employees/position-histories', name: 'employees.position-histories', component: PositionHistoriesIndex, meta: { title: 'Riwayat Pekerjaan' } },
+      { path: 'employees/families', name: 'employees.families', component: FamiliesIndex, meta: { title: 'Keluarga & Tanggungan' } },
+      { path: 'employees/documents', name: 'employees.documents', component: DocumentsIndex, meta: { title: 'Dokumen' } },
+      { path: 'employees/terminations', name: 'employees.terminations', component: TerminationsIndex, meta: { title: 'Resign & PHK' } },
       { path: 'attendance', name: 'attendance', component: AttendanceIndex, meta: { title: 'Absensi' } },
       { path: 'attendance/import', name: 'attendance.import', component: LogImport, meta: { title: 'Import Log' } },
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },

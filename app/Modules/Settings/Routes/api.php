@@ -29,6 +29,11 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         Route::post('/groups', [EmployeeDataApiController::class, 'storeGroup']);
         Route::put('/groups/{id}', [EmployeeDataApiController::class, 'updateGroup']);
         Route::delete('/groups/{id}', [EmployeeDataApiController::class, 'destroyGroup']);
+
+        Route::get('/group-settings', [EmployeeDataApiController::class, 'getGroupSettings']);
+        Route::post('/group-settings', [EmployeeDataApiController::class, 'storeGroupSetting']);
+        Route::put('/group-settings/{id}', [EmployeeDataApiController::class, 'updateGroupSetting']);
+        Route::delete('/group-settings/{id}', [EmployeeDataApiController::class, 'destroyGroupSetting']);
     });
 
     // Payroll Configs

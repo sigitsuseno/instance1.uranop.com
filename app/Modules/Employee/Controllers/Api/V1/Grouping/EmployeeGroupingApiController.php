@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Settings\Models\EmployeeGroup;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
+use App\Modules\Settings\Models\EmployeeGroupSetting;
 use App\Modules\Payroll\Models\PayPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,31 +18,74 @@ class EmployeeGroupingApiController extends Controller
         $year = $request->query('year', date('Y'));
         $month = $request->query('month', date('n'));
 
-        // 1. Get employees (only active ones for period + those who have groups)
-        // To simplify, we get all employees and let the frontend filter.
+        // Start date adalah tanggal 25 bulan sebelumnya, End date adalah tanggal 24 bulan saat ini
+        $periodDate = \Carbon\Carbon::createFromDate($year, $month, 1);
+        $startDate = $periodDate->copy()->subMonth()->format('Y-m-25');
+        $endDate = $periodDate->copy()->format('Y-m-24');
+
         $employees = Employee::select('id', 'name', 'employee_code', 'nik', 'photo', 'employment_status', 'join_date', 'end_date', 'is_active')
             ->orderBy('name')
             ->get();
 
-        // 2. Get Employee Groups (Otoritas Manajemen)
-        $groups = EmployeeGroupMaster::where('group_label', 'Otoritas Manajemen')
-            ->orWhere('code', 'like', 'AUTH-%')
+        $employees->transform(function ($emp) use ($startDate, $endDate) {
+            $join = $emp->join_date;
+            $end = $emp->end_date;
+            
+            $isActiveInPeriod = true;
+            if ($join && $join > $endDate) {
+                $isActiveInPeriod = false;
+            }
+            if ($end && $end < $startDate) {
+                $isActiveInPeriod = false;
+            }
+            
+            $emp->is_active_in_period = $isActiveInPeriod;
+            return $emp;
+        });
+
+        // 1. Get Settings
+        $tabSettings = EmployeeGroupSetting::where('is_active', true)
+            ->orderBy('sort_order')
             ->get();
             
-        // Fallback: If no groups defined, fetch all masters just in case
-        if ($groups->isEmpty()) {
-            $groups = EmployeeGroupMaster::all();
-        }
+        $dynamicGroupLabels = $tabSettings->pluck('group_label')->filter()->toArray();
 
-        // 3. Get Enrollments (Siklus Payroll)
+        // 2. Get Employee Groups
+        $groupsMaster = EmployeeGroupMaster::whereIn('group_label', $dynamicGroupLabels)
+            ->orWhere('code', 'like', 'AUTH-%') // fallback
+            ->get();
+            
+        // 3. Attach dynamic groups to employees
+        $masterCodes = $groupsMaster->pluck('code')->toArray();
+        $employeeGroupsData = EmployeeGroup::whereIn('reference_code', $masterCodes)
+            ->get()
+            ->groupBy('employee_id');
+
+        $employees->transform(function ($emp) use ($employeeGroupsData, $groupsMaster, $tabSettings) {
+            $dynamicGroups = [];
+            $empAuths = $employeeGroupsData->get($emp->id, collect());
+            
+            foreach ($tabSettings as $setting) {
+                if (!$setting->group_label) continue;
+                
+                $validMasterCodes = $groupsMaster->where('group_label', $setting->group_label)->pluck('code')->toArray();
+                $auth = $empAuths->whereIn('reference_code', $validMasterCodes)->first();
+                $authGroup = $auth ? $groupsMaster->where('code', $auth->reference_code)->first() : null;
+                
+                $dynamicGroups[$setting->tab_id] = $authGroup ? $authGroup->id : null;
+            }
+            
+            $emp->dynamic_groups = $dynamicGroups;
+
+            return $emp;
+        });
+
+        // 4. Get Enrollments (Siklus Payroll)
         $periodCode = "PAY-{$year}-" . str_pad($month, 2, '0', STR_PAD_LEFT);
-        
-        // Also fetch the actual pay period to know if it exists
         $payPeriod = PayPeriod::where('period_year', $year)
             ->where('period_month', $month)
             ->first();
 
-        // Get enrolled employees for this period
         $enrolledIds = EmployeeGroup::where('reference_code', $periodCode)
             ->pluck('employee_id')
             ->toArray();
@@ -49,27 +93,15 @@ class EmployeeGroupingApiController extends Controller
         $enrolledData = [];
         foreach ($enrolledIds as $id) {
             $enrolledData[$id] = [
-                'payroll_type' => 'monthly', // default
+                'payroll_type' => 'monthly',
                 'emp_group' => 'Terdaftar'
             ];
         }
 
-        // 4. Attach management authority to employees
-        $authorityCodes = $groups->pluck('code')->toArray();
-        $employeeAuthorities = EmployeeGroup::whereIn('reference_code', $authorityCodes)
-            ->get()
-            ->keyBy('employee_id');
-
-        $employees->transform(function ($emp) use ($employeeAuthorities, $groups) {
-            $auth = $employeeAuthorities->get($emp->id);
-            $authGroup = $auth ? $groups->where('code', $auth->reference_code)->first() : null;
-            $emp->employee_group_id = $authGroup ? $authGroup->id : null;
-            return $emp;
-        });
-
         return response()->json([
             'employees' => $employees,
-            'groups' => $groups,
+            'tabSettings' => $tabSettings,
+            'groupsMaster' => $groupsMaster,
             'enrolledData' => (object)$enrolledData,
             'filters' => [
                 'year' => (int)$year,
@@ -86,22 +118,25 @@ class EmployeeGroupingApiController extends Controller
         
         DB::beginTransaction();
         try {
-            if ($tab === 'group_es') {
+            $tabSetting = EmployeeGroupSetting::where('tab_id', $tab)->first();
+            
+            if ($tabSetting && $tabSetting->group_label) {
                 $changes = $request->input('changes', []);
-                $groups = EmployeeGroupMaster::all();
+                $allGroups = EmployeeGroupMaster::all();
                 
+                $validCodes = EmployeeGroupMaster::where('group_label', $tabSetting->group_label)
+                    ->pluck('code')->toArray();
+                    
                 foreach ($changes as $change) {
                     $empId = $change['employee_id'];
-                    $groupId = $change['employee_group_id'];
+                    $groupId = $change['group_id'];
                     
-                    // Hapus authority lama
-                    $authCodes = $groups->pluck('code')->toArray();
                     EmployeeGroup::where('employee_id', $empId)
-                        ->whereIn('reference_code', $authCodes)
+                        ->whereIn('reference_code', $validCodes)
                         ->delete();
                         
                     if ($groupId) {
-                        $groupMaster = $groups->where('id', $groupId)->first();
+                        $groupMaster = $allGroups->where('id', $groupId)->first();
                         if ($groupMaster) {
                             EmployeeGroup::create([
                                 'employee_id' => $empId,
@@ -110,7 +145,7 @@ class EmployeeGroupingApiController extends Controller
                         }
                     }
                 }
-            } 
+            }
             elseif ($tab === 'payroll_cycle') {
                 $year = $request->input('year');
                 $month = $request->input('month');
@@ -119,14 +154,12 @@ class EmployeeGroupingApiController extends Controller
                 $enrollments = $request->input('enrollments', []);
                 $disenrollments = $request->input('disenrollments', []);
                 
-                // Remove disenrollments
                 if (!empty($disenrollments)) {
                     EmployeeGroup::whereIn('employee_id', $disenrollments)
                         ->where('reference_code', $periodCode)
                         ->delete();
                 }
                 
-                // Add enrollments
                 foreach ($enrollments as $enrollment) {
                     EmployeeGroup::updateOrCreate([
                         'employee_id' => $enrollment['employee_id'],
@@ -135,7 +168,6 @@ class EmployeeGroupingApiController extends Controller
                 }
             }
             elseif ($tab === 'employment_type') {
-                // If we also handle employment_type change
                 $changes = $request->input('changes', []);
                 foreach ($changes as $change) {
                     Employee::where('id', $change['employee_id'])
@@ -160,7 +192,6 @@ class EmployeeGroupingApiController extends Controller
         $startDate = "{$year}-" . str_pad($month, 2, '0', STR_PAD_LEFT) . "-01";
         $endDate = \Carbon\Carbon::parse($startDate)->endOfMonth()->format('Y-m-d');
         
-        // Ambil semua karyawan yang aktif di periode tersebut
         $activeEmployees = Employee::activeInPeriod($startDate, $endDate)->pluck('id');
         
         $enrolledCount = 0;
