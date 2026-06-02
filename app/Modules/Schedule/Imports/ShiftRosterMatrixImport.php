@@ -87,7 +87,9 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
 
             $wpCode = trim($rowArray['wp'] ?? $rowArray['WP'] ?? '');
 
-            $employee = Employee::where('employee_code', $nip)->first();
+            $employee = Employee::where('employee_code', $nip)
+                ->orWhere('nip', $nip)
+                ->first();
 
             if (! $employee) {
                 $this->errors[] = 'Baris '.($index + 3).": Data master karyawan untuk NIP {$nip} tidak ditemukan.";
@@ -184,6 +186,7 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
 
         $isSaturday = $carbonDate->dayOfWeek == 6;
         $isHalfDay = $workPattern && $isSaturday && $workPattern->sat_type == 'half';
+        $isHoliday = $shift->is_dayoff || in_array($date, $this->holidays);
 
         $data = [
             'uuid' => Str::uuid()->toString(),
@@ -191,12 +194,12 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
             'work_pattern_id' => $workPattern?->id,
             'shift_code' => $shift->code,
             'work_pattern_type' => $workPattern?->employee_type,
-            'external_code' => $externalCode,
-            'is_holiday' => $shift->is_dayoff || in_array($date, $this->holidays),
+            'external_code' => $isHoliday ? 'L' : $externalCode,
+            'is_holiday' => $isHoliday,
             'is_sat' => $isSaturday,
             'is_sun' => $carbonDate->dayOfWeek == 0,
             'is_half_day' => $isHalfDay,
-            'status' => ($shift->is_dayoff || in_array($date, $this->holidays)) ? 'holiday' : 'scheduled',
+            'status' => $isHoliday ? 'holiday' : 'scheduled',
             'source' => 'import',
             'created_by' => Auth::id(),
             'synced_at' => now(),

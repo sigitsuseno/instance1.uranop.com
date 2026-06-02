@@ -275,7 +275,7 @@ class ScheduleApiController extends Controller
         $start = \Carbon\Carbon::create($year, $month, 25)->subMonth();
         $end = \Carbon\Carbon::create($year, $month, 24);
 
-        $employees = \App\Modules\Employee\Models\Employee::with(['department'])->get();
+        $employees = \App\Modules\Employee\Models\Employee::with(['department'])->activeInPeriod($start, $end)->get();
         $rosters = \App\Modules\Schedule\Models\EmployeeShiftRoster::with('shift')
             ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->get()
@@ -299,6 +299,7 @@ class ScheduleApiController extends Controller
                         'date' => $dateStr,
                         'code' => $r->shift ? $r->shift->code : ($r->is_holiday ? 'L' : 'NS'),
                         'name' => $r->shift ? $r->shift->name : ($r->is_holiday ? 'Libur' : 'Non Shift'),
+                        'external_code' => $r->external_code ?? ($r->is_holiday ? 'L' : '-'),
                         'is_off' => $r->is_holiday || $r->shift?->is_dayoff,
                         'shift_id' => $r->shift_id
                     ];

@@ -8,14 +8,14 @@
     </div>
 
     <div class="grid gap-6">
+      <!-- Upload Card -->
       <BaseCard>
         <div class="space-y-4">
           <div>
             <h3 class="font-semibold text-(--text-main) mb-1">Panduan Import</h3>
             <p class="text-sm text-(--text-muted)">
-              Unggah file log absensi dengan format .xlsx atau .csv. File harus memiliki kolom berikut:
-              <strong>NIP, Tanggal, Jam Masuk, Jam Pulang.</strong>
-              Gunakan template yang disediakan untuk memastikan format yang benar.
+              Unggah file log absensi dengan format <strong>.xlsx</strong> atau <strong>.csv</strong>.
+              File harus memiliki kolom: <strong>NIP, Nama, Tanggal, Scan 1-4</strong>.
             </p>
           </div>
 
@@ -26,6 +26,18 @@
               </template>
               Download Template
             </BaseButton>
+          </div>
+
+          <!-- Mode selector -->
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="importMode" value="create" class="text-(--primary)" />
+              <span class="text-sm text-(--text-main)">Create (tambah data baru)</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="importMode" value="replace" class="text-(--primary)" />
+              <span class="text-sm text-(--text-main)">Replace (hapus & ganti data dari file yang sama)</span>
+            </label>
           </div>
 
           <div
@@ -48,7 +60,7 @@
               Seret & lepas file di sini, atau
               <span class="text-(--primary) font-medium">klik untuk memilih</span>
             </p>
-            <p class="text-xs text-(--text-muted) mt-1">Format: .xlsx, .csv (Maks. 5MB)</p>
+            <p class="text-xs text-(--text-muted) mt-1">Format: .xlsx, .csv (Maks. 20MB)</p>
           </div>
 
           <div v-if="selectedFile" class="flex items-center gap-3 p-3 rounded-md bg-(--bg-elevated)">
@@ -69,29 +81,40 @@
               Import Data
             </BaseButton>
           </div>
+
+          <!-- Progress / Result -->
+          <div v-if="importResult" class="p-4 rounded-md" :class="importResult.success ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'">
+            <p class="font-medium" :class="importResult.success ? 'text-green-700' : 'text-red-700'">
+              {{ importResult.message || (importResult.success ? 'Import berhasil!' : 'Import gagal!') }}
+            </p>
+            <div v-if="importResult.status === 'processing'" class="mt-2 flex items-center gap-2 text-sm text-(--text-muted)">
+              <span class="animate-spin w-4 h-4 border-2 border-(--primary) border-t-transparent rounded-full"></span>
+              {{ importResult.message }}
+            </div>
+            <div v-if="importResult.inserted !== undefined" class="mt-1 text-sm text-(--text-muted)">
+              {{ importResult.inserted }} data berhasil diimport.
+              <span v-if="importResult.total_errors > 0" class="text-red-600"> ({{ importResult.total_errors }} error)</span>
+              <span v-if="importResult.total_warnings > 0" class="text-yellow-600"> ({{ importResult.total_warnings }} warning)</span>
+            </div>
+          </div>
         </div>
       </BaseCard>
 
-      <BaseCard v-if="showPreview">
-        <template #title>Pratinjau Data (5 data pertama)</template>
-
-        <DataTable :headers="previewHeaders" :items="previewData" />
-
-        <div class="mt-3 text-sm text-(--text-muted)">
-          Total {{ previewTotal }} data akan diimport
-        </div>
-      </BaseCard>
-
+      <!-- Import History -->
       <BaseCard>
         <template #title>Riwayat Import</template>
 
-        <DataTable :headers="historyHeaders" :items="importHistory">
+        <div v-if="importHistory.length === 0" class="text-sm text-(--text-muted) py-4 text-center">
+          Belum ada riwayat import
+        </div>
+
+        <DataTable v-else :headers="historyHeaders" :items="importHistory">
           <template #item.date="{ value }">{{ value }}</template>
           <template #item.filename="{ value }">{{ value }}</template>
           <template #item.records="{ value }">{{ value }}</template>
           <template #item.status="{ value }">
-            <Badge :variant="value === 'success' ? 'success' : 'danger'">
-              {{ value === 'success' ? 'Berhasil' : 'Gagal' }}
+            <Badge :variant="value === 'success' ? 'success' : value === 'processing' ? 'warning' : 'danger'">
+              {{ value === 'success' ? 'Berhasil' : value === 'processing' ? 'Diproses' : 'Gagal' }}
             </Badge>
           </template>
         </DataTable>
@@ -101,29 +124,24 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import BaseCard from '../../../Components/BaseCard.vue'
 import BaseButton from '../../../Components/BaseButton.vue'
 import Badge from '../../../Components/Badge.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { IconDownload, IconUpload, IconTrash } from '../../../Components/Icons/index.js'
+import { useApi } from '../../../Composables/useApi.js'
+
+const { post, get } = useApi()
 
 const fileInput = ref(null)
 const selectedFile = ref(null)
 const dragOver = ref(false)
 const importing = ref(false)
-const showPreview = ref(false)
+const importMode = ref('create')
+const importResult = ref(null)
 
-const previewHeaders = [
-  { key: 'nip', label: 'NIP' },
-  { key: 'name', label: 'Nama' },
-  { key: 'date', label: 'Tanggal' },
-  { key: 'check_in', label: 'Jam Masuk' },
-  { key: 'check_out', label: 'Jam Pulang' },
-]
-
-const previewData = ref([])
-const previewTotal = ref(0)
+let pollTimer = null
 
 const historyHeaders = [
   { key: 'date', label: 'Tanggal' },
@@ -132,11 +150,7 @@ const historyHeaders = [
   { key: 'status', label: 'Status' },
 ]
 
-const importHistory = ref([
-  { id: 1, date: '2026-05-27', filename: 'log_20260527.xlsx', records: 156, status: 'success' },
-  { id: 2, date: '2026-05-26', filename: 'log_20260526.xlsx', records: 158, status: 'success' },
-  { id: 3, date: '2026-05-25', filename: 'log_20260525.csv', records: 0, status: 'failed' },
-])
+const importHistory = ref([])
 
 function triggerFileInput() {
   fileInput.value?.click()
@@ -144,54 +158,101 @@ function triggerFileInput() {
 
 function handleFileSelect(e) {
   const file = e.target.files[0]
-  if (file) processFile(file)
+  if (file) {
+    selectedFile.value = file
+    importResult.value = null
+  }
 }
 
 function handleDrop(e) {
   dragOver.value = false
   const file = e.dataTransfer.files[0]
-  if (file) processFile(file)
-}
-
-function processFile(file) {
-  selectedFile.value = file
-
-  previewData.value = [
-    { nip: 'EMP001', name: 'Budi Santoso', date: '2026-05-27', check_in: '07:55', check_out: '17:05' },
-    { nip: 'EMP002', name: 'Siti Nurhaliza', date: '2026-05-27', check_in: '08:15', check_out: '17:00' },
-    { nip: 'EMP003', name: 'Ahmad Fauzi', date: '2026-05-27', check_in: '07:50', check_out: '18:30' },
-    { nip: 'EMP004', name: 'Dewi Lestari', date: '2026-05-27', check_in: '08:00', check_out: '17:00' },
-    { nip: 'EMP005', name: 'Rudi Hartono', date: '2026-05-27', check_in: '--:--', check_out: '--:--' },
-  ]
-  previewTotal.value = 156
-  showPreview.value = true
+  if (file) {
+    selectedFile.value = file
+    importResult.value = null
+  }
 }
 
 function clearFile() {
   selectedFile.value = null
-  showPreview.value = false
-  previewData.value = []
+  importResult.value = null
   if (fileInput.value) fileInput.value.value = ''
 }
 
-function handleImport() {
+async function handleImport() {
+  if (!selectedFile.value) return
+
   importing.value = true
-  setTimeout(() => {
+  importResult.value = null
+
+  try {
+    const formData = new FormData()
+    formData.append('file', selectedFile.value)
+    formData.append('mode', importMode.value)
+
+    const response = await post('/api/v1/attendance/logs/import', formData)
+
+    if (response.batch) {
+      // Start polling for result
+      importResult.value = { status: 'processing', message: response.message }
+      startPolling(response.batch)
+    } else {
+      importResult.value = { success: true, message: response.message }
+      addHistory(selectedFile.value.name, 'success')
+      clearFile()
+    }
+  } catch (error) {
+    importResult.value = { success: false, message: error.message || 'Gagal mengimport file.' }
+    addHistory(selectedFile.value?.name || 'unknown', 'failed')
+  } finally {
     importing.value = false
-    clearFile()
-    importHistory.value.unshift({
-      id: Date.now(),
-      date: '2026-05-27',
-      filename: selectedFile.value?.name || 'log.xlsx',
-      records: 156,
-      status: 'success',
-    })
-    alert('Import berhasil! 156 data absensi telah diimport.')
+  }
+}
+
+function startPolling(batch) {
+  clearPolling()
+
+  pollTimer = setInterval(async () => {
+    try {
+      const result = await get(`/api/v1/attendance/logs/import/status/${batch}`)
+
+      if (result.status === 'completed') {
+        importResult.value = result
+        addHistory(result.file, 'success', result.inserted)
+        clearFile()
+        clearPolling()
+      } else if (result.status === 'failed') {
+        importResult.value = { success: false, message: result.message || 'Import gagal.' }
+        addHistory(result.file, 'failed')
+        clearPolling()
+      }
+      // else: still processing, keep polling
+    } catch {
+      // Silently retry
+    }
   }, 2000)
 }
 
+function clearPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function addHistory(filename, status, records = 0) {
+  importHistory.value.unshift({
+    id: Date.now(),
+    date: new Date().toISOString().split('T')[0],
+    filename,
+    records,
+    status,
+  })
+}
+
 function downloadTemplate() {
-  alert('Template akan diunduh.')
+  // Buka URL download template
+  window.open('/api/v1/attendance/logs/import/template', '_blank')
 }
 
 function formatFileSize(bytes) {
@@ -199,4 +260,8 @@ function formatFileSize(bytes) {
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / 1048576).toFixed(1) + ' MB'
 }
+
+onUnmounted(() => {
+  clearPolling()
+})
 </script>

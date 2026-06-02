@@ -45,11 +45,21 @@ class LeaveApiController extends Controller
             }
         }
 
-        if ($request->has('leave_period_id') && $request->leave_period_id !== '') {
-            $query->where('leave_period_id', $request->leave_period_id);
+        if ($request->filled('leave_period_id')) {
+            $period = LeavePeriod::find($request->leave_period_id);
+            if ($period) {
+                $query->where(function ($q) use ($period) {
+                    $q->whereBetween('start_date', [$period->start_date, $period->end_date])
+                      ->orWhereBetween('end_date', [$period->start_date, $period->end_date])
+                      ->orWhere(function ($sq) use ($period) {
+                          $sq->where('start_date', '<=', $period->start_date)
+                             ->where('end_date', '>=', $period->end_date);
+                      });
+                });
+            }
         }
 
-        if ($request->has('status') && $request->status !== '') {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
@@ -64,8 +74,18 @@ class LeaveApiController extends Controller
                 });
             }
         }
-        if ($request->has('leave_period_id') && $request->leave_period_id !== '') {
-            $statsQuery->where('leave_period_id', $request->leave_period_id);
+        if ($request->filled('leave_period_id')) {
+            $period = LeavePeriod::find($request->leave_period_id);
+            if ($period) {
+                $statsQuery->where(function ($q) use ($period) {
+                    $q->whereBetween('start_date', [$period->start_date, $period->end_date])
+                      ->orWhereBetween('end_date', [$period->start_date, $period->end_date])
+                      ->orWhere(function ($sq) use ($period) {
+                          $sq->where('start_date', '<=', $period->start_date)
+                             ->where('end_date', '>=', $period->end_date);
+                      });
+                });
+            }
         }
 
         $stats = [

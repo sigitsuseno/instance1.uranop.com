@@ -94,6 +94,7 @@
     --success: #10b981;
     --warning: #f59e0b;
     --danger: #ef4444;
+    --info: #06b6d4;
 }
 
 .dark {
@@ -121,6 +122,7 @@
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
+    --info: #06b6d4;
 }
 
 ::-webkit-scrollbar {

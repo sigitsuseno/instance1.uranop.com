@@ -6,7 +6,13 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [env('APP_URL', 'http://localhost')],
+    'allowed_origins' => [
+        env('APP_URL', 'http://localhost'),
+        'tauri://localhost',
+        'https://tauri.localhost',
+        'http://localhost:1420',
+        'http://localhost:5173',
+    ],
 
     'allowed_origins_patterns' => [],
 
