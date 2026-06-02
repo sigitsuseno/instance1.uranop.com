@@ -236,9 +236,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useScheduleStore } from '../../../../Stores/schedule'
+import { useApi } from '../../../../composables/useApi'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import TextInput from '../../../../Components/TextInput.vue'
@@ -247,6 +248,7 @@ import { IconArrowLeft } from '../../../../Components/Icons/index.js'
 
 const router = useRouter()
 const store = useScheduleStore()
+const { get } = useApi()
 
 const form = reactive({
   monthStr: '2026-06',
@@ -259,6 +261,8 @@ const isGenerating = ref(false)
 
 const empSearchQuery = ref('')
 const empDeptFilter = ref(null)
+const employees = ref([])
+const departments = ref([])
 
 const monthLabels = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -288,6 +292,13 @@ onMounted(async () => {
   } catch (error) {
     console.error('Failed to fetch employees', error)
   }
+
+  try {
+    const resDept = await get('/api/organization/departments/options')
+    departments.value = resDept.data || []
+  } catch (error) {
+    console.error('Failed to fetch departments', error)
+  }
 })
 
 const selectedPattern = computed(() => {
@@ -296,8 +307,8 @@ const selectedPattern = computed(() => {
 
 const filteredEmployees = computed(() => {
   return employees.value.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(empSearchQuery.value.toLowerCase()) || 
-                          emp.nik.toLowerCase().includes(empSearchQuery.value.toLowerCase())
+    const matchesSearch = String(emp.name || '').toLowerCase().includes(empSearchQuery.value.toLowerCase()) || 
+                          String(emp.nik || '').toLowerCase().includes(empSearchQuery.value.toLowerCase())
     const matchesDept = !empDeptFilter.value || emp.department_id === empDeptFilter.value
     return matchesSearch && matchesDept
   })

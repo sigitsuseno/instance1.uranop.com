@@ -201,6 +201,16 @@ export const useScheduleStore = defineStore('schedule', () => {
     }
   }
 
+  async function overrideRosterCell(payload) {
+    try {
+      await api.post(`/api/schedule/roster/override`, payload)
+      return true
+    } catch (error) {
+      console.error('Failed to override roster', error)
+      throw error
+    }
+  }
+
   return {
     shifts,
     calendars,
@@ -220,5 +230,6 @@ export const useScheduleStore = defineStore('schedule', () => {
     saveWorkPatternDetails,
     deleteWorkPatternDetailsGroup,
     generateRosterBulk,
+    overrideRosterCell,
   }
 })

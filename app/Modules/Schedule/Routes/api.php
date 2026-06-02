@@ -20,6 +20,7 @@ Route::middleware('auth:sanctum')->prefix('schedule')->group(function () {
     Route::get('/roster', [ScheduleApiController::class, 'getRoster']);
     Route::post('/roster/generate', [ScheduleApiController::class, 'generateRoster']);
     Route::post('/roster/import', [ScheduleApiController::class, 'importRoster']);
+    Route::post('/roster/override', [ScheduleApiController::class, 'overrideRoster']);
     // Holiday CRUD
     Route::post('/calendars/{id}/holidays', [ScheduleApiController::class, 'storeHoliday']);
     Route::put('/calendars/{id}/holidays/{holiday_id}', [ScheduleApiController::class, 'updateHoliday']);

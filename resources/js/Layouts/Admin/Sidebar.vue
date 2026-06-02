@@ -28,7 +28,6 @@ const allMenus = [
       { title: 'Kalender', icon: 'bx bx-calendar', route: '/admin/schedule/calendars' },
       { title: 'Gaji & LTHR', icon: 'bx bx-money', route: '/admin/payroll/configs' },
       { title: 'Penggajian', icon: 'bx bx-time', route: '/admin/payroll/payroll-periode' },
-      { title: 'Jenis Cuti', icon: 'bx bx-calendar-check', route: '/admin/leave/settings', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Pengaturan Cuti', icon: 'bx bx-cog', route: '/admin/leave/settings', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'PPh 21', icon: 'bx bx-receipt', route: '/admin/payroll/configs' },
       { title: 'BPJS', icon: 'bx bx-health', route: '/admin/payroll/configs' },
@@ -66,17 +65,15 @@ const allMenus = [
       { title: 'Jadwal Umum', icon: 'bx bx-calendar', route: '/admin/schedule/roster' },
       { title: 'Pola & Jadwal Kerja', icon: 'bx bx-time-five', route: '/admin/schedule/work-patterns' },
       { title: 'Shift', icon: 'bx bx-transfer-alt', route: '/admin/schedule/shifts' },
-      { title: 'Buat Jadwal', icon: 'bx bx-calendar-plus', route: '/admin/schedule/roster' },
+      { title: 'Buat Jadwal', icon: 'bx bx-calendar-plus', route: '/admin/schedule/roster/generate' },
     ],
   },
   {
     title: 'Pengelolaan Cuti',
     icon: 'bx bx-umbrella',
     children: [
-      { title: 'Cuti Karyawan', icon: 'bx bx-calendar-edit', route: '/admin/leave' },
-      { title: 'Pengajuan Cuti', icon: 'bx bx-edit-alt', route: '/admin/leave' },
+      { title: 'Cuti & Izin', icon: 'bx bx-calendar-edit', route: '/admin/leave' },
       { title: 'Approval Cuti', icon: 'bx bx-check-shield', route: '/admin/leave/approvals' },
-      { title: 'Saldo Cuti', icon: 'bx bx-bar-chart-square', route: '/admin/leave' },
     ],
   },
   {

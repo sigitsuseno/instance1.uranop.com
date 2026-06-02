@@ -208,6 +208,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useScheduleStore } from '../../../../Stores/schedule'
+import { useApi } from '../../../../composables/useApi'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
@@ -218,9 +219,17 @@ const monthFilter = ref('2026-06')
 const selectedYear = ref(2026)
 const selectedMonth = ref(6)
 
-onMounted(() => {
+onMounted(async () => {
   store.fetchShifts()
   store.fetchRosterForPeriod(selectedYear.value, selectedMonth.value)
+  
+  try {
+    const { get } = useApi()
+    const res = await get('/api/organization/departments/options')
+    departments.value = res.data || []
+  } catch (error) {
+    console.error('Failed to fetch departments', error)
+  }
 })
 
 watch([selectedYear, selectedMonth], ([y, m]) => {
@@ -239,13 +248,7 @@ const monthLabels = [
 ]
 const dayNameAbbr = ['Mg', 'Sn', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
 
-const departments = [
-  { id: 1, name: 'Teknologi Informasi' },
-  { id: 2, name: 'Keuangan' },
-  { id: 3, name: 'SDM' },
-  { id: 4, name: 'Pemasaran' },
-  { id: 5, name: 'Operasional' },
-]
+const departments = ref([])
 
 const prevMonthIndex = computed(() => {
   return selectedMonth.value === 1 ? 11 : selectedMonth.value - 2
@@ -265,8 +268,8 @@ const rosterList = computed(() => {
 
 const filteredRoster = computed(() => {
   return rosterList.value.filter(emp => {
-    const matchesSearch = emp.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || 
-                          emp.nik.toLowerCase().includes(searchQuery.value.toLowerCase())
+    const matchesSearch = String(emp.name || '').toLowerCase().includes(searchQuery.value.toLowerCase()) || 
+                          String(emp.nik || '').toLowerCase().includes(searchQuery.value.toLowerCase())
     const matchesDept = !departmentFilter.value || emp.department_id === departmentFilter.value
     return matchesSearch && matchesDept
   })
@@ -303,19 +306,35 @@ function openOverrideModal(employee, dayInfo, dayIndex) {
   showModal.value = true
 }
 
-function applyOverride(newShift) {
+async function applyOverride(newShift) {
   if (!editingCell.value) return
   
-  const roster = store.getRosterForPeriod(selectedYear.value, selectedMonth.value)
-  const empIdx = roster.findIndex(e => e.id === editingCell.value.employeeId)
-  
-  if (empIdx !== -1) {
-    roster[empIdx].schedule[editingCell.value.dayIndex] = {
-      code: newShift.code,
-      name: newShift.name,
-      is_off: !!newShift.is_off,
-      shift_id: newShift.id || null
+  const d = editingCell.value.date
+  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+  const payload = {
+    employee_id: editingCell.value.employeeId,
+    date: dateStr,
+    shift_id: newShift.id || null,
+    is_off: !!newShift.is_off
+  }
+
+  try {
+    await store.overrideRosterCell(payload)
+    
+    const roster = store.getRosterForPeriod(selectedYear.value, selectedMonth.value)
+    const empIdx = roster.findIndex(e => e.id === editingCell.value.employeeId)
+    
+    if (empIdx !== -1) {
+      roster[empIdx].schedule[editingCell.value.dayIndex] = {
+        code: newShift.code,
+        name: newShift.name,
+        is_off: !!newShift.is_off,
+        shift_id: newShift.id || null
+      }
     }
+  } catch (error) {
+    alert('Gagal mengupdate jadwal: ' + (error.message || 'Unknown error'))
   }
   
   showModal.value = false

@@ -303,14 +303,7 @@ class ScheduleApiController extends Controller
                         'shift_id' => $r->shift_id
                     ];
                 } else {
-                    $isWeekend = ($dow == 0 || $dow == 6);
-                    $schedule[] = [
-                        'date' => $dateStr,
-                        'code' => $isWeekend ? 'L' : 'NS',
-                        'name' => $isWeekend ? 'Libur' : 'Non Shift',
-                        'is_off' => $isWeekend,
-                        'shift_id' => $isWeekend ? null : 4,
-                    ];
+                    $schedule[] = null;
                 }
                 $current->addDay();
             }
@@ -364,7 +357,7 @@ class ScheduleApiController extends Controller
             'work_pattern_id' => 'required|exists:sch_work_patterns,id',
             'detail_group_name' => 'required|string',
             'employee_ids' => 'required|array',
-            'employee_ids.*' => 'integer|exists:hr_employees,id',
+            'employee_ids.*' => 'integer|exists:employees,id',
         ]);
 
         $year = $request->year;
@@ -426,6 +419,49 @@ class ScheduleApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => "Berhasil men-generate roster untuk {$employees->count()} karyawan ({$insertedCount} jadwal diperbarui)."
+        ]);
+    }
+
+    /**
+     * Override/update a single cell roster
+     */
+    public function overrideRoster(Request $request)
+    {
+        $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'date' => 'required|date',
+            'shift_id' => 'nullable|exists:sch_shifts,id',
+            'is_off' => 'boolean'
+        ]);
+
+        $carbonDate = \Carbon\Carbon::parse($request->date);
+
+        $shift = null;
+        if ($request->shift_id) {
+            $shift = \App\Modules\Schedule\Models\Shift::find($request->shift_id);
+        }
+
+        \App\Modules\Schedule\Models\EmployeeShiftRoster::updateOrCreate(
+            [
+                'employee_id' => $request->employee_id,
+                'date' => $request->date,
+            ],
+            [
+                'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                'shift_id' => $shift ? $shift->id : null,
+                'shift_code' => $shift ? $shift->code : ($request->is_off ? 'L' : null),
+                'is_holiday' => $request->boolean('is_off'),
+                'is_sat' => $carbonDate->dayOfWeek === 6,
+                'is_sun' => $carbonDate->dayOfWeek === 0,
+                'status' => $request->is_off ? 'holiday' : 'scheduled',
+                'source' => 'manual',
+                'created_by' => auth()->id() ?? 1,
+            ]
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Jadwal berhasil diupdate'
         ]);
     }
 

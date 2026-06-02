@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             WorkingCalendarSeeder::class,
             HolidaySeeder::class,
             WorkPatternSeeder::class,
+            LeaveSettingsSeeder::class,
         ]);
     }
 }

@@ -158,9 +158,11 @@ import { useScheduleStore } from '../../../../Stores/schedule'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import { IconArrowLeft } from '../../../../Components/Icons/index.js'
+import { useApi } from '../../../../composables/useApi'
 
 const router = useRouter()
 const store = useScheduleStore()
+const { post } = useApi()
 
 const fileInput = ref(null)
 const isDragging = ref(false)
@@ -244,56 +246,26 @@ function downloadTemplate() {
   alert('Men-download Template excel roster... (Simulasi)')
 }
 
-function submitImport() {
+async function submitImport() {
   if (!form.file) return
   
   processing.value = true
   
-  setTimeout(() => {
-    // Generate random shift schedules for all employees in store rosterSchedules
-    const roster = store.getRosterForPeriod(form.year, form.month)
-    const daysRange = store.getDaysInMonthRange(form.year, form.month)
+  try {
+    const formData = new FormData()
+    formData.append('file', form.file)
+    formData.append('month', form.month)
+    formData.append('year', form.year)
     
-    // Available shifts codes list
-    const shiftOptions = [
-      ...store.shifts,
-      { code: 'L', name: 'Libur', is_off: true }
-    ]
+    const res = await post('/api/schedule/roster/import', formData)
     
-    roster.forEach(emp => {
-      const schedule = []
-      
-      daysRange.forEach(day => {
-        // Randomly pick a shift (mostly PG or NS, occasionally ML or SG or Libur)
-        // Saturday/Sunday are mostly Libur (L)
-        const isWeekend = day.dow === 0 || day.dow === 6
-        
-        let selectedShift
-        if (isWeekend) {
-          selectedShift = Math.random() > 0.15 ? shiftOptions.find(s => s.code === 'L') : shiftOptions[0] // Shift Pagi
-        } else {
-          const rand = Math.random()
-          if (rand < 0.6) selectedShift = shiftOptions.find(s => s.code === 'NS')
-          else if (rand < 0.8) selectedShift = shiftOptions.find(s => s.code === 'PG')
-          else if (rand < 0.9) selectedShift = shiftOptions.find(s => s.code === 'SG')
-          else if (rand < 0.95) selectedShift = shiftOptions.find(s => s.code === 'ML')
-          else selectedShift = shiftOptions.find(s => s.code === 'L')
-        }
-        
-        schedule.push({
-          code: selectedShift.code,
-          name: selectedShift.name,
-          is_off: !!selectedShift.is_off,
-          shift_id: selectedShift.id || null
-        })
-      })
-      
-      emp.schedule = schedule
-    })
-    
-    processing.value = false
-    alert(`File "${form.file.name}" berhasil di-import. ${roster.length} Jadwal karyawan telah diperbarui!`)
+    alert(res.message || `File "${form.file.name}" berhasil di-import.`)
     router.push({ name: 'schedule.roster' })
-  }, 1500)
+  } catch (error) {
+    console.error('Failed to import', error)
+    alert(error.message || 'Gagal melakukan import roster.')
+  } finally {
+    processing.value = false
+  }
 }
 </script>
