@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-xl font-semibold text-(--text-main)">Shift Kerja</h1>
-        <p class="text-sm text-(--text-muted) mt-1">Atur shift kerja karyawan</p>
+        <p class="text-sm text-(--text-muted) mt-1">Kelola master shift kerja karyawan</p>
       </div>
       <BaseButton variant="primary" @click="openForm(null)">
         <template #icon-left>
@@ -18,17 +18,38 @@
         <template #item.code="{ value }">
           <Badge variant="primary">{{ value }}</Badge>
         </template>
-        <template #item.color="{ value }">
+        <template #item.name="{ item }">
           <div class="flex items-center gap-2">
-            <span class="w-4 h-4 rounded-full border border-(--border-soft) inline-block" :style="{ backgroundColor: value }"></span>
-            <span class="text-xs text-(--text-muted) font-mono">{{ value }}</span>
+            <span class="w-3.5 h-3.5 rounded-full border border-(--border-soft) inline-block shrink-0" :style="{ backgroundColor: item.color || '#3b82f6' }"></span>
+            <span class="text-(--text-main) font-medium">{{ item.name }}</span>
           </div>
         </template>
-        <template #item.start_time="{ item }">
-          <span class="text-(--text-main)">{{ item.start_time }} - {{ item.end_time }}</span>
+        <template #item.work_pattern="{ item }">
+          <span class="text-xs text-(--text-muted) font-medium">
+            {{ getWorkPatternName(item.work_pattern_id) || '-' }}
+          </span>
         </template>
-        <template #item.break_start="{ item }">
-          <span class="text-(--text-main)">{{ item.break_start }} - {{ item.break_end }}</span>
+        <template #item.working_hours="{ item }">
+          <span class="text-(--text-main) font-mono text-xs">{{ item.work_hour_start }} - {{ item.work_hour_end }}</span>
+        </template>
+        <template #item.check_in_range="{ item }">
+          <span class="text-xs text-(--text-muted) font-mono">{{ item.check_in_start || '-' }} - {{ item.check_in_end || '-' }}</span>
+        </template>
+        <template #item.check_out_range="{ item }">
+          <div class="flex items-center gap-1 font-mono text-xs text-(--text-muted)">
+            <span>
+              {{ item.is_overnight ? (item.check_out_overnight_start || '-') + ' - ' + (item.check_out_overnight_end || '-') : (item.check_out_start || '-') + ' - ' + (item.check_out_end || '-') }}
+            </span>
+            <span v-if="item.is_overnight" class="text-xs" title="Shift Melewati Tengah Malam">🌙</span>
+          </div>
+        </template>
+        <template #item.status="{ item }">
+          <div class="flex items-center gap-1">
+            <Badge :variant="item.is_active ? 'success' : 'neutral'">
+              {{ item.is_active ? 'Aktif' : 'Nonaktif' }}
+            </Badge>
+            <Badge v-if="item.is_dayoff" variant="danger">Libur</Badge>
+          </div>
         </template>
         <template #item.actions="{ item }">
           <div class="flex items-center gap-1">
@@ -52,21 +73,110 @@
       <Pagination :current-page="1" :total-pages="1" :total="shifts.length" :per-page="10" @page-change="() => {}" />
     </BaseCard>
 
-    <BaseModal :show="!!formVisible" :title="editingItem?.id ? 'Edit Shift' : 'Tambah Shift'" @close="formVisible = null">
-      <div class="space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-          <TextInput v-model="form.name" label="Nama Shift" placeholder="Contoh: Shift Pagi" />
-          <TextInput v-model="form.code" label="Kode" placeholder="Contoh: PG" />
+    <BaseModal :show="!!formVisible" :title="editingItem?.id ? 'Edit Shift' : 'Tambah Shift'" size="lg" @close="formVisible = null">
+      <div class="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        <!-- Basic Info -->
+        <div class="grid grid-cols-4 gap-4">
+          <div class="col-span-2">
+            <TextInput v-model="form.name" label="Nama Shift" placeholder="Contoh: Shift Pagi Reguler" />
+          </div>
+          <div>
+            <TextInput v-model="form.code" label="Kode Shift" placeholder="Contoh: PG" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Pola Kerja</label>
+            <select v-model="form.work_pattern_id" class="w-full h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary-glow)">
+              <option :value="null">-- Semua Pola --</option>
+              <option v-for="pattern in store.workPatterns" :key="pattern.id" :value="pattern.id">
+                {{ pattern.name }}
+              </option>
+            </select>
+          </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <TextInput v-model="form.start_time" label="Jam Masuk" type="time" />
-          <TextInput v-model="form.end_time" label="Jam Pulang" type="time" />
+
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <TextInput v-model="form.external_code" label="External Code" placeholder="P, S, M, L" />
+            <p class="text-[10px] text-(--text-muted) mt-1">Kode untuk import absensi</p>
+          </div>
+          <div>
+            <TextInput v-model="form.work_hour_start" label="Jam Mulai" type="time" step="1" />
+          </div>
+          <div>
+            <TextInput v-model="form.work_hour_end" label="Jam Selesai" type="time" step="1" />
+          </div>
         </div>
-        <div class="grid grid-cols-2 gap-4">
-          <TextInput v-model="form.break_start" label="Istirahat Mulai" type="time" />
-          <TextInput v-model="form.break_end" label="Istirahat Selesai" type="time" />
+
+        <!-- Range Check-in -->
+        <div class="border-t border-(--border-soft) pt-3">
+          <span class="text-sm font-semibold text-(--text-main) block mb-2">Range Check-in</span>
+          <div class="grid grid-cols-2 gap-4">
+            <TextInput v-model="form.check_in_start" label="Mulai Check-in" type="time" step="1" />
+            <TextInput v-model="form.check_in_end" label="Akhir Check-in" type="time" step="1" />
+          </div>
         </div>
-        <div>
+
+        <!-- Range Check-out -->
+        <div class="border-t border-(--border-soft) pt-3">
+          <span class="text-sm font-semibold text-(--text-main) block mb-2">Range Check-out</span>
+          <div class="grid grid-cols-2 gap-4">
+            <TextInput v-model="form.check_out_start" label="Mulai Check-out" type="time" step="1" />
+            <TextInput v-model="form.check_out_end" label="Akhir Check-out" type="time" step="1" />
+          </div>
+        </div>
+
+        <!-- Overnight Shift -->
+        <div class="border-t border-(--border-soft) pt-3">
+          <label class="flex items-center gap-2 mb-2 cursor-pointer">
+            <input type="checkbox" v-model="form.is_overnight" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+            <span class="text-sm font-medium text-(--text-main)">Shift Melewati Tengah Malam</span>
+          </label>
+          <div v-if="form.is_overnight" class="grid grid-cols-2 gap-4 ml-6">
+            <TextInput v-model="form.check_out_overnight_start" label="Check-out Overnight Mulai" type="time" step="1" />
+            <TextInput v-model="form.check_out_overnight_end" label="Check-out Overnight Selesai" type="time" step="1" />
+          </div>
+        </div>
+
+        <!-- Rules -->
+        <div class="border-t border-(--border-soft) pt-3">
+          <span class="text-sm font-semibold text-(--text-main) block mb-2">Aturan Shift</span>
+          <div class="grid grid-cols-3 gap-4">
+            <TextInput v-model.number="form.tolerance_minutes" label="Toleransi (menit)" type="number" min="0" />
+            <TextInput v-model.number="form.min_work_hours" label="Min Jam Kerja" type="number" min="0" />
+            <div>
+              <label class="block text-sm font-medium text-(--text-main) mb-1">Bisa Lembur</label>
+              <select v-model="form.has_overtime" class="w-full h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary-glow)">
+                <option :value="true">Ya</option>
+                <option :value="false">Tidak</option>
+              </select>
+            </div>
+          </div>
+          <div v-if="form.has_overtime" class="grid grid-cols-1 mt-3">
+            <div>
+              <label class="block text-sm font-medium text-(--text-main) mb-1">Multiplier Lembur</label>
+              <select v-model="form.overtime_multiplier" class="w-full h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) max-w-[200px]">
+                <option :value="1.5">1.5x (Normal)</option>
+                <option :value="2.0">2x (Hari Libur)</option>
+                <option :value="3.0">3x (Libur Nasional)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Details -->
+        <div class="border-t border-(--border-soft) pt-3 space-y-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" v-model="form.is_dayoff" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+            <span class="text-sm font-medium text-(--text-main)">Ini adalah shift libur</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" v-model="form.is_active" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+            <span class="text-sm font-medium text-(--text-main)">Aktif</span>
+          </label>
+        </div>
+
+        <!-- Color Preset picker -->
+        <div class="border-t border-(--border-soft) pt-3">
           <label class="block text-sm font-medium text-(--text-main) mb-1">Warna Shift</label>
           <div class="flex items-center gap-3">
             <input
@@ -106,7 +216,8 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useScheduleStore } from '../../../../Stores/schedule'
 import DataTable from '../../../../Components/Table/DataTable.vue'
 import Pagination from '../../../../Components/Table/Pagination.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
@@ -117,86 +228,157 @@ import TextInput from '../../../../Components/TextInput.vue'
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
 import { IconPlus, IconPencil, IconTrash } from '../../../../Components/Icons/index.js'
 
+const store = useScheduleStore()
+
+onMounted(() => {
+  store.fetchShifts()
+  if (store.workPatterns.length === 0) {
+    store.fetchWorkPatterns()
+  }
+})
+
 const colorPresets = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16']
 
 const headers = [
   { key: 'code', label: 'Kode' },
-  { key: 'name', label: 'Nama' },
-  { key: 'start_time', label: 'Jam Masuk' },
-  { key: 'end_time', label: 'Jam Pulang' },
-  { key: 'break_start', label: 'Istirahat' },
-  { key: 'color', label: 'Warna' },
+  { key: 'name', label: 'Nama Shift' },
+  { key: 'work_pattern', label: 'Pola Kerja' },
+  { key: 'external_code', label: 'External' },
+  { key: 'working_hours', label: 'Jam Kerja' },
+  { key: 'check_in_range', label: 'Check-in' },
+  { key: 'check_out_range', label: 'Check-out' },
+  { key: 'status', label: 'Status' },
   { key: 'actions', label: 'Aksi', sortable: false, width: '100px' },
 ]
 
-const shifts = ref([
-  { id: 1, name: 'Shift Pagi', code: 'PG', start_time: '07:00', end_time: '15:00', break_start: '12:00', break_end: '13:00', color: '#3b82f6' },
-  { id: 2, name: 'Shift Siang', code: 'SG', start_time: '15:00', end_time: '23:00', break_start: '18:00', break_end: '19:00', color: '#f59e0b' },
-  { id: 3, name: 'Shift Malam', code: 'ML', start_time: '23:00', end_time: '07:00', break_start: '02:00', break_end: '03:00', color: '#8b5cf6' },
-  { id: 4, name: 'Non Shift', code: 'NS', start_time: '08:00', end_time: '17:00', break_start: '12:00', break_end: '13:00', color: '#10b981' },
-])
+const shifts = computed(() => store.shifts)
+
+function getWorkPatternName(id) {
+  if (!id) return null
+  const pattern = store.workPatterns.find(p => p.id === id)
+  return pattern ? pattern.name : null
+}
 
 const formVisible = ref(null)
 const editingItem = ref(null)
 const confirmDelete = ref(null)
 
 const form = reactive({
+  work_pattern_id: null,
   name: '',
   code: '',
-  start_time: '',
-  end_time: '',
-  break_start: '',
-  break_end: '',
+  external_code: '',
+  work_hour_start: '',
+  work_hour_end: '',
+  check_in_start: '',
+  check_in_end: '',
+  check_out_start: '',
+  check_out_end: '',
+  is_overnight: false,
+  check_out_overnight_start: '',
+  check_out_overnight_end: '',
+  tolerance_minutes: 15,
+  min_work_hours: 8,
+  has_overtime: true,
+  overtime_multiplier: 1.5,
+  is_dayoff: false,
+  is_active: true,
   color: '#3b82f6',
 })
 
 function openForm(item) {
   editingItem.value = item
   if (item) {
+    form.work_pattern_id = item.work_pattern_id || null
     form.name = item.name
     form.code = item.code
-    form.start_time = item.start_time
-    form.end_time = item.end_time
-    form.break_start = item.break_start
-    form.break_end = item.break_end
-    form.color = item.color
+    form.external_code = item.external_code || ''
+    form.work_hour_start = item.work_hour_start
+    form.work_hour_end = item.work_hour_end
+    form.check_in_start = item.check_in_start || ''
+    form.check_in_end = item.check_in_end || ''
+    form.check_out_start = item.check_out_start || ''
+    form.check_out_end = item.check_out_end || ''
+    form.is_overnight = !!item.is_overnight
+    form.check_out_overnight_start = item.check_out_overnight_start || ''
+    form.check_out_overnight_end = item.check_out_overnight_end || ''
+    form.tolerance_minutes = item.tolerance_minutes ?? 15
+    form.min_work_hours = item.min_work_hours ?? 8
+    form.has_overtime = item.has_overtime ?? true
+    form.overtime_multiplier = item.overtime_multiplier ?? 1.5
+    form.is_dayoff = !!item.is_dayoff
+    form.is_active = item.is_active ?? true
+    form.color = item.color || '#3b82f6'
   } else {
+    form.work_pattern_id = null
     form.name = ''
     form.code = ''
-    form.start_time = ''
-    form.end_time = ''
-    form.break_start = ''
-    form.break_end = ''
+    form.external_code = ''
+    form.work_hour_start = '08:00:00'
+    form.work_hour_end = '17:00:00'
+    form.check_in_start = '07:30:00'
+    form.check_in_end = '08:30:00'
+    form.check_out_start = '17:00:00'
+    form.check_out_end = '18:00:00'
+    form.is_overnight = false
+    form.check_out_overnight_start = ''
+    form.check_out_overnight_end = ''
+    form.tolerance_minutes = 15
+    form.min_work_hours = 8
+    form.has_overtime = true
+    form.overtime_multiplier = 1.5
+    form.is_dayoff = false
+    form.is_active = true
     form.color = '#3b82f6'
   }
   formVisible.value = {}
 }
 
-function saveShift() {
-  const item = {
-    id: editingItem.value?.id || shifts.value.length + 1,
+async function saveShift() {
+  const payload = {
+    work_pattern_id: form.work_pattern_id,
     name: form.name,
     code: form.code,
-    start_time: form.start_time,
-    end_time: form.end_time,
-    break_start: form.break_start,
-    break_end: form.break_end,
-    color: form.color,
+    external_code: form.external_code,
+    work_hour_start: form.work_hour_start,
+    work_hour_end: form.work_hour_end,
+    check_in_start: form.check_in_start,
+    check_in_end: form.check_in_end,
+    check_out_start: form.check_out_start,
+    check_out_end: form.check_out_end,
+    is_overnight: form.is_overnight,
+    check_out_overnight_start: form.is_overnight ? form.check_out_overnight_start : null,
+    check_out_overnight_end: form.is_overnight ? form.check_out_overnight_end : null,
+    tolerance_minutes: form.tolerance_minutes,
+    min_work_hours: form.min_work_hours,
+    has_overtime: form.has_overtime,
+    overtime_multiplier: form.has_overtime ? form.overtime_multiplier : 1.5,
+    is_dayoff: form.is_dayoff,
+    is_active: form.is_active,
+    metadata: { color: form.color },
   }
-  if (editingItem.value?.id) {
-    const idx = shifts.value.findIndex((s) => s.id === editingItem.value.id)
-    if (idx !== -1) shifts.value[idx] = item
-  } else {
-    shifts.value.push(item)
+
+  try {
+    if (editingItem.value?.id) {
+      await store.updateShift(editingItem.value.id, payload)
+    } else {
+      await store.saveShift(payload)
+    }
+    formVisible.value = null
+    editingItem.value = null
+  } catch (error) {
+    console.error('Failed to save shift', error)
   }
-  formVisible.value = null
-  editingItem.value = null
 }
 
-function deleteShift() {
+async function deleteShift() {
   if (confirmDelete.value) {
-    shifts.value = shifts.value.filter((s) => s.id !== confirmDelete.value.id)
-    confirmDelete.value = null
+    try {
+      await store.deleteShift(confirmDelete.value.id)
+      confirmDelete.value = null
+    } catch (error) {
+      console.error('Failed to delete shift', error)
+    }
   }
 }
 </script>

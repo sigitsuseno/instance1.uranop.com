@@ -16,6 +16,9 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     Route::get('/payroll', [SettingsApiController::class, 'getPayrollSettings']);
     Route::post('/payroll', [SettingsApiController::class, 'updatePayrollSettings']);
     
+    Route::get('/work-pattern-types', [SettingsApiController::class, 'getWorkPatternTypes']);
+    Route::put('/work-pattern-types/{id}', [SettingsApiController::class, 'updateWorkPatternType']);
+    
     Route::apiResource('salary-grades', SalaryGradeApiController::class);
 
     // Employee Data

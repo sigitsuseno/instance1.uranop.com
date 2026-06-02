@@ -39,9 +39,13 @@ const PayrollPeriodDetail = () => import('../Pages/Admin/Payroll/Periods/Detail.
 const PayrollConfigsIndex = () => import('../Pages/Admin/Payroll/Configs/Index.vue')
 const PayrollThr = () => import('../Pages/Admin/Payroll/Thr.vue')
 const WorkPatternsIndex = () => import('../Pages/Admin/Schedule/WorkPatterns/Index.vue')
+const WorkPatternsDetails = () => import('../Pages/Admin/Schedule/WorkPatterns/Details.vue')
 const ShiftsIndex = () => import('../Pages/Admin/Schedule/Shifts/Index.vue')
 const CalendarsIndex = () => import('../Pages/Admin/Schedule/Calendars/Index.vue')
+const CalendarsShow = () => import('../Pages/Admin/Schedule/Calendars/Show.vue')
 const ScheduleRoster = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
+const RosterGenerate = () => import('../Pages/Admin/Schedule/Roster/Generate.vue')
+const RosterImport = () => import('../Pages/Admin/Schedule/Roster/Import.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
 const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
@@ -115,9 +119,13 @@ const routes = [
       { path: 'payroll/configs', name: 'payroll.configs', component: PayrollConfigsIndex, meta: { title: 'Konfigurasi Payroll' } },
       { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail, meta: { title: 'Detail Periode' } },
       { path: 'schedule/work-patterns', name: 'schedule.work-patterns', component: WorkPatternsIndex, meta: { title: 'Pola Kerja' } },
+      { path: 'schedule/work-patterns/:id/details', name: 'schedule.work-patterns.details', component: WorkPatternsDetails, meta: { title: 'Detail Pola Kerja' } },
       { path: 'schedule/shifts', name: 'schedule.shifts', component: ShiftsIndex, meta: { title: 'Shift' } },
       { path: 'schedule/calendars', name: 'schedule.calendars', component: CalendarsIndex, meta: { title: 'Kalender' } },
+      { path: 'schedule/calendars/:id', name: 'schedule.calendars.show', component: CalendarsShow, meta: { title: 'Detail Kalender' } },
       { path: 'schedule/roster', name: 'schedule.roster', component: ScheduleRoster, meta: { title: 'Roster' } },
+      { path: 'schedule/roster/generate', name: 'schedule.roster.generate', component: RosterGenerate, meta: { title: 'Generate Roster' } },
+      { path: 'schedule/roster/import', name: 'schedule.roster.import', component: RosterImport, meta: { title: 'Import Roster' } },
       { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },

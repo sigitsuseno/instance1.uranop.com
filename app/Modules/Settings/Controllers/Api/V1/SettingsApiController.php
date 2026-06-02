@@ -5,6 +5,7 @@ namespace App\Modules\Settings\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Modules\Settings\Models\SystemSetting;
+use App\Modules\Schedule\Models\WorkPatternType;
 use Illuminate\Support\Str;
 
 class SettingsApiController extends Controller
@@ -141,5 +142,31 @@ class SettingsApiController extends Controller
         ]);
 
         return response()->json(['message' => 'Payroll settings updated successfully']);
+    }
+
+    public function getWorkPatternTypes()
+    {
+        $types = WorkPatternType::all();
+        return response()->json(['data' => $types]);
+    }
+
+    public function updateWorkPatternType(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'label' => 'nullable|string|max:255',
+            'keterangan' => 'nullable|string|max:255',
+        ]);
+
+        $type = WorkPatternType::findOrFail($id);
+        $type->update([
+            'label' => $validated['label'],
+            'keterangan' => $validated['keterangan'],
+            'updated_by' => auth()->id() ?? 1,
+        ]);
+
+        return response()->json([
+            'message' => 'Tipe pola kerja berhasil diupdate',
+            'data' => $type
+        ]);
     }
 }

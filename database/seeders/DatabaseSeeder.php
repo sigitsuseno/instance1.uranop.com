@@ -16,6 +16,9 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             InstanceSeeder::class,
             PayPeriodSeeder::class,
+            WorkingCalendarSeeder::class,
+            HolidaySeeder::class,
+            WorkPatternSeeder::class,
         ]);
     }
 }

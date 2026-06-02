@@ -1,275 +1,235 @@
 <template>
   <div>
+    <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-xl font-semibold text-(--text-main)">Kalender Kerja</h1>
-        <p class="text-sm text-(--text-muted) mt-1">Kelola hari kerja, hari libur, dan tanggal khusus</p>
+        <p class="text-sm text-(--text-muted) mt-1">Kelola kalender kerja dan hari libur perusahaan</p>
       </div>
-      <div class="flex items-center gap-3">
-        <BaseButton variant="secondary" size="sm" @click="selectedYear = selectedYear - 1">
-          &laquo;
-        </BaseButton>
-        <span class="text-lg font-semibold text-(--text-main) min-w-[80px] text-center">{{ selectedYear }}</span>
-        <BaseButton variant="secondary" size="sm" @click="selectedYear = selectedYear + 1">
-          &raquo;
-        </BaseButton>
-        <BaseButton variant="primary" @click="showHolidayModal = true">
-          <template #icon-left>
-            <IconPlus class="w-4 h-4" />
-          </template>
-          Tambah Hari Libur
-        </BaseButton>
+      <BaseButton variant="primary" @click="openForm(null)">
+        <template #icon-left>
+          <IconPlus class="w-4 h-4" />
+        </template>
+        Tambah Kalender
+      </BaseButton>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-4 mb-6">
+      <div class="flex flex-col sm:flex-row gap-4">
+        <div class="flex-1 relative">
+          <input
+            type="text"
+            placeholder="Cari kalender..."
+            v-model="searchValue"
+            class="w-full h-10 pl-3 pr-4 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary-glow)"
+          />
+        </div>
+        <div>
+          <select
+            v-model="yearFilter"
+            class="h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary-glow)"
+          >
+            <option value="">Semua Tahun</option>
+            <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
+          </select>
+        </div>
       </div>
     </div>
 
-    <BaseCard class="mb-6">
-      <template #title>Kalender {{ selectedYear }}</template>
-      <template #subtitle>Klik sel untuk mengubah status hari</template>
-
-      <div class="flex items-center gap-4 mb-4">
-        <div class="flex items-center gap-1.5">
-          <span class="w-3 h-3 rounded-sm bg-(--success)/30 border border-(--success)"></span>
-          <span class="text-xs text-(--text-muted)">Hari Kerja</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span class="w-3 h-3 rounded-sm bg-(--danger)/30 border border-(--danger)"></span>
-          <span class="text-xs text-(--text-muted)">Hari Libur</span>
-        </div>
-        <div class="flex items-center gap-1.5">
-          <span class="w-3 h-3 rounded-sm bg-(--warning)/30 border border-(--warning)"></span>
-          <span class="text-xs text-(--text-muted)">Tanggal Khusus</span>
-        </div>
-      </div>
-
-      <div class="overflow-x-auto">
-        <table class="w-full border-collapse text-sm">
-          <thead>
-            <tr>
-              <th class="px-1 py-2 text-center text-xs font-semibold text-(--text-muted) uppercase">Bulan</th>
-              <th
-                v-for="day in 31"
-                :key="day"
-                class="px-1 py-2 text-center text-xs font-semibold text-(--text-muted)"
-              >
-                {{ day }}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="month in calendarData" :key="month.name">
-              <td class="px-1 py-1 text-xs font-medium text-(--text-main) whitespace-nowrap">{{ month.name }}</td>
-              <td
-                v-for="day in 31"
-                :key="day"
-                class="p-0.5"
-              >
-                <div
-                  v-if="day <= month.days"
-                  :class="cellClasses(month, day)"
-                  :title="getCellTooltip(month, day)"
-                  @click="handleCellClick(month, day)"
-                >
-                  {{ day }}
-                </div>
-                <div v-else class="w-7 h-7"></div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </BaseCard>
-
-    <BaseCard>
-      <template #title>Daftar Hari Libur {{ selectedYear }}</template>
-      <template #actions>
-        <TextInput v-model="holidaySearch" placeholder="Cari hari libur..." type="text" class="w-56">
-          <template #icon>
-            <IconSearch class="w-4 h-4" />
-          </template>
-        </TextInput>
-      </template>
-
-      <DataTable :headers="holidayHeaders" :items="filteredHolidays">
-        <template #item.type="{ value }">
-          <Badge :variant="value === 'Nasional' ? 'danger' : value === 'Cuti Bersama' ? 'warning' : 'info'">{{ value }}</Badge>
-        </template>
-        <template #item.actions="{ item }">
+    <!-- Calendars Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" v-if="filteredCalendars.length > 0">
+      <div
+        v-for="cal in filteredCalendars"
+        :key="cal.id"
+        class="bg-(--bg-card) border border-(--border-soft) rounded-md p-5 flex flex-col justify-between hover:shadow-md transition-shadow group relative"
+      >
+        <!-- Card actions on hover -->
+        <div class="absolute top-4 right-4 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            class="p-1.5 rounded-md text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10 transition-colors"
+            @click="openForm(cal)"
+            class="p-1 text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 rounded transition-colors"
+            title="Edit"
+          >
+            <IconPencil class="w-4 h-4" />
+          </button>
+          <button
+            @click="confirmDelete = cal"
+            class="p-1 text-(--text-muted) hover:text-red-500 hover:bg-red-50 rounded transition-colors"
             title="Hapus"
-            @click="confirmDeleteHoliday = item"
           >
             <IconTrash class="w-4 h-4" />
           </button>
-        </template>
-      </DataTable>
-    </BaseCard>
+        </div>
 
-    <BaseModal :show="showHolidayModal" title="Tambah Hari Libur" @close="showHolidayModal = false">
+        <div>
+          <h3 class="font-bold text-(--text-main) text-base pr-12">{{ cal.name }}</h3>
+          <span class="inline-block mt-1 text-xs font-mono text-(--text-muted) bg-(--bg-elevated) px-2 py-0.5 rounded-md">
+            Tahun {{ cal.year }}
+          </span>
+
+          <div class="mt-4 space-y-2 text-xs text-(--text-muted)">
+            <div class="flex items-center gap-2">
+              <span>🏢 Semua Cabang</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span>📅 {{ cal.weekend_days?.length || 0 }} Hari Libur Mingguan</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span>🎉 {{ cal.holidays?.length || 0 }} Hari Libur Terdaftar</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-(--border-soft) flex justify-between items-center">
+          <router-link
+            :to="{ name: 'schedule.calendars.show', params: { id: cal.id } }"
+            class="text-sm font-semibold text-(--primary) hover:text-(--primary-hover) inline-flex items-center gap-1"
+          >
+            Lihat Detail &rarr;
+          </router-link>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div v-else class="text-center py-16 bg-(--bg-card) border border-(--border-soft) rounded-md">
+      <p class="text-(--text-muted)">Belum ada kalender yang sesuai filter</p>
+    </div>
+
+    <!-- Calendar Form Modal -->
+    <BaseModal :show="!!formVisible" :title="editingItem?.id ? 'Edit Kalender' : 'Tambah Kalender'" size="md" @close="formVisible = null">
       <div class="space-y-4">
-        <TextInput v-model="holidayForm.date" label="Tanggal" type="date" />
-        <TextInput v-model="holidayForm.name" label="Nama Hari Libur" placeholder="Contoh: Idul Fitri 1447 H" />
-        <SelectInput
-          v-model="holidayForm.type"
-          label="Tipe"
-          :options="[
-            { value: 'Nasional', label: 'Nasional' },
-            { value: 'Cuti Bersama', label: 'Cuti Bersama' },
-            { value: 'Perusahaan', label: 'Perusahaan' },
-          ]"
-        />
-        <TextInput v-model="holidayForm.description" label="Deskripsi" placeholder="Deskripsi (opsional)" />
+        <TextInput v-model="form.name" label="Nama Kalender" placeholder="Contoh: Kalender Kerja Utama 2026" />
+        <TextInput v-model.number="form.year" label="Tahun" type="number" placeholder="2026" />
+
+        <div>
+          <label class="block text-sm font-medium text-(--text-main) mb-2">Hari Libur Mingguan (Weekend)</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label v-for="d in days" :key="d.value" class="flex items-center gap-2 p-2 rounded-md border border-(--border-soft) cursor-pointer hover:bg-(--bg-elevated)/45 transition-colors">
+              <input
+                type="checkbox"
+                :value="d.value"
+                v-model="form.weekend_days"
+                class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)"
+              />
+              <span class="text-sm text-(--text-main)">{{ d.label }}</span>
+            </label>
+          </div>
+        </div>
       </div>
       <template #footer>
-        <BaseButton variant="ghost" @click="showHolidayModal = false">Batal</BaseButton>
-        <BaseButton variant="primary" @click="addHoliday">Simpan</BaseButton>
+        <BaseButton variant="ghost" @click="formVisible = null">Batal</BaseButton>
+        <BaseButton variant="primary" @click="saveCalendar">Simpan</BaseButton>
       </template>
     </BaseModal>
 
+    <!-- Confirm delete -->
     <ConfirmDialog
-      :show="!!confirmDeleteHoliday"
-      title="Hapus Hari Libur"
-      :message="`Apakah Anda yakin ingin menghapus '${confirmDeleteHoliday?.name}'?`"
+      :show="!!confirmDelete"
+      title="Hapus Kalender"
+      :message="`Apakah Anda yakin ingin menghapus kalender '${confirmDelete?.name}'?`"
       confirm-text="Hapus"
       variant="danger"
-      @confirm="deleteHoliday"
-      @cancel="confirmDeleteHoliday = null"
+      @confirm="deleteCalendar"
+      @cancel="confirmDelete = null"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
-import DataTable from '../../../../Components/Table/DataTable.vue'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useScheduleStore } from '../../../../Stores/schedule'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
-import Badge from '../../../../Components/Badge.vue'
 import TextInput from '../../../../Components/TextInput.vue'
-import SelectInput from '../../../../Components/SelectInput.vue'
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
-import { IconPlus, IconSearch, IconTrash } from '../../../../Components/Icons/index.js'
+import { IconPlus, IconPencil, IconTrash } from '../../../../Components/Icons/index.js'
 
-const selectedYear = ref(2026)
-const holidaySearch = ref('')
-const showHolidayModal = ref(false)
-const confirmDeleteHoliday = ref(null)
+const store = useScheduleStore()
+const router = useRouter()
 
-const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
-const monthDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-
-const holidays = ref([
-  { id: 1, date: '2026-01-01', name: 'Tahun Baru Masehi', type: 'Nasional', description: 'Tahun Baru 2026' },
-  { id: 2, date: '2026-01-29', name: 'Tahun Baru Imlek 2577', type: 'Nasional', description: 'Tahun Baru Imlek' },
-  { id: 3, date: '2026-02-18', name: 'Isra Miraj Nabi Muhammad SAW', type: 'Nasional', description: 'Isra Miraj 1447 H' },
-  { id: 4, date: '2026-03-20', name: 'Idul Fitri 1447 H (Hari Pertama)', type: 'Nasional', description: 'Hari Raya Idul Fitri' },
-  { id: 5, date: '2026-03-21', name: 'Idul Fitri 1447 H (Hari Kedua)', type: 'Nasional', description: 'Hari Raya Idul Fitri' },
-  { id: 6, date: '2026-03-22', name: 'Cuti Bersama Idul Fitri', type: 'Cuti Bersama', description: 'Cuti bersama Idul Fitri' },
-  { id: 7, date: '2026-05-01', name: 'Hari Buruh Internasional', type: 'Nasional', description: 'May Day' },
-  { id: 8, date: '2026-05-26', name: 'Waisak 2570', type: 'Nasional', description: 'Hari Raya Waisak' },
-  { id: 9, date: '2026-05-27', name: 'Kenaikan Yesus Kristus', type: 'Nasional', description: 'Kenaikan Isa Almasih' },
-  { id: 10, date: '2026-08-17', name: 'HUT Kemerdekaan RI Ke-81', type: 'Nasional', description: 'Hari Kemerdekaan Republik Indonesia' },
-  { id: 11, date: '2026-12-25', name: 'Hari Raya Natal', type: 'Nasional', description: 'Natal 2026' },
-  { id: 12, date: '2026-09-15', name: 'Ulang Tahun Perusahaan', type: 'Perusahaan', description: 'HUT Perusahaan ke-15' },
-])
-
-const calendarData = computed(() => {
-  return monthNames.map((name, i) => ({
-    name,
-    monthIdx: i,
-    days: monthDays[i],
-  }))
+onMounted(() => {
+  store.fetchCalendars()
 })
 
-const holidayDateMap = computed(() => {
-  const map = {}
-  for (const h of holidays.value) {
-    const [y, m, d] = h.date.split('-')
-    if (parseInt(y) === selectedYear.value) {
-      map[`${parseInt(m)}-${parseInt(d)}`] = h
-    }
-  }
-  return map
-})
+const searchValue = ref('')
+const yearFilter = ref('')
 
-function cellClasses(month, day) {
-  const key = `${month.monthIdx + 1}-${day}`
-  const holiday = holidayDateMap.value[key]
-  const base = 'w-7 h-7 flex items-center justify-center text-xs rounded-sm cursor-pointer transition-colors'
-
-  if (holiday) {
-    if (holiday.type === 'Nasional') return `${base} bg-(--danger)/20 text-(--danger) font-medium`
-    if (holiday.type === 'Cuti Bersama') return `${base} bg-(--warning)/20 text-(--warning) font-medium`
-    return `${base} bg-(--primary)/20 text-(--primary) font-medium`
-  }
-
-  const isWeekend = getDayOfWeek(selectedYear.value, month.monthIdx, day)
-  if (isWeekend === 0 || isWeekend === 6) {
-    return `${base} bg-(--danger)/10 text-(--text-soft) hover:bg-(--bg-elevated)`
-  }
-
-  return `${base} text-(--text-main) bg-(--success)/10 hover:bg-(--success)/20`
-}
-
-function getDayOfWeek(year, month, day) {
-  const d = new Date(year, month, day)
-  return d.getDay()
-}
-
-function getCellTooltip(month, day) {
-  const key = `${month.monthIdx + 1}-${day}`
-  const holiday = holidayDateMap.value[key]
-  return holiday ? holiday.name : `${day} ${month.name} ${selectedYear.value}`
-}
-
-function handleCellClick(month, day) {
-  const key = `${month.monthIdx + 1}-${day}`
-  const holiday = holidayDateMap.value[key]
-  if (holiday) {
-    confirmDeleteHoliday.value = holiday
-    return
-  }
-  showHolidayModal.value = true
-  const mm = String(month.monthIdx + 1).padStart(2, '0')
-  const dd = String(day).padStart(2, '0')
-  holidayForm.date = `${selectedYear.value}-${mm}-${dd}`
-}
-
-const holidayHeaders = [
-  { key: 'date', label: 'Tanggal' },
-  { key: 'name', label: 'Nama' },
-  { key: 'type', label: 'Tipe' },
-  { key: 'description', label: 'Deskripsi' },
-  { key: 'actions', label: 'Aksi', sortable: false, width: '80px' },
+const days = [
+  { value: 0, label: 'Minggu' },
+  { value: 1, label: 'Senin' },
+  { value: 2, label: 'Selasa' },
+  { value: 3, label: 'Rabu' },
+  { value: 4, label: 'Kamis' },
+  { value: 5, label: 'Jumat' },
+  { value: 6, label: 'Sabtu' },
 ]
 
-const filteredHolidays = computed(() => {
-  if (!holidaySearch.value) return holidays.value
-  const q = holidaySearch.value.toLowerCase()
-  return holidays.value.filter((h) => h.name.toLowerCase().includes(q) || h.type.toLowerCase().includes(q))
+const availableYears = computed(() => {
+  const years = new Set()
+  store.calendars.forEach(c => years.add(c.year))
+  return Array.from(years).sort((a, b) => b - a)
 })
 
-const holidayForm = reactive({ date: '', name: '', type: 'Nasional', description: '' })
-
-function addHoliday() {
-  holidays.value.push({
-    id: holidays.value.length + 1,
-    date: holidayForm.date,
-    name: holidayForm.name,
-    type: holidayForm.type,
-    description: holidayForm.description,
+const filteredCalendars = computed(() => {
+  return store.calendars.filter(cal => {
+    const matchesSearch = cal.name.toLowerCase().includes(searchValue.value.toLowerCase())
+    const matchesYear = !yearFilter.value || cal.year === parseInt(yearFilter.value)
+    return matchesSearch && matchesYear
   })
-  showHolidayModal.value = false
-  holidayForm.date = ''
-  holidayForm.name = ''
-  holidayForm.type = 'Nasional'
-  holidayForm.description = ''
+})
+
+const formVisible = ref(null)
+const editingItem = ref(null)
+const confirmDelete = ref(null)
+
+const form = reactive({
+  name: '',
+  year: 2026,
+  weekend_days: [0, 6],
+})
+
+function openForm(item) {
+  editingItem.value = item
+  if (item) {
+    form.name = item.name
+    form.year = item.year
+    form.weekend_days = [...(item.weekend_days || [])]
+  } else {
+    form.name = ''
+    form.year = 2026
+    form.weekend_days = [0, 6]
+  }
+  formVisible.value = {}
 }
 
-function deleteHoliday() {
-  if (confirmDeleteHoliday.value) {
-    holidays.value = holidays.value.filter((h) => h.id !== confirmDeleteHoliday.value.id)
-    confirmDeleteHoliday.value = null
+function saveCalendar() {
+  const item = {
+    id: editingItem.value?.id || store.calendars.length + 1,
+    name: form.name,
+    year: form.year,
+    weekend_days: [...form.weekend_days],
+    holidays: editingItem.value?.holidays || [],
+  }
+  
+  if (editingItem.value?.id) {
+    const idx = store.calendars.findIndex(c => c.id === editingItem.value.id)
+    if (idx !== -1) store.calendars[idx] = item
+  } else {
+    store.calendars.push(item)
+  }
+  
+  formVisible.value = null
+  editingItem.value = null
+}
+
+function deleteCalendar() {
+  if (confirmDelete.value) {
+    store.calendars = store.calendars.filter(c => c.id !== confirmDelete.value.id)
+    confirmDelete.value = null
   }
 }
 </script>
