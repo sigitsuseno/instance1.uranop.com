@@ -2,11 +2,12 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
-use App\Modules\Leave\Models\LeaveType;
-use App\Modules\Leave\Models\LeavePolicy;
 use App\Modules\Leave\Models\LeavePeriod;
+use App\Modules\Leave\Models\LeavePolicy;
+use App\Modules\Leave\Models\LeaveType;
+use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class LeaveSettingsSeeder extends Seeder
 {
@@ -23,6 +24,7 @@ class LeaveSettingsSeeder extends Seeder
         // --- 1. Leave Types (12 tipe lengkap) ---
         $types = [
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CT',
                 'name' => 'Cuti Tahunan',
                 'category' => 'leave',
@@ -35,6 +37,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#10b981',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CM',
                 'name' => 'Cuti Menikah',
                 'category' => 'special',
@@ -47,6 +50,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#f59e0b',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CKM',
                 'name' => 'Cuti Keluarga Meninggal',
                 'category' => 'special',
@@ -59,6 +63,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#6366f1',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CH',
                 'name' => 'Cuti Hajatan',
                 'category' => 'special',
@@ -71,6 +76,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#ec4899',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CTM',
                 'name' => 'Cuti Melahirkan',
                 'category' => 'special',
@@ -83,6 +89,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#8b5cf6',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CTK',
                 'name' => 'Cuti Keguguran',
                 'category' => 'special',
@@ -95,6 +102,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#ef4444',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'SKT',
                 'name' => 'Sakit',
                 'category' => 'sick',
@@ -107,6 +115,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#f87171',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CTH',
                 'name' => 'Cuti Haid',
                 'category' => 'special',
@@ -119,6 +128,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#fb7185',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'CTI',
                 'name' => 'Cuti Ibadah',
                 'category' => 'special',
@@ -131,6 +141,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#3b82f6',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'ITM',
                 'name' => 'Izin Tidak Masuk',
                 'category' => 'permit',
@@ -143,6 +154,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#6b7280',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'IMT',
                 'name' => 'Izin Masuk Terlambat',
                 'category' => 'permit',
@@ -155,6 +167,7 @@ class LeaveSettingsSeeder extends Seeder
                 'color_hex' => '#94a3b8',
             ],
             [
+                'uuid' => Str::uuid()->toString(),
                 'code' => 'IPA',
                 'name' => 'Izin Pulang Awal',
                 'category' => 'permit',
@@ -187,6 +200,7 @@ class LeaveSettingsSeeder extends Seeder
         LeavePolicy::truncate();
 
         LeavePolicy::create([
+            'uuid' => Str::uuid()->toString(),
             'leave_type_id' => $annualLeave->id,
             'name' => 'Kebijakan Cuti Tahunan Standar',
             'description' => 'Berlaku untuk semua karyawan yang telah mencapai 1 tahun masa kerja.',
@@ -197,6 +211,7 @@ class LeaveSettingsSeeder extends Seeder
         ]);
 
         LeavePolicy::create([
+            'uuid' => Str::uuid()->toString(),
             'leave_type_id' => $sickLeave->id,
             'name' => 'Kebijakan Cuti Sakit',
             'description' => 'Sakit dengan atau tanpa surat dokter.',
@@ -207,6 +222,7 @@ class LeaveSettingsSeeder extends Seeder
         ]);
 
         LeavePolicy::create([
+            'uuid' => Str::uuid()->toString(),
             'leave_type_id' => $permitLeave->id,
             'name' => 'Kebijakan Izin Pribadi',
             'description' => 'Izin khusus keperluan pribadi dengan jatah 3 hari setahun.',
@@ -217,6 +233,7 @@ class LeaveSettingsSeeder extends Seeder
         ]);
 
         LeavePolicy::create([
+            'uuid' => Str::uuid()->toString(),
             'leave_type_id' => $maternityLeave->id,
             'name' => 'Kebijakan Cuti Melahirkan',
             'description' => 'Cuti selama 3 bulan untuk melahirkan.',
@@ -230,6 +247,7 @@ class LeaveSettingsSeeder extends Seeder
         // Jangan truncate periods — bisa jadi sudah ada data generate
         if (LeavePeriod::count() === 0) {
             LeavePeriod::create([
+                'uuid' => Str::uuid()->toString(),
                 'name' => 'Periode 2025-2026 (Pasca Lebaran)',
                 'start_date' => '2025-04-10',
                 'end_date' => '2026-03-18',
@@ -237,6 +255,7 @@ class LeaveSettingsSeeder extends Seeder
             ]);
 
             LeavePeriod::create([
+                'uuid' => Str::uuid()->toString(),
                 'name' => 'Periode 2026-2027 (Pasca Lebaran)',
                 'start_date' => '2026-03-19',
                 'end_date' => '2027-03-08',
