@@ -130,7 +130,7 @@ import BaseButton from '../../../Components/BaseButton.vue'
 import Badge from '../../../Components/Badge.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { IconDownload, IconUpload, IconTrash } from '../../../Components/Icons/index.js'
-import { useApi } from '../../../Composables/useApi.js'
+import { useApi } from '../../../composables/useApi.js'
 
 const { post, get } = useApi()
 

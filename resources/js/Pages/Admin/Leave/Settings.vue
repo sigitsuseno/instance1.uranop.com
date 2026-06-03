@@ -193,8 +193,8 @@ import SelectInput from '../../../Components/SelectInput.vue'
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { IconPlus, IconPencil, IconTrash } from '../../../Components/Icons/index.js'
-import { useApi } from '../../../Composables/useApi'
-import { useNotification } from '../../../Composables/useNotification'
+import { useApi } from '../../../composables/useApi'
+import { useNotification } from '../../../composables/useNotification'
 
 const api = useApi()
 const notify = useNotification()
