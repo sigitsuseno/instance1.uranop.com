@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('leave_types', function (Blueprint $table) {
             $table->id();
-            $table->uuid('uuid')->unique();
+            $table->uuid('uuid')->nullable()->unique();
             $table->string('code')->unique();
             $table->string('name');
             $table->enum('category', ['leave', 'permit', 'sick', 'special']);
