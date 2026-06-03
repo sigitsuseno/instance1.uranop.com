@@ -203,18 +203,19 @@ class LeaveApiController extends Controller
                 $additions = EmployeeLeave::where('employee_id', $employee->id)
                     ->where('leave_type_id', $type->id)
                     ->where('leave_period_id', $periodId)
-                    ->where('transaction_type', 'addition')
+                    ->where('transaction_type', 'increment')
                     ->sum('amount');
 
                 $deductions = EmployeeLeave::where('employee_id', $employee->id)
                     ->where('leave_type_id', $type->id)
                     ->where('leave_period_id', $periodId)
-                    ->where('transaction_type', 'deduction')
+                    ->where('transaction_type', 'decrement')
                     ->sum('amount');
 
                 $remaining = $additions - $deductions;
 
-                if ($additions > 0 || $deductions > 0 || $type->balance_type === 'decrement') {
+                // Hanya tampilkan jika ada data kuota (addition/deduction) — jangan tampilin row kosong
+                if ($additions > 0 || $deductions > 0) {
                     $balances[] = [
                         'employee_id' => $employee->id,
                         'employee_name' => $employee->name,
@@ -271,25 +272,30 @@ class LeaveApiController extends Controller
                     continue;
                 }
 
-                // Check if entitlement already generated for this employee, leave type and period
-                $exists = EmployeeLeave::where('employee_id', $employee->id)
-                    ->where('leave_type_id', $policy->leave_type_id)
-                    ->where('leave_period_id', $period->id)
-                    ->where('transaction_type', 'addition')
-                    ->exists();
+                // Gunakan firstOrCreate agar atomic (didukung unique constraint di DB)
+                try {
+                    $employeeLeave = EmployeeLeave::firstOrCreate(
+                        [
+                            'employee_id' => $employee->id,
+                            'leave_type_id' => $policy->leave_type_id,
+                            'leave_period_id' => $period->id,
+                            'transaction_type' => 'increment',
+                            'reference_id' => 0,
+                        ],
+                        [
+                            'amount' => $policy->entitlement_days,
+                            'description' => 'Generate Kuota ' . $policy->name,
+                            'created_by' => Auth::id(),
+                            'updated_by' => Auth::id(),
+                        ]
+                    );
 
-                if (!$exists) {
-                    EmployeeLeave::create([
-                        'employee_id' => $employee->id,
-                        'leave_type_id' => $policy->leave_type_id,
-                        'leave_period_id' => $period->id,
-                        'transaction_type' => 'addition',
-                        'amount' => $policy->entitlement_days,
-                        'description' => 'Generate Kuota ' . $policy->name,
-                        'created_by' => Auth::id(),
-                        'updated_by' => Auth::id(),
-                    ]);
-                    $generatedCount++;
+                    if ($employeeLeave->wasRecentlyCreated) {
+                        $generatedCount++;
+                    }
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+                    // Duplicate entry — skip, already exists (race condition handling)
+                    continue;
                 }
             }
 
@@ -339,13 +345,13 @@ class LeaveApiController extends Controller
                         $additions = EmployeeLeave::where('employee_id', $employee->id)
                             ->where('leave_type_id', $type->id)
                             ->where('leave_period_id', $period->id)
-                            ->where('transaction_type', 'addition')
+                            ->where('transaction_type', 'increment')
                             ->sum('amount');
 
                         $deductions = EmployeeLeave::where('employee_id', $employee->id)
                             ->where('leave_type_id', $type->id)
                             ->where('leave_period_id', $period->id)
-                            ->where('transaction_type', 'deduction')
+                            ->where('transaction_type', 'decrement')
                             ->sum('amount');
 
                         $remaining = $additions - $deductions;
@@ -356,7 +362,7 @@ class LeaveApiController extends Controller
                                 'employee_id' => $employee->id,
                                 'leave_type_id' => $type->id,
                                 'leave_period_id' => $period->id,
-                                'transaction_type' => 'deduction',
+                                'transaction_type' => 'decrement',
                                 'amount' => $remaining,
                                 'description' => 'Penghangusan Akhir Periode (Carry Forward False)',
                                 'created_by' => Auth::id(),

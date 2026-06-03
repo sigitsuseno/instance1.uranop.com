@@ -15,51 +15,177 @@ class LeaveSettingsSeeder extends Seeder
      */
     public function run(): void
     {
-        // Untuk menghindari foreign key constraint error jika mau di reset
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        LeaveType::truncate();
+
+        // Bersihkan tipe lama yang sudah tidak dipakai (kode AL, SK, PM, ML)
+        LeaveType::whereIn('code', ['AL', 'SK', 'PM', 'ML'])->delete();
+
+        // --- 1. Leave Types (12 tipe lengkap) ---
+        $types = [
+            [
+                'code' => 'CT',
+                'name' => 'Cuti Tahunan',
+                'category' => 'leave',
+                'balance_type' => 'decrement',
+                'is_paid' => true,
+                'max_days' => 12,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#10b981',
+            ],
+            [
+                'code' => 'CM',
+                'name' => 'Cuti Menikah',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 3,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#f59e0b',
+            ],
+            [
+                'code' => 'CKM',
+                'name' => 'Cuti Keluarga Meninggal',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 3,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#6366f1',
+            ],
+            [
+                'code' => 'CH',
+                'name' => 'Cuti Hajatan',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 3,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#ec4899',
+            ],
+            [
+                'code' => 'CTM',
+                'name' => 'Cuti Melahirkan',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 90,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => true,
+                'color_hex' => '#8b5cf6',
+            ],
+            [
+                'code' => 'CTK',
+                'name' => 'Cuti Keguguran',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 45,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => true,
+                'color_hex' => '#ef4444',
+            ],
+            [
+                'code' => 'SKT',
+                'name' => 'Sakit',
+                'category' => 'sick',
+                'balance_type' => 'increment',
+                'is_paid' => true,
+                'max_days' => null,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => true,
+                'color_hex' => '#f87171',
+            ],
+            [
+                'code' => 'CTH',
+                'name' => 'Cuti Haid',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 2,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#fb7185',
+            ],
+            [
+                'code' => 'CTI',
+                'name' => 'Cuti Ibadah',
+                'category' => 'special',
+                'balance_type' => 'none',
+                'is_paid' => true,
+                'max_days' => 7,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#3b82f6',
+            ],
+            [
+                'code' => 'ITM',
+                'name' => 'Izin Tidak Masuk',
+                'category' => 'permit',
+                'balance_type' => 'decrement',
+                'is_paid' => false,
+                'max_days' => 3,
+                'affects_daily_worker' => true,
+                'affects_monthly_worker' => true,
+                'requires_medical_doc' => false,
+                'color_hex' => '#6b7280',
+            ],
+            [
+                'code' => 'IMT',
+                'name' => 'Izin Masuk Terlambat',
+                'category' => 'permit',
+                'balance_type' => 'none',
+                'is_paid' => false,
+                'max_days' => null,
+                'affects_daily_worker' => false,
+                'affects_monthly_worker' => false,
+                'requires_medical_doc' => false,
+                'color_hex' => '#94a3b8',
+            ],
+            [
+                'code' => 'IPA',
+                'name' => 'Izin Pulang Awal',
+                'category' => 'permit',
+                'balance_type' => 'none',
+                'is_paid' => false,
+                'max_days' => null,
+                'affects_daily_worker' => false,
+                'affects_monthly_worker' => false,
+                'requires_medical_doc' => false,
+                'color_hex' => '#cbd5e1',
+            ],
+        ];
+
+        // Upsert leave types — jaga agar ID existing tidak berubah jika code sama
+        foreach ($types as $type) {
+            LeaveType::updateOrCreate(
+                ['code' => $type['code']],
+                array_merge($type, ['is_active' => true])
+            );
+        }
+
+        // Ambil reference ke tipe yang digunakan di policies
+        $annualLeave = LeaveType::where('code', 'CT')->first();
+        $sickLeave = LeaveType::where('code', 'SKT')->first();
+        $permitLeave = LeaveType::where('code', 'ITM')->first();
+        $maternityLeave = LeaveType::where('code', 'CTM')->first();
+
+        // --- 2. Leave Policies ---
+        // Hapus policies lama yang referencenya mungkin berubah
         LeavePolicy::truncate();
-        LeavePeriod::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        // 1. Leave Types
-        $annualLeave = LeaveType::create([
-            'code' => 'AL',
-            'name' => 'Cuti Tahunan',
-            'category' => 'leave',
-            'balance_type' => 'decrement',
-            'is_paid' => true,
-            'max_days' => 12,
-        ]);
-
-        $sickLeave = LeaveType::create([
-            'code' => 'SK',
-            'name' => 'Sakit',
-            'category' => 'sick',
-            'balance_type' => 'increment',
-            'is_paid' => true,
-            'max_days' => null, // Tidak ada maksimal strict karena bisa lama dengan surat dokter
-        ]);
-
-        $permitLeave = LeaveType::create([
-            'code' => 'PM',
-            'name' => 'Izin Kepentingan Pribadi',
-            'category' => 'permit',
-            'balance_type' => 'decrement', // Misalnya dapat jatah izin 3 hari setahun tanpa potong cuti
-            'is_paid' => false, // Potong gaji jika izin melebihi batas atau secara default
-            'max_days' => 3,
-        ]);
-
-        $maternityLeave = LeaveType::create([
-            'code' => 'ML',
-            'name' => 'Cuti Melahirkan',
-            'category' => 'special',
-            'balance_type' => 'none',
-            'is_paid' => true,
-            'max_days' => 90,
-        ]);
-
-        // 2. Leave Policies
         LeavePolicy::create([
             'leave_type_id' => $annualLeave->id,
             'name' => 'Kebijakan Cuti Tahunan Standar',
@@ -77,7 +203,7 @@ class LeaveSettingsSeeder extends Seeder
             'requires_one_year_service' => false,
             'can_carry_forward' => false,
             'max_carry_forward_days' => 0,
-            'entitlement_days' => 0, // Tidak dicatat sebagai kuota awal (karena balance_type = increment)
+            'entitlement_days' => 0,
         ]);
 
         LeavePolicy::create([
@@ -97,24 +223,27 @@ class LeaveSettingsSeeder extends Seeder
             'requires_one_year_service' => false,
             'can_carry_forward' => false,
             'max_carry_forward_days' => 0,
-            'entitlement_days' => 90, // Sebagai patokan
+            'entitlement_days' => 90,
         ]);
 
-        // 3. Leave Periods (Berbasis Idul Fitri)
-        // Misal Idul Fitri 2025: 31 Maret 2025
-        LeavePeriod::create([
-            'name' => 'Periode 2025-2026 (Pasca Lebaran)',
-            'start_date' => '2025-04-10',
-            'end_date' => '2026-03-18', // Sebelum Lebaran 2026 (sekitar 19 Maret 2026)
-            'status' => 'active',
-        ]);
+        // --- 3. Leave Periods ---
+        // Jangan truncate periods — bisa jadi sudah ada data generate
+        if (LeavePeriod::count() === 0) {
+            LeavePeriod::create([
+                'name' => 'Periode 2025-2026 (Pasca Lebaran)',
+                'start_date' => '2025-04-10',
+                'end_date' => '2026-03-18',
+                'status' => 'active',
+            ]);
 
-        // Misal Idul Fitri 2026: 19 Maret 2026
-        LeavePeriod::create([
-            'name' => 'Periode 2026-2027 (Pasca Lebaran)',
-            'start_date' => '2026-03-25',
-            'end_date' => '2027-03-08',
-            'status' => 'active',
-        ]);
+            LeavePeriod::create([
+                'name' => 'Periode 2026-2027 (Pasca Lebaran)',
+                'start_date' => '2026-03-19',
+                'end_date' => '2027-03-08',
+                'status' => 'active',
+            ]);
+        }
+
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
     }
 }

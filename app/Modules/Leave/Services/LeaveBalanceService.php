@@ -62,7 +62,7 @@ class LeaveBalanceService
                             'employee_id' => $emp->id,
                             'leave_type_id' => $policy->leave_type_id,
                             'leave_period_id' => $activePeriod->id,
-                            'transaction_type' => 'addition',
+                            'transaction_type' => 'increment',
                             'amount' => $policy->entitlement_days,
                             'description' => 'Kuota 1 Tahun Masa Kerja',
                         ]);

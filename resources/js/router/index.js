@@ -29,7 +29,7 @@ const DocumentsIndex = () => import('../Pages/Admin/Employees/Documents/Index.vu
 const TerminationsIndex = () => import('../Pages/Admin/Employees/Terminations/Index.vue')
 const AttendanceIndex = () => import('../Pages/Admin/Attendance/Index.vue')
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
-const RosterIndex = () => import('../Pages/Admin/Attendance/Roster.vue')
+const RosterIndex = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const OvertimeIndex = () => import('../Pages/Admin/Attendance/Overtime/Index.vue')
 const LeaveIndex = () => import('../Pages/Admin/Leave/Index.vue')
 const LeaveApprovals = () => import('../Pages/Admin/Leave/Approvals.vue')

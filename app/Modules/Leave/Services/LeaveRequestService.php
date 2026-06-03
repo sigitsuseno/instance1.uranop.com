@@ -19,13 +19,13 @@ class LeaveRequestService
         $additions = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
             ->where('leave_period_id', $periodId)
-            ->where('transaction_type', 'addition')
+            ->where('transaction_type', 'increment')
             ->sum('amount');
             
         $deductions = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
             ->where('leave_period_id', $periodId)
-            ->where('transaction_type', 'deduction')
+            ->where('transaction_type', 'decrement')
             ->sum('amount');
             
         return $additions - $deductions;
@@ -108,7 +108,7 @@ class LeaveRequestService
                         'leave_type_id' => $leaveType->id,
                         'leave_period_id' => $period->id,
                         'reference_id' => $request->id,
-                        'transaction_type' => 'deduction',
+                        'transaction_type' => 'decrement',
                         'amount' => $request->days_requested,
                         'description' => 'Approval Pengajuan Cuti #' . $request->id,
                         'created_by' => $user->id,
@@ -116,6 +116,22 @@ class LeaveRequestService
                     ]);
                 }
             }
+
+            // Update sch_employee_shift_rosters: set external_code sesuai kode leave type
+            // Kalo ga ada roster record → update 0 rows (skip, no error)
+            $isLeave = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
+            $isPermit = ($leaveType->category === 'permit') ? 1 : 0;
+
+            DB::table('sch_employee_shift_rosters')
+                ->where('employee_id', $request->employee_id)
+                ->whereBetween('date', [$request->start_date, $request->end_date])
+                ->update([
+                    'external_code' => $leaveType->code,
+                    'is_leave' => $isLeave,
+                    'is_permit' => $isPermit,
+                    'leave_id' => $request->id,
+                    'updated_at' => now(),
+                ]);
         });
 
         return $request;
@@ -175,7 +191,7 @@ class LeaveRequestService
                             'leave_type_id' => $leaveType->id,
                             'leave_period_id' => $period->id,
                             'reference_id' => $request->id,
-                            'transaction_type' => 'addition', // KOMPENSASI PENGEMBALIAN
+                            'transaction_type' => 'increment', // KOMPENSASI PENGEMBALIAN
                             'amount' => $request->days_requested,
                             'description' => 'Kompensasi Pembatalan Cuti #' . $request->id,
                             'created_by' => $user->id,

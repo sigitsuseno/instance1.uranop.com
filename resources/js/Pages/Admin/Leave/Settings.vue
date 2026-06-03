@@ -378,10 +378,21 @@ function deletePolicy(item) {
 }
 
 // --- Periods Methods ---
+function formatDateForInput(date) {
+  if (!date) return ''
+  // API returns ISO 8601 (e.g. 2026-06-02T00:00:00.000000Z), input[type=date] needs YYYY-MM-DD
+  return date.split('T')[0]
+}
+
 function openPeriodForm(item) {
   if (item) {
     editingPeriod.value = item
-    Object.assign(periodForm, item)
+    Object.assign(periodForm, {
+      name: item.name,
+      start_date: formatDateForInput(item.start_date),
+      end_date: formatDateForInput(item.end_date),
+      status: item.status,
+    })
   } else {
     editingPeriod.value = null
     Object.assign(periodForm, { name: '', start_date: '', end_date: '', status: 'active' })

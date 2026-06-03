@@ -20,6 +20,11 @@ class LeaveType extends Model
         'balance_type',
         'is_paid',
         'max_days',
+        'affects_daily_worker',
+        'affects_monthly_worker',
+        'requires_medical_doc',
+        'color_hex',
+        'is_active',
     ];
 
     protected $searchableFields = ['code', 'name', 'category'];
@@ -29,6 +34,10 @@ class LeaveType extends Model
         return [
             'is_paid' => 'boolean',
             'max_days' => 'integer',
+            'affects_daily_worker' => 'boolean',
+            'affects_monthly_worker' => 'boolean',
+            'requires_medical_doc' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 

@@ -277,7 +277,7 @@
                   variant="primary"
                   @click="showConfirmGenerate = true"
                   :loading="generating"
-                  :disabled="periods.length === 0 || !selectedPeriodId || !selectedPolicyId || currentPeriodStatus === 'closed'"
+                  :disabled="periods.length === 0 || !selectedPeriodId || !selectedPolicyId || currentPeriodStatus === 'closed' || generating"
                 >
                   <template #icon-left>
                     <i class="bx bx-magic-wand text-base"></i>
