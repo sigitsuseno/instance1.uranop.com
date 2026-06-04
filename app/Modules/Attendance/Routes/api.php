@@ -32,45 +32,6 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.logs.delete-batch');
     });
 
-    // ========== ATTENDANCE CONFIGS ==========
-
-    Route::prefix('attendance/configs')->group(function () {
-        Route::get('/', [AttendanceApiController::class, 'configs'])
-            ->name('attendance.configs.index');
-        Route::put('/', [AttendanceApiController::class, 'updateConfigs'])
-            ->name('attendance.configs.update');
-    });
-
-    // ========== SCAN DETECTION CONFIGS ==========
-
-    Route::prefix('attendance/scan-configs')->group(function () {
-        Route::get('/', [AttendanceApiController::class, 'scanConfigs'])
-            ->name('attendance.scan-configs.index');
-        Route::post('/', [AttendanceApiController::class, 'storeScanConfig'])
-            ->name('attendance.scan-configs.store');
-        Route::put('/{id}', [AttendanceApiController::class, 'updateScanConfig'])
-            ->name('attendance.scan-configs.update');
-        Route::delete('/{id}', [AttendanceApiController::class, 'deleteScanConfig'])
-            ->name('attendance.scan-configs.destroy');
-    });
-
-    // ========== ATTENDANCE RECORDS ==========
-
-    Route::prefix('attendance/records')->group(function () {
-        Route::get('/', [AttendanceApiController::class, 'records'])
-            ->name('attendance.records.index');
-        Route::get('/{id}', [AttendanceApiController::class, 'showRecord'])
-            ->name('attendance.records.show');
-        Route::put('/{id}', [AttendanceApiController::class, 'updateRecord'])
-            ->name('attendance.records.update');
-    });
-
-    // ========== ATTENDANCE SUMMARIES ==========
-
-    Route::prefix('attendance/summaries')->group(function () {
-        Route::get('/', [AttendanceApiController::class, 'summaries'])
-            ->name('attendance.summaries.index');
-    });
 
     // ========== ATTENDANCE PREPARE (Core: Sync, Lengkapi, Hitung Lembur, Lock) ==========
 
@@ -89,28 +50,5 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.prepare.lock');
     });
 
-    // ========== ATTENDANCE PROCESSING ==========
-
-    Route::prefix('attendance/process')->group(function () {
-        Route::post('/autolog', [AttendanceApiController::class, 'processAutolog'])
-            ->name('attendance.process.autolog');
-        Route::post('/generate-records', [AttendanceApiController::class, 'processGenerateRecords'])
-            ->name('attendance.process.generate-records');
-        Route::post('/generate-summary', [AttendanceApiController::class, 'processGenerateSummary'])
-            ->name('attendance.process.generate-summary');
-    });
-
-    // ========== OVERTIME ==========
-
-    Route::prefix('attendance/overtimes')->group(function () {
-        Route::get('/', [AttendanceApiController::class, 'overtimes'])
-            ->name('attendance.overtimes.index');
-        Route::post('/', [AttendanceApiController::class, 'storeOvertime'])
-            ->name('attendance.overtimes.store');
-        Route::put('/{id}/approve', [AttendanceApiController::class, 'approveOvertime'])
-            ->name('attendance.overtimes.approve');
-        Route::delete('/{id}', [AttendanceApiController::class, 'deleteOvertime'])
-            ->name('attendance.overtimes.destroy');
-    });
 
 });
