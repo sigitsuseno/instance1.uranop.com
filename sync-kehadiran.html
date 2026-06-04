@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sync Kehadiran - Uranop</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f6f9;
+    --sidebar-bg: #1e2535;
+    --sidebar-active: #2d3748;
+    --sidebar-text: #a0aec0;
+    --sidebar-text-active: #ffffff;
+    --sidebar-accent: #4f8ef7;
+    --topbar-bg: #ffffff;
+    --card-bg: #ffffff;
+    --border: #e2e8f0;
+    --text-primary: #1a202c;
+    --text-secondary: #718096;
+    --text-muted: #a0aec0;
+    --blue: #4f8ef7;
+    --blue-light: #ebf2ff;
+    --green: #38a169;
+    --green-light: #f0fff4;
+    --orange: #dd6b20;
+    --orange-light: #fffaf0;
+    --date-active: #1a202c;
+    --date-inactive: #ffffff;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 4px rgba(0,0,0,0.07);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
+    font-size: 13.5px;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 210px;
+    min-height: 100vh;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 24px;
+    flex-shrink: 0;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+
+  .sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 18px 18px;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--blue);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #fff; font-size: 15px;
+  }
+
+  .logo-text {
+    font-weight: 700; font-size: 16px;
+    color: #fff; letter-spacing: 0.3px;
+  }
+
+  .sidebar-menu {
+    flex: 1;
+    padding: 12px 0;
+    overflow-y: auto;
+  }
+
+  .menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 18px;
+    color: var(--sidebar-text);
+    cursor: pointer;
+    font-size: 13px; font-weight: 500;
+    border-radius: 0;
+    transition: background 0.15s, color 0.15s;
+    user-select: none;
+    position: relative;
+  }
+
+  .menu-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+
+  .menu-item.active {
+    background: rgba(79,142,247,0.13);
+    color: var(--blue);
+  }
+
+  .menu-item.active::before {
+    content: '';
+    position: absolute; left: 0; top: 4px; bottom: 4px;
+    width: 3px; background: var(--blue);
+    border-radius: 0 3px 3px 0;
+  }
+
+  .menu-item svg { flex-shrink: 0; opacity: 0.7; }
+  .menu-item.active svg { opacity: 1; }
+
+  .menu-section {
+    font-size: 10px; font-weight: 700;
+    color: rgba(160,174,192,0.5);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    padding: 14px 18px 6px;
+  }
+
+  .menu-item .chevron {
+    margin-left: auto;
+    opacity: 0.5;
+    font-size: 10px;
+  }
+
+  .sub-menu { padding-left: 0; }
+
+  .sub-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 18px 7px 40px;
+    color: var(--sidebar-text);
+    cursor: pointer;
+    font-size: 12.5px; font-weight: 500;
+    transition: background 0.15s, color 0.15s;
+    position: relative;
+  }
+
+  .sub-item:hover { background: rgba(255,255,255,0.04); color: #e2e8f0; }
+
+  .sub-item.active {
+    color: var(--blue);
+    background: rgba(79,142,247,0.08);
+  }
+
+  .sub-item .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: 210px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* ── TOPBAR ── */
+  .topbar {
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--border);
+    height: 54px;
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+    position: sticky; top: 0; z-index: 50;
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  .topbar-back {
+    width: 28px; height: 28px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background 0.15s;
+  }
+  .topbar-back:hover { background: var(--bg); }
+
+  .topbar-title {
+    font-weight: 700; font-size: 15px;
+    color: var(--text-primary);
+  }
+
+  .badge {
+    padding: 2px 10px;
+    border-radius: 20px;
+    font-size: 11.5px; font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .badge-blue { background: var(--blue); color: #fff; }
+  .badge-gray { background: #edf2f7; color: var(--text-secondary); }
+
+  .topbar-right {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 14px;
+  }
+
+  .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background 0.15s;
+  }
+  .icon-btn:hover { background: var(--bg); }
+
+  .user-pill {
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer;
+    padding: 4px 10px 4px 4px;
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+  .user-pill:hover { background: var(--bg); }
+
+  .user-avatar {
+    width: 28px; height: 28px;
+    background: var(--blue);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 12px;
+  }
+
+  .user-info { line-height: 1.2; }
+  .user-name { font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+  .user-role { font-size: 11px; color: var(--text-muted); }
+
+  /* ── CONTENT ── */
+  .content {
+    padding: 24px;
+    flex: 1;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 22px;
+    flex-wrap: wrap; gap: 12px;
+  }
+
+  .page-title {
+    font-size: 22px; font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+  }
+
+  .btn-group {
+    display: flex; gap: 8px;
+  }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: var(--radius-sm);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    color: var(--text-primary);
+    transition: all 0.15s;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+
+  .btn:hover { background: var(--bg); border-color: #cbd5e0; }
+
+  .btn-primary {
+    background: var(--blue);
+    color: #fff;
+    border-color: var(--blue);
+  }
+
+  .btn-primary:hover { background: #3a7de8; border-color: #3a7de8; }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .card-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* ── PERIOD SELECT ── */
+  .period-select {
+    position: relative;
+  }
+
+  .period-select select {
+    appearance: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 7px 32px 7px 12px;
+    font-size: 12.5px; font-weight: 500;
+    font-family: inherit;
+    color: var(--text-primary);
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .period-select select:focus { border-color: var(--blue); }
+
+  .period-select::after {
+    content: '▾';
+    position: absolute; right: 10px; top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted); font-size: 11px;
+    pointer-events: none;
+  }
+
+  /* ── DATE NAV ── */
+  .date-nav {
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .date-nav-btn {
+    width: 30px; height: 30px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.15s;
+    font-size: 12px;
+  }
+
+  .date-nav-btn:hover { background: var(--bg); }
+
+  .date-chip {
+    width: 38px; height: 30px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .date-chip:hover { border-color: var(--blue); color: var(--blue); }
+
+  .date-chip.active {
+    background: var(--date-active);
+    color: #fff;
+    border-color: var(--date-active);
+  }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  thead th {
+    background: #f8fafc;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  thead th:not(:first-child):not(:nth-child(2)) {
+    text-align: center;
+    min-width: 120px;
+  }
+
+  tbody td {
+    padding: 0;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+
+  tbody tr:last-child td { border-bottom: none; }
+
+  .cell-name {
+    padding: 14px 16px;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-primary);
+    vertical-align: middle;
+    min-width: 150px;
+  }
+
+  .cell-ket {
+    padding: 10px 16px;
+    border-right: 1px solid var(--border);
+  }
+
+  .ket-label {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    line-height: 2;
+  }
+
+  .cell-day {
+    text-align: center;
+    padding: 10px 14px;
+    border-right: 1px solid var(--border);
+  }
+
+  .cell-day:last-child { border-right: none; }
+
+  .day-value {
+    font-size: 13px;
+    color: var(--text-primary);
+    font-weight: 500;
+    line-height: 2;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .day-value.time { color: var(--blue); }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 1px 8px;
+    border-radius: 20px;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.2px;
+  }
+
+  .status-hadir { background: var(--green-light); color: var(--green); }
+  .status-menunggu { background: #fef3c7; color: #b45309; }
+  .status-absen { background: #fff5f5; color: #c53030; }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--topbar-bg);
+    border-top: 1px solid var(--border);
+    padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 11.5px; color: var(--text-muted);
+  }
+
+  footer a { color: var(--text-secondary); text-decoration: none; }
+  footer a:hover { color: var(--blue); }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 6px; }
+  ::-webkit-scrollbar-thumb:hover { background: #a0aec0; }
+
+  @media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .main { margin-left: 0; }
+    .page-header { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">U</div>
+    <span class="logo-text">Uranop</span>
+  </div>
+
+  <nav class="sidebar-menu">
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h8M4 18h8"/></svg>
+      Data Master
+      <span class="chevron">›</span>
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Perusahaan
+      <span class="chevron">›</span>
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Data Karyawan
+      <span class="chevron">›</span>
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Jadwal Kerja
+      <span class="chevron">›</span>
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Pengelolaan Cuti
+      <span class="chevron" style="transform: rotate(90deg); display:inline-block;">›</span>
+    </div>
+    <div class="sub-menu">
+      <div class="sub-item"><span class="dot"></span> Cuti &amp; Izin</div>
+      <div class="sub-item"><span class="dot"></span> Approval Cuti</div>
+    </div>
+
+    <div class="menu-item active">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      Kehadiran
+      <span class="chevron" style="transform: rotate(90deg); display:inline-block;">›</span>
+    </div>
+    <div class="sub-menu">
+      <div class="sub-item"><span class="dot"></span> Import Kehadiran</div>
+      <div class="sub-item active"><span class="dot"></span> Sync Kehadiran</div>
+      <div class="sub-item"><span class="dot"></span> Data Kehadiran</div>
+      <div class="sub-item"><span class="dot"></span> Consecutive Day</div>
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Pengelolaan BPJS
+      <span class="chevron">›</span>
+    </div>
+
+    <div class="menu-item">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      Absensi
+      <span class="chevron" style="transform: rotate(90deg); display:inline-block;">›</span>
+    </div>
+    <div class="sub-menu">
+      <div class="sub-item"><span class="dot"></span> Import</div>
+      <div class="sub-item"><span class="dot"></span> Data Absensi</div>
+    </div>
+  </nav>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-back">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+    </div>
+    <span class="topbar-title">Import Log</span>
+    <span class="badge badge-blue">Admin</span>
+    <span class="badge badge-gray">Supervisor</span>
+
+    <div class="topbar-right">
+      <div class="icon-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      </div>
+      <div class="icon-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      </div>
+      <div class="user-pill">
+        <div class="user-avatar">S</div>
+        <div class="user-info">
+          <div class="user-name">Super Admin</div>
+          <div class="user-role">superadmin</div>
+        </div>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--text-muted);margin-left:2px"><path d="M6 9l6 6 6-6"/></svg>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT -->
+  <main class="content">
+    <div class="page-header">
+      <h1 class="page-title">Sync Kehadiran</h1>
+      <div class="btn-group">
+        <button class="btn btn-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Sync Kehadiran
+        </button>
+        <button class="btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
+          Lengkapi
+        </button>
+        <button class="btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+          Hitung Lembur
+        </button>
+        <button class="btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          Kunci
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-toolbar">
+        <div class="period-select">
+          <select>
+            <option>Periode Mei 2026 (25 Apr 2026 - 24 Mei 2026)</option>
+            <option>Periode Apr 2026 (25 Mar 2026 - 24 Apr 2026)</option>
+            <option>Periode Mar 2026 (25 Feb 2026 - 24 Mar 2026)</option>
+          </select>
+        </div>
+
+        <div class="date-nav">
+          <div class="date-nav-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+          </div>
+          <div class="date-chip">25</div>
+          <div class="date-chip">26</div>
+          <div class="date-chip">27</div>
+          <div class="date-chip">28</div>
+          <div class="date-chip active">29</div>
+          <div class="date-nav-btn">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nama</th>
+              <th>Ket.</th>
+              <th>25 April 2026</th>
+              <th>26 April 2026</th>
+              <th>27 April 2026</th>
+              <th>28 April 2026</th>
+              <th>29 April 2026</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cell-name">Sipulan</td>
+              <td class="cell-ket">
+                <div class="ket-label">Check In</div>
+                <div class="ket-label">Check Out</div>
+                <div class="ket-label">Lembur</div>
+                <div class="ket-label">Status</div>
+                <div class="ket-label">Review Status</div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:14</div>
+                <div class="day-value time">18:33</div>
+                <div class="day-value">2 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:14</div>
+                <div class="day-value time">18:33</div>
+                <div class="day-value">2 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:14</div>
+                <div class="day-value time">18:33</div>
+                <div class="day-value">2 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:14</div>
+                <div class="day-value time">18:33</div>
+                <div class="day-value">2 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:14</div>
+                <div class="day-value time">18:33</div>
+                <div class="day-value">2 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+            </tr>
+            <tr>
+              <td class="cell-name">Budi Santoso</td>
+              <td class="cell-ket">
+                <div class="ket-label">Check In</div>
+                <div class="ket-label">Check Out</div>
+                <div class="ket-label">Lembur</div>
+                <div class="ket-label">Status</div>
+                <div class="ket-label">Review Status</div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:05</div>
+                <div class="day-value time">17:50</div>
+                <div class="day-value">-</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:22</div>
+                <div class="day-value time">18:00</div>
+                <div class="day-value">-</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value" style="color:var(--text-muted)">—</div>
+                <div class="day-value" style="color:var(--text-muted)">—</div>
+                <div class="day-value">-</div>
+                <div class="day-value"><span class="status-pill status-absen">Absen</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:10</div>
+                <div class="day-value time">17:45</div>
+                <div class="day-value">1 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+              <td class="cell-day">
+                <div class="day-value time">08:00</div>
+                <div class="day-value time">18:15</div>
+                <div class="day-value">2 jam</div>
+                <div class="day-value"><span class="status-pill status-hadir">Hadir</span></div>
+                <div class="day-value"><span class="status-pill status-menunggu">Menunggu</span></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>© 2024 - 2026 Uranop Enterprise. All rights reserved.</span>
+    <span>
+      <a href="#">Uranop Enterprise</a> &nbsp;·&nbsp;
+      <a href="mailto:support@uranop.com">support@uranop.com</a>
+    </span>
+  </footer>
+</div>
+
+<script>
+  // Date chip click to toggle active
+  document.querySelectorAll('.date-chip').forEach(chip => {
+    chip.addEventListener('click', function() {
+      document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('active'));
+      this.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

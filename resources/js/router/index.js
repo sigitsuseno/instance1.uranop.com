@@ -30,6 +30,7 @@ const TerminationsIndex = () => import('../Pages/Admin/Employees/Terminations/In
 const AttendanceIndex = () => import('../Pages/Admin/Attendance/Index.vue')
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
+const SyncKehadiran = () => import('../Pages/Admin/Attendance/SyncKehadiran.vue')
 const OvertimeIndex = () => import('../Pages/Admin/Attendance/Overtime/Index.vue')
 const LeaveIndex = () => import('../Pages/Admin/Leave/Index.vue')
 const LeaveApprovals = () => import('../Pages/Admin/Leave/Approvals.vue')
@@ -110,6 +111,7 @@ const routes = [
       { path: 'attendance', name: 'attendance', component: AttendanceIndex, meta: { title: 'Absensi' } },
       { path: 'attendance/import', name: 'attendance.import', component: LogImport, meta: { title: 'Import Log' } },
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
+      { path: 'attendance/sync', name: 'attendance.sync', component: SyncKehadiran, meta: { title: 'Sync Kehadiran' } },
       { path: 'attendance/overtime', name: 'attendance.overtime', component: OvertimeIndex, meta: { title: 'Lembur' } },
       { path: 'leave', name: 'leave', component: LeaveIndex, meta: { title: 'Cuti' } },
       { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals, meta: { title: 'Approval Cuti' } },
