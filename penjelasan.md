@@ -5,3 +5,15 @@ untuk submenu Sync Kehadiran, didalamnya itu ada 4 proses.
 2. proses melengkapi, yaitu proses melengkapi data check_in dan check_out.
 3. proses perhitungan lembur, setelah lengkap kita mulai menghitung lembur, telat dll,
 4. proses lock/unlock, yaitu proses mengunci data
+
+yang sudah :
+
+1. Proses Sync
+
+Yang akan kita kerjakan :
+
+2. Proses melengkapi kemudian test kemudian lanjut ke
+3. proses menghitung lembur dan test kemudian lanjut ke
+4. proses lock/unlock
+
+## Detail Proses Hitung lembur.

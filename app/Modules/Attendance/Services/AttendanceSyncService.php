@@ -142,6 +142,23 @@ class AttendanceSyncService
             ->get()
             ->groupBy('employee_code');
 
+        // Overnight: juga ambil log besoknya
+        if ($roster->shift && $roster->shift->is_overnight) {
+            $nextDate = Carbon::parse($date)->addDay()->toDateString();
+            $nextLogs = RawLog::whereDate('scan_datetime', $nextDate)
+                ->orderBy('scan_datetime')
+                ->get()
+                ->groupBy('employee_code');
+            // Merge next day logs into main collection
+            foreach ($nextLogs as $code => $items) {
+                if (isset($logs[$code])) {
+                    $logs[$code] = $logs[$code]->merge($items)->sortBy('scan_datetime')->values();
+                } else {
+                    $logs[$code] = $items;
+                }
+            }
+        }
+
         return $this->processRoster($roster, $date, $logs);
     }
 
@@ -186,6 +203,18 @@ class AttendanceSyncService
         $empCode = $employee->nip ?? $employee->employee_code;
         $logs = $allLogs->get($empCode, collect());
 
+        // Overnight shift: perlu juga log dari hari berikutnya
+        if ($shift && $shift->is_overnight) {
+            $nextDateStr = Carbon::parse($dateStr)->addDay()->toDateString();
+            $nextDayLogs = RawLog::whereDate('scan_datetime', $nextDateStr)
+                ->where('employee_code', $empCode)
+                ->orderBy('scan_datetime')
+                ->get();
+            if ($nextDayLogs->isNotEmpty()) {
+                $logs = $logs->merge($nextDayLogs)->sortBy('scan_datetime')->values();
+            }
+        }
+
         // ── 3. Gak ada log ─────────────────────────────────────
         if ($logs->isEmpty()) {
             if ($isHoliday) {
@@ -224,8 +253,16 @@ class AttendanceSyncService
         $workPatternType = $roster->work_pattern_type ?? 'FIXED';
 
         $result = match ($workPatternType) {
-            'FIXED' => $this->detectFixed($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
-            default => $this->detectShift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'FIXED'       => $this->detectFixed($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'FLEX-SHIFT'  => $this->detectFlexShift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'SHIFT'       => $this->detectShift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'LONGSHIFT'   => $this->detectLongshift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'SPLIT'       => $this->detectSplit($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'FLEXI'       => $this->detectFlexi($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'HOURLY'      => $this->detectHourly($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'ON_CAL'      => $this->detectOnCall($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'SEASONAL'    => $this->detectSeasonal($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            default       => $this->detectShift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
         };
 
         return $this->savePrepare($roster, $dateStr, $shift, $result);
@@ -243,7 +280,13 @@ class AttendanceSyncService
         }
     }
 
-    // ─── Detectors ──────────────────────────────────────────────────
+    // ─── Detectors (ported from hris-system) ────────────────────────
+    //  Signature: detectXxx(Collection $logs, ?Shift $shift, string $dateStr,
+    //                        bool $isHoliday, bool $isSunday, EmployeeShiftRoster $roster): array
+    //  Return format: [check_in, check_out, status, has_in, has_out, is_holiday, is_sunday]
+    //
+    //  NOTE: Leave/permit checks are handled BEFORE detectors in processRoster().
+    //        Each detector only handles the matching of fingerprint logs.
 
     /**
      * FIXED: scan pertama = check_in, scan terakhir = check_out.
@@ -262,13 +305,10 @@ class AttendanceSyncService
         $checkIn  = $checkInLog ? Carbon::parse($checkInLog->scan_datetime) : null;
         $checkOut = $checkOutLog ? Carbon::parse($checkOutLog->scan_datetime) : null;
 
-        $hasBoth = $checkIn && $checkOut;
-        $hasOne  = ($checkIn && !$checkOut) || (!$checkIn && $checkOut);
-
         return [
             'check_in'    => $checkIn,
             'check_out'   => $checkOut,
-            'status'      => $hasBoth ? AttendancePrepare::STATUS_HADIR : AttendancePrepare::STATUS_HADIR,
+            'status'      => AttendancePrepare::STATUS_HADIR,
             'has_in'      => !is_null($checkIn),
             'has_out'     => !is_null($checkOut),
             'is_holiday'  => $isHoliday,
@@ -277,8 +317,82 @@ class AttendanceSyncService
     }
 
     /**
-     * SHIFT / FLEX_SHIFT / LONGSHIFT / SPLIT / FLEXI / HOURLY / ON_CALL / SEASONAL:
-     * Match scan dalam window check_in_start..check_in_end dan check_out_start..check_out_end.
+     * FLEX-SHIFT: Window matching + holiday config dari shift metadata.
+     * Port dari hris-system detectFlexShift().
+     */
+    protected function detectFlexShift(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        $isOffDay = $isSunday || $isHoliday;
+
+        // ── Holiday / Sunday: pakai holiday config ──────────────
+        if ($isOffDay) {
+            // Baca holiday config dari shift metadata
+            $metadata = $shift?->metadata ?? [];
+            if (is_string($metadata)) {
+                $metadata = json_decode($metadata, true) ?? [];
+            }
+            $holidayCheckInStart  = $metadata['holiday_check_in_start'] ?? '05:50:00';
+            $holidayCheckInTarget = $metadata['holiday_check_in_target'] ?? '10:00:00';
+            $holidayCheckOutTarget = $metadata['holiday_check_out_target'] ?? '19:00:00';
+            $holidayMaxHours = $metadata['holiday_max_work_hours'] ?? 11;
+
+            // Cari check_in: log setelah holiday_check_in_start
+            $checkInLog = $this->findLogAfterTime($logs, $dateStr, $holidayCheckInStart, $holidayCheckInTarget);
+            $checkIn = $checkInLog ? Carbon::parse($checkInLog->scan_datetime) : null;
+
+            // Cari check_out: log setelah check_in, sebelum max hours
+            $checkOut = null;
+            if ($checkIn) {
+                $maxCheckOutTime = (clone $checkIn)->addHours($holidayMaxHours);
+                $checkOutCandidates = $logs->filter(function (RawLog $log) use ($checkIn, $maxCheckOutTime) {
+                    $logTime = Carbon::parse($log->scan_datetime);
+                    return $logTime->gt($checkIn) && $logTime->lte($maxCheckOutTime);
+                });
+
+                if ($checkOutCandidates->isNotEmpty()) {
+                    $checkOutLog = $this->findClosestToTarget($checkOutCandidates, $dateStr, $holidayCheckOutTarget);
+                    $checkOut = $checkOutLog ? Carbon::parse($checkOutLog->scan_datetime) : null;
+                }
+            }
+
+            if (! $checkIn && ! $checkOut) {
+                // Tidak ada scan sama sekali
+                return [
+                    'check_in'   => null,
+                    'check_out'  => null,
+                    'status'     => $isHoliday ? AttendancePrepare::STATUS_LIBUR : AttendancePrepare::STATUS_OFF,
+                    'has_in'     => false,
+                    'has_out'    => false,
+                    'is_holiday' => $isHoliday,
+                    'is_sunday'  => $isSunday,
+                ];
+            }
+
+            // Ada scan di hari libur → hadir
+            return [
+                'check_in'   => $checkIn,
+                'check_out'  => $checkOut,
+                'status'     => AttendancePrepare::STATUS_HADIR,
+                'has_in'     => !is_null($checkIn),
+                'has_out'    => !is_null($checkOut),
+                'is_holiday' => $isHoliday,
+                'is_sunday'  => $isSunday,
+            ];
+        }
+
+        // ── Hari biasa: window matching ─────────────────────────
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
+
+    /**
+     * SHIFT: Window matching standar.
+     * Port dari hris-system detectShift().
      */
     protected function detectShift(
         Collection $logs,
@@ -288,25 +402,111 @@ class AttendanceSyncService
         bool $isSunday,
         EmployeeShiftRoster $roster
     ): array {
-        // Holiday / off-day dengan log: tetap proses sebagai event khusus
-        $isOffDay = $isHoliday || $isSunday || $roster->is_sun;
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
 
-        if ($isOffDay && !$isHoliday && !$isSunday && $roster->is_sun) {
-            // Minggu biasa — first/last aja
-            $checkIn  = $logs->first() ? Carbon::parse($logs->first()->scan_datetime) : null;
-            $checkOut = $logs->count() > 1 ? Carbon::parse($logs->last()->scan_datetime) : null;
+    /**
+     * LONGSHIFT: Window matching (sama dengan SHIFT di sistem lama).
+     * Port dari hris-system detectLongshift().
+     */
+    protected function detectLongshift(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
 
-            return [
-                'check_in'   => $checkIn,
-                'check_out'  => $checkOut,
-                'status'     => AttendancePrepare::STATUS_OFF,
-                'has_in'     => !is_null($checkIn),
-                'has_out'    => !is_null($checkOut),
-                'is_holiday' => $isHoliday,
-                'is_sunday'  => true,
-            ];
-        }
+    /**
+     * SPLIT: Window matching.
+     * Port dari hris-system detectSplit().
+     */
+    protected function detectSplit(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
 
+    /**
+     * FLEXI: Window matching (late dihandle oleh calculator dengan flexi option).
+     * Port dari hris-system detectFlexi().
+     */
+    protected function detectFlexi(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
+
+    /**
+     * HOURLY: Window matching.
+     * Port dari hris-system detectHourly().
+     */
+    protected function detectHourly(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
+
+    /**
+     * ON_CALL: Window matching.
+     * Port dari hris-system detectOnCall().
+     */
+    protected function detectOnCall(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
+
+    /**
+     * SEASONAL: Window matching.
+     * Port dari hris-system detectSeasonal().
+     */
+    protected function detectSeasonal(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        EmployeeShiftRoster $roster
+    ): array {
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
+    }
+
+    /**
+     * Shared worker untuk semua pattern berbasis window (SHIFT, LONGSHIFT, SPLIT, FLEXI, dll).
+     * Logic: filter log by check_in_start..end & check_out_start..end, lalu ambil
+     * yang terdekat dengan work_hour_start/end.
+     */
+    protected function detectShiftWorker(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday
+    ): array {
         if (!$shift) {
             // Fallback: no shift → first/last
             $checkIn  = $logs->first() ? Carbon::parse($logs->first()->scan_datetime) : null;
@@ -333,7 +533,6 @@ class AttendanceSyncService
         );
 
         // CHECK OUT: cari log dalam range check_out_start..check_out_end
-        // Untuk overnight shift, pakai overnight window
         if ($shift->is_overnight) {
             $checkOutLog = $this->findLogInWindow(
                 $logs,
@@ -341,7 +540,7 @@ class AttendanceSyncService
                 $shift->check_out_overnight_start,
                 $shift->check_out_overnight_end,
                 $shift->work_hour_end,
-                true // overnight: next day
+                true
             );
         } else {
             $checkOutLog = $this->findLogInWindow(
@@ -358,12 +557,10 @@ class AttendanceSyncService
             ? Carbon::parse($checkOutLog->scan_datetime)
             : null;
 
-        $hasBoth = $checkIn && $checkOut;
-
         return [
             'check_in'   => $checkIn,
             'check_out'  => $checkOut,
-            'status'     => $hasBoth ? AttendancePrepare::STATUS_HADIR : AttendancePrepare::STATUS_HADIR,
+            'status'     => AttendancePrepare::STATUS_HADIR,
             'has_in'     => !is_null($checkIn),
             'has_out'    => !is_null($checkOut),
             'is_holiday' => $isHoliday,
@@ -375,7 +572,8 @@ class AttendanceSyncService
 
     /**
      * Simpan / update record attendance_prepare.
-     * Includes kalkulasi via AttendanceCalculatorService.
+     * HANYA menyimpan hasil deteksi (check_in, check_out, status).
+     * Kalkulasi (late, overtime, LM) dilakukan terpisah di proses "Hitung Lembur".
      */
     protected function savePrepare(
         EmployeeShiftRoster $roster,
@@ -396,31 +594,10 @@ class AttendanceSyncService
             return $existing; // jangan sentuh yang sudah dikunci
         }
 
-        // Kalkulasi
-        $tempPrepare = new AttendancePrepare([
-            'employee_id' => $roster->employee_id,
-            'date'        => $dateStr,
-            'check_in'    => $result['check_in'] ?? null,
-            'check_out'   => $result['check_out'] ?? null,
-        ]);
-
-        $calc = $this->calculator->calculate($tempPrepare, $shift, $isHoliday, $isSunday);
-
-        // Tentukan status akhir
+        // Tentukan status akhir (deteksi saja, tanpa kalkulasi late)
         $status = $result['status'];
-        if (!in_array($status, [
-            AttendancePrepare::STATUS_CUTI,
-            AttendancePrepare::STATUS_IZIN,
-            AttendancePrepare::STATUS_SAKIT,
-            AttendancePrepare::STATUS_LIBUR,
-            AttendancePrepare::STATUS_OFF,
-            AttendancePrepare::STATUS_ABSENT,
-        ])) {
-            // Re-derive: hadir / terlambat
-            $status = $calc['late_minutes'] > 0
-                ? AttendancePrepare::STATUS_TERLAMBAT
-                : AttendancePrepare::STATUS_HADIR;
-        }
+        // Biarkan status dari detector apa adanya (hadir, absent, libur, off, dll)
+        // Status terlambat akan ditentukan saat proses Hitung Lembur
 
         // Tentukan review_status
         $hasIn  = $result['has_in'] ?? !is_null($result['check_in'] ?? null);
@@ -438,21 +615,21 @@ class AttendanceSyncService
         $periode = $this->getPeriode($date);
 
         $data = [
-            'employee_id'   => $roster->employee_id,
-            'date'          => $dateStr,
-            'periode_start' => $periode['start'],
-            'periode_end'   => $periode['end'],
-            'check_in'      => $result['check_in'] ?? null,
-            'check_out'     => $result['check_out'] ?? null,
-            'schedule_in'   => $shift?->work_hour_start,
-            'schedule_out'  => $shift?->work_hour_end,
-            'late_minutes'  => $calc['late_minutes'],
-            'lm'            => $calc['lm'],
-            'lm_count'      => $calc['lm_count'],
-            'overtime'      => $calc['overtime'],
-            'overtime_count' => $calc['overtime_count'],
-            'status'        => $status,
-            'review_status' => $reviewStatus,
+            'employee_id'    => $roster->employee_id,
+            'date'           => $dateStr,
+            'periode_start'  => $periode['start'],
+            'periode_end'    => $periode['end'],
+            'check_in'       => $result['check_in'] ?? null,
+            'check_out'      => $result['check_out'] ?? null,
+            'schedule_in'    => $shift?->work_hour_start,
+            'schedule_out'   => $shift?->work_hour_end,
+            'late_minutes'   => 0,
+            'lm'             => 0,
+            'lm_count'       => 0,
+            'overtime'       => 0,
+            'overtime_count' => 0,
+            'status'         => $status,
+            'review_status'  => $reviewStatus,
         ];
 
         if ($existing) {
@@ -515,6 +692,56 @@ class AttendanceSyncService
         }
 
         return $candidates->first();
+    }
+
+    /**
+     * Cari log pertama setelah waktu tertentu (digunakan FLEX-SHIFT holiday).
+     * Kalau ada multiple, ambil yang terdekat dengan targetTime.
+     */
+    protected function findLogAfterTime(
+        Collection $logs,
+        string $dateStr,
+        string $afterTime,
+        ?string $targetTime = null
+    ): ?RawLog {
+        if ($logs->isEmpty()) {
+            return null;
+        }
+
+        $after = Carbon::parse($dateStr . ' ' . $afterTime);
+
+        $candidates = $logs->filter(function (RawLog $log) use ($after) {
+            return Carbon::parse($log->scan_datetime)->gt($after);
+        });
+
+        if ($candidates->isEmpty()) {
+            return null;
+        }
+
+        if ($candidates->count() === 1 || !$targetTime) {
+            return $candidates->first();
+        }
+
+        return $this->findClosestToTarget($candidates, $dateStr, $targetTime);
+    }
+
+    /**
+     * Cari log yang paling dekat dengan target time.
+     */
+    protected function findClosestToTarget(
+        Collection $logs,
+        string $dateStr,
+        string $targetTimeStr
+    ): ?RawLog {
+        if ($logs->isEmpty() || !$targetTimeStr) {
+            return null;
+        }
+
+        $target = Carbon::parse($dateStr . ' ' . $targetTimeStr);
+
+        return $logs->sortBy(fn(RawLog $log) =>
+            abs(Carbon::parse($log->scan_datetime)->diffInSeconds($target))
+        )->first();
     }
 
     /**

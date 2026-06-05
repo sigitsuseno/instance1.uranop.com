@@ -15,7 +15,7 @@
           </template>
           Sync Kehadiran
         </BaseButton>
-        <BaseButton variant="secondary" @click="handleLengkapi" :disabled="true" title="Coming soon — sesi selanjutnya">
+        <BaseButton variant="secondary" :loading="isCompleting" @click="handleLengkapi">
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
           </template>
@@ -37,9 +37,25 @@
     </div>
 
     <!-- Status Banner -->
-    <div v-if="syncResult" class="mb-4 p-3 rounded-lg text-sm font-medium" :class="syncResult.success ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
-      {{ syncResult.message }}
-      <button class="ml-2 underline text-xs" @click="syncResult = null">Tutup</button>
+    <div v-if="syncResult || completingResult" class="mb-4 p-3 rounded-lg text-sm font-medium" :class="(syncResult?.success || completingResult?.success) ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
+      {{ syncResult?.message || completingResult?.message }}
+      <button class="ml-2 underline text-xs" @click="syncResult = null; completingResult = null">Tutup</button>
+    </div>
+
+    <!-- Tab Bar: Jakarta / Ungaran Staff / Ungaran Production -->
+    <div class="flex gap-1 mb-6 border-b border-(--border-soft)">
+      <button
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="px-4 py-2.5 text-sm font-medium rounded-t-lg transition border-b-2 -mb-[1px]"
+        :class="activeTab === tab.key
+          ? 'bg-(--bg-card) border-(--primary) text-(--primary)'
+          : 'bg-transparent border-transparent text-(--text-muted) hover:text-(--text-main) hover:border-(--border-soft)'"
+        @click="activeTab = tab.key"
+      >
+        {{ tab.label }}
+        <span class="ml-1 text-xs opacity-60">({{ tab.code }})</span>
+      </button>
     </div>
 
     <!-- Stats Cards -->
@@ -119,6 +135,12 @@
             @input="filterData"
           />
         </div>
+        <!-- Checkbox "Lengkapi Absent" — per tab -->
+        <label v-if="currentAbsentGroup" class="flex items-center gap-1.5 px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-sm cursor-pointer hover:border-(--primary) transition select-none" :class="{ 'border-(--primary) bg-(--primary)/5': fillAbsent }">
+          <input v-model="fillAbsent" type="checkbox" class="w-3.5 h-3.5 rounded accent-(--primary)" />
+          <span class="text-(--text-main)">Lengkapi Absent</span>
+          <span class="text-[10px] text-(--text-muted)">({{ currentAbsentGroup }})</span>
+        </label>
         <select
           v-model="filterDepartment"
           class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
@@ -232,8 +254,8 @@
       <span>{{ isLoading ? 'Memuat...' : `Menampilkan ${filteredEmployees.length} karyawan` }}</span>
     </div>
 
-    <!-- Edit Modal (baca-saja dulu, edit nanti di sesi lengkapi) -->
-    <BaseModal v-if="editingCell" :show="!!editingCell" title="Detail Absensi" size="lg" @close="closeEdit">
+    <!-- Edit Modal -->
+    <BaseModal v-if="editingCell" :show="!!editingCell" title="Edit Absensi" size="lg" @close="closeEdit">
       <div class="p-3 bg-(--bg-elevated) rounded-lg mb-4">
         <p class="text-sm font-semibold text-(--text-main)">{{ editingCell.employee.name }}</p>
         <p class="text-xs text-(--text-muted) mt-1">
@@ -246,32 +268,50 @@
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-(--text-main) mb-1">Check-in</label>
-            <input v-model="editForm.checkIn" type="time" disabled
-              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+            <input v-model="editForm.checkIn" type="time"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              :disabled="editForm.isLocked" />
           </div>
           <div>
             <label class="block text-sm font-medium text-(--text-main) mb-1">Check-out</label>
-            <input v-model="editForm.checkOut" type="time" disabled
-              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+            <input v-model="editForm.checkOut" type="time"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              :disabled="editForm.isLocked" />
           </div>
         </div>
 
         <div>
           <label class="block text-sm font-medium text-(--text-main) mb-1">Status</label>
-          <input :value="statusLabel(editForm.status)" readonly
-            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+          <select v-model="editForm.status" :disabled="editForm.isLocked"
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+            <option value="hadir">Hadir</option>
+            <option value="terlambat">Terlambat</option>
+            <option value="absent">Absen</option>
+            <option value="cuti">Cuti</option>
+            <option value="izin">Izin</option>
+            <option value="sakit">Sakit</option>
+            <option value="libur">Libur</option>
+            <option value="off">Off</option>
+          </select>
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-(--text-main) mb-1">Review</label>
-          <input :value="reviewLabel(editForm.reviewStatus)" readonly
-            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+          <label class="block text-sm font-medium text-(--text-main) mb-1">Catatan</label>
+          <textarea v-model="editForm.notes" rows="2" :disabled="editForm.isLocked"
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" placeholder="Catatan..."></textarea>
         </div>
 
-        <div>
-          <label class="block text-sm font-medium text-(--text-main) mb-1">Keterlambatan (menit)</label>
-          <input :value="editForm.lateMinutes" readonly type="text"
-            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Review</label>
+            <input :value="reviewLabel(editForm.reviewStatus)" readonly
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Keterlambatan (menit)</label>
+            <input :value="editForm.lateMinutes" readonly type="text"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+          </div>
         </div>
 
         <div>
@@ -285,6 +325,12 @@
         <div class="flex gap-3 w-full">
           <BaseButton variant="secondary" @click="closeEdit">Tutup</BaseButton>
           <span class="flex-1"></span>
+          <BaseButton variant="primary" :loading="isSaving" :disabled="editForm.isLocked" @click="handleSaveEdit">
+            <template #icon-left>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            </template>
+            Simpan
+          </BaseButton>
         </div>
       </template>
     </BaseModal>
@@ -301,11 +347,15 @@ const { get, post } = useApi()
 
 // ── State ──
 const isSyncing = ref(false)
+const isCompleting = ref(false)
 const isLoading = ref(true)
 const isSaving = ref(false)
 const syncResult = ref(null)
+const completingResult = ref(null)
 const selectedPeriod = ref('current')
 const activeDate = ref(new Date().toISOString().split('T')[0])
+const activeTab = ref('jkt')
+const fillAbsent = ref(false)
 const dateWindowStart = ref(0)
 const searchQuery = ref('')
 const filterDepartment = ref('')
@@ -321,12 +371,21 @@ const editForm = ref({
   lateMinutes: 0,
   overtimeTotal: 0,
   notes: '',
+  isLocked: false,
 })
 
 // Data dari API
 const employees = ref([])
 const attendanceData = ref({})
 const departments = ref([])
+const employeeGroups = ref({}) // { employee_id: [reference_codes] }
+
+// ── Tabs ──
+const tabs = [
+  { key: 'jkt', label: 'Jakarta', code: 'GRP-JKT', groupCodes: ['GRP-JKT'], absentGroup: 'GRP-JKT' },
+  { key: 'ung-staff', label: 'Ungaran Staff', code: 'GRP-ALLIN, GD, SS, SPR', groupCodes: ['GRP-ALLIN', 'GRP-GD', 'GRP-SS', 'GRP-SPR'], absentGroup: 'GRP-SPR' },
+  { key: 'ung-prod', label: 'Ungaran Production', code: 'GRP-PS1', groupCodes: ['GRP-PS1'], absentGroup: null },
+]
 
 // ── Periode 25-24 ──
 
@@ -462,6 +521,17 @@ async function fetchEmployees() {
   }
 }
 
+async function fetchEmployeeGroups() {
+  try {
+    const res = await get('/api/v1/attendance/prepare/employee-groups')
+    // Endpoint returns { groups: { employee_id: [reference_codes] } }
+    employeeGroups.value = res.groups || {}
+  } catch (e) {
+    console.error('Gagal fetch employee groups:', e)
+    employeeGroups.value = {}
+  }
+}
+
 async function fetchPrepareData() {
   const { start, end } = getPeriodDates()
   try {
@@ -561,7 +631,7 @@ async function fetchData() {
   apiError.value = null
   try {
     if (employees.value.length === 0) {
-      await fetchEmployees()
+      await Promise.all([fetchEmployees(), fetchEmployeeGroups()])
     }
     await Promise.all([fetchPrepareData(), fetchStats()])
   } catch (e) {
@@ -606,6 +676,15 @@ async function handleSync() {
 
 const filteredEmployees = computed(() => {
   let result = employees.value
+
+  // Filter by active tab's group codes
+  const currentTab = tabs.find(t => t.key === activeTab.value)
+  if (currentTab && currentTab.groupCodes.length > 0) {
+    result = result.filter(e => {
+      const codes = employeeGroups.value[e.id] || []
+      return currentTab.groupCodes.some(gc => codes.includes(gc))
+    })
+  }
 
   if (searchQuery.value) {
     const q = searchQuery.value.toLowerCase()
@@ -720,7 +799,7 @@ function reviewBadgeClass(status) {
   return map[status] || 'bg-gray-100 text-gray-800'
 }
 
-// ── Edit Modal (read-only for now) ──
+// ── Edit Modal ──
 
 function openEdit(emp, dateObj) {
   const dayData = getDayData(emp, dateObj.date)
@@ -728,6 +807,7 @@ function openEdit(emp, dateObj) {
 
   editingCell.value = { employee: emp, date: dateObj }
   editForm.value = {
+    prepareId: dayData.id || null,
     checkIn: dayData.checkIn || '',
     checkOut: dayData.checkOut || '',
     status: dayData.status || 'absent',
@@ -735,6 +815,7 @@ function openEdit(emp, dateObj) {
     lateMinutes: dayData.lateMinutes || 0,
     overtimeTotal: totalOT,
     notes: dayData.notes || '',
+    isLocked: dayData.isLocked || false,
   }
 }
 
@@ -742,9 +823,96 @@ function closeEdit() {
   editingCell.value = null
 }
 
-// ── Placeholders (akan diimplementasi di sesi selanjutnya) ──
+async function handleSaveEdit() {
+  isSaving.value = true
+  try {
+    const res = await post('/api/v1/attendance/prepare/lengkapi', {
+      records: [{
+        id: editForm.value.prepareId,
+        check_in: editForm.value.checkIn || null,
+        check_out: editForm.value.checkOut || null,
+        status: editForm.value.status,
+        notes: editForm.value.notes,
+      }],
+    })
 
-function handleLengkapi() { /* TODO: sesi selanjutnya */ }
+    if (res.success) {
+      // Update local data instantly
+      const empId = editingCell.value.employee.id
+      const dateStr = editingCell.value.date.date
+      if (attendanceData.value[empId]?.[dateStr]) {
+        attendanceData.value[empId][dateStr].checkIn = editForm.value.checkIn
+        attendanceData.value[empId][dateStr].checkOut = editForm.value.checkOut
+        attendanceData.value[empId][dateStr].status = editForm.value.status
+        attendanceData.value[empId][dateStr].reviewStatus = 'lengkap'
+        attendanceData.value[empId][dateStr].notes = editForm.value.notes
+      }
+      closeEdit()
+    }
+  } catch (e) {
+    console.error('Gagal simpan edit:', e)
+  } finally {
+    isSaving.value = false
+  }
+}
+
+// ── Lengkapi ──
+
+const currentAbsentGroup = computed(() => {
+  const tab = tabs.find(t => t.key === activeTab.value)
+  return tab?.absentGroup || null
+})
+
+async function handleLengkapi() {
+  isCompleting.value = true
+  completingResult.value = null
+
+  const { start, end } = getPeriodDates()
+  const currentTab = tabs.find(t => t.key === activeTab.value)
+  let totalMessage = ''
+
+  try {
+    // 1. Lengkapi normal (semua group codes di tab)
+    const res = await post('/api/v1/attendance/prepare/auto-lengkapi', {
+      group_codes: currentTab?.groupCodes || [],
+      start_date: start,
+      end_date: end,
+      fill_absent: false,
+    })
+    totalMessage = res.message || ''
+
+    // 2. Kalau checkbox dicentang & ada absentGroup → lengkapi absent khusus grup itu
+    if (fillAbsent.value && currentAbsentGroup.value) {
+      // Reset fillAbsent checkbox biar nggak double-process
+      const absentRes = await post('/api/v1/attendance/prepare/auto-lengkapi', {
+        group_codes: [currentAbsentGroup.value],
+        start_date: start,
+        end_date: end,
+        fill_absent: true,
+      })
+      totalMessage += ' | ' + (absentRes.message || '')
+    }
+
+    completingResult.value = {
+      success: res.success,
+      message: totalMessage || 'Lengkapi selesai.',
+    }
+
+    if (res.success) {
+      await fetchData()
+    }
+  } catch (e) {
+    completingResult.value = {
+      success: false,
+      message: 'Lengkapi gagal: ' + (e.message || 'Unknown error'),
+    }
+  } finally {
+    isCompleting.value = false
+  }
+}
+
+// ── Placeholders ──
+
 function handleHitungLembur() { /* TODO: sesi selanjutnya */ }
 function handleKunci() { /* TODO: sesi selanjutnya */ }
 

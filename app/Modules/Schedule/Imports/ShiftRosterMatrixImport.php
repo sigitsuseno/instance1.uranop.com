@@ -188,13 +188,16 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
         $isHalfDay = $workPattern && $isSaturday && $workPattern->sat_type == 'half';
         $isHoliday = $shift->is_dayoff || in_array($date, $this->holidays);
 
+        // WP "SC" tidak dioverride — tetap pakai kode asli
+        $shouldOverride = $isHoliday && !($workPattern && $workPattern->code === 'SC');
+
         $data = [
             'uuid' => Str::uuid()->toString(),
             'shift_id' => $shift->id,
             'work_pattern_id' => $workPattern?->id,
             'shift_code' => $shift->code,
             'work_pattern_type' => $workPattern?->employee_type,
-            'external_code' => $isHoliday ? 'L' : $externalCode,
+            'external_code' => $shouldOverride ? 'L' : $externalCode,
             'is_holiday' => $isHoliday,
             'is_sat' => $isSaturday,
             'is_sun' => $carbonDate->dayOfWeek == 0,

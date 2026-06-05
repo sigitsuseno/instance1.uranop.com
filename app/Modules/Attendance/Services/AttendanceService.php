@@ -2,9 +2,12 @@
 
 namespace App\Modules\Attendance\Services;
 
+use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Attendance\Models\RawLog;
 use App\Modules\Attendance\Services\AttendanceCalculatorService;
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Schedule\Models\Holiday;
 use App\Modules\Schedule\Models\WorkingCalendar;
 use Carbon\Carbon;
@@ -126,6 +129,221 @@ class AttendanceService
         }
 
         return ['updated' => $updated, 'errors' => $errors];
+    }
+
+    /**
+     * Auto-lengkapi attendance untuk karyawan dalam grup tertentu.
+     *
+     * Rules:
+     * - Holiday (dari sch_holidays): lengkapi dari roster work_hour_start/end → status='libur'
+     * - Minggu: lengkapi dari roster → status='libur' (ada scan) / 'off' (tidak ada)
+     * - Hari kerja: cek cuti → 'cuti', else lengkapi dari roster → 'hadir', else 'absent'
+     *
+     * @param  string[]  $groupCodes  e.g. ['GRP-JKT'] atau ['GRP-ALLIN', 'GRP-GD', 'GRP-SS']
+     * @param  string    $startDate   Y-m-d
+     * @param  string    $endDate     Y-m-d
+     * @param  bool      $fillAbsent  Isi check_in/out dari roster meskipun nol scan (weekday only)
+     */
+    public function autoLengkapi(array $groupCodes, string $startDate, string $endDate, bool $fillAbsent = false): array
+    {
+        // ── 1. Ambil employee IDs dalam grup ──────────────────────
+        $employeeIds = Employee::whereHas('groups', function ($q) use ($groupCodes) {
+            $q->whereIn('reference_code', $groupCodes);
+        })->pluck('id');
+
+        if ($employeeIds->isEmpty()) {
+            return [
+                'success' => false,
+                'message' => 'Tidak ada karyawan dalam grup yang dipilih.',
+                'stats'   => null,
+            ];
+        }
+
+        // ── 2. Ambil att_prepares yang incomplete (unlocked) ─────
+        $prepares = AttendancePrepare::whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->where('is_locked', false)
+            ->where(function ($q) {
+                $q->whereNull('check_in')
+                  ->orWhereNull('check_out');
+            })
+            ->get();
+
+        if ($prepares->isEmpty()) {
+            return [
+                'success' => true,
+                'message' => 'Semua data sudah lengkap.',
+                'stats'   => ['total' => 0, 'filled' => 0, 'holiday' => 0, 'off' => 0, 'absent' => 0, 'cuti' => 0, 'hadir' => 0],
+            ];
+        }
+
+        // ── 3. Preload holidays ──────────────────────────────────
+        $holidayDates = Holiday::whereBetween('date', [$startDate, $endDate])
+            ->pluck('date')
+            ->map(fn ($d) => Carbon::parse($d)->toDateString())
+            ->flip();
+
+        // ── 4. Preload approved leaves ───────────────────────────
+        $allIds = $prepares->pluck('employee_id')->unique();
+
+        $leaves = LeaveRequest::whereIn('employee_id', $allIds)
+            ->where('status', 'approved')
+            ->where(function ($q) use ($startDate, $endDate) {
+                // overlap: leave range intersect with date range
+                $q->whereBetween('start_date', [$startDate, $endDate])
+                  ->orWhereBetween('end_date', [$startDate, $endDate])
+                  ->orWhere(function ($q2) use ($startDate, $endDate) {
+                      $q2->where('start_date', '<=', $startDate)
+                         ->where('end_date', '>=', $endDate);
+                  });
+            })
+            ->get()
+            ->groupBy('employee_id');
+
+        // ── 5. Preload rosters + shifts ──────────────────────────
+        $rosterMap = EmployeeShiftRoster::whereIn('employee_id', $allIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->with('shift')
+            ->get()
+            ->keyBy(fn ($r) => $r->employee_id . '_' . Carbon::parse($r->date)->toDateString());
+
+        // ── 6. Proses tiap record ────────────────────────────────
+        $stats = [
+            'total'   => $prepares->count(),
+            'filled'  => 0,
+            'holiday' => 0,
+            'off'     => 0,
+            'absent'  => 0,
+            'cuti'    => 0,
+            'hadir'   => 0,
+        ];
+
+        DB::beginTransaction();
+        try {
+            foreach ($prepares as $p) {
+                $dateStr    = Carbon::parse($p->date)->toDateString();
+                $dateCarbon = Carbon::parse($p->date);
+
+                $isHoliday   = $holidayDates->has($dateStr);
+                $isSunday    = $dateCarbon->isSunday();
+                $hasCheckIn  = ! is_null($p->check_in);
+                $hasCheckOut = ! is_null($p->check_out);
+                $hasAny      = $hasCheckIn || $hasCheckOut;
+
+                // Dapatkan roster
+                $key    = $p->employee_id . '_' . $dateStr;
+                $roster = $rosterMap->get($key);
+                $shift  = $roster?->shift;
+
+                $workStart = $shift?->work_hour_start;
+                $workEnd   = $shift?->work_hour_end;
+
+                $update = [];
+
+                // ── HOLIDAY ──────────────────────────────────
+                if ($isHoliday) {
+                    if ($hasAny) {
+                        if (! $hasCheckIn && $workStart) {
+                            $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
+                        }
+                        if (! $hasCheckOut && $workEnd) {
+                            $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
+                        }
+                    }
+                    $update['status']        = AttendancePrepare::STATUS_LIBUR;
+                    $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                    $stats['holiday']++;
+                }
+                // ── SUNDAY ───────────────────────────────────
+                elseif ($isSunday) {
+                    if ($hasAny) {
+                        if (! $hasCheckIn && $workStart) {
+                            $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
+                        }
+                        if (! $hasCheckOut && $workEnd) {
+                            $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
+                        }
+                        $update['status'] = AttendancePrepare::STATUS_LIBUR;
+                    } else {
+                        $update['status'] = AttendancePrepare::STATUS_OFF;
+                    }
+                    $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                    $stats['off']++;
+                }
+                // ── WEEKDAY (Mon-Sat) ────────────────────────
+                else {
+                    // Cek cuti
+                    $hasLeave  = false;
+                    $empLeaves = $leaves->get($p->employee_id);
+
+                    if ($empLeaves) {
+                        foreach ($empLeaves as $leave) {
+                            $leaveStart = Carbon::parse($leave->start_date);
+                            $leaveEnd   = Carbon::parse($leave->end_date);
+                            if ($dateCarbon->between($leaveStart, $leaveEnd)) {
+                                $hasLeave = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if ($hasLeave) {
+                        $update['status']        = AttendancePrepare::STATUS_CUTI;
+                        $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                        $stats['cuti']++;
+                    } elseif ($hasAny) {
+                        if (! $hasCheckIn && $workStart) {
+                            $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
+                        }
+                        if (! $hasCheckOut && $workEnd) {
+                            $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
+                        }
+                        $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                        $stats['hadir']++;
+                    } else {
+                        // No scan at all
+                        if ($fillAbsent && $workStart && $workEnd) {
+                            // Fill from roster meskipun nol scan
+                            $update['check_in']  = Carbon::parse($dateStr . ' ' . $workStart);
+                            $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
+                            $update['status']    = AttendancePrepare::STATUS_HADIR;
+                            $stats['hadir']++;
+                        } else {
+                            $update['status'] = AttendancePrepare::STATUS_ABSENT;
+                            $stats['absent']++;
+                        }
+                        $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                    }
+                }
+
+                if (! empty($update)) {
+                    $p->update($update);
+                    $stats['filled']++;
+                }
+            }
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'message' => "Lengkapi selesai. {$stats['filled']}/{$stats['total']} record diperbarui.",
+                'stats'   => $stats,
+            ];
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Auto-lengkapi error: ' . $e->getMessage(), [
+                'group_codes' => $groupCodes,
+                'start_date'  => $startDate,
+                'end_date'    => $endDate,
+                'trace'       => $e->getTraceAsString(),
+            ]);
+
+            return [
+                'success' => false,
+                'message' => 'Gagal: ' . $e->getMessage(),
+                'stats'   => $stats,
+            ];
+        }
     }
 
     /**

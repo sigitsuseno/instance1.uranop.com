@@ -277,25 +277,42 @@ class AttendanceApiController extends Controller
 
     /**
      * GET /api/v1/attendance/prepare/list
-     * List prepares dengan filter: date, status, review_status, dll.
+     * List prepares dengan filter: date, status, review_status, group_codes, incomplete_only.
      */
     public function prepareList(Request $request): JsonResponse
     {
-        $startDate  = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
-        $endDate    = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
-        $employeeId = $request->input('employee_id');
-        $status     = $request->input('status');
+        $startDate    = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate      = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+        $employeeId   = $request->input('employee_id');
+        $status       = $request->input('status');
         $reviewStatus = $request->input('review_status');
-        $isLocked   = $request->input('is_locked');
-        $perPage    = $request->input('per_page', 50);
+        $isLocked     = $request->input('is_locked');
+        $groupCodes   = $request->input('group_codes', []);       // array of reference_code
+        $perPage      = $request->input('per_page', 50);
 
         $query = AttendancePrepare::with('employee:id,name,nip,employee_code,department_id')
             ->whereBetween('date', [$startDate, $endDate])
-            ->when($employeeId, fn($q) => $q->where('employee_id', $employeeId))
-            ->when($status, fn($q) => $q->where('status', $status))
-            ->when($reviewStatus, fn($q) => $q->where('review_status', $reviewStatus))
-            ->when($isLocked !== null, fn($q) => $q->where('is_locked', $isLocked === '1'))
-            ->orderBy('date')
+            ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($reviewStatus, fn ($q) => $q->where('review_status', $reviewStatus))
+            ->when($isLocked !== null, fn ($q) => $q->where('is_locked', $isLocked === '1' || $isLocked === 'true'));
+
+        // Filter by employee group codes
+        if (! empty($groupCodes)) {
+            $query->whereHas('employee.groups', function ($q) use ($groupCodes) {
+                $q->whereIn('reference_code', (array) $groupCodes);
+            });
+        }
+
+        // Only incomplete records
+        if ($request->boolean('incomplete_only')) {
+            $query->where(function ($q) {
+                $q->whereNull('check_in')
+                  ->orWhereNull('check_out');
+            });
+        }
+
+        $query = $query->orderBy('date')
             ->orderBy('employee_id')
             ->paginate($perPage);
 
@@ -328,6 +345,31 @@ class AttendanceApiController extends Controller
             'message' => "Lengkapi selesai. {$result['updated']} record diperbarui.",
             'data'    => $result,
         ]);
+    }
+
+    /**
+     * POST /api/v1/attendance/prepare/auto-lengkapi
+     * Auto-lengkapi: isi check_in/check_out otomatis berdasarkan rules per tanggal.
+     */
+    public function prepareAutoLengkapi(Request $request): JsonResponse
+    {
+        $request->validate([
+            'group_codes'   => 'required|array',
+            'group_codes.*' => 'string',
+            'start_date'    => 'required|date',
+            'end_date'      => 'required|date|after_or_equal:start_date',
+            'fill_absent'   => 'boolean',
+        ]);
+
+        $service = new AttendanceService();
+        $result  = $service->autoLengkapi(
+            $request->input('group_codes'),
+            $request->input('start_date'),
+            $request->input('end_date'),
+            $request->boolean('fill_absent'),
+        );
+
+        return response()->json($result, $result['success'] ? 200 : 422);
     }
 
     /**
@@ -394,6 +436,20 @@ class AttendanceApiController extends Controller
         $stats = $syncService->getSyncSummary($startDate, $endDate);
 
         return response()->json(['data' => $stats]);
+    }
+
+    /**
+     * GET /api/v1/attendance/prepare/employee-groups
+     * Return employee_id → group reference_codes mapping untuk frontend filtering.
+     */
+    public function prepareEmployeeGroups(Request $request): JsonResponse
+    {
+        $groups = \App\Modules\Settings\Models\EmployeeGroup::select('employee_id', 'reference_code')
+            ->get()
+            ->groupBy('employee_id')
+            ->map(fn ($group) => $group->pluck('reference_code')->toArray());
+
+        return response()->json(['groups' => $groups]);
     }
 
 }
