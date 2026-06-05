@@ -4,52 +4,59 @@ namespace App\Modules\Attendance\Services;
 
 use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Schedule\Models\Shift;
+use App\Modules\Settings\Models\OvertimeRule;
 use Carbon\Carbon;
 
 /**
  * Menghitung late, overtime, dan LM per record attendance prepare.
- * Port dari hris-system AttendanceCalculatorService — disederhanakan sesuai kolom baru.
+ * Multiplier diambil dari tabel overtime_rules (bisa dikonfigurasi per work pattern).
+ * Fallback ke hardcoded jika rules tidak ditemukan.
  */
 class AttendanceCalculatorService
 {
     /**
      * Calculate all durations for a single AttendancePrepare record.
      *
-     * @param  AttendancePrepare  $prepare   Record yang akan dihitung (bisa new / existing)
-     * @param  Shift|null         $shift     Shift terkait (dari roster)
-     * @param  bool               $isHoliday Apakah tanggal ini hari libur nasional
-     * @param  bool               $isSunday  Apakah tanggal ini hari Minggu
-     * @param  int|null           $manualOvertime  Overtime manual (dari user input)
+     * @param  AttendancePrepare  $prepare          Record yang akan dihitung
+     * @param  Shift|null         $shift            Shift terkait (dari roster)
+     * @param  bool               $isHoliday        Apakah tanggal ini hari libur nasional
+     * @param  bool               $isSunday         Apakah tanggal ini hari Minggu
+     * @param  int|null           $manualOvertime   Overtime manual (dari user input)
+     * @param  string|null        $workPatternType  Tipe work pattern: FIXED, SHIFT, FLEX-SHIFT
+     * @param  bool               $isSaturday       Apakah tanggal ini hari Sabtu (dari roster)
+     * @param  int|null           $workPatternId    ID work pattern (untuk lookup overtime rule)
      */
     public function calculate(
         AttendancePrepare $prepare,
         ?Shift $shift = null,
         bool $isHoliday = false,
         bool $isSunday = false,
-        ?int $manualOvertime = null
+        ?int $manualOvertime = null,
+        ?string $workPatternType = null,
+        bool $isSaturday = false,
+        ?int $workPatternId = null,
     ): array {
         // ── Late Minutes ──────────────────────────────────────
         $lateMinutes = $this->calculateLate($prepare, $shift);
 
         // ── Overtime ──────────────────────────────────────────
-        // Tentukan overtime dari manual input atau kalkulasi
         $rawOvertime = $manualOvertime !== null
             ? $manualOvertime
-            : $this->calculateRawOvertime($prepare, $shift, $isHoliday, $isSunday);
+            : $this->calculateRawOvertime($prepare, $shift, $isHoliday, $isSunday, $workPatternType, $isSaturday);
 
         // ── LM vs Regular Overtime ────────────────────────────
         $isOffDay = $isHoliday || $isSunday;
 
         if ($isOffDay) {
-            $lm         = $rawOvertime;
-            $overtime   = 0;
-            $lmCount    = $this->calculateLmMultiplier($lm);
-            $overtimeCount = 0;
+            $lm             = $rawOvertime;
+            $overtime       = 0;
+            $lmCount        = $this->calculateLmMultiplier($lm, $workPatternId);
+            $overtimeCount  = 0;
         } else {
-            $lm         = 0;
-            $overtime   = $rawOvertime;
-            $lmCount    = 0;
-            $overtimeCount = $this->calculateOvertimeMultiplier($overtime);
+            $lm             = 0;
+            $overtime       = $rawOvertime;
+            $lmCount        = 0;
+            $overtimeCount  = $this->calculateOvertimeMultiplier($overtime, $workPatternId);
         }
 
         return [
@@ -63,7 +70,6 @@ class AttendanceCalculatorService
 
     /**
      * Hitung keterlambatan dalam menit.
-     * Hanya dihitung jika shift punya work_hour_start dan check_in tersedia.
      */
     protected function calculateLate(AttendancePrepare $prepare, ?Shift $shift): int
     {
@@ -71,7 +77,6 @@ class AttendanceCalculatorService
             return 0;
         }
 
-        // Shift dengan flexible check-in tidak dihitung late
         if (!empty($shift->shift_checkin_options)) {
             return 0;
         }
@@ -82,20 +87,27 @@ class AttendanceCalculatorService
         )->startOfMinute();
 
         $tolerance   = $shift->tolerance_minutes ?? 30;
-        $lateMinutes = $scheduleIn->diffInMinutes($checkInTime, false); // negatif = telat
+        $lateMinutes = $scheduleIn->diffInMinutes($checkInTime, false);
 
         return max(0, $lateMinutes - $tolerance);
     }
 
     /**
      * Hitung overtime mentah dalam menit (sebelum multiplier).
-     * Overtime = total menit kerja - jam normal.
+     *
+     * Rules (ref: penjelasan.md):
+     * SHIFT : Holiday = full check_in→check_out (max 8j), Sabtu = 2j flat, else 0
+     * FIXED : Holiday/Minggu = full check_in→check_out (max 8j), Kerja = schedule_out→check_out
+     * FLEX-SHIFT P: Holiday/Minggu = full, Kerja = schedule_out→check_out
+     * FLEX-SHIFT S: Holiday/Minggu = full, Kerja = aturan b.1/b.2/b.3 (pre/post-shift)
      */
     protected function calculateRawOvertime(
         AttendancePrepare $prepare,
         ?Shift $shift,
         bool $isHoliday,
-        bool $isSunday
+        bool $isSunday,
+        ?string $workPatternType = null,
+        bool $isSaturday = false,
     ): int {
         if (!$prepare->check_in || !$prepare->check_out) {
             return 0;
@@ -104,68 +116,251 @@ class AttendanceCalculatorService
         $checkIn  = $prepare->check_in->startOfMinute();
         $checkOut = $prepare->check_out->startOfMinute();
 
+        // Overnight check-out
         if ($checkOut < $checkIn) {
             $checkOut->addDay();
         }
 
-        $totalMinutes = $checkIn->diffInMinutes($checkOut);
+        $totalMinutes = $checkIn->diffInMinutes($checkOut, true);
 
-        // Hari Minggu / Libur → semua jam kerja = overtime
-        if ($isSunday || $isHoliday) {
-            return min($totalMinutes, 480); // cap 8 jam
+        // ═══════════════════════════════════════════════════════
+        // SHIFT Pattern
+        // ═══════════════════════════════════════════════════════
+        if ($workPatternType === 'SHIFT') {
+            // Holiday (termasuk holiday Sabtu): full, max 8 jam
+            if ($isHoliday) {
+                return min($totalMinutes, 480);
+            }
+            // Sabtu biasa: flat 2 jam
+            if ($isSaturday) {
+                return 120;
+            }
+            return 0;
         }
 
-        // Hari Sabtu → 6 jam normal
-        $isSaturday = $prepare->date->isSaturday();
-        if ($isSaturday) {
-            $normalMinutes = 6 * 60; // 360 menit
-        } else {
-            $normalMinutes = 8 * 60; // 480 menit
+        // ═══════════════════════════════════════════════════════
+        // Holiday / Minggu (FIXED & FLEX-SHIFT): full, max 8 jam
+        // ═══════════════════════════════════════════════════════
+        if ($isHoliday || $isSunday) {
+            return min($totalMinutes, 480);
         }
 
-        $rawOvertime = max(0, $totalMinutes - $normalMinutes);
+        // ═══════════════════════════════════════════════════════
+        // Hari kerja biasa — butuh schedule_in/out (dari sync)
+        // ═══════════════════════════════════════════════════════
+        if (!$prepare->schedule_in || !$prepare->schedule_out) {
+            return 0;
+        }
 
-        return $this->roundUp($rawOvertime);
+        $dateStr = $prepare->date->toDateString();
+        $scheduleIn  = Carbon::parse($dateStr . ' ' . $prepare->schedule_in->format('H:i:s'))->startOfMinute();
+        $scheduleOut = Carbon::parse($dateStr . ' ' . $prepare->schedule_out->format('H:i:s'))->startOfMinute();
+
+        // Overnight shift
+        if ($scheduleOut < $scheduleIn) {
+            $scheduleOut->addDay();
+        }
+
+        // ── FIXED: post-shift only ───────────────────────────
+        if ($workPatternType === 'FIXED') {
+            if ($checkOut > $scheduleOut) {
+                return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
+            }
+            return 0;
+        }
+
+        // ── FLEX-SHIFT ──────────────────────────────────────
+        $extCode = $shift?->external_code ?? '';
+
+        // P (pagi): post-shift only
+        if ($extCode === 'P') {
+            if ($checkOut > $scheduleOut) {
+                return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
+            }
+            return 0;
+        }
+
+        // S (siang): aturan b.1 / b.2 / b.3
+        if ($extCode === 'S') {
+            $toleranceLimit = (clone $scheduleIn)->addMinutes(30);
+            $lateLimit      = (clone $scheduleIn)->addHours(2);
+
+            // b.3: check_in > schedule_in + 2 jam → post-shift
+            if ($checkIn > $lateLimit) {
+                if ($checkOut > $scheduleOut) {
+                    return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
+                }
+                return 0;
+            }
+
+            // b.1 & b.2: check_in dalam toleransi (schedule_in + 30 menit)
+            if ($checkIn < $toleranceLimit) {
+                $earlyMinutes = $scheduleIn->diffInMinutes($checkIn, true);
+                // b.1: early > 30 menit → pre-shift overtime
+                if ($checkIn < $scheduleIn && $earlyMinutes > 30) {
+                    return $this->roundUp($earlyMinutes);
+                }
+                // b.2: early ≤ 30 menit → post-shift overtime
+                if ($checkOut > $scheduleOut) {
+                    return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
+                }
+                return 0;
+            }
+
+            // Fallback: check_in antara +30m s/d +2j → post-shift
+            if ($checkOut > $scheduleOut) {
+                return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
+            }
+            return 0;
+        }
+
+        // Unknown FLEX-SHIFT code: fallback post-shift
+        if ($checkOut > $scheduleOut) {
+            return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
+        }
+        return 0;
     }
 
+    // ═══════════════════════════════════════════════════════════
+    // MULTIPLIER — dari tabel overtime_rules
+    // ═══════════════════════════════════════════════════════════
+
     /**
-     * LM Multiplier: ((base_hours) - 1) × 2
-     * base = min(menit, 480) / 60
+     * LM Multiplier (lembur mingguan / hari libur).
+     * Menggunakan overtime_rule dengan is_holiday=true.
+     * Fallback: (min(total_hours, 8) - 1) × 2 × 60
      */
-    protected function calculateLmMultiplier(int $minutes): int
+    protected function calculateLmMultiplier(int $minutes, ?int $workPatternId = null): int
     {
         if ($minutes <= 0) {
             return 0;
         }
 
+        return $this->multiplyFromRule($minutes, isHoliday: true, maxHours: 8, workPatternId: $workPatternId)
+            ?? $this->calculateLmMultiplierFallback($minutes);
+    }
+
+    /**
+     * Overtime Multiplier (hari kerja).
+     * Menggunakan overtime_rule dengan is_holiday=false.
+     * Fallback: 60 menit pertama × 1.5, sisanya × 2
+     */
+    protected function calculateOvertimeMultiplier(int $minutes, ?int $workPatternId = null): int
+    {
+        if ($minutes <= 0) {
+            return 0;
+        }
+
+        return $this->multiplyFromRule($minutes, isHoliday: false, maxHours: null, workPatternId: $workPatternId)
+            ?? $this->calculateOvertimeMultiplierFallback($minutes);
+    }
+
+    /**
+     * Hitung multiplier dari tabel overtime_rules.
+     *
+     * Konvensi: detail dengan `hour` tertinggi berlaku untuk jam tersebut dan seterusnya.
+     * Contoh: hour=1→1.5, hour=2→2.0  →  jam ke-1 = 1.5x, jam 2+ = 2.0x
+     *
+     * @return int|null  null jika rule tidak ditemukan (pakai fallback)
+     */
+    protected function multiplyFromRule(
+        int $minutes,
+        bool $isHoliday,
+        ?int $maxHours = null,
+        ?int $workPatternId = null,
+    ): ?int {
+        // Cari rule yang cocok
+        $rule = OvertimeRule::where('is_active', true)
+            ->where('is_holiday', $isHoliday)
+            ->when($workPatternId, function ($q) use ($workPatternId) {
+                // Prioritaskan rule spesifik work_pattern
+                $q->where('work_pattern_id', $workPatternId);
+            }, function ($q) {
+                // Fallback: rule global (work_pattern_id = null)
+                $q->whereNull('work_pattern_id');
+            })
+            ->first();
+
+        // Kalau ga ketemu dengan filter work_pattern_id, coba yang global
+        if (!$rule && $workPatternId) {
+            $rule = OvertimeRule::where('is_active', true)
+                ->where('is_holiday', $isHoliday)
+                ->whereNull('work_pattern_id')
+                ->first();
+        }
+
+        if (!$rule) {
+            return null; // trigger fallback
+        }
+
+        $details = $rule->details()->orderBy('hour')->get();
+
+        if ($details->isEmpty()) {
+            return null;
+        }
+
+        // Cap total menit jika ada batasan (untuk LM: max 8 jam)
+        $remainingMinutes = $minutes;
+        if ($maxHours !== null) {
+            $remainingMinutes = min($remainingMinutes, $maxHours * 60);
+        }
+
+        $total = 0.0;
+        $currentHour = 1;
+
+        while ($remainingMinutes > 0) {
+            // Cari multiplier yang applicable untuk jam ke-currentHour:
+            // detail dengan hour <= currentHour yang paling tinggi
+            $detail = $details->filter(fn($d) => $d->hour <= $currentHour)->sortByDesc('hour')->first();
+
+            if (!$detail) {
+                break; // tidak ada rule, hentikan
+            }
+
+            // Blok ini maksimal 60 menit (1 jam), atau sisa menit terakhir
+            $minutesInBlock = min($remainingMinutes, 60);
+            $total += $minutesInBlock * (float) $detail->multiplier;
+            $remainingMinutes -= $minutesInBlock;
+            $currentHour++;
+        }
+
+        return (int) round($total);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // FALLBACK (kalau overtime_rules tidak ditemukan)
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * LM Multiplier fallback: ((base_hours) - 1) × 2
+     */
+    protected function calculateLmMultiplierFallback(int $minutes): int
+    {
         $hours = $minutes / 60;
         $clampedHours = min($hours, 8);
-
-        // (max 8 jam - 1 jam istirahat) × 2
         $workHoursAfterRest = max(0, $clampedHours - 1);
 
         return (int) round($workHoursAfterRest * 2 * 60);
     }
 
     /**
-     * Overtime Multiplier (hari kerja):
-     * 60 menit pertama × 1.5, sisanya × 2
+     * Overtime Multiplier fallback: 60 menit pertama × 1.5, sisanya × 2
      */
-    protected function calculateOvertimeMultiplier(int $minutes): int
+    protected function calculateOvertimeMultiplierFallback(int $minutes): int
     {
-        if ($minutes <= 0) {
-            return 0;
-        }
-
         if ($minutes <= 60) {
             return (int) round($minutes * 1.5);
         }
 
-        $firstHour = 60 * 1.5; // 90
+        $firstHour = 60 * 1.5;
         $remaining = ($minutes - 60) * 2;
 
         return (int) round($firstHour + $remaining);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // UTILITY
+    // ═══════════════════════════════════════════════════════════
 
     /**
      * Round up overtime per 30 menit (dengan threshold 5 menit).

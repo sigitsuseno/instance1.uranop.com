@@ -151,14 +151,22 @@
               </select>
             </div>
           </div>
-          <div v-if="form.has_overtime" class="grid grid-cols-1 mt-3">
-            <div>
-              <label class="block text-sm font-medium text-(--text-main) mb-1">Multiplier Lembur</label>
-              <select v-model="form.overtime_multiplier" class="w-full h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) max-w-[200px]">
-                <option :value="1.5">1.5x (Normal)</option>
-                <option :value="2.0">2x (Hari Libur)</option>
-                <option :value="3.0">3x (Libur Nasional)</option>
-              </select>
+          <div class="mt-3">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" v-model="form.has_modifier" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+              <span class="text-sm font-medium text-(--text-main)">Punya Modifier</span>
+              <span class="text-xs text-(--text-muted)">(perlakuan khusus perhitungan lembur)</span>
+            </label>
+          </div>
+          <div v-if="form.has_modifier" class="grid grid-cols-1 gap-3 mt-3 ml-6 p-3 border-l-2 border-(--primary) bg-(--bg-elevated) rounded-r-lg">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" v-model="form.is_special" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+              <span class="text-sm font-medium text-(--text-main)">Slot Spesial</span>
+              <span class="text-xs text-(--text-muted)">(ada jam alternatif)</span>
+            </label>
+            <div v-if="form.is_special" class="grid grid-cols-2 gap-3">
+              <TextInput v-model="form.special_hour_start" label="Jam Spesial Mulai" type="time" />
+              <TextInput v-model="form.special_hour_end" label="Jam Spesial Selesai" type="time" />
             </div>
           </div>
         </div>
@@ -280,7 +288,10 @@ const form = reactive({
   tolerance_minutes: 15,
   min_work_hours: 8,
   has_overtime: true,
-  overtime_multiplier: 1.5,
+  has_modifier: false,
+  is_special: false,
+  special_hour_start: '',
+  special_hour_end: '',
   is_dayoff: false,
   is_active: true,
   color: '#3b82f6',
@@ -305,7 +316,11 @@ function openForm(item) {
     form.tolerance_minutes = item.tolerance_minutes ?? 15
     form.min_work_hours = item.min_work_hours ?? 8
     form.has_overtime = item.has_overtime ?? true
-    form.overtime_multiplier = item.overtime_multiplier ?? 1.5
+    form.has_modifier = item.has_modifier ?? false
+    const meta = item.metadata || {}
+    form.special_hour_start = meta.special_hour_start || ''
+    form.special_hour_end = meta.special_hour_end || ''
+    form.is_special = meta.is_special || false
     form.is_dayoff = !!item.is_dayoff
     form.is_active = item.is_active ?? true
     form.color = item.color || '#3b82f6'
@@ -326,7 +341,10 @@ function openForm(item) {
     form.tolerance_minutes = 15
     form.min_work_hours = 8
     form.has_overtime = true
-    form.overtime_multiplier = 1.5
+    form.has_modifier = false
+    form.is_special = false
+    form.special_hour_start = ''
+    form.special_hour_end = ''
     form.is_dayoff = false
     form.is_active = true
     form.color = '#3b82f6'
@@ -352,10 +370,19 @@ async function saveShift() {
     tolerance_minutes: form.tolerance_minutes,
     min_work_hours: form.min_work_hours,
     has_overtime: form.has_overtime,
-    overtime_multiplier: form.has_overtime ? form.overtime_multiplier : 1.5,
+    has_modifier: form.has_modifier,
     is_dayoff: form.is_dayoff,
     is_active: form.is_active,
-    metadata: { color: form.color },
+    metadata: {
+      color: form.color,
+      ...(form.has_modifier ? {
+        work_hour_start: form.work_hour_start,
+        work_hour_end: form.work_hour_end,
+        is_special: form.is_special,
+        special_hour_start: form.special_hour_start,
+        special_hour_end: form.special_hour_end,
+      } : {}),
+    },
   }
 
   try {

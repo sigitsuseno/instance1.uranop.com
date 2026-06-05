@@ -12,7 +12,7 @@ use App\Modules\Settings\Models\TerRate;
 use App\Modules\Settings\Models\ProgressiveRate;
 use App\Modules\Settings\Models\OvertimeRule;
 use App\Modules\Settings\Models\OvertimeRuleDetail;
-use App\Modules\Settings\Models\WorkPattern;
+use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Settings\Models\ServiceYearAllowance;
 use App\Modules\Settings\Models\ThrConfig;
 
@@ -134,7 +134,7 @@ class PayrollConfigApiController extends Controller
         $validated = $request->validate([
             'code' => 'required|string|unique:overtime_rules,code',
             'name' => 'required|string',
-            'work_pattern_id' => 'nullable|exists:work_patterns,id',
+            'work_pattern_id' => 'nullable|exists:sch_work_patterns,id',
             'is_holiday' => 'boolean',
             'description' => 'nullable|string',
             'details' => 'required|array',
@@ -170,7 +170,7 @@ class PayrollConfigApiController extends Controller
         $validated = $request->validate([
             'code' => 'required|string|unique:overtime_rules,code,'.$id,
             'name' => 'required|string',
-            'work_pattern_id' => 'nullable|exists:work_patterns,id',
+            'work_pattern_id' => 'nullable|exists:sch_work_patterns,id',
             'is_holiday' => 'boolean',
             'description' => 'nullable|string',
             'details' => 'required|array',

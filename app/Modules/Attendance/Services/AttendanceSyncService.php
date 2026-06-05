@@ -614,6 +614,25 @@ class AttendanceSyncService
         // Periode 25-24
         $periode = $this->getPeriode($date);
 
+        $scheduleIn  = $shift?->work_hour_start;
+        $scheduleOut = $shift?->work_hour_end;
+
+        // Deteksi slot spesial (modifier): pilih slot terdekat dari check_in
+        if ($shift?->has_modifier && !empty($result['check_in'])) {
+            $meta = $shift->metadata ?? [];
+            if (!empty($meta['is_special']) && !empty($meta['special_hour_start'])) {
+                $checkInTime = Carbon::parse($result['check_in']);
+                $normalStart = Carbon::parse($dateStr . ' ' . ($meta['work_hour_start'] ?? $scheduleIn));
+                $specialStart = Carbon::parse($dateStr . ' ' . $meta['special_hour_start']);
+
+                if ($checkInTime->diffInMinutes($specialStart, true)
+                    < $checkInTime->diffInMinutes($normalStart, true)) {
+                    $scheduleIn  = $meta['special_hour_start'];
+                    $scheduleOut = $meta['special_hour_end'] ?? $scheduleOut;
+                }
+            }
+        }
+
         $data = [
             'employee_id'    => $roster->employee_id,
             'date'           => $dateStr,
@@ -621,8 +640,8 @@ class AttendanceSyncService
             'periode_end'    => $periode['end'],
             'check_in'       => $result['check_in'] ?? null,
             'check_out'      => $result['check_out'] ?? null,
-            'schedule_in'    => $shift?->work_hour_start,
-            'schedule_out'   => $shift?->work_hour_end,
+            'schedule_in'    => $scheduleIn,
+            'schedule_out'   => $scheduleOut,
             'late_minutes'   => 0,
             'lm'             => 0,
             'lm_count'       => 0,

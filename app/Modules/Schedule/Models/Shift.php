@@ -34,7 +34,7 @@ class Shift extends Model
         'tolerance_minutes',
         'min_work_hours',
         'has_overtime',
-        'overtime_multiplier',
+        'has_modifier',
         'is_weekend',
         'is_dayoff',
         'is_active',
@@ -52,7 +52,7 @@ class Shift extends Model
         'is_active' => 'boolean',
         'tolerance_minutes' => 'integer',
         'min_work_hours' => 'integer',
-        'overtime_multiplier' => 'decimal:2',
+        'has_modifier' => 'boolean',
         'metadata' => 'array',
     ];
 

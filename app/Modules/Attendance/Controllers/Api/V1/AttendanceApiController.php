@@ -393,7 +393,8 @@ class AttendanceApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "Hitung lembur selesai. {$result['updated']} record diperbarui.",
+            'message' => "Hitung lembur selesai. {$result['updated']} record dihitung" .
+                (($result['skipped'] ?? 0) > 0 ? ", {$result['skipped']} diskip (cuti/izin/sakit)." : "."),
             'data'    => $result,
         ]);
     }

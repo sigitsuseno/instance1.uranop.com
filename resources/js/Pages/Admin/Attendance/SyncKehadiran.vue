@@ -21,7 +21,7 @@
           </template>
           Lengkapi
         </BaseButton>
-        <BaseButton variant="secondary" @click="handleHitungLembur" :disabled="true" title="Coming soon — sesi selanjutnya">
+        <BaseButton variant="secondary" :loading="isCalculating" @click="handleHitungLembur" :disabled="isCalculating">
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
           </template>
@@ -37,9 +37,9 @@
     </div>
 
     <!-- Status Banner -->
-    <div v-if="syncResult || completingResult" class="mb-4 p-3 rounded-lg text-sm font-medium" :class="(syncResult?.success || completingResult?.success) ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
-      {{ syncResult?.message || completingResult?.message }}
-      <button class="ml-2 underline text-xs" @click="syncResult = null; completingResult = null">Tutup</button>
+    <div v-if="syncResult || completingResult || calculateResult" class="mb-4 p-3 rounded-lg text-sm font-medium" :class="(syncResult?.success || completingResult?.success || calculateResult?.success) ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
+      {{ syncResult?.message || completingResult?.message || calculateResult?.message }}
+      <button class="ml-2 underline text-xs" @click="syncResult = null; completingResult = null; calculateResult = null">Tutup</button>
     </div>
 
     <!-- Tab Bar: Jakarta / Ungaran Staff / Ungaran Production -->
@@ -81,7 +81,7 @@
             @change="onPeriodChange"
             :disabled="isLoading"
           >
-            <option v-for="p in periods" :key="p.value" :value="p.value">{{ p.label }}</option>
+            <option v-for="p in payPeriods" :key="p.id" :value="p.id">{{ p.label }}</option>
           </select>
         </div>
 
@@ -135,12 +135,6 @@
             @input="filterData"
           />
         </div>
-        <!-- Checkbox "Lengkapi Absent" — per tab -->
-        <label v-if="currentAbsentGroup" class="flex items-center gap-1.5 px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-sm cursor-pointer hover:border-(--primary) transition select-none" :class="{ 'border-(--primary) bg-(--primary)/5': fillAbsent }">
-          <input v-model="fillAbsent" type="checkbox" class="w-3.5 h-3.5 rounded accent-(--primary)" />
-          <span class="text-(--text-main)">Lengkapi Absent</span>
-          <span class="text-[10px] text-(--text-muted)">({{ currentAbsentGroup }})</span>
-        </label>
         <select
           v-model="filterDepartment"
           class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
@@ -334,6 +328,114 @@
         </div>
       </template>
     </BaseModal>
+
+    <!-- Lengkapi Modal -->
+    <BaseModal v-if="showLengkapiModal" :show="showLengkapiModal" title="Lengkapi Absensi" size="sm" @close="showLengkapiModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih rentang tanggal untuk proses auto-lengkapi. Hanya record yang belum punya check-in/out yang akan diisi.
+        </p>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-(--text-main) mb-1">Dari Tanggal</label>
+            <input v-model="processStartDate" type="date"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-(--text-main) mb-1">Sampai Tanggal</label>
+            <input v-model="processEndDate" type="date"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
+          </div>
+        </div>
+
+        <label v-if="currentAbsentGroup" class="flex items-center gap-2 text-sm cursor-pointer select-none">
+          <input v-model="fillAbsent" type="checkbox" class="w-4 h-4 rounded accent-(--primary)" />
+          <span class="text-(--text-main)">Lengkapi Absent</span>
+          <span class="text-xs text-(--text-muted)">({{ currentAbsentGroup }})</span>
+        </label>
+      </div>
+
+      <template #footer>
+        <div class="flex gap-3 w-full">
+          <BaseButton variant="secondary" @click="showLengkapiModal = false">Batal</BaseButton>
+          <span class="flex-1"></span>
+          <BaseButton variant="primary" :loading="isCompleting" @click="handleProceedLengkapi">
+            <template #icon-left>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
+            </template>
+            Proses Lengkapi
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
+
+    <!-- Sync Modal -->
+    <BaseModal v-if="showSyncModal" :show="showSyncModal" title="Sync Kehadiran" size="sm" @close="showSyncModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih rentang tanggal untuk sinkronisasi data fingerprint ke attendance prepare.
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-(--text-main) mb-1">Dari Tanggal</label>
+            <input v-model="processStartDate" type="date"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-(--text-main) mb-1">Sampai Tanggal</label>
+            <input v-model="processEndDate" type="date"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex gap-3 w-full">
+          <BaseButton variant="secondary" @click="showSyncModal = false">Batal</BaseButton>
+          <span class="flex-1"></span>
+          <BaseButton variant="primary" :loading="isSyncing" @click="handleProceedSync">
+            <template #icon-left>
+              <svg class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </template>
+            Proses Sync
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
+
+    <!-- Hitung Lembur Modal -->
+    <BaseModal v-if="showHitungLemburModal" :show="showHitungLemburModal" title="Hitung Lembur" size="sm" @close="showHitungLemburModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih rentang tanggal untuk menghitung lembur. Record yang sudah terkunci akan dilewati.
+        </p>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-(--text-main) mb-1">Dari Tanggal</label>
+            <input v-model="processStartDate" type="date"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-(--text-main) mb-1">Sampai Tanggal</label>
+            <input v-model="processEndDate" type="date"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex gap-3 w-full">
+          <BaseButton variant="secondary" @click="showHitungLemburModal = false">Batal</BaseButton>
+          <span class="flex-1"></span>
+          <BaseButton variant="primary" :loading="isCalculating" @click="handleProceedHitungLembur">
+            <template #icon-left>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            </template>
+            Proses Hitung Lembur
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
+
   </div>
 </template>
 
@@ -348,10 +450,12 @@ const { get, post } = useApi()
 // ── State ──
 const isSyncing = ref(false)
 const isCompleting = ref(false)
+const isCalculating = ref(false)
 const isLoading = ref(true)
 const isSaving = ref(false)
 const syncResult = ref(null)
 const completingResult = ref(null)
+const calculateResult = ref(null)
 const selectedPeriod = ref('current')
 const activeDate = ref(new Date().toISOString().split('T')[0])
 const activeTab = ref('jkt')
@@ -362,6 +466,11 @@ const filterDepartment = ref('')
 const filterStatus = ref('')
 const editingCell = ref(null)
 const apiError = ref(null)
+const showLengkapiModal = ref(false)
+const showSyncModal = ref(false)
+const showHitungLemburModal = ref(false)
+const processStartDate = ref('')
+const processEndDate = ref('')
 
 const editForm = ref({
   checkIn: '',
@@ -387,50 +496,34 @@ const tabs = [
   { key: 'ung-prod', label: 'Ungaran Production', code: 'GRP-PS1', groupCodes: ['GRP-PS1'], absentGroup: null },
 ]
 
-// ── Periode 25-24 ──
+// ── Periode (dari pay_periods API) ──
 
-function getPeriodeRange(monthOffset = 0) {
-  const now = new Date()
-  now.setMonth(now.getMonth() + monthOffset)
+const payPeriods = ref([])
 
-  const year = now.getFullYear()
-  const month = now.getMonth()
-
-  // Periode: 25 bulan lalu s/d 24 bulan ini
-  const start = new Date(year, month - 1, 25)
-  const end = new Date(year, month, 24)
-
-  return {
-    start: start.toISOString().split('T')[0],
-    end: end.toISOString().split('T')[0],
-    label: formatPeriodeLabel(start, end),
+async function fetchPayPeriods() {
+  try {
+    const res = await get('/api/v1/payroll/periods')
+    const list = res.data || []
+    payPeriods.value = list.map(p => ({
+      id: p.id,
+      name: p.name,
+      start: p.start_date,
+      end: p.end_date,
+      label: `${p.name} (${p.start_date} - ${p.end_date})`,
+    }))
+    // Set selected ke periode pertama (default)
+    if (payPeriods.value.length > 0 && selectedPeriod.value === 'current') {
+      selectedPeriod.value = payPeriods.value[0].id
+    }
+  } catch (e) {
+    console.error('Gagal fetch pay periods:', e)
+    payPeriods.value = []
   }
 }
-
-function formatPeriodeLabel(start, end) {
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
-  return `${start.getDate()} ${monthNames[start.getMonth()]} ${start.getFullYear()} - ${end.getDate()} ${monthNames[end.getMonth()]} ${end.getFullYear()}`
-}
-
-// Generate last 6 periods
-const periods = computed(() => {
-  const result = []
-  for (let i = 0; i >= -5; i--) {
-    const p = getPeriodeRange(i)
-    const label = i === 0 ? `Periode Saat Ini (${p.label})` : p.label
-    result.push({
-      value: p.start, // use start date as key
-      label,
-      start: p.start,
-      end: p.end,
-    })
-  }
-  return result
-})
 
 function getPeriodDates() {
-  const p = periods.value.find(p => p.value === selectedPeriod.value)
-  return p || periods.value[0]
+  const p = payPeriods.value.find(p => p.id == selectedPeriod.value)
+  return p || payPeriods.value[0] || { start: '', end: '' }
 }
 
 // Generate all dates for period
@@ -487,13 +580,14 @@ function onPeriodChange() {
 
 async function fetchEmployees() {
   try {
+    const { start, end } = getPeriodDates()
     // Backend limits per_page to max 100, so paginate through all pages
     let allEmployees = []
     let page = 1
     let hasMore = true
 
     while (hasMore) {
-      const res = await get(`/api/v1/employees?is_active=1&per_page=100&page=${page}`)
+      const res = await get(`/api/v1/employees?period_start=${start}&period_end=${end}&per_page=100&page=${page}`)
       // EmployeeListResource::collection() returns { data: [...], links: {...}, meta: {...} }
       const empList = Array.isArray(res.data) ? res.data : (res.data?.data || [])
       allEmployees = allEmployees.concat(empList)
@@ -562,9 +656,9 @@ async function fetchPrepareData() {
       const checkIn = p.check_in ? p.check_in.split('T')[1]?.substring(0, 5) : null
       const checkOut = p.check_out ? p.check_out.split('T')[1]?.substring(0, 5) : null
 
-      // Calculate overtime display
+      // Calculate overtime display — pakai raw overtime/LM (sebelum multiplier)
       let overtimeStr = null
-      const totalOT = (p.overtime_count || 0) + (p.lm_count || 0)
+      const totalOT = (p.overtime || 0) + (p.lm || 0)
       if (totalOT > 0) {
         overtimeStr = totalOT >= 60
           ? `${Math.floor(totalOT / 60)}j ${totalOT % 60}m`
@@ -630,6 +724,9 @@ async function fetchData() {
   isLoading.value = true
   apiError.value = null
   try {
+    if (payPeriods.value.length === 0) {
+      await fetchPayPeriods()
+    }
     if (employees.value.length === 0) {
       await Promise.all([fetchEmployees(), fetchEmployeeGroups()])
     }
@@ -644,15 +741,21 @@ async function fetchData() {
 // ── Sync ──
 
 async function handleSync() {
+  const { start, end } = getPeriodDates()
+  processStartDate.value = start
+  processEndDate.value   = end
+  showSyncModal.value = true
+}
+
+async function handleProceedSync() {
   isSyncing.value = true
   syncResult.value = null
-
-  const { start, end } = getPeriodDates()
+  showSyncModal.value = false
 
   try {
     const res = await post('/api/v1/attendance/prepare/sync', {
-      start_date: start,
-      end_date: end,
+      start_date: processStartDate.value,
+      end_date: processEndDate.value,
     })
 
     syncResult.value = {
@@ -660,7 +763,6 @@ async function handleSync() {
       message: res.message || 'Sync selesai.',
     }
 
-    // Refresh data
     await fetchData()
   } catch (e) {
     syncResult.value = {
@@ -803,7 +905,7 @@ function reviewBadgeClass(status) {
 
 function openEdit(emp, dateObj) {
   const dayData = getDayData(emp, dateObj.date)
-  const totalOT = (dayData.overtimeCount || 0) + (dayData.lmCount || 0)
+  const totalOT = (dayData.overtimeRaw || 0) + (dayData.lmRaw || 0)
 
   editingCell.value = { employee: emp, date: dateObj }
   editForm.value = {
@@ -863,11 +965,24 @@ const currentAbsentGroup = computed(() => {
   return tab?.absentGroup || null
 })
 
-async function handleLengkapi() {
+function handleLengkapi() {
+  // Buka modal — default range: periode start → hari ini
+  const { start } = getPeriodDates()
+  const today = new Date().toISOString().split('T')[0]
+
+  if (!processStartDate.value) processStartDate.value = start
+  if (!processEndDate.value)   processEndDate.value   = today
+
+  showLengkapiModal.value = true
+}
+
+async function handleProceedLengkapi() {
   isCompleting.value = true
   completingResult.value = null
+  showLengkapiModal.value = false
 
-  const { start, end } = getPeriodDates()
+  const start = processStartDate.value
+  const end   = processEndDate.value
   const currentTab = tabs.find(t => t.key === activeTab.value)
   let totalMessage = ''
 
@@ -883,7 +998,6 @@ async function handleLengkapi() {
 
     // 2. Kalau checkbox dicentang & ada absentGroup → lengkapi absent khusus grup itu
     if (fillAbsent.value && currentAbsentGroup.value) {
-      // Reset fillAbsent checkbox biar nggak double-process
       const absentRes = await post('/api/v1/attendance/prepare/auto-lengkapi', {
         group_codes: [currentAbsentGroup.value],
         start_date: start,
@@ -911,33 +1025,49 @@ async function handleLengkapi() {
   }
 }
 
-// ── Placeholders ──
+// ── Hitung Lembur ──
 
-function handleHitungLembur() { /* TODO: sesi selanjutnya */ }
+async function handleHitungLembur() {
+  const { start, end } = getPeriodDates()
+  processStartDate.value = start
+  processEndDate.value   = end
+  showHitungLemburModal.value = true
+}
+
+async function handleProceedHitungLembur() {
+  isCalculating.value = true
+  calculateResult.value = null
+  showHitungLemburModal.value = false
+
+  try {
+    const res = await post('/api/v1/attendance/prepare/hitung-lembur', {
+      start_date: processStartDate.value,
+      end_date: processEndDate.value,
+    })
+
+    calculateResult.value = {
+      success: res.success,
+      message: res.message || 'Hitung lembur selesai.',
+    }
+
+    if (res.success) {
+      await fetchData()
+    }
+  } catch (e) {
+    calculateResult.value = {
+      success: false,
+      message: 'Hitung lembur gagal: ' + (e.message || 'Unknown error'),
+    }
+  } finally {
+    isCalculating.value = false
+  }
+}
+
 function handleKunci() { /* TODO: sesi selanjutnya */ }
 
 function filterData() { /* computed handles this */ }
 
 // ── Init ──
-
-// Set selected period to current
-if (periods.value.length > 0) {
-  selectedPeriod.value = periods.value[0].value
-}
-
-// Set active date to today (or first available)
-const today = new Date().toISOString().split('T')[0]
-const todayInRange = allDates.value.find(d => d.date === today)
-if (todayInRange) {
-  activeDate.value = today
-  // Scroll window to include today
-  const idx = allDates.value.findIndex(d => d.date === today)
-  if (idx >= 0) {
-    dateWindowStart.value = Math.max(0, Math.floor(idx / WINDOW_SIZE) * WINDOW_SIZE)
-  }
-} else if (allDates.value.length > 0) {
-  activeDate.value = allDates.value[0].date
-}
 
 // Watch for period change to refetch
 watch(() => selectedPeriod.value, () => {

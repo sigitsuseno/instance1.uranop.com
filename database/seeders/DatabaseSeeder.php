@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             LeaveSettingsSeeder::class,
             WorkPatternAdditionalSeeder::class,
             LeaveTypeSeeder::class,
+            OvertimeRuleSeeder::class,
         ]);
     }
 }

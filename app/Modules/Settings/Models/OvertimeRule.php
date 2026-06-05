@@ -20,6 +20,6 @@ class OvertimeRule extends Model
 
     public function workPattern()
     {
-        return $this->belongsTo(WorkPattern::class, 'work_pattern_id');
+        return $this->belongsTo(\App\Modules\Schedule\Models\WorkPattern::class, 'work_pattern_id');
     }
 }

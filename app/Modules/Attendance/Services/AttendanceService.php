@@ -349,30 +349,58 @@ class AttendanceService
     /**
      * Hitung lembur (overtime multiplier) untuk satu record.
      * Recalculate menggunakan AttendanceCalculatorService.
+     *
+     * Mengambil work_pattern_type, is_holiday, is_saturday, is_sunday dari roster
+     * untuk menentukan logika perhitungan yang tepat (SHIFT vs FIXED).
+     * work_pattern_id digunakan untuk lookup overtime_rule spesifik.
      */
     public function hitungLembur(AttendancePrepare $prepare, AttendanceCalculatorService $calculator): AttendancePrepare
     {
         $shift = null;
+        $workPatternType = null;
+        $workPatternId   = null;
+        $isHoliday = false;
+        $isSaturday = false;
+        $isSunday  = false;
 
-        // Coba dapatkan shift dari roster
+        // Ambil data dari roster (sumber utama)
         $roster = \App\Modules\Schedule\Models\EmployeeShiftRoster::where('employee_id', $prepare->employee_id)
             ->whereDate('date', $prepare->date)
             ->first();
 
         if ($roster) {
-            $shift = $roster->shift;
+            $shift           = $roster->shift;
+            $workPatternType = $roster->work_pattern_type;
+            $workPatternId   = $roster->work_pattern_id;
+            $isHoliday       = (bool) $roster->is_holiday;
+            $isSaturday      = (bool) $roster->is_sat;
+            $isSunday        = (bool) $roster->is_sun;
         }
 
-        $isHoliday = \App\Modules\Schedule\Models\Holiday::where('date', $prepare->date->toDateString())->exists();
-        $isSunday  = $prepare->date->isSunday();
+        // Fallback: cek dari tabel Holiday dan Carbon
+        if (! $isHoliday) {
+            $isHoliday = \App\Modules\Schedule\Models\Holiday::where('date', $prepare->date->toDateString())->exists();
+        }
+        if (! $isSunday) {
+            $isSunday = $prepare->date->isSunday();
+        }
+        if (! $isSaturday) {
+            $isSaturday = $prepare->date->isSaturday();
+        }
 
-        $calc = $calculator->calculate($prepare, $shift, $isHoliday, $isSunday);
+        $calc = $calculator->calculate(
+            $prepare, $shift, $isHoliday, $isSunday,
+            null,              // manualOvertime
+            $workPatternType,  // workPatternType
+            $isSaturday,       // isSaturday
+            $workPatternId,    // workPatternId → lookup overtime_rule
+        );
 
         $prepare->update([
-            'late_minutes'  => $calc['late_minutes'],
-            'lm'            => $calc['lm'],
-            'lm_count'      => $calc['lm_count'],
-            'overtime'      => $calc['overtime'],
+            'late_minutes'   => $calc['late_minutes'],
+            'lm'             => $calc['lm'],
+            'lm_count'       => $calc['lm_count'],
+            'overtime'       => $calc['overtime'],
             'overtime_count' => $calc['overtime_count'],
         ]);
 
@@ -381,24 +409,44 @@ class AttendanceService
 
     /**
      * Bulk hitung lembur untuk rentang tanggal.
+     *
+     * Memproses SEMUA record unlocked yang punya check_in & check_out lengkap,
+     * termasuk yang overtime/lm-nya masih 0 (belum pernah dikalkulasi).
+     * Record libur/off/cuti/izin/sakit tanpa scan akan diskip otomatis
+     * karena tidak punya check_in & check_out.
      */
     public function bulkHitungLembur(string $startDate, string $endDate, AttendanceCalculatorService $calculator): array
     {
+        // Ambil semua record unlocked yang punya data scan lengkap
         $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
             ->where('is_locked', false)
-            ->where(function ($q) {
-                $q->where('overtime', '>', 0)
-                  ->orWhere('lm', '>', 0);
-            })
+            ->whereNotNull('check_in')
+            ->whereNotNull('check_out')
             ->get();
 
         $updated = 0;
+        $skipped = 0;
+
         foreach ($prepares as $prepare) {
+            // Skip record yang statusnya bukan hari hadir/kerja (cuti/izin/sakit/libur/off)
+            // karena overtime/LM hanya relevan untuk hari hadir + hari libur/minggu
+            if (in_array($prepare->status, [
+                AttendancePrepare::STATUS_CUTI,
+                AttendancePrepare::STATUS_IZIN,
+                AttendancePrepare::STATUS_SAKIT,
+            ])) {
+                $skipped++;
+                continue;
+            }
+
             $this->hitungLembur($prepare, $calculator);
             $updated++;
         }
 
-        return ['updated' => $updated];
+        return [
+            'updated' => $updated,
+            'skipped' => $skipped,
+        ];
     }
 
     /**
