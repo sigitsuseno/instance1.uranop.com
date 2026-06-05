@@ -152,13 +152,14 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
                 // Set semua kontrak lama karyawan ini menjadi is_latest = false karena kita akan insert yang baru
                 EmployeeContract::where('employee_id', $employee->id)->update(['is_latest' => false]);
 
-                // Opsi A: Catatan kontrak berulang sesuai durasi hingga waktu saat ini (atau target end dari excel)
+                // Opsi B: Kontrak nyambung rapat — end = start + durasi, next start = end + 1 day
+                // Contoh: 01 Jan → 01 Feb, 02 Feb → 02 Mar, dst.
                 $segmentStart = $startDate->copy();
                 $now = Carbon::now();
                 $segments = [];
 
                 while (true) {
-                    $segmentEnd = $segmentStart->copy()->addMonths($duration)->subDay();
+                    $segmentEnd = $segmentStart->copy()->addMonths($duration);
                     $currentVersion++;
 
                     if ($excelEndDate) {
