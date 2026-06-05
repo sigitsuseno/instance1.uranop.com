@@ -176,6 +176,11 @@ class Employee extends Model
         return $this->hasMany(EmployeeThr::class);
     }
 
+    public function shiftRosters()
+    {
+        return $this->hasMany(\App\Modules\Schedule\Models\EmployeeShiftRoster::class, 'employee_id');
+    }
+
     // ========== EFFECTIVE DATE PATTERN — METHODS ==========
 
     /**

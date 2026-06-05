@@ -11,25 +11,37 @@
       <div class="flex gap-2">
         <BaseButton variant="primary" :loading="isSyncing" @click="handleSync">
           <template #icon-left>
-            <svg class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            <svg class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2.5">
+              <path d="M23 4v6h-6" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
           </template>
           Sync Kehadiran
         </BaseButton>
         <BaseButton variant="secondary" :loading="isCompleting" @click="handleLengkapi">
           <template #icon-left>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 11l3 3L22 4" />
+            </svg>
           </template>
           Lengkapi
         </BaseButton>
         <BaseButton variant="secondary" :loading="isCalculating" @click="handleHitungLembur" :disabled="isCalculating">
           <template #icon-left>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="7" width="20" height="14" rx="2" />
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+            </svg>
           </template>
           Hitung Lembur
         </BaseButton>
         <BaseButton variant="secondary" @click="handleKunci" :disabled="true" title="Coming soon — sesi selanjutnya">
           <template #icon-left>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
           </template>
           Kunci
         </BaseButton>
@@ -37,22 +49,20 @@
     </div>
 
     <!-- Status Banner -->
-    <div v-if="syncResult || completingResult || calculateResult" class="mb-4 p-3 rounded-lg text-sm font-medium" :class="(syncResult?.success || completingResult?.success || calculateResult?.success) ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
+    <div v-if="syncResult || completingResult || calculateResult" class="mb-4 p-3 rounded-lg text-sm font-medium"
+      :class="(syncResult?.success || completingResult?.success || calculateResult?.success) ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
       {{ syncResult?.message || completingResult?.message || calculateResult?.message }}
-      <button class="ml-2 underline text-xs" @click="syncResult = null; completingResult = null; calculateResult = null">Tutup</button>
+      <button class="ml-2 underline text-xs"
+        @click="syncResult = null; completingResult = null; calculateResult = null">Tutup</button>
     </div>
 
     <!-- Tab Bar: Jakarta / Ungaran Staff / Ungaran Production -->
     <div class="flex gap-1 mb-6 border-b border-(--border-soft)">
-      <button
-        v-for="tab in tabs"
-        :key="tab.key"
+      <button v-for="tab in tabs" :key="tab.key"
         class="px-4 py-2.5 text-sm font-medium rounded-t-lg transition border-b-2 -mb-[1px]"
         :class="activeTab === tab.key
           ? 'bg-(--bg-card) border-(--primary) text-(--primary)'
-          : 'bg-transparent border-transparent text-(--text-muted) hover:text-(--text-main) hover:border-(--border-soft)'"
-        @click="activeTab = tab.key"
-      >
+          : 'bg-transparent border-transparent text-(--text-muted) hover:text-(--text-main) hover:border-(--border-soft)'" @click="activeTab = tab.key">
         {{ tab.label }}
         <span class="ml-1 text-xs opacity-60">({{ tab.code }})</span>
       </button>
@@ -60,7 +70,8 @@
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3 mb-6">
-      <div v-for="stat in statsCards" :key="stat.label" class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center">
+      <div v-for="stat in statsCards" :key="stat.label"
+        class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center">
         <p class="text-2xl font-bold" :class="stat.color">{{ stat.value }}</p>
         <p class="text-xs text-(--text-muted)">{{ stat.label }}</p>
       </div>
@@ -72,15 +83,18 @@
         <!-- Period Selector -->
         <div class="flex items-center gap-3">
           <label class="text-sm font-medium text-(--text-main) whitespace-nowrap">
-            <svg class="w-4 h-4 inline mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <svg class="w-4 h-4 inline mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
             Periode
           </label>
-          <select
-            v-model="selectedPeriod"
+          <select v-model="selectedPeriod"
             class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary) min-w-[280px]"
-            @change="onPeriodChange"
-            :disabled="isLoading"
-          >
+            @change="onPeriodChange" :disabled="isLoading">
             <option v-for="p in payPeriods" :key="p.id" :value="p.id">{{ p.label }}</option>
           </select>
         </div>
@@ -89,30 +103,26 @@
         <div class="flex items-center gap-2">
           <button
             class="w-8 h-8 rounded-lg border border-(--border-soft) bg-(--bg-card) flex items-center justify-center text-(--text-secondary) hover:bg-(--bg-elevated) transition disabled:opacity-30"
-            :disabled="dateWindowStart <= 0"
-            @click="shiftWindow(-1)"
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+            :disabled="dateWindowStart <= 0" @click="shiftWindow(-1)">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
           </button>
 
-          <button
-            v-for="(d, i) in visibleDates"
-            :key="d.date"
+          <button v-for="(d, i) in visibleDates" :key="d.date"
             class="w-10 h-8 rounded-lg border text-sm font-semibold transition font-mono"
             :class="d.date === activeDate
               ? 'bg-(--text-main) text-white border-(--text-main)'
-              : 'bg-(--bg-card) border-(--border-soft) text-(--text-main) hover:border-(--primary) hover:text-(--primary)'"
-            @click="activeDate = d.date"
-          >
+              : 'bg-(--bg-card) border-(--border-soft) text-(--text-main) hover:border-(--primary) hover:text-(--primary)'" @click="activeDate = d.date">
             {{ d.day }}
           </button>
 
           <button
             class="w-8 h-8 rounded-lg border border-(--border-soft) bg-(--bg-card) flex items-center justify-center text-(--text-secondary) hover:bg-(--bg-elevated) transition disabled:opacity-30"
-            :disabled="dateWindowEnd >= allDates.length"
-            @click="shiftWindow(1)"
-          >
-            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6"/></svg>
+            :disabled="dateWindowEnd >= allDates.length" @click="shiftWindow(1)">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M9 18l6-6-6-6" />
+            </svg>
           </button>
 
           <span class="text-xs text-(--text-muted) ml-2 hidden sm:inline">
@@ -126,28 +136,24 @@
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
       <div class="flex gap-2">
         <div class="relative">
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-(--text-soft)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Cari karyawan..."
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-(--text-soft)" viewBox="0 0 24 24"
+            fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <path d="M21 21l-4.35-4.35" />
+          </svg>
+          <input v-model="searchQuery" type="text" placeholder="Cari karyawan..."
             class="pl-9 pr-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary) w-56"
-            @input="filterData"
-          />
+            @input="filterData" />
         </div>
-        <select
-          v-model="filterDepartment"
+        <select v-model="filterDepartment"
           class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
-          @change="filterData"
-        >
+          @change="filterData">
           <option value="">Semua Departemen</option>
           <option v-for="d in departments" :key="d" :value="d">{{ d }}</option>
         </select>
-        <select
-          v-model="filterStatus"
+        <select v-model="filterStatus"
           class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
-          @change="filterData"
-        >
+          @change="filterData">
           <option value="">Semua Status</option>
           <option value="hadir">Hadir</option>
           <option value="terlambat">Terlambat</option>
@@ -157,41 +163,43 @@
       </div>
       <div class="flex gap-2 items-center">
         <div v-if="isLoading" class="flex items-center gap-1 text-sm text-(--text-muted)">
-          <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4"/></svg>
+          <svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" />
+          </svg>
           Memuat data...
         </div>
         <div class="text-sm text-(--text-muted)">
-          <svg class="w-4 h-4 inline mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          <svg class="w-4 h-4 inline mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
           Klik cell untuk edit absensi
         </div>
       </div>
     </div>
-
     <!-- Table -->
-    <div class="overflow-auto max-h-[65vh] bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm relative custom-scrollbar">
+    <div
+      class="overflow-auto max-h-[65vh] bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm relative custom-scrollbar">
       <table class="w-full text-sm">
         <thead class="sticky top-0 z-20">
           <tr class="border-b border-(--border-soft) bg-(--bg-elevated)">
-            <th class="sticky left-0 bg-(--bg-elevated) px-4 py-3 text-left text-xs font-medium text-(--text-muted) uppercase tracking-wider z-30 min-w-[160px]">
+            <th
+              class="sticky left-0 bg-(--bg-elevated) px-4 py-3 text-left text-xs font-medium text-(--text-muted) uppercase tracking-wider z-30 min-w-[160px]">
               Nama
             </th>
-            <th
-              v-for="d in visibleDates"
-              :key="d.date"
+            <th v-for="d in visibleDates" :key="d.date"
               class="px-3 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider min-w-[110px]"
-              :class="{ 'bg-red-50/30 dark:bg-red-900/10': d.isWeekend, 'ring-2 ring-inset ring-(--primary)': d.date === activeDate }"
-            >
+              :class="{ 'bg-red-50/30 dark:bg-red-900/10': d.isWeekend, 'ring-2 ring-inset ring-(--primary)': d.date === activeDate }">
               <div>{{ d.dateDisplay }}</div>
               <div class="text-[10px]">{{ d.dayName }}</div>
             </th>
           </tr>
         </thead>
         <tbody>
-          <tr
-            v-for="emp in filteredEmployees"
-            :key="emp.id"
-            class="border-b border-(--border-soft) hover:bg-(--bg-elevated)/30 transition"
-          >
+          <tr v-for="emp in filteredEmployees" :key="emp.id"
+            class="border-b border-(--border-soft) hover:bg-(--bg-elevated)/30 transition">
             <td class="sticky left-0 bg-(--bg-card) px-4 py-0 font-medium text-(--text-main) z-10">
               <div class="py-2">
                 <div class="text-sm font-semibold">{{ emp.name }}</div>
@@ -201,32 +209,37 @@
             </td>
 
             <!-- Date columns -->
-            <td
-              v-for="d in visibleDates"
-              :key="d.date"
+            <td v-for="d in visibleDates" :key="d.date"
               class="px-2 py-0 text-center align-top cursor-pointer hover:bg-(--bg-elevated) transition border-l border-(--border-soft)/30"
-              :class="{ 'bg-red-50/20 dark:bg-red-900/5': d.isWeekend }"
-              @click="openEdit(emp, d)"
-            >
+              :class="{ 'bg-red-50/20 dark:bg-red-900/5': d.isWeekend }" @click="openEdit(emp, d)">
               <div class="py-2 space-y-[6px]">
                 <!-- Check In -->
-                <div class="text-xs font-mono" :class="getDayData(emp, d.date).checkIn ? 'text-(--text-main)' : 'text-(--text-muted)'">
-                  <span class="text-[10px] text-(--text-soft) mr-0.5">in</span>{{ getDayData(emp, d.date).checkIn || '--:--' }}
+                <div class="text-xs font-mono"
+                  :class="getDayData(emp, d.date).checkIn ? 'text-(--text-main)' : 'text-(--text-muted)'">
+                  <span class="text-[10px] text-(--text-soft) mr-0.5">in</span>{{ getDayData(emp, d.date).checkIn ||
+                    '--:--'
+                  }}
                 </div>
                 <!-- Check Out -->
-                <div class="text-xs font-mono" :class="getDayData(emp, d.date).checkOut ? 'text-(--text-muted)' : 'text-(--text-muted)'">
-                  <span class="text-[10px] text-(--text-soft) mr-0.5">out</span>{{ getDayData(emp, d.date).checkOut || '--:--' }}
+                <div class="text-xs font-mono"
+                  :class="getDayData(emp, d.date).checkOut ? 'text-(--text-muted)' : 'text-(--text-muted)'">
+                  <span class="text-[10px] text-(--text-soft) mr-0.5">out</span>{{ getDayData(emp, d.date).checkOut ||
+                    '--:--' }}
                 </div>
                 <!-- Overtime -->
-                <div class="text-[10px]" :class="getDayData(emp, d.date).overtime ? 'text-orange-500' : 'text-(--text-muted)'">
+                <div class="text-[10px]"
+                  :class="getDayData(emp, d.date).overtime ? 'text-orange-500' : 'text-(--text-muted)'">
                   {{ getDayData(emp, d.date).overtime || '-' }}
                 </div>
                 <!-- Status Badge -->
-                <span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold" :class="statusBadgeClass(getDayData(emp, d.date).status)">
+                <span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold"
+                  :class="statusBadgeClass(getDayData(emp, d.date).status)">
                   {{ statusLabel(getDayData(emp, d.date).status) }}
                 </span>
                 <!-- Review Status -->
-                <span v-if="getDayData(emp, d.date).reviewStatus" class="inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold" :class="reviewBadgeClass(getDayData(emp, d.date).reviewStatus)">
+                <span v-if="getDayData(emp, d.date).reviewStatus"
+                  class="inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold"
+                  :class="reviewBadgeClass(getDayData(emp, d.date).reviewStatus)">
                   {{ reviewLabel(getDayData(emp, d.date).reviewStatus) }}
                 </span>
               </div>
@@ -235,7 +248,11 @@
 
           <tr v-if="filteredEmployees.length === 0">
             <td :colspan="visibleDates.length + 1" class="px-4 py-12 text-center text-(--text-muted)">
-              <svg class="w-8 h-8 mx-auto mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 13V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7m16 0v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5m16 0h-2.586a1 1 0 0 0-.707.293l-2.414 2.414a1 1 0 0 1-.707.293h-3.172a1 1 0 0 1-.707-.293l-2.414-2.414A1 1 0 0 0 6.586 13H4"/></svg>
+              <svg class="w-8 h-8 mx-auto mb-2 opacity-40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.5">
+                <path
+                  d="M20 13V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7m16 0v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5m16 0h-2.586a1 1 0 0 0-.707.293l-2.414 2.414a1 1 0 0 1-.707.293h-3.172a1 1 0 0 1-.707-.293l-2.414-2.414A1 1 0 0 0 6.586 13H4" />
+              </svg>
               {{ isLoading ? 'Memuat...' : 'Tidak ada data untuk ditampilkan' }}
             </td>
           </tr>
@@ -253,7 +270,13 @@
       <div class="p-3 bg-(--bg-elevated) rounded-lg mb-4">
         <p class="text-sm font-semibold text-(--text-main)">{{ editingCell.employee.name }}</p>
         <p class="text-xs text-(--text-muted) mt-1">
-          <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <svg class="w-3.5 h-3.5 inline mr-1 -mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
           {{ formatDate(editingCell.date.date) }} — {{ editingCell.date.dayName }}
         </p>
       </div>
@@ -292,7 +315,8 @@
         <div>
           <label class="block text-sm font-medium text-(--text-main) mb-1">Catatan</label>
           <textarea v-model="editForm.notes" rows="2" :disabled="editForm.isLocked"
-            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" placeholder="Catatan..."></textarea>
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+            placeholder="Catatan..."></textarea>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -321,7 +345,11 @@
           <span class="flex-1"></span>
           <BaseButton variant="primary" :loading="isSaving" :disabled="editForm.isLocked" @click="handleSaveEdit">
             <template #icon-left>
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
             </template>
             Simpan
           </BaseButton>
@@ -330,7 +358,8 @@
     </BaseModal>
 
     <!-- Lengkapi Modal -->
-    <BaseModal v-if="showLengkapiModal" :show="showLengkapiModal" title="Lengkapi Absensi" size="sm" @close="showLengkapiModal = false">
+    <BaseModal v-if="showLengkapiModal" :show="showLengkapiModal" title="Lengkapi Absensi" size="sm"
+      @close="showLengkapiModal = false">
       <div class="space-y-4">
         <p class="text-sm text-(--text-muted)">
           Pilih rentang tanggal untuk proses auto-lengkapi. Hanya record yang belum punya check-in/out yang akan diisi.
@@ -362,7 +391,9 @@
           <span class="flex-1"></span>
           <BaseButton variant="primary" :loading="isCompleting" @click="handleProceedLengkapi">
             <template #icon-left>
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/></svg>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4" />
+              </svg>
             </template>
             Proses Lengkapi
           </BaseButton>
@@ -371,7 +402,8 @@
     </BaseModal>
 
     <!-- Sync Modal -->
-    <BaseModal v-if="showSyncModal" :show="showSyncModal" title="Sync Kehadiran" size="sm" @close="showSyncModal = false">
+    <BaseModal v-if="showSyncModal" :show="showSyncModal" title="Sync Kehadiran" size="sm"
+      @close="showSyncModal = false">
       <div class="space-y-4">
         <p class="text-sm text-(--text-muted)">
           Pilih rentang tanggal untuk sinkronisasi data fingerprint ke attendance prepare.
@@ -395,7 +427,11 @@
           <span class="flex-1"></span>
           <BaseButton variant="primary" :loading="isSyncing" @click="handleProceedSync">
             <template #icon-left>
-              <svg class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <svg class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.5">
+                <path d="M23 4v6h-6" />
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
             </template>
             Proses Sync
           </BaseButton>
@@ -404,7 +440,8 @@
     </BaseModal>
 
     <!-- Hitung Lembur Modal -->
-    <BaseModal v-if="showHitungLemburModal" :show="showHitungLemburModal" title="Hitung Lembur" size="sm" @close="showHitungLemburModal = false">
+    <BaseModal v-if="showHitungLemburModal" :show="showHitungLemburModal" title="Hitung Lembur" size="sm"
+      @close="showHitungLemburModal = false">
       <div class="space-y-4">
         <p class="text-sm text-(--text-muted)">
           Pilih rentang tanggal untuk menghitung lembur. Record yang sudah terkunci akan dilewati.
@@ -428,7 +465,10 @@
           <span class="flex-1"></span>
           <BaseButton variant="primary" :loading="isCalculating" @click="handleProceedHitungLembur">
             <template #icon-left>
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="7" width="20" height="14" rx="2" />
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+              </svg>
             </template>
             Proses Hitung Lembur
           </BaseButton>
@@ -523,7 +563,14 @@ async function fetchPayPeriods() {
 
 function getPeriodDates() {
   const p = payPeriods.value.find(p => p.id == selectedPeriod.value)
-  return p || payPeriods.value[0] || { start: '', end: '' }
+  if (p) return p
+  // Fallback ke periode pertama jika selected invalid
+  if (payPeriods.value.length > 0) return payPeriods.value[0]
+  // Last resort: bulan berjalan (tanggal 1 s/d hari ini)
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+  const end = now.toISOString().split('T')[0]
+  return { start, end }
 }
 
 // Generate all dates for period
@@ -581,6 +628,12 @@ function onPeriodChange() {
 async function fetchEmployees() {
   try {
     const { start, end } = getPeriodDates()
+    // Guard: jangan fetch kalau tanggal kosong (harusnya ga terjadi setelah perbaikan fallback)
+    if (!start || !end) {
+      console.error('fetchEmployees: start/end kosong, skip fetch')
+      employees.value = []
+      return
+    }
     // Backend limits per_page to max 100, so paginate through all pages
     let allEmployees = []
     let page = 1
@@ -743,7 +796,7 @@ async function fetchData() {
 async function handleSync() {
   const { start, end } = getPeriodDates()
   processStartDate.value = start
-  processEndDate.value   = end
+  processEndDate.value = end
   showSyncModal.value = true
 }
 
@@ -971,7 +1024,7 @@ function handleLengkapi() {
   const today = new Date().toISOString().split('T')[0]
 
   if (!processStartDate.value) processStartDate.value = start
-  if (!processEndDate.value)   processEndDate.value   = today
+  if (!processEndDate.value) processEndDate.value = today
 
   showLengkapiModal.value = true
 }
@@ -982,7 +1035,7 @@ async function handleProceedLengkapi() {
   showLengkapiModal.value = false
 
   const start = processStartDate.value
-  const end   = processEndDate.value
+  const end = processEndDate.value
   const currentTab = tabs.find(t => t.key === activeTab.value)
   let totalMessage = ''
 
@@ -998,13 +1051,20 @@ async function handleProceedLengkapi() {
 
     // 2. Kalau checkbox dicentang & ada absentGroup → lengkapi absent khusus grup itu
     if (fillAbsent.value && currentAbsentGroup.value) {
-      const absentRes = await post('/api/v1/attendance/prepare/auto-lengkapi', {
-        group_codes: [currentAbsentGroup.value],
-        start_date: start,
-        end_date: end,
-        fill_absent: true,
-      })
-      totalMessage += ' | ' + (absentRes.message || '')
+      try {
+        const absentRes = await post('/api/v1/attendance/prepare/auto-lengkapi', {
+          group_codes: [currentAbsentGroup.value],
+          start_date: start,
+          end_date: end,
+          fill_absent: true,
+        })
+        totalMessage += ' | ' + (absentRes.message || '')
+      } catch (absentErr) {
+        const msg = absentErr?.response?.data?.message || absentErr.message || ''
+        totalMessage += ' | ' + (msg.includes('Tidak ada karyawan')
+          ? '⚠️ ' + msg + ' — lewati'
+          : '⚠️ Gagal isi absent: ' + msg)
+      }
     }
 
     completingResult.value = {
@@ -1016,9 +1076,10 @@ async function handleProceedLengkapi() {
       await fetchData()
     }
   } catch (e) {
+    const msg = e?.response?.data?.message || e.message || 'Unknown error'
     completingResult.value = {
       success: false,
-      message: 'Lengkapi gagal: ' + (e.message || 'Unknown error'),
+      message: 'Lengkapi gagal: ' + msg,
     }
   } finally {
     isCompleting.value = false
@@ -1030,7 +1091,7 @@ async function handleProceedLengkapi() {
 async function handleHitungLembur() {
   const { start, end } = getPeriodDates()
   processStartDate.value = start
-  processEndDate.value   = end
+  processEndDate.value = end
   showHitungLemburModal.value = true
 }
 

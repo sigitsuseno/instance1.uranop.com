@@ -58,9 +58,16 @@ class EmployeeService
         }
 
         if (! empty($filters['period_start']) && ! empty($filters['period_end'])) {
-            $query->activeInPeriod($filters['period_start'], $filters['period_end']);
+            // Filter: hanya karyawan yang punya roster/shift di periode tersebut
+            $query->whereHas('shiftRosters', function ($q) use ($filters) {
+                $q->whereBetween('date', [$filters['period_start'], $filters['period_end']]);
+            });
         } elseif (isset($filters['is_active']) && $filters['is_active'] !== '') {
             $query->where('is_active', (bool) $filters['is_active']);
+        } else {
+            // Safety net: kalau ga ada filter periode & is_active, default ke karyawan aktif aja
+            // Mencegah semua karyawan (termasuk yg belum join / udah resign) muncul tanpa filter
+            $query->where('is_active', true);
         }
 
         if (! empty($filters['contract_type'])) {

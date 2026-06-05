@@ -391,11 +391,11 @@
       <div class="space-y-4">
         <!-- Employee Selector: visible only to HR. For normal user, auto pre-selected and disabled -->
         <div v-if="isHrOrAdmin">
-          <SelectInput
+          <SearchableSelect
             v-model="createForm.employee_id"
             label="Karyawan"
             :options="employeeOptions"
-            placeholder="Pilih karyawan"
+            placeholder="Cari nama atau NIP karyawan..."
             :required="true"
             :error="errors.employee_id"
           />
@@ -557,6 +557,7 @@ import BaseModal from '../../../Components/BaseModal.vue'
 import Badge from '../../../Components/Badge.vue'
 import TextInput from '../../../Components/TextInput.vue'
 import SelectInput from '../../../Components/SelectInput.vue'
+import SearchableSelect from '../../../Components/SearchableSelect.vue'
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import Pagination from '../../../Components/Table/Pagination.vue'

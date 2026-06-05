@@ -54,5 +54,18 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.prepare.employee-groups');
     });
 
+    // ========== CONSECUTIVE DAYS — CRUD ==========
+
+    Route::prefix('attendance/consecutive')->group(function () {
+        Route::get('/', [AttendanceApiController::class, 'consecutiveList'])
+            ->name('attendance.consecutive.list');
+        Route::post('/', [AttendanceApiController::class, 'consecutiveStore'])
+            ->name('attendance.consecutive.store');
+        Route::put('/{id}', [AttendanceApiController::class, 'consecutiveUpdate'])
+            ->name('attendance.consecutive.update');
+        Route::delete('/{id}', [AttendanceApiController::class, 'consecutiveDestroy'])
+            ->name('attendance.consecutive.destroy');
+    });
+
 
 });

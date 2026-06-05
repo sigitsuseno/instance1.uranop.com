@@ -453,4 +453,111 @@ class AttendanceApiController extends Controller
         return response()->json(['groups' => $groups]);
     }
 
+    // =================================================================
+    // CONSECUTIVE DAYS — CRUD (mirip leave_request)
+    // =================================================================
+
+    /**
+     * GET /api/v1/attendance/consecutive
+     * List consecutive days dengan filter.
+     */
+    public function consecutiveList(Request $request): JsonResponse
+    {
+        $service = new \App\Modules\Attendance\Services\ConsecutiveDayService();
+
+        $filters = $request->only(['start_date', 'end_date', 'employee_id', 'type', 'per_page']);
+        $result  = $service->list($filters);
+
+        return response()->json([
+            'data' => $result,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/attendance/consecutive
+     * Buat record consecutive day baru (HR input manual).
+     */
+    public function consecutiveStore(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'employee_id' => 'required|integer|exists:employees,id',
+            'start_date'  => 'required|date',
+            'end_date'    => 'required|date|after_or_equal:start_date',
+            'type'        => 'required|in:worked,absent',
+            'notes'       => 'nullable|string|max:500',
+        ]);
+
+        $start  = \Carbon\Carbon::parse($data['start_date']);
+        $end    = \Carbon\Carbon::parse($data['end_date']);
+        $days   = $start->diffInDays($end, true) + 1;
+
+        $record = \App\Modules\Attendance\Models\ConsecutiveDay::create([
+            'employee_id' => $data['employee_id'],
+            'start_date'  => $data['start_date'],
+            'end_date'    => $data['end_date'],
+            'total_days'  => $days,
+            'type'        => $data['type'],
+            'status'      => \App\Modules\Attendance\Models\ConsecutiveDay::STATUS_CALCULATED,
+            'notes'       => $data['notes'] ?? null,
+        ]);
+
+        $record->load('employee:id,name,employee_code,department_id');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consecutive day berhasil ditambahkan.',
+            'data'    => $record,
+        ], 201);
+    }
+
+    /**
+     * PUT /api/v1/attendance/consecutive/{id}
+     * Update record.
+     */
+    public function consecutiveUpdate(Request $request, int $id): JsonResponse
+    {
+        $record = \App\Modules\Attendance\Models\ConsecutiveDay::findOrFail($id);
+
+        $data = $request->validate([
+            'start_date'  => 'required|date',
+            'end_date'    => 'required|date|after_or_equal:start_date',
+            'type'        => 'required|in:worked,absent',
+            'notes'       => 'nullable|string|max:500',
+        ]);
+
+        $start = \Carbon\Carbon::parse($data['start_date']);
+        $end   = \Carbon\Carbon::parse($data['end_date']);
+        $days  = $start->diffInDays($end, true) + 1;
+
+        $record->update([
+            'start_date' => $data['start_date'],
+            'end_date'   => $data['end_date'],
+            'total_days' => $days,
+            'type'       => $data['type'],
+            'notes'      => $data['notes'] ?? $record->notes,
+        ]);
+
+        $record->load('employee:id,name,employee_code,department_id');
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consecutive day berhasil diperbarui.',
+            'data'    => $record,
+        ]);
+    }
+
+    /**
+     * DELETE /api/v1/attendance/consecutive/{id}
+     */
+    public function consecutiveDestroy(int $id): JsonResponse
+    {
+        $record = \App\Modules\Attendance\Models\ConsecutiveDay::findOrFail($id);
+        $record->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Consecutive day berhasil dihapus.',
+        ]);
+    }
+
 }
