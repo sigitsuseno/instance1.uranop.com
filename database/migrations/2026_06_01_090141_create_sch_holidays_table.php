@@ -15,8 +15,9 @@ return new class extends Migration
             $table->foreignId('working_calendar_id')->nullable()->constrained('sch_working_calendars')->cascadeOnDelete();
             
             $table->date('date');
+            $table->string('name')->nullable();
             $table->string('description')->nullable();
-            $table->string('type')->default('nasional'); // nasional, cuti_bersama, perusahaan
+            $table->string('type')->default('nasional');
             
             $table->boolean('is_national_holiday')->default(false);
             $table->boolean('is_company_holiday')->default(false);

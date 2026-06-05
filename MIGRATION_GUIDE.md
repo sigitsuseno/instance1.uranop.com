@@ -601,117 +601,567 @@ Di tabel `lve_types`, kolom `category` membedakan jenis:
 
 ### Fase 7: Attendance / Kehadiran
 
-**Tujuan:** Absensi, log import fingerprint, roster, lembur, snapshot, rekap.
+**Tujuan:** Absensi, log import fingerprint, sync, lengkapi, hitung lembur, consecutive days, resume kehadiran untuk payroll.
 **Dependencies:** Fase 4 (Employee), Fase 5 (Schedule)
 
 > **Catatan:** `overtime_rules` sudah dibuat di Fase 3 (shared). `permit_requests` dihapus — izin ditangani lewat Leave module.
+> **Carbon:** Semua pemanggilan `diffInMinutes()` WAJIB pakai parameter `true` (absolute): `$a->diffInMinutes($b, true)`.
 
-#### 7.1 Backend
+---
 
-| Item | Status |
+#### 7.1 Struktur Menu & Submenu
+
+```
+Kehadiran
+├── 1. Sync Kehadiran          ← Halaman utama: import, daftar att_prepares, filter
+│   ├── 1a. Proses Sync        ← Raw logs → att_prepares (9 detector types)
+│   ├── 1b. Proses Lengkapi    ← Auto-fill check_in/out kosong
+│   ├── 1c. Proses Hitung Lembur ← Kalkulasi late, OT, LM per record
+│   └── 1d. Lock/Unlock        ← Kunci/unlock data
+├── 2. Consecutive             ← Deteksi hari kerja berturut-turut (seperti leave_request pattern)
+└── 3. Resume Kehadiran        ← Rekap untuk input payroll (hari kerja, OT, LM, dll)
+```
+
+---
+
+#### 7.2 Proses 1a: Sync (Raw Logs → att_prepares)
+
+**Flow:** `att_raw_logs` + `sch_rosters` → **AttendanceSyncService** → `att_prepares`
+
+**Tabel input:**
+| Tabel | Fungsi |
 |---|---|
-| Migration raw_logs (data fingerprint mentah) | `not started` |
-| Migration attendance_logs, attendance_autologs | `not started` |
-| Migration attendance_prepares, attendance_records | `not started` |
-| Migration attendance_snapshots, attendance_summaries | `not started` |
-| Migration attendance_consecutive_days, attendance_configs | `not started` |
-| Migration scan_detection_configs | `not started` |
-| Migration overtimes | `not started` |
-| Model: semua model attendance | `not started` |
-| Controller AttendanceApiController | `not started` |
-| Routes Attendance/Routes/api.php | `not started` |
-| Service: FingerprintBinParser (port dari hris-system) | `not started` |
+| `att_raw_logs` | Data fingerprint mentah (PIN, scan_datetime, import_batch) |
+| `sch_rosters` | Jadwal karyawan per tanggal (shift, work_pattern) |
+| `sch_holidays` | Hari libur nasional |
+| `lve_requests` | Cuti/izin yang approved |
 
-#### 7.2 Frontend
+**Proses Sync per karyawan per hari:**
 
-| Item | Status |
+1. Ambil roster karyawan dari `sch_rosters` untuk tanggal tersebut
+2. Cek status cuti/izin dari `lve_requests` → kalau ada, langsung set status CUTI/IZIN/SAKIT
+3. Ambil raw_logs berdasarkan `employee_code` (PIN/NIP)
+4. Deteksi check_in & check_out berdasarkan **work pattern type**:
+
+| Detector | Work Pattern | Cara Deteksi |
+|---|---|---|
+| `detectFixed` | FIXED | Scan pertama = check_in, scan terakhir = check_out |
+| `detectShift` | SHIFT | Window matching: filter log by check_in_start..end & check_out_start..end |
+| `detectFlexShift` | FLEX-SHIFT | Window matching + holiday config dari `sch_shifts.metadata` JSON |
+| `detectLongshift` | LONGSHIFT | Window matching (sama dengan SHIFT) |
+| `detectSplit` | SPLIT | Window matching |
+| `detectFlexi` | FLEXI | Window matching (late dihandle calculator) |
+| `detectHourly` | HOURLY | Window matching |
+| `detectOnCall` | ON_CALL | Window matching |
+| `detectSeasonal` | SEASONAL | Window matching |
+
+5. Jika tidak ada log:
+   - Holiday → status LIBUR
+   - Minggu (is_sun) → status OFF
+   - Hari kerja tanpa scan → status ABSENT
+
+6. Simpan ke `att_prepares` (upsert by employee_id + date)
+
+**Status di att_prepares:** `hadir`, `libur`, `off`, `absent`, `cuti`, `izin`, `sakit`
+
+---
+
+#### 7.3 Proses 1b: Lengkapi
+
+**Flow:** `AttendanceService.autoLengkapi()` — isi check_in/check_out kosong.
+
+**Rules:**
+| Kondisi | Ada Scan | Tidak Ada Scan |
+|---|---|---|
+| **Holiday** | Isi check_in/out dari roster work_hour_start/end → status LIBUR | Status LIBUR |
+| **Minggu** | Isi check_in/out dari roster → status LIBUR | Status OFF |
+| **Cuti (approved)** | — | Status CUTI |
+| **Hari Kerja** | Isi check_in/out kosong dari roster → status HADIR | Status ABSENT (atau HADIR jika fillAbsent=true) |
+
+Parameter `fillAbsent=true`: mengisi check_in/out dari roster meskipun 0 scan (untuk karyawan tanpa fingerprint).
+
+---
+
+#### 7.4 Proses 1c: Hitung Lembur
+
+**Flow:** `AttendanceCalculatorService.calculate()` — kalkulasi per record att_prepares.
+
+**Output per record:**
+| Field | Keterangan |
 |---|---|
-| Attendance/Index.vue | `done` (mock data) |
-| Attendance/LogImport.vue | `done` (mock data) |
-| Attendance/Roster.vue | `done` (mock data) |
-| Attendance/Overtime/Index.vue | `done` (mock data) |
+| `late_minutes` | Keterlambatan (check_in vs schedule_in - tolerance) |
+| `overtime` | Menit lembur mentah (sebelum multiplier) |
+| `overtime_count` | Menit lembur setelah multiplier (hari kerja) |
+| `lm` | Menit LM mentah (hari libur/minggu) |
+| `lm_count` | Menit LM setelah multiplier |
+| `normal` | Menit kerja normal (`workEnd - workStart`) |
 
-#### 7.3 Checklist Fase 7
+**Rules Overtime per Work Pattern:**
 
-- [x] Frontend: Attendance Index (mock)
+| Pattern | Holiday | Minggu | Sabtu | Hari Kerja |
+|---|---|---|---|---|
+| **SHIFT** | Full check_in→check_out, max 480m | 0 | **Flat 120m** | 0 |
+| **FIXED** | Full, max 480m | Full, max 480m | — | Post-shift: `check_out - schedule_out` |
+| **FLEX-SHIFT P** | Full, max 480m | Full, max 480m | — | Post-shift only |
+| **FLEX-SHIFT S** | Full, max 480m | Full, max 480m | — | Aturan b.1/b.2/b.3 (lihat bawah) |
+
+**FLEX-SHIFT S — Aturan b.1 / b.2 / b.3:**
+
+`has_modifier` flag di `sch_shifts` hanya untuk FLEX-SHIFT + `ext_code=S`. Metadata JSON punya 5 field holiday config.
+
+| Aturan | Kondisi | Overtime |
+|---|---|---|
+| **b.1** | check_in early > 30 menit sebelum schedule_in | Pre-shift: `schedule_in - check_in` |
+| **b.2** | check_in early ≤ 30 menit, check_out > schedule_out | Post-shift: `check_out - schedule_out` |
+| **b.3** | check_in > schedule_in + 2 jam | Post-shift: `check_out - schedule_out` |
+
+**Effective Start per Pattern:**
+| Pattern | effectiveStart |
+|---|---|
+| SHIFT | — (overtime hanya holiday/sabtu) |
+| FIXED | `max(checkIn, workStart)` |
+| FLEX-SHIFT | `checkIn` |
+
+**Multiplier:**
+- **Hari kerja (overtime):** Lookup dari `att_overtime_rules` (is_holiday=false). Fallback: 60m pertama ×1.5, sisanya ×2.
+- **Hari libur (LM):** Lookup dari `att_overtime_rules` (is_holiday=true). Fallback: `(min(hours,8) - 1) × 2 × 60`.
+
+**Rounding:** Overtime dibulatkan per 30 menit dengan threshold 5 menit. `floor((minutes + 5) / 30) * 30`.
+
+---
+
+#### 7.5 Proses 1d: Lock/Unlock
+
+Hanya **superadmin** & **hrmanager** yang bisa lock/unlock.
+
+- **Lock:** Record tidak bisa diedit (lengkapi, hitung lembur, manual edit)
+- **Unlock:** Record bisa diedit kembali
+- Support **bulk** lock/unlock
+
+---
+
+#### 7.6 Submenu 2: Consecutive
+
+> **Tabel:** `att_consecutive_days`
+
+Deteksi hari kerja berturut-turut. Pattern mirip leave_request — mendeteksi rentang tanggal di mana karyawan:
+- Hadir berturut-turut (untuk perhitungan overtime khusus)
+- Absen berturut-turut (untuk flag pemeriksaan)
+
+---
+
+#### 7.7 Submenu 3: Resume Kehadiran
+
+> **Tabel:** `att_summaries`, `att_snapshots`
+
+Rekap kehadiran per karyawan per periode untuk input ke **payroll** (Fase 8).
+
+**Data yang dihasilkan:**
+| Data | Sumber |
+|---|---|
+| Total hari kerja | att_prepares (status HADIR) |
+| Total hari libur | att_prepares (status LIBUR) |
+| Total hari off | att_prepares (status OFF) |
+| Total absen | att_prepares (status ABSENT) |
+| Total cuti | att_prepares (status CUTI) |
+| Total izin | att_prepares (status IZIN) |
+| Total sakit | att_prepares (status SAKIT) |
+| Total overtime (count) | att_prepares.overtime_count |
+| Total LM (count) | att_prepares.lm_count |
+| Total late | att_prepares.late_minutes |
+
+---
+
+#### 7.8 Backend Status
+
+| Item | Status | Keterangan |
+|---|---|---|
+| Migration `att_raw_logs` | `done` | Data fingerprint mentah |
+| Migration `att_prepares` | `done` | Data kehadiran per karyawan per hari |
+| Migration `att_logs`, `att_autologs` | `not started` | Log attendance (intermediate) |
+| Migration `att_records` | `not started` | Record attendance final |
+| Migration `att_snapshots` | `not started` | Snapshot untuk supervisor dashboard |
+| Migration `att_summaries` | `not started` | Resume kehadiran per periode |
+| Migration `att_consecutive_days` | `not started` | Hari berturut-turut |
+| Migration `att_configs` | `not started` | Konfigurasi attendance |
+| Migration `att_scan_configs` | `not started` | Konfigurasi scan detection |
+| Migration `att_overtimes` | `not started` | Data overtime |
+| Model `RawLog` | `done` | |
+| Model `AttendancePrepare` | `done` | + status constants, review_status |
+| Model lainnya | `not started` | AttendanceLog, AttendanceRecord, dll |
+| Controller `AttendanceApiController` | `done` | Full CRUD + sync + lengkapi + hitung lembur |
+| Routes `Attendance/Routes/api.php` | `done` | Semua endpoint terdefinisi |
+| Resources: `RawLogResource`, `AttendanceRecordResource`, `OvertimeResource`, `AttendanceSummaryResource` | `done` | |
+| Service `AttendanceService` | `done` | Lengkapi, autoLengkapi, hitungLembur, bulkHitungLembur, lock/unlock |
+| Service `AttendanceSyncService` | `done` | Sync raw_logs → att_prepares (892 baris, 9 detector) |
+| Service `AttendanceCalculatorService` | `done` | Kalkulasi late, OT, LM (373 baris) |
+| Service `FingerprintBinParser` | `done` | Parsing file .bin mesin fingerprint |
+| Job `ProcessAttendanceLogImport` | `done` | Queue job untuk import |
+| Import `AttendanceLogImport` | `done` | Excel import handler |
+
+#### 7.9 Frontend Status
+
+| Item | Status | Keterangan |
+|---|---|---|
+| `Attendance/SyncKehadiran/Index.vue` | `done` (mock) | Halaman utama: import, daftar, filter |
+| `Attendance/LogImport.vue` | `done` (mock) | Import Excel/bin |
+| `Attendance/Roster.vue` | `done` (mock) | Roster view |
+| `Attendance/Overtime/Index.vue` | `done` (mock) | Overtime manual |
+| `Attendance/Consecutive/Index.vue` | `not started` | |
+| `Attendance/Resume/Index.vue` | `not started` | |
+
+#### 7.10 Checklist Fase 7
+
+- [x] Migration: `att_raw_logs`, `att_prepares`
+- [x] Model: `RawLog`, `AttendancePrepare`
+- [x] Controller: `AttendanceApiController`
+- [x] Routes: `Attendance/Routes/api.php`
+- [x] Resources: RawLog, AttendanceRecord, Overtime, AttendanceSummary
+- [x] Service: `AttendanceService` (lengkapi, autoLengkapi, hitungLembur, lock)
+- [x] Service: `AttendanceSyncService` (sync, 9 detector types)
+- [x] Service: `AttendanceCalculatorService` (late, OT, LM, multiplier, rounding)
+- [x] Service: `FingerprintBinParser` (parsing .bin fingerprint)
+- [x] Job: `ProcessAttendanceLogImport`
+- [x] Import: `AttendanceLogImport`
+- [x] Frontend: SyncKehadiran Index (mock)
 - [x] Frontend: Log Import (mock)
-- [x] Frontend: Roster (mock)
 - [x] Frontend: Overtime (mock)
-- [ ] Migration: semua tabel attendance (tanpa overtime_rules, tanpa permit_requests)
-- [ ] Model: semua model attendance
-- [ ] Controller: AttendanceApiController
-- [ ] Routes: Attendance/Routes/api.php
-- [ ] Resources: Attendance resources
-- [ ] Service: AttendanceService (auto-proses, import logic)
-- [ ] Service: FingerprintBinParser (parsing file .bin mesin fingerprint)
-- [ ] Frontend: Integrasi semua halaman attendance dengan API
+- [ ] Migration: `att_logs`, `att_autologs`, `att_records`
+- [ ] Migration: `att_snapshots`, `att_summaries`, `att_consecutive_days`
+- [ ] Migration: `att_configs`, `att_scan_configs`, `att_overtimes`
+- [ ] Model: AttendanceLog, AttendanceAutolog, AttendanceRecord, dll
+- [ ] Frontend: Consecutive page
+- [ ] Frontend: Resume Kehadiran page
+- [ ] Frontend: Integrasi SyncKehadiran dengan API
+- [ ] Frontend: Integrasi Overtime dengan API
 - [ ] Test: import Excel/bin absensi
+- [ ] Test: sync + lengkapi + hitung lembur full flow
 
 ---
 
 ### Fase 8: Payroll
 
-**Tujuan:** Penggajian, periode, generate payroll, komponen gaji, BPJS, PPH, THR.
+**Tujuan:** Penggajian, generate payroll per periode, kalkulasi BPJS, PPh 21, THR, slip gaji.
 **Dependencies:** Fase 4 (Employee), Fase 6 (Leave), Fase 7 (Attendance)
 
 > **Catatan:** Struktur payroll disederhanakan. Snapshot karyawan di-embed langsung ke `pay_records`. Tabel `payroll_results`, `payroll_breakdowns`, `payslips`, `payroll_component_snapshots`, `payroll_employee_snapshots` **dihapus**.
+>
+> **PENTING:** Gunakan metode kalkulasi gaji dari model `Employee` (lihat Effective Date Pattern di atas). JANGAN hardcode query `emp_salaries` manual. Fungsi siap pakai: `baseSalary()`, `premi()`, `tunjanganMasaKerja()`, `tunjangan()`, `totalGaji()` — semua terima parameter `$period` ('YYYY-MM').
 
-#### 8.1 Struktur Tabel Payroll (Disederhanakan)
+---
 
-| Tabel Baru | Fungsi |
+#### 8.1 Struktur Menu & Submenu
+
+```
+Payroll
+├── 1. Gaji Karyawan          ← Generate payroll, lihat/edit pay_records, lock periode
+│   ├── 1a. Pilih Periode     ← Pilih/buat pay_periods
+│   ├── 1b. Generate Gaji     ← Kalkulasi & simpan pay_records
+│   ├── 1c. Review & Edit     ← Lihat/ubah pay_records per karyawan
+│   └── 1d. Lock Periode      ← Kunci periode (tidak bisa diedit)
+├── 2. Perhitungan BPJS       ← Konfigurasi + kalkulasi BPJS
+│   ├── 2a. BPJS Kesehatan    ← 4% (1% karyawan, 3% perusahaan)
+│   └── 2b. BPJS TK           ← JKK, JKM, JHT, JP
+├── 3. Perhitungan PPh        ← Konfigurasi + kalkulasi PPh 21
+│   ├── 3a. TER Bulanan       ← Tarif Efektif Rata-rata per bulan
+│   └── 3b. PPh 21 Tahunan    ← Rekonsiliasi akhir tahun
+├── 4. Slip Gaji              ← Render payslip + export
+│   ├── 4a. Individual        ← Slip per karyawan
+│   └── 4b. Bulk Export       ← Export semua slip (PDF/Excel)
+└── 5. Pengelolaan THR        ← Generate + export THR
+    ├── 5a. Konfigurasi THR   ← Rules (masa kerja, proporsional)
+    └── 5b. Generate THR      ← Kalkulasi + simpan ke emp_thr
+```
+
+---
+
+#### 8.2 Submenu 1: Gaji Karyawan
+
+##### 8.2.1 Flow Generate Gaji
+
+```
+Pilih Periode → Generate → Kalkulasi → Simpan pay_records → Review → Lock
+```
+
+**Step by step:**
+
+1. **Pilih/Buat Periode** (`pay_periods`)
+   - Format: `period_year` + `period_month`
+   - Status: `draft` → `generated` → `locked`
+
+2. **Generate — Ambil Data Input:**
+   | Sumber | Data | Method |
+   |---|---|---|
+   | Employee | Gaji pokok | `$employee->baseSalary($period)` |
+   | Employee | Premi/bonus tetap | `$employee->premi($period)` |
+   | Employee | Tunjangan masa kerja | `$employee->tunjanganMasaKerja($period)` |
+   | Employee | Tunjangan tetap | `$employee->tunjangan($period)` |
+   | Attendance | Hari kerja, OT, LM, late | `att_summaries` (dari Fase 7 Resume) |
+   | BPJS | Potongan BPJS | `pay_bpjs_configs` + kalkulasi |
+   | PPh | Potongan PPh 21 | `pay_pph_configs` + TER |
+
+3. **Kalkulasi per Karyawan:**
+   ```
+   GROSS = baseSalary + premi + tunjanganMasaKerja + tunjangan
+   EARNINGS = GROSS + overtime_count × rate_per_hour + LM_count × rate_per_hour
+   DEDUCTIONS = BPJS_Kesehatan + BPJS_TK + PPh21 + late_penalty + absent_penalty
+   NET = EARNINGS - DEDUCTIONS
+   ```
+
+4. **Simpan ke `pay_records`** (satu record per karyawan per periode):
+   - Earnings breakdown → JSON `earnings_breakdown`
+   - Attendance breakdown → JSON `attendance_breakdown`
+   - Deduction breakdown → JSON `deduction_breakdown`
+   - Snapshot: salary_components, position, department, contract → embed di record
+
+5. **Review & Edit:**
+   - Tabel list semua pay_records dalam satu periode
+   - Bisa edit manual overtime, bonus, potongan tambahan
+   - Recalculate otomatis setelah edit
+
+6. **Lock Periode:**
+   - Status `locked` → tidak bisa generate ulang / edit
+   - Hanya superadmin & hrmanager
+
+##### 8.2.2 Tabel `pay_records` — Struktur
+
+| Field | Tipe | Keterangan |
+|---|---|---|
+| `id` | bigint | PK |
+| `uuid` | char(36) | Sync identifier |
+| `pay_period_id` | FK | Periode payroll |
+| `employee_id` | FK | Karyawan |
+| `basic_salary` | decimal | Gaji pokok (snapshot) |
+| `total_earnings` | decimal | Total pendapatan (gross + OT + LM) |
+| `total_deductions` | decimal | Total potongan (BPJS + PPh + denda) |
+| `net_pay` | decimal | Gaji bersih |
+| `earnings_breakdown` | json | `{gaji_pokok, premi, tunjangan_masa_kerja, tunjangan, overtime, lm, bonus}` |
+| `attendance_breakdown` | json | `{hadir, libur, off, absent, cuti, izin, sakit, overtime_count, lm_count, late}` |
+| `deduction_breakdown` | json | `{bpjs_kes, bpjs_tk, pph21, late_penalty, absent_penalty, other}` |
+| `salary_snapshot` | json | `{position, department, contract_type, join_date}` |
+| `status` | enum | `draft`, `final`, `locked` |
+| `notes` | text | Catatan |
+| `created_by` | FK | User yang generate |
+| `timestamps` | | |
+| `deleted_at` | softDelete | |
+
+---
+
+#### 8.3 Submenu 2: Perhitungan BPJS
+
+> **Tabel:** `pay_bpjs_configs`
+
+**Komponen BPJS:**
+
+| Jenis | Komponen | Karyawan | Perusahaan | Max Cap |
+|---|---|---|---|---|
+| **Kesehatan** | JKN | 1% | 4% | Rp 12.000.000 |
+| **TK - JKK** | Kecelakaan Kerja | 0% | 0.24% - 1.74% | — |
+| **TK - JKM** | Kematian | 0% | 0.3% | — |
+| **TK - JHT** | Hari Tua | 2% | 3.7% | — |
+| **TK - JP** | Pensiun | 1% | 2% | — |
+
+**Config per komponen:**
+- `component` (enum: jkn, jkk, jkm, jht, jp)
+- `employee_rate` (decimal)
+- `company_rate` (decimal)
+- `max_cap` (decimal, nullable)
+- `effective_date`
+
+---
+
+#### 8.4 Submenu 3: Perhitungan PPh
+
+> **Tabel:** `pay_pph_configs`, `pay_ptkp_rates`, `pay_ter_rates`, `pay_progressive_rates`
+
+##### 8.4.1 PTKP (Penghasilan Tidak Kena Pajak)
+
+| Kategori | Kode | Nilai/Tahun |
+|---|---|---|
+| Tidak Kawin | TK/0 | Rp 54.000.000 |
+| Tidak Kawin + 1 tanggungan | TK/1 | Rp 58.500.000 |
+| Kawin | K/0 | Rp 58.500.000 |
+| Kawin + 1 tanggungan | K/1 | Rp 63.000.000 |
+| Kawin + 2 tanggungan | K/2 | Rp 67.500.000 |
+| Kawin + 3 tanggungan | K/3 | Rp 72.000.000 |
+
+##### 8.4.2 TER (Tarif Efektif Rata-rata) — Bulanan
+
+| Kategori | TER A | TER B | TER C |
+|---|---|---|---|
+| **Range gaji** | s.d. 5.4jt | 5.4jt - 10.5jt | > 10.5jt |
+
+> Lihat tabel lengkap di `pay_ter_rates` (PER-2/PJ/2024 untuk TER terbaru).
+
+##### 8.4.3 Kalkulasi PPh 21 per Bulan
+
+```
+Gaji Bruto Sebulan = GROSS (dari pay_records)
+PPh 21 = Gaji Bruto × TER% (sesuai kategori PTKP)
+```
+
+Rekonsiliasi tahunan (Desember): hitung ulang dengan tarif progressive, selisih kurang/lebih bayar.
+
+**Tarif Progressive (Tahunan):**
+
+| Lapisan | PKP | Tarif |
+|---|---|---|
+| I | s.d. 60jt | 5% |
+| II | 60jt - 250jt | 15% |
+| III | 250jt - 500jt | 25% |
+| IV | 500jt - 5M | 30% |
+| V | > 5M | 35% |
+
+---
+
+#### 8.5 Submenu 4: Slip Gaji
+
+**Render dari `pay_records`**, bukan tabel terpisah.
+
+**Format Slip Gaji:**
+```
+┌─────────────────────────────────────┐
+│ SLIP GAJI — Periode: Mei 2026       │
+│ Nama: Budi Setiawan                 │
+│ Jabatan: Staff IT                   │
+├─────────────────────────────────────┤
+│ PENDAPATAN                          │
+│   Gaji Pokok         10.000.000     │
+│   Tunjangan Tetap     2.000.000     │
+│   Premi                 500.000     │
+│   Overtime (10h)      1.500.000     │
+│   LM (8h)             1.200.000     │
+│   Total Pendapatan   15.200.000     │
+├─────────────────────────────────────┤
+│ POTONGAN                            │
+│   BPJS Kesehatan        100.000     │
+│   BPJS TK - JHT          200.000    │
+│   BPJS TK - JP           100.000    │
+│   PPh 21                 350.000    │
+│   Denda Keterlambatan     50.000    │
+│   Total Potongan         800.000    │
+├─────────────────────────────────────┤
+│ GAJI BERSIH          14.400.000     │
+└─────────────────────────────────────┘
+```
+
+**Export:**
+- Individual PDF (download)
+- Bulk PDF (zip per periode)
+- Bulk Excel (rekap per periode)
+
+---
+
+#### 8.6 Submenu 5: Pengelolaan THR
+
+> **Tabel:** `emp_thr` (dibuat di Fase 4)
+
+**Rules THR (default, bisa dikonfigurasi):**
+| Masa Kerja | THR |
 |---|---|
-| `pay_periods` | Periode payroll |
-| `pay_records` | Payroll utama per karyawan per periode (+ snapshot data karyawan embed) |
-| `pay_component_values` | Nilai komponen per payroll record |
-| `pay_configs` | Konfigurasi payroll |
-| `pay_settings` | Settings payroll |
-| `pay_audits` | Versi aplikasi bayangan (supervisor) — perhitungan terpisah |
+| ≥ 12 bulan | 1 × gaji pokok |
+| 1 - 12 bulan | Proporsional: (bulan_kerja / 12) × gaji pokok |
+| < 1 bulan | Tidak dapat |
+
+**Flow Generate THR:**
+1. Pilih tahun/periode THR
+2. Filter karyawan aktif per tanggal cutoff (biasanya H-7 Lebaran)
+3. Kalkulasi THR per karyawan: `masa_kerja × gaji_pokok / 12` (proporsional)
+4. Simpan ke `emp_thr`
+5. Export/render slip THR
+
+---
+
+#### 8.7 Struktur Tabel Payroll (Disederhanakan)
+
+| Tabel | Fungsi | Status |
+|---|---|---|
+| `pay_periods` | Periode payroll | ✅ done |
+| `pay_records` | Data gaji per karyawan per periode (+ snapshot embed) | ❌ not started |
+| `pay_component_values` | Nilai komponen per payroll record | ❌ not started |
+| `pay_configs` | Konfigurasi payroll | ❌ not started |
+| `pay_settings` | Settings payroll | ❌ not started |
+| `pay_bpjs_configs` | Konfigurasi BPJS | ❌ not started |
+| `pay_pph_configs` | Konfigurasi PPh | ❌ not started |
+| `pay_ptkp_rates` | Tarif PTKP | ❌ not started |
+| `pay_ter_rates` | Tarif TER | ❌ not started |
+| `pay_progressive_rates` | Tarif progressive | ❌ not started |
+| `pay_service_allowances` | Tunjangan masa kerja | ❌ not started |
+| `pay_audits` | Aplikasi bayangan (Supervisor) — perhitungan terpisah | ❌ not started |
 
 Tabel yang **dihapus/digabung**:
-- ~~`payroll_results`~~ → sudah ada di `pay_records`
-- ~~`payroll_breakdowns`~~ → JSON fields di `pay_records` (earnings_breakdown, attendance_breakdown)
-- ~~`payslips`~~ → di-generate/render dari `pay_records`, bukan tabel
-- ~~`payroll_component_snapshots`~~ → data komponen ada di `pay_component_values`
-- ~~`payroll_employee_snapshots`~~ → snapshot embed di kolom-kolom `pay_records`
+- ~~`payroll_results`~~ → digabung ke `pay_records`
+- ~~`payroll_breakdowns`~~ → JSON fields di `pay_records`
+- ~~`payslips`~~ → di-generate/render dari `pay_records`
+- ~~`payroll_component_snapshots`~~ → di `pay_component_values`
+- ~~`payroll_employee_snapshots`~~ → embed di `pay_records`
 
-#### 8.2 Backend
+---
 
-| Item | Status |
-|---|---|
-| Migration pay_settings, pay_configs | `not started` |
-| Migration pay_periods | `not started` |
-| Migration pay_records (+ snapshot embed) | `not started` |
-| Migration pay_component_values | `not started` |
-| Migration pay_audits | `not started` |
-| Model: semua model payroll | `not started` |
-| Controller PayrollApiController | `not started` |
-| Routes Payroll/Routes/api.php | `not started` |
-| Service: PayrollCalculator | `not started` |
+#### 8.8 Backend Status
 
-#### 8.3 Frontend
+| Item | Status | Keterangan |
+|---|---|---|
+| Migration `pay_periods` | `done` | Periode payroll (basic) |
+| Migration `pay_records` | `not started` | Data gaji per karyawan per periode |
+| Migration `pay_component_values` | `not started` | Nilai komponen per record |
+| Migration `pay_configs` | `not started` | Konfigurasi payroll |
+| Migration `pay_settings` | `not started` | Settings payroll |
+| Migration `pay_bpjs_configs` | `not started` | Konfigurasi BPJS |
+| Migration `pay_pph_configs` | `not started` | Konfigurasi PPh |
+| Migration `pay_ptkp_rates` | `not started` | Tarif PTKP |
+| Migration `pay_ter_rates` | `not started` | Tarif TER |
+| Migration `pay_progressive_rates` | `not started` | Tarif progressive |
+| Migration `pay_service_allowances` | `not started` | Tunjangan masa kerja |
+| Migration `pay_audits` | `not started` | Supervisor dashboard |
+| Model `PayPeriod` | `done` | Basic, akan di-expand |
+| Model `PayRecord` | `not started` | |
+| Model lainnya | `not started` | PayComponentValue, PayConfig, dll |
+| Controller `PayPeriodApiController` | `done` | Basic CRUD |
+| Routes `Payroll/Routes/api.php` | `done` | Basic resource routes |
+| Service `PayrollCalculator` | `not started` | Port logic dari hris-system |
+| Service `BpjsCalculator` | `not started` | |
+| Service `PphCalculator` | `not started` | |
+| Service `ThrCalculator` | `not started` | |
 
-| Item | Status |
-|---|---|
-| Payroll/Periods/Index.vue | `done` (mock data) |
-| Payroll/Periods/Detail.vue | `done` (mock data) |
-| Payroll/Configs/Index.vue | `done` (mock data) |
-| Payroll/Thr.vue | `done` (mock data) |
+#### 8.9 Frontend Status
 
-#### 8.4 Checklist Fase 8
+| Item | Status | Keterangan |
+|---|---|---|
+| `Payroll/GajiKaryawan/Index.vue` | `not started` | List periode + generate |
+| `Payroll/GajiKaryawan/Detail.vue` | `done` (mock) | Lihat pay_records per periode |
+| `Payroll/Bpjs/Index.vue` | `not started` | Konfigurasi + kalkulasi BPJS |
+| `Payroll/Pph/Index.vue` | `not started` | Konfigurasi + kalkulasi PPh |
+| `Payroll/SlipGaji/Index.vue` | `not started` | Render + export slip |
+| `Payroll/Thr/Index.vue` | `done` (mock) | Generate + export THR |
+| `Payroll/Configs/Index.vue` | `done` (mock) | Konfigurasi payroll |
 
-- [x] Frontend: Payroll Periods Index (mock)
+#### 8.10 Checklist Fase 8
+
+- [x] Migration: `pay_periods`
+- [x] Model: `PayPeriod`
+- [x] Controller: `PayPeriodApiController`
+- [x] Routes: `Payroll/Routes/api.php`
 - [x] Frontend: Payroll Period Detail (mock)
-- [x] Frontend: Payroll Configs (mock)
 - [x] Frontend: Payroll THR (mock)
-- [ ] Migration: semua tabel payroll (struktur disederhanakan)
-- [ ] Model: semua model payroll
-- [ ] Controller: PayrollApiController
-- [ ] Routes: Payroll/Routes/api.php
-- [ ] Resources: Payroll resources
-- [ ] Service: PayrollCalculator (port logic dari hris-system)
-- [ ] Frontend: Integrasi semua halaman payroll dengan API
-- [ ] Test: generate payroll
-- [ ] Test: export Excel/PDF payslip
+- [x] Frontend: Payroll Configs (mock)
+- [ ] Migration: `pay_records`, `pay_component_values`, `pay_configs`, `pay_settings`
+- [ ] Migration: `pay_bpjs_configs`, `pay_pph_configs`, `pay_ptkp_rates`, `pay_ter_rates`, `pay_progressive_rates`
+- [ ] Migration: `pay_service_allowances`, `pay_audits`
+- [ ] Model: `PayRecord`, `PayComponentValue`, `PayConfig`, `PaySetting`
+- [ ] Model: `PayBpjsConfig`, `PayPphConfig`, `PayPtkpRate`, `PayTerRate`, `PayProgressiveRate`
+- [ ] Service: `PayrollCalculator` (generate gaji, port dari hris-system)
+- [ ] Service: `BpjsCalculator` (kalkulasi BPJS)
+- [ ] Service: `PphCalculator` (kalkulasi PPh 21 TER + progressive)
+- [ ] Service: `ThrCalculator` (kalkulasi THR)
+- [ ] Frontend: Gaji Karyawan Index + Generate
+- [ ] Frontend: Perhitungan BPJS
+- [ ] Frontend: Perhitungan PPh
+- [ ] Frontend: Slip Gaji (render + export)
+- [ ] Frontend: Integrasi semua halaman dengan API
+- [ ] Test: generate payroll full flow
+- [ ] Test: export slip gaji PDF/Excel
+- [ ] Test: generate THR
 
 ---
 

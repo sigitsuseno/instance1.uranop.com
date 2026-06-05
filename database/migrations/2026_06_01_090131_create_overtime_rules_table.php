@@ -15,7 +15,7 @@ return new class extends Migration
             $table->string('name');
             $table->boolean('is_active')->default(true);
             $table->boolean('is_holiday')->default(false);
-            $table->foreignId('work_pattern_id')->nullable()->constrained('work_patterns')->nullOnDelete();
+            $table->unsignedBigInteger('work_pattern_id')->nullable();
             $table->string('description')->nullable();
             
             $table->foreignId('created_by')->nullable()->constrained('users');

@@ -11,6 +11,8 @@ const emit = defineEmits(['toggle'])
 
 const route = useRoute()
 
+const { isSuperadmin, isHrmanager, isAdmManager } = useAuth()
+
 const supervisorMenus = [
   {
     title: 'Dashboard',
@@ -19,22 +21,26 @@ const supervisorMenus = [
     visible: true,
   },
   {
-    title: 'Kehadiran',
+    title: 'Absensi',
     icon: 'bx bx-calendar-check',
     children: [
-      { title: 'Absensi', icon: 'bx bx-file', route: '/supervisor/attendance' },
+      { title: 'Import', icon: 'bx bx-upload', route: '/supervisor/attendance/import' },
+      { title: 'Sync Kehadiran', icon: 'bx bx-sync', route: '/supervisor/attendance/sync' },
+      { title: 'Data Absensi', icon: 'bx bx-file', route: '/supervisor/attendance' },
+      { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/supervisor/attendance/consecutive' },
       { title: 'Roster', icon: 'bx bx-calendar', route: '/supervisor/attendance/roster' },
+      { title: 'Lembur Staf', icon: 'bx bx-time', route: '/supervisor/attendance/overtime' },
+      { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/supervisor/attendance/recap' },
     ],
   },
   {
-    title: 'Generate Gaji',
+    title: 'Penggajian',
     icon: 'bx bx-money',
-    route: '/supervisor/payroll',
-  },
-  {
-    title: 'THR',
-    icon: 'bx bx-gift',
-    route: '/supervisor/payroll/thr',
+    children: [
+      { title: 'Gaji Karyawan', icon: 'bx bx-cog', route: '/supervisor/payroll' },
+      { title: 'Slip Gaji', icon: 'bx bx-file', route: '/supervisor/payroll/slip' },
+      { title: 'Perhitungan THR', icon: 'bx bx-gift', route: '/supervisor/payroll/thr' },
+    ],
   },
   {
     title: 'Cuti',

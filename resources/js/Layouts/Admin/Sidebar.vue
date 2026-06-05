@@ -96,28 +96,7 @@ const allMenus = [
       { title: 'Perubahan Data BPJS', icon: 'bx bx-edit', route: '/admin/payroll/configs' },
     ],
   },
-  {
-    title: 'Absensi',
-    icon: 'bx bx-calendar-check',
-    visible: isHrbranch.value || isHrAst.value,
-    children: [
-      { title: 'Import', icon: 'bx bx-upload', route: '/admin/attendance/import' },
-      { title: 'Data Absensi', icon: 'bx bx-shield-quarter', route: '/admin/attendance' },
-      { title: 'Snapshot', icon: 'bx bx-camera', route: '/admin/attendance' },
-      { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/admin/attendance' },
-      { title: 'Lembur Staf', icon: 'bx bx-time', route: '/admin/attendance/overtime' },
-    ],
-  },
-  {
-    title: 'Penggajian',
-    icon: 'bx bx-money',
-    visible: isHrbranch.value || isHrAst.value,
-    children: [
-      { title: 'Detail Gaji', icon: 'bx bx-cog', route: '/admin/payroll' },
-      { title: 'Slip Gaji', icon: 'bx bx-file', route: '/admin/payroll' },
-      { title: 'Perhitungan THR', icon: 'bx bx-gift', route: '/admin/payroll/thr' },
-    ],
-  },
+
   {
     title: 'Payroll',
     icon: 'bx bx-money',

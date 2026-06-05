@@ -34,7 +34,7 @@ return new class extends Migration
             $table->integer('tolerance_minutes')->default(0);
             $table->integer('min_work_hours')->nullable();
             $table->boolean('has_overtime')->default(false);
-            $table->decimal('overtime_multiplier', 5, 2)->nullable();
+            $table->boolean('has_modifier')->default(false);
             
             $table->boolean('is_weekend')->default(false);
             $table->boolean('is_dayoff')->default(false); 

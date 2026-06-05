@@ -53,8 +53,14 @@ const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue'
 
 const SupervisorDashboard = () => import('../Pages/Supervisor/Dashboard.vue')
 const SupervisorAttendance = () => import('../Pages/Supervisor/Attendance/Index.vue')
+const SupervisorAttendanceImport = () => import('../Pages/Supervisor/Attendance/Import.vue')
+const SupervisorAttendanceSync = () => import('../Pages/Supervisor/Attendance/SyncKehadiran.vue')
+const SupervisorAttendanceConsecutive = () => import('../Pages/Supervisor/Attendance/Consecutive.vue')
+const SupervisorAttendanceOvertime = () => import('../Pages/Supervisor/Attendance/Overtime/Index.vue')
+const SupervisorAttendanceRecap = () => import('../Pages/Supervisor/Attendance/Recap.vue')
 const SupervisorRoster = () => import('../Pages/Supervisor/Attendance/Roster/Index.vue')
 const SupervisorPayroll = () => import('../Pages/Supervisor/Payroll/Index.vue')
+const SupervisorPayrollSlip = () => import('../Pages/Supervisor/Payroll/Slip.vue')
 const SupervisorLeave = () => import('../Pages/Supervisor/Leave/Index.vue')
 const SupervisorEmployee = () => import('../Pages/Supervisor/Employee/Index.vue')
 const SupervisorReports = () => import('../Pages/Supervisor/Reports/Index.vue')
@@ -142,10 +148,16 @@ const routes = [
     meta: { requiresAuth: true, requiresSupervisor: true },
     children: [
       { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard, meta: { title: 'Dashboard Supervisor' } },
-      { path: 'attendance', name: 'supervisor.attendance', component: SupervisorAttendance, meta: { title: 'Kehadiran' } },
+      { path: 'attendance', name: 'supervisor.attendance', component: SupervisorAttendance, meta: { title: 'Data Absensi' } },
+      { path: 'attendance/import', name: 'supervisor.attendance.import', component: SupervisorAttendanceImport, meta: { title: 'Import Kehadiran' } },
+      { path: 'attendance/sync', name: 'supervisor.attendance.sync', component: SupervisorAttendanceSync, meta: { title: 'Sync Kehadiran' } },
+      { path: 'attendance/consecutive', name: 'supervisor.attendance.consecutive', component: SupervisorAttendanceConsecutive, meta: { title: 'Consecutive Day' } },
+      { path: 'attendance/overtime', name: 'supervisor.attendance.overtime', component: SupervisorAttendanceOvertime, meta: { title: 'Lembur Staf' } },
+      { path: 'attendance/recap', name: 'supervisor.attendance.recap', component: SupervisorAttendanceRecap, meta: { title: 'Rekap Absensi' } },
       { path: 'attendance/roster', name: 'supervisor.attendance.roster', component: SupervisorRoster, meta: { title: 'Roster' } },
-      { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll, meta: { title: 'Generate Gaji' } },
-      { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr, meta: { title: 'THR' } },
+      { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll, meta: { title: 'Gaji Karyawan' } },
+      { path: 'payroll/slip', name: 'supervisor.payroll.slip', component: SupervisorPayrollSlip, meta: { title: 'Slip Gaji' } },
+      { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr, meta: { title: 'Perhitungan THR' } },
       { path: 'leave', name: 'supervisor.leave', component: SupervisorLeave, meta: { title: 'Cuti' } },
       { path: 'employee', name: 'supervisor.employee', component: SupervisorEmployee, meta: { title: 'Karyawan' } },
       { path: 'reports', name: 'supervisor.reports', component: SupervisorReports, meta: { title: 'Laporan' } },

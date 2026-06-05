@@ -13,6 +13,7 @@ return new class extends Migration
             $table->uuid('uuid')->unique();
             $table->foreignId('employee_id')->constrained('employees');
             $table->foreignId('leave_type_id')->constrained('leave_types');
+            $table->foreignId('leave_period_id')->nullable()->constrained('leave_periods');
             
             $table->date('start_date');
             $table->date('end_date');

@@ -14,7 +14,10 @@ return new class extends Migration
             $table->string('group')->default('general');
             $table->string('key')->unique();
             $table->text('value')->nullable();
-            $table->string('type')->default('string'); // string, boolean, integer, json
+            $table->integer('cut_off_date')->nullable();
+            $table->string('working_day_type')->default('fixed');
+            $table->integer('fixed_working_day')->nullable();
+            $table->string('type')->default('string');
             $table->string('description')->nullable();
             $table->foreignId('created_by')->nullable()->constrained('users');
             $table->foreignId('updated_by')->nullable()->constrained('users');
