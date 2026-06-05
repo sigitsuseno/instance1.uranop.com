@@ -14,7 +14,8 @@ return new class extends Migration
             $table->foreignId('employee_id')->constrained('employees');
             $table->foreignId('leave_type_id')->constrained('leave_types');
             $table->foreignId('leave_period_id')->constrained('leave_periods');
-            
+            $table->unsignedBigInteger('reference_id')->nullable();
+
             $table->enum('transaction_type', ['increment', 'decrement'])->default('increment');
             $table->decimal('amount', 10, 2)->default(0);
             $table->text('description')->nullable();
@@ -25,7 +26,7 @@ return new class extends Migration
             $table->foreignId('updated_by')->nullable()->constrained('users');
 
             $table->unique(
-                ['employee_id', 'leave_type_id', 'leave_period_id', 'transaction_type'],
+                ['employee_id', 'leave_type_id', 'leave_period_id', 'reference_id', 'transaction_type'],
                 'uq_employee_leave_period_type'
             );
         });
