@@ -67,5 +67,16 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.consecutive.destroy');
     });
 
+    // ========== RESUME KEHADIRAN (Attendance Records) ==========
+
+    Route::prefix('attendance/recap')->group(function () {
+        Route::get('/', [AttendanceApiController::class, 'recapList'])
+            ->name('attendance.recap.list');
+        Route::post('/generate', [AttendanceApiController::class, 'recapGenerate'])
+            ->name('attendance.recap.generate');
+        Route::post('/approve', [AttendanceApiController::class, 'recapApprove'])
+            ->name('attendance.recap.approve');
+    });
+
 
 });

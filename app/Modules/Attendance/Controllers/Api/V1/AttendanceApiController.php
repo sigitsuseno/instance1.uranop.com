@@ -560,4 +560,277 @@ class AttendanceApiController extends Controller
         ]);
     }
 
+    // ========== RESUME KEHADIRAN (Attendance Records) ==========
+
+    /**
+     * GET /api/v1/attendance/recap
+     * List resume kehadiran per periode
+     */
+    public function recapList(Request $request): JsonResponse
+    {
+        $periodId = $request->period_id;
+        $search = $request->search;
+        $departmentId = $request->department_id;
+        $perPage = $request->per_page ?? 50;
+
+        if (!$periodId) {
+            return response()->json(['data' => [], 'message' => 'Silakan pilih periode'], 422);
+        }
+
+        $query = \App\Modules\Attendance\Models\AttendanceRecord::with([
+            'employee' => fn($q) => $q->select('id', 'name', 'employee_code', 'department_id'),
+            'employee.department' => fn($q) => $q->select('id', 'name'),
+            'payPeriod' => fn($q) => $q->select('id', 'name', 'start_date', 'end_date'),
+        ])->where('pay_period_id', $periodId);
+
+        if ($search) {
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('employee_code', 'like', "%{$search}%");
+            });
+        }
+
+        if ($departmentId) {
+            $query->whereHas('employee', function ($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            });
+        }
+
+        // Order by employee code
+        $query->orderBy(
+            \App\Modules\Employee\Models\Employee::select('employee_code')
+                ->whereColumn('employees.id', 'att_records.employee_id')
+        );
+
+        $records = $query->paginate($perPage);
+
+        return response()->json($records);
+    }
+
+    /**
+     * POST /api/v1/attendance/recap/generate
+     * Generate resume kehadiran untuk satu periode
+     */
+    public function recapGenerate(Request $request): JsonResponse
+    {
+        $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+        ]);
+
+        $periodId = $request->period_id;
+        $period = \App\Modules\Payroll\Models\PayPeriod::findOrFail($periodId);
+        $startDate = $period->start_date;
+        $endDate = $period->end_date;
+
+        // Ambil semua karyawan yang punya data roster di periode ini
+        $employees = \App\Modules\Employee\Models\Employee::with('department')
+            ->activeInPeriod($startDate, $endDate)
+            ->whereHas('shiftRosters', function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('date', [$startDate, $endDate]);
+            })
+            ->get();
+
+        // Fixed days dari config (default 22)
+        $fixedDays = \App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22;
+
+        $generatedCount = 0;
+
+        \Illuminate\Support\Facades\DB::beginTransaction();
+        try {
+            foreach ($employees as $employee) {
+                // 1. Aggregate leave yang approved dalam periode
+                $leaves = \App\Modules\Leave\Models\LeaveRequest::where('employee_id', $employee->id)
+                    ->where('status', 'approved')
+                    ->where(function ($q) use ($startDate, $endDate) {
+                        $q->whereBetween('start_date', [$startDate, $endDate])
+                          ->orWhereBetween('end_date', [$startDate, $endDate]);
+                    })
+                    ->with('leaveType')
+                    ->get();
+
+                $cuti = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'leave')->sum('total_days');
+                $izin = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'permit')->sum('total_days');
+                $sakit = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'sick')->sum('total_days');
+
+                // 2. Aggregate att_prepares dalam periode
+                $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)
+                    ->whereBetween('date', [$startDate, $endDate])
+                    ->get();
+
+                $absen = $prepares->where('status', 'absent')->count();
+                $lateMinutes = $prepares->sum('late_minutes');
+                $lm = $prepares->sum('lm');
+                $lmCount = $prepares->sum('lm_count');
+                $lembur = $prepares->sum('overtime');
+                $lemburCount = $prepares->sum('overtime_count');
+
+                // 3. Hitung
+                $deductDay = $izin + $absen;   // hari pemotongan
+                $hariKerja = max(0, $fixedDays - $deductDay);
+
+                // 4. Upsert
+                \App\Modules\Attendance\Models\AttendanceRecord::updateOrCreate(
+                    [
+                        'employee_id' => $employee->id,
+                        'pay_period_id' => $periodId,
+                    ],
+                    [
+                        'hari_kerja' => $hariKerja,
+                        'cuti' => $cuti,
+                        'izin' => $izin,
+                        'sakit' => $sakit,
+                        'absen' => $absen,
+                        'deduct_day' => $deductDay,
+                        'late_minutes' => $lateMinutes,
+                        'lm' => $lm,
+                        'lm_count' => $lmCount,
+                        'lembur' => $lembur,
+                        'lembur_count' => $lemburCount,
+                        'status' => 'generated',
+                    ]
+                );
+
+                $generatedCount++;
+            }
+
+            \Illuminate\Support\Facades\DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Berhasil me-generate resume kehadiran untuk {$generatedCount} karyawan.",
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\DB::rollBack();
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal generate: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * POST /api/v1/attendance/recap/approve
+     * Lock att_records + create/update pay_records (dengan split logic)
+     */
+    public function recapApprove(Request $request): JsonResponse
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:att_records,id',
+        ]);
+
+        $records = \App\Modules\Attendance\Models\AttendanceRecord::with(['employee', 'payPeriod'])
+            ->whereIn('id', $request->ids)
+            ->get();
+
+        if ($records->isEmpty()) {
+            return response()->json(['success' => false, 'message' => 'Data tidak ditemukan.'], 404);
+        }
+
+        $processed = 0;
+        $errors = [];
+
+        try {
+            foreach ($records as $record) {
+                // Cek apakah udah locked
+                if ($record->status === 'locked') {
+                    $errors[] = "{$record->employee->name}: sudah dilock sebelumnya.";
+                    continue;
+                }
+
+                $period = $record->payPeriod;
+                $employee = $record->employee;
+                $segment = $record->segment; // null / A / B
+                $hk = $record->hari_kerja + $record->deduct_day; // total fixed working days
+                if ($hk == 0) $hk = 22;
+
+                // ── DATA MASUKAN ──
+                $gajiPokok = $employee->gaji_pokok($period->start_date->format('Y-m'));
+                $premi = $employee->premi($period->start_date->format('Y-m'));
+                $tjMasaKerja = $employee->tunjangan_masa_kerja($period->start_date->format('Y-m'));
+                $tunjangan = $employee->tunjangan($period->start_date->format('Y-m'));
+                $hariKerja = $record->hari_kerja;
+                $deductDay = $record->deduct_day;
+                $lm = $record->lm;
+                $lmCount = $record->lm_count;
+                $lemburCount = $record->lembur_count;
+
+                // ── HITUNGAN ──
+                $gaji = round(($gajiPokok / $hk) * $hariKerja, 2);
+                $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * ($lmCount + $lemburCount) / 100) * 100;
+                $premiHadir = round(($premi / $hk) * $hariKerja, 2);
+
+                // Part 1 vs Part 2
+                $isPart1 = ($segment === 'A');
+                $revisi = $isPart1 ? ($tjMasaKerja * -1) : 0;
+                $bpjsTk = $isPart1 ? 0 : ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
+                $bpjsKs = $isPart1 ? 0 : ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
+                $bpjsPen = $isPart1 ? 0 : ($employee->bpjs?->bpjs_pensiun ?? 0);
+                $pph = $isPart1 ? 0 : 0; // TODO: dari pengelolaan PPH
+                $cashbon = 0;
+
+                $gajiKotor = $gaji + $upahLembur + $premiHadir + $tunjangan;
+                $potKehadiran = round($deductDay * ($gajiPokok / $hk), 2);
+                $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon + $potKehadiran;
+
+                // Pembulatan 100
+                $beforeRounding = $gajiKotor - $totalPotongan;
+                $rounded = ceil($beforeRounding / 100) * 100;
+                $pblt = $rounded - $beforeRounding;
+                $gajiBersih = $beforeRounding + $pblt;
+
+                // ── CREATE/UPDATE PAY_RECORD ──
+                \App\Modules\Payroll\Models\PayRecord::updateOrCreate(
+                    [
+                        'employee_id' => $employee->id,
+                        'pay_period_id' => $period->id,
+                        'segment' => $segment,
+                    ],
+                    [
+                        'att_record_id' => $record->id,
+                        'gaji_pokok' => $gajiPokok,
+                        'premi' => $premi,
+                        'tj_masa_kerja' => $tjMasaKerja,
+                        'tunjangan' => $tunjangan,
+                        'hari_kerja' => $hariKerja,
+                        'deduct_day' => $deductDay,
+                        'lm' => $lm,
+                        'lm_count' => $lmCount,
+                        'lembur_count' => $lemburCount,
+                        'gaji' => $gaji,
+                        'upah_lembur' => $upahLembur,
+                        'premi_hadir' => $premiHadir,
+                        'revisi' => $revisi,
+                        'gaji_kotor' => $gajiKotor,
+                        'bpjs_tk' => $bpjsTk,
+                        'bpjs_ks' => $bpjsKs,
+                        'bpjs_pen' => $bpjsPen,
+                        'pph' => $pph,
+                        'cashbon' => $cashbon,
+                        'pot_kehadiran' => $potKehadiran,
+                        'pblt' => $pblt,
+                        'gaji_bersih' => $gajiBersih,
+                        'status' => 'generated',
+                    ]
+                );
+
+                // ── LOCK ATT_RECORD ──
+                $record->update(['status' => 'locked']);
+
+                $processed++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Berhasil memproses {$processed} data." . (count($errors) ? ' ' . implode(' ', $errors) : ''),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal approve: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
 }

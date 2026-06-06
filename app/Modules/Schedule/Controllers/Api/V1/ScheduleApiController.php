@@ -275,7 +275,12 @@ class ScheduleApiController extends Controller
         $start = \Carbon\Carbon::create($year, $month, 25)->subMonth();
         $end = \Carbon\Carbon::create($year, $month, 24);
 
-        $employees = \App\Modules\Employee\Models\Employee::with(['department'])->activeInPeriod($start, $end)->get();
+        $employees = \App\Modules\Employee\Models\Employee::with(['department'])
+            ->activeInPeriod($start, $end)
+            ->whereHas('shiftRosters', function ($q) use ($start, $end) {
+                $q->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')]);
+            })
+            ->get();
         $rosters = \App\Modules\Schedule\Models\EmployeeShiftRoster::with('shift')
             ->whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
             ->get()

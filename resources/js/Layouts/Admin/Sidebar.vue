@@ -83,7 +83,7 @@ const allMenus = [
     children: [
       { title: 'Import Kehadiran', icon: 'bx bx-upload', route: '/admin/attendance/import', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Sync Kehadiran', icon: 'bx bx-sync', route: '/admin/attendance/sync', visible: isSuperadmin.value || isHrmanager.value },
-      { title: 'Data Kehadiran', icon: 'bx bx-file', route: '/admin/attendance', visible: true },
+      { title: 'Resume Kehadiran', icon: 'bx bx-file', route: '/admin/attendance/recap', visible: true },
       { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/admin/attendance/consecutive', visible: true },
     ],
   },

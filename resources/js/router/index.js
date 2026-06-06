@@ -28,6 +28,7 @@ const FamiliesIndex = () => import('../Pages/Admin/Employees/Families/Index.vue'
 const DocumentsIndex = () => import('../Pages/Admin/Employees/Documents/Index.vue')
 const TerminationsIndex = () => import('../Pages/Admin/Employees/Terminations/Index.vue')
 const AttendanceIndex = () => import('../Pages/Admin/Attendance/Index.vue')
+const AttendanceRecap = () => import('../Pages/Admin/Attendance/Recap/Index.vue')
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const SyncKehadiran = () => import('../Pages/Admin/Attendance/SyncKehadiran.vue')
@@ -115,7 +116,7 @@ const routes = [
       { path: 'employees/families', name: 'employees.families', component: FamiliesIndex, meta: { title: 'Keluarga & Tanggungan' } },
       { path: 'employees/documents', name: 'employees.documents', component: DocumentsIndex, meta: { title: 'Dokumen' } },
       { path: 'employees/terminations', name: 'employees.terminations', component: TerminationsIndex, meta: { title: 'Resign & PHK' } },
-      { path: 'attendance', name: 'attendance', component: AttendanceIndex, meta: { title: 'Absensi' } },
+      { path: 'attendance/recap', name: 'attendance.recap', component: AttendanceRecap, meta: { title: 'Resume Kehadiran' } },
       { path: 'attendance/import', name: 'attendance.import', component: LogImport, meta: { title: 'Import Log' } },
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
       { path: 'attendance/sync', name: 'attendance.sync', component: SyncKehadiran, meta: { title: 'Sync Kehadiran' } },
