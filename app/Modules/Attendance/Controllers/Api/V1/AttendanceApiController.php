@@ -453,6 +453,127 @@ class AttendanceApiController extends Controller
         return response()->json(['groups' => $groups]);
     }
 
+    /**
+     * GET /api/v1/attendance/prepare/overtime-summary
+     * List employees with aggregated overtime values
+     */
+    public function prepareOvertimeSummary(Request $request): JsonResponse
+    {
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate   = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+        $search    = $request->input('search');
+        $perPage   = $request->input('per_page', 20);
+        $employees = \App\Modules\Employee\Models\Employee::with([
+            'department',
+            'position',
+            'attendancePrepares' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            },
+        ])
+            ->where('is_active', true)
+            ->where(function ($q) use ($startDate) {
+                $q->whereNull('resign_date')
+                    ->orWhere('resign_date', '>=', $startDate);
+            })
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('employee_code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('employee_code')
+            ->paginate($perPage);
+
+        $data = [];
+        foreach ($employees as $employee) {
+            $totalHadir = 0;
+            $lm = 0;
+            $totalLm = 0;
+            $lemburHb = 0;
+            $totalLhb = 0;
+
+            foreach ($employee->attendancePrepares as $attendance) {
+                // Check if status is present or late (in database: 'hadir', 'terlambat')
+                if (in_array($attendance->status, ['hadir', 'terlambat'])) {
+                    $totalHadir++;
+                }
+
+                $lemburHb += $attendance->overtime ?? 0;
+                $totalLhb += $attendance->overtime_count ?? 0;
+                $lm += $attendance->lm ?? 0;
+                $totalLm += $attendance->lm_count ?? 0;
+            }
+
+            $data[] = [
+                'id' => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'employee_name' => $employee->name,
+                'department' => $employee->department?->name,
+                'total_hadir' => $totalHadir,
+                'lm' => $lm,
+                'total_lm' => $totalLm,
+                'lembur_hb' => $lemburHb,
+                'total_lhb' => $totalLhb,
+                'total_lembur' => $totalLm + $totalLhb,
+            ];
+        }
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $employees->currentPage(),
+                'last_page'    => $employees->lastPage(),
+                'total'        => $employees->total(),
+                'from'         => $employees->firstItem(),
+                'to'           => $employees->lastItem(),
+                'links'        => [
+                    'prev' => $employees->previousPageUrl(),
+                    'next' => $employees->nextPageUrl(),
+                ]
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/attendance/prepare/overtime-navigation
+     * Get prev/next employee ID for Detail page
+     */
+    public function prepareOvertimeNavigation(Request $request): JsonResponse
+    {
+        $employeeId = $request->input('employee_id');
+        $search     = $request->input('search');
+
+        // We use the same base query as prepareOvertimeSummary to maintain the list order
+        $baseQuery = \App\Modules\Employee\Models\Employee::where('is_active', true)
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('employee_code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('employee_code');
+
+        $employees = $baseQuery->pluck('id')->toArray();
+        $currentIndex = array_search($employeeId, $employees);
+
+        $prevId = null;
+        $nextId = null;
+
+        if ($currentIndex !== false) {
+            if ($currentIndex > 0) {
+                $prevId = $employees[$currentIndex - 1];
+            }
+            if ($currentIndex < count($employees) - 1) {
+                $nextId = $employees[$currentIndex + 1];
+            }
+        }
+
+        return response()->json([
+            'prev_id' => $prevId,
+            'next_id' => $nextId,
+        ]);
+    }
+
     // =================================================================
     // CONSECUTIVE DAYS — CRUD (mirip leave_request)
     // =================================================================

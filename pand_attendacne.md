@@ -34,7 +34,7 @@ hari_kerja = HK - deduct_day.
    (bpjs_tk + bpjs_kes + bpjs_pen) -> didapat dari pengelolaan bpjs belum kita buat,
 9. pph = employee_pph->pph_bulanan ?? 0,
 10. cashbon = 0,
-11. pot_kehadiran = deduct_day \* (gaji_pokok / HK),
+11. pot_kehadiran = deduct_day x (gaji_pokok / HK),
 12. pblt = (pembulatan 100 dari (gaji_kotor - (bpjs_tk + bpjs_kes + bpjs_pen + pph + cashbon + pot_kehadiran))) - (gaji_kotor - (bpjs_tk + bpjs_kes + bpjs_pen + pph + cashbon + pot_kehadiran))
 13. gaji_bersih = gaji_kotor - (bpjs_tk + bpjs_kes + bpjs_pen + pph + cashbon + pot_kehadiran) + pblt
 

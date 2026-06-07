@@ -27,15 +27,6 @@
           </template>
           Lengkapi
         </BaseButton>
-        <BaseButton variant="secondary" :loading="isCalculating" @click="handleHitungLembur" :disabled="isCalculating">
-          <template #icon-left>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="7" width="20" height="14" rx="2" />
-              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-            </svg>
-          </template>
-          Hitung Lembur
-        </BaseButton>
         <BaseButton variant="secondary" @click="handleKunci" :disabled="true" title="Coming soon — sesi selanjutnya">
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -434,43 +425,6 @@
               </svg>
             </template>
             Proses Sync
-          </BaseButton>
-        </div>
-      </template>
-    </BaseModal>
-
-    <!-- Hitung Lembur Modal -->
-    <BaseModal v-if="showHitungLemburModal" :show="showHitungLemburModal" title="Hitung Lembur" size="sm"
-      @close="showHitungLemburModal = false">
-      <div class="space-y-4">
-        <p class="text-sm text-(--text-muted)">
-          Pilih rentang tanggal untuk menghitung lembur. Record yang sudah terkunci akan dilewati.
-        </p>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-medium text-(--text-main) mb-1">Dari Tanggal</label>
-            <input v-model="processStartDate" type="date"
-              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-(--text-main) mb-1">Sampai Tanggal</label>
-            <input v-model="processEndDate" type="date"
-              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
-          </div>
-        </div>
-      </div>
-      <template #footer>
-        <div class="flex gap-3 w-full">
-          <BaseButton variant="secondary" @click="showHitungLemburModal = false">Batal</BaseButton>
-          <span class="flex-1"></span>
-          <BaseButton variant="primary" :loading="isCalculating" @click="handleProceedHitungLembur">
-            <template #icon-left>
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="7" width="20" height="14" rx="2" />
-                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-              </svg>
-            </template>
-            Proses Hitung Lembur
           </BaseButton>
         </div>
       </template>
@@ -1086,44 +1040,7 @@ async function handleProceedLengkapi() {
   }
 }
 
-// ── Hitung Lembur ──
-
-async function handleHitungLembur() {
-  const { start, end } = getPeriodDates()
-  processStartDate.value = start
-  processEndDate.value = end
-  showHitungLemburModal.value = true
-}
-
-async function handleProceedHitungLembur() {
-  isCalculating.value = true
-  calculateResult.value = null
-  showHitungLemburModal.value = false
-
-  try {
-    const res = await post('/api/v1/attendance/prepare/hitung-lembur', {
-      start_date: processStartDate.value,
-      end_date: processEndDate.value,
-    })
-
-    calculateResult.value = {
-      success: res.success,
-      message: res.message || 'Hitung lembur selesai.',
-    }
-
-    if (res.success) {
-      await fetchData()
-    }
-  } catch (e) {
-    calculateResult.value = {
-      success: false,
-      message: 'Hitung lembur gagal: ' + (e.message || 'Unknown error'),
-    }
-  } finally {
-    isCalculating.value = false
-  }
-}
-
+// ── Kunci ──
 function handleKunci() { /* TODO: sesi selanjutnya */ }
 
 function filterData() { /* computed handles this */ }

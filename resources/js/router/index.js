@@ -33,6 +33,8 @@ const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const SyncKehadiran = () => import('../Pages/Admin/Attendance/SyncKehadiran.vue')
 const OvertimeIndex = () => import('../Pages/Admin/Attendance/Overtime/Index.vue')
+const OvertimeCalculationIndex = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Index.vue')
+const OvertimeCalculationDetail = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Detail.vue')
 const ConsecutiveIndex = () => import('../Pages/Admin/Attendance/Consecutive/Index.vue')
 const LeaveIndex = () => import('../Pages/Admin/Leave/Index.vue')
 const LeaveApprovals = () => import('../Pages/Admin/Leave/Approvals.vue')
@@ -121,6 +123,8 @@ const routes = [
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
       { path: 'attendance/sync', name: 'attendance.sync', component: SyncKehadiran, meta: { title: 'Sync Kehadiran' } },
       { path: 'attendance/overtime', name: 'attendance.overtime', component: OvertimeIndex, meta: { title: 'Lembur' } },
+      { path: 'attendance/overtime-calculation', name: 'attendance.overtime-calculation', component: OvertimeCalculationIndex, meta: { title: 'Perhitungan Lembur' } },
+      { path: 'attendance/overtime-calculation/:id', name: 'attendance.overtime-calculation.detail', component: OvertimeCalculationDetail, meta: { title: 'Detail Perhitungan Lembur' } },
       { path: 'attendance/consecutive', name: 'attendance.consecutive', component: ConsecutiveIndex, meta: { title: 'Consecutive Day' } },
       { path: 'leave', name: 'leave', component: LeaveIndex, meta: { title: 'Cuti' } },
       { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals, meta: { title: 'Approval Cuti' } },
