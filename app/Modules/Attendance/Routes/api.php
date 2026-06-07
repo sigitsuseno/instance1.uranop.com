@@ -9,6 +9,10 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
 
     Route::prefix('attendance/logs')->group(function () {
 
+        // Cek Log endpoint
+        Route::get('/cek', [\App\Modules\Attendance\Controllers\Api\V1\RawLogController::class, 'cekLog'])
+            ->name('attendance.logs.cek');
+
         // Import endpoints (harus SEBELUM {batch} agar tidak konflik)
         Route::get('/import/template', [AttendanceApiController::class, 'template'])
             ->name('attendance.logs.import.template');

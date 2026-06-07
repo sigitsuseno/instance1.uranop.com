@@ -41,3 +41,18 @@ hari_kerja = HK - deduct_day.
 ## hitungan is_split = false
 
 sama seperti hitungan split part 2.
+
+bisa buatkan deteksi jadwal dari file excel ini, keluarannya excel juga juga boleh.
+
+aturannya,
+
+jika karyawan dengan nip = [163, 288, 57, 90]
+
+- salah satu scan ada di range 05.30 - 06.30 = P
+- salah satu scan ada di range 13.30 - 14.30 = S
+- salah satu scan ada di range 21.30 - 22.30 = ML
+
+jika karyawan dengan nip != [163, 288, 57, 90]
+
+- salah satu scan ada di range 06.30 - 08.30 = P
+- salah satu scan ada di range 11.30 - 18.30 = S

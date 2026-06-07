@@ -26,6 +26,10 @@
               </template>
               Download Template
             </BaseButton>
+
+            <BaseButton variant="primary" size="sm" @click="$router.push('/admin/attendance/cek-log')">
+              Cek Log
+            </BaseButton>
           </div>
 
           <!-- Mode selector -->

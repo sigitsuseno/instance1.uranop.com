@@ -120,6 +120,7 @@ const routes = [
       { path: 'employees/terminations', name: 'employees.terminations', component: TerminationsIndex, meta: { title: 'Resign & PHK' } },
       { path: 'attendance/recap', name: 'attendance.recap', component: AttendanceRecap, meta: { title: 'Resume Kehadiran' } },
       { path: 'attendance/import', name: 'attendance.import', component: LogImport, meta: { title: 'Import Log' } },
+      { path: 'attendance/cek-log', name: 'attendance.cek-log', component: () => import('../Pages/Admin/Attendance/CekLog.vue'), meta: { title: 'Cek Log Kehadiran' } },
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
       { path: 'attendance/sync', name: 'attendance.sync', component: SyncKehadiran, meta: { title: 'Sync Kehadiran' } },
       { path: 'attendance/overtime', name: 'attendance.overtime', component: OvertimeIndex, meta: { title: 'Lembur' } },
