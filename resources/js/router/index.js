@@ -43,6 +43,9 @@ const PayrollPeriodsIndex = () => import('../Pages/Admin/Payroll/Periods/Index.v
 const PayrollPeriodDetail = () => import('../Pages/Admin/Payroll/Periods/Detail.vue')
 const PayrollConfigsIndex = () => import('../Pages/Admin/Payroll/Configs/Index.vue')
 const PayrollThr = () => import('../Pages/Admin/Payroll/Thr.vue')
+const BpjsKeanggotaanIndex = () => import('../Pages/Admin/Payroll/Bpjs/Keanggotaan/Index.vue')
+const BpjsIuranIndex = () => import('../Pages/Admin/Payroll/Bpjs/Iuran/Index.vue')
+const BpjsKonfigurasiIndex = () => import('../Pages/Admin/Payroll/Bpjs/Konfigurasi/Index.vue')
 const WorkPatternsIndex = () => import('../Pages/Admin/Schedule/WorkPatterns/Index.vue')
 const WorkPatternsDetails = () => import('../Pages/Admin/Schedule/WorkPatterns/Details.vue')
 const ShiftsIndex = () => import('../Pages/Admin/Schedule/Shifts/Index.vue')
@@ -134,6 +137,9 @@ const routes = [
       { path: 'payroll/thr', name: 'payroll.thr', component: PayrollThr, meta: { title: 'THR' } },
       { path: 'payroll/configs', name: 'payroll.configs', component: PayrollConfigsIndex, meta: { title: 'Konfigurasi Payroll' } },
       { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail, meta: { title: 'Detail Periode' } },
+      { path: 'payroll/bpjs/keanggotaan', name: 'payroll.bpjs.keanggotaan', component: BpjsKeanggotaanIndex, meta: { title: 'Keanggotaan BPJS' } },
+      { path: 'payroll/bpjs/iuran', name: 'payroll.bpjs.iuran', component: BpjsIuranIndex, meta: { title: 'Iuran BPJS' } },
+      { path: 'payroll/bpjs/konfigurasi', name: 'payroll.bpjs.konfigurasi', component: BpjsKonfigurasiIndex, meta: { title: 'Konfigurasi BPJS' } },
       { path: 'schedule/work-patterns', name: 'schedule.work-patterns', component: WorkPatternsIndex, meta: { title: 'Pola Kerja' } },
       { path: 'schedule/work-patterns/:id/details', name: 'schedule.work-patterns.details', component: WorkPatternsDetails, meta: { title: 'Detail Pola Kerja' } },
       { path: 'schedule/shifts', name: 'schedule.shifts', component: ShiftsIndex, meta: { title: 'Shift' } },

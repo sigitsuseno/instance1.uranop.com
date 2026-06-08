@@ -5,6 +5,7 @@ use App\Modules\Settings\Controllers\Api\V1\SettingsApiController;
 use App\Modules\Settings\Controllers\Api\V1\SalaryGradeApiController;
 use App\Modules\Settings\Controllers\Api\V1\EmployeeDataApiController;
 use App\Modules\Settings\Controllers\Api\V1\PayrollConfigApiController;
+use App\Modules\Settings\Controllers\Api\V1\BpjsConfigController;
 
 Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     Route::get('/general', [SettingsApiController::class, 'getSystemSettings']);
@@ -68,4 +69,10 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         Route::put('/thr/{id}', [PayrollConfigApiController::class, 'updateThrConfig']);
         Route::delete('/thr/{id}', [PayrollConfigApiController::class, 'destroyThrConfig']);
     });
+
+    // BPJS Configs (versioned persentase)
+    Route::apiResource('bpjs-configs', BpjsConfigController::class);
+    Route::post('bpjs-configs/{config}/activate',   [BpjsConfigController::class, 'activate']);
+    Route::post('bpjs-configs/{config}/deactivate', [BpjsConfigController::class, 'deactivate']);
+    Route::get('bpjs-configs-active',               [BpjsConfigController::class, 'active']);
 });

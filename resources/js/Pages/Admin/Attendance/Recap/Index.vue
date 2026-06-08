@@ -92,6 +92,24 @@
           </BaseButton>
         </div>
       </div>
+
+      <!-- Baris kedua: per_page + select all shortcut -->
+      <div class="flex items-center gap-4 mt-3 pt-3 border-t border-(--border-soft)">
+        <div class="flex items-center gap-2">
+          <label class="text-xs text-(--text-muted)">Tampilkan</label>
+          <select v-model="perPage" @change="fetchList"
+            class="px-2 py-1 border border-(--border-soft) rounded bg-(--bg-card) text-(--text-main) text-sm">
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+            <option :value="200">200</option>
+            <option :value="500">500</option>
+          </select>
+        </div>
+        <span v-if="isApproving" class="text-xs text-(--text-muted)">
+          Centang semua di header untuk pilih {{ records.filter(r => r.status !== 'locked').length }} data di halaman ini
+        </span>
+      </div>
     </div>
 
     <!-- Table -->
@@ -186,6 +204,7 @@ const pagination = ref({ current_page: 1, last_page: 1, total: 0 })
 const selectedPeriod = ref('')
 const filterDepartment = ref('')
 const filterSearch = ref('')
+const perPage = ref(50)
 
 // ── Approve Mode ──
 const isApproving = ref(false)
@@ -228,7 +247,7 @@ async function fetchList(page = 1) {
   try {
     const params = new URLSearchParams({
       period_id: selectedPeriod.value,
-      per_page: '50',
+      per_page: String(perPage.value),
       page: String(page),
     })
     if (filterSearch.value) params.set('search', filterSearch.value)

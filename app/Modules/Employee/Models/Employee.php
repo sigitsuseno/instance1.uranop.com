@@ -168,7 +168,7 @@ class Employee extends Model
 
     public function bpjs()
     {
-        return $this->hasOne(EmployeeBpjs::class);
+        return $this->hasOne(EmployeeBpjs::class)->latestOfMany();
     }
 
     public function thr()

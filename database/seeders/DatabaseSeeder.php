@@ -23,6 +23,7 @@ class DatabaseSeeder extends Seeder
             WorkPatternAdditionalSeeder::class,
             LeaveTypeSeeder::class,
             OvertimeRuleSeeder::class,
+            BpjsConfigSeeder::class,
         ]);
     }
 }

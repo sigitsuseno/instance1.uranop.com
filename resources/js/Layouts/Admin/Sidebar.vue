@@ -30,7 +30,6 @@ const allMenus = [
       { title: 'Penggajian', icon: 'bx bx-time', route: '/admin/payroll/payroll-periode' },
       { title: 'Pengaturan Cuti', icon: 'bx bx-cog', route: '/admin/leave/settings', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'PPh 21', icon: 'bx bx-receipt', route: '/admin/payroll/configs' },
-      { title: 'BPJS', icon: 'bx bx-health', route: '/admin/payroll/configs' },
     ],
   },
   {
@@ -93,8 +92,9 @@ const allMenus = [
     icon: 'bx bx-health',
     visible: isSuperadmin.value || isHrmanager.value,
     children: [
-      { title: 'Data Karyawan BPJS', icon: 'bx bx-group', route: '/admin/payroll/configs' },
-      { title: 'Perubahan Data BPJS', icon: 'bx bx-edit', route: '/admin/payroll/configs' },
+      { title: 'Keanggotaan', icon: 'bx bx-group', route: '/admin/payroll/bpjs/keanggotaan' },
+      { title: 'Iuran BPJS', icon: 'bx bx-calculator', route: '/admin/payroll/bpjs/iuran' },
+      { title: 'Konfigurasi BPJS', icon: 'bx bx-cog', route: '/admin/payroll/bpjs/konfigurasi' },
     ],
   },
 

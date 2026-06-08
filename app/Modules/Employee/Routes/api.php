@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Employee\Controllers\Api\V1\Bpjs\BpjsApiController;
+use App\Modules\Employee\Controllers\Api\V1\Bpjs\BpjsEmployeeController;
 use App\Modules\Employee\Controllers\Api\V1\Contract\ContractApiController;
 use App\Modules\Employee\Controllers\Api\V1\Document\DocumentApiController;
 use App\Modules\Employee\Controllers\Api\V1\EmployeeApiController;
@@ -129,4 +130,18 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             });
         });
     });
+
+    // ========== BPJS STANDALONE ==========
+    // Keanggotaan & Iuran BPJS — halaman independen
+    Route::prefix('bpjs')->group(function () {
+        Route::get('/keanggotaan', [BpjsEmployeeController::class, 'index']);
+        Route::get('/keanggotaan/{employee}', [BpjsEmployeeController::class, 'show']);
+        Route::post('/keanggotaan/{employee}', [BpjsEmployeeController::class, 'store']);
+        Route::put('/keanggotaan/{employee}', [BpjsEmployeeController::class, 'update']);
+        Route::delete('/keanggotaan/{employee}', [BpjsEmployeeController::class, 'destroy']);
+        Route::post('/generate-iuran', [BpjsEmployeeController::class, 'generateIuran']);
+        Route::get('/iuran', [BpjsEmployeeController::class, 'iuranIndex']);
+        Route::get('/reports', [BpjsEmployeeController::class, 'reports']);
+    });
+
 });

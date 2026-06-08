@@ -730,7 +730,8 @@ class AttendanceApiController extends Controller
 
     /**
      * POST /api/v1/attendance/recap/generate
-     * Generate resume kehadiran untuk satu periode
+     * Generate resume kehadiran untuk satu periode.
+     * Jika is_split=true → 2 att_records per karyawan (seg-A & seg-B).
      */
     public function recapGenerate(Request $request): JsonResponse
     {
@@ -751,65 +752,92 @@ class AttendanceApiController extends Controller
             })
             ->get();
 
-        // Fixed days dari config (default 22)
-        $fixedDays = \App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22;
+        // Fixed days — ambil dari setting
+        $fixedDays = (int) (\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22);
+
+        // Tentukan segment(s)
+        if ($period->is_split) {
+            $month1End = Carbon::parse($startDate)->endOfMonth()->toDateString();
+            $month2Start = Carbon::parse($endDate)->startOfMonth()->toDateString();
+
+            // HK per segment dari JSON, fallback dibagi rata
+            $splitDays = json_decode(\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.split_working_days')->value('value') ?? '{}', true);
+            $hkA = $splitDays['A'] ?? (int) round($fixedDays / 2);
+            $hkB = $splitDays['B'] ?? (int) ($fixedDays - $hkA);
+
+            $segments = [
+                ['segment' => 'A', 'start' => $startDate, 'end' => $month1End, 'hk' => $hkA],
+                ['segment' => 'B', 'start' => $month2Start, 'end' => $endDate, 'hk' => $hkB],
+            ];
+        } else {
+            $segments = [
+                ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
+            ];
+        }
 
         $generatedCount = 0;
 
         \Illuminate\Support\Facades\DB::beginTransaction();
         try {
             foreach ($employees as $employee) {
-                // 1. Aggregate leave yang approved dalam periode
-                $leaves = \App\Modules\Leave\Models\LeaveRequest::where('employee_id', $employee->id)
-                    ->where('status', 'approved')
-                    ->where(function ($q) use ($startDate, $endDate) {
-                        $q->whereBetween('start_date', [$startDate, $endDate])
-                          ->orWhereBetween('end_date', [$startDate, $endDate]);
-                    })
-                    ->with('leaveType')
-                    ->get();
+                foreach ($segments as $seg) {
+                    $segStart = $seg['start'];
+                    $segEnd = $seg['end'];
+                    $hk = $seg['hk'];
 
-                $cuti = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'leave')->sum('total_days');
-                $izin = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'permit')->sum('total_days');
-                $sakit = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'sick')->sum('total_days');
+                    // 1. Aggregate leave yang approved dalam rentang segmen
+                    $leaves = \App\Modules\Leave\Models\LeaveRequest::where('employee_id', $employee->id)
+                        ->where('status', 'approved')
+                        ->where(function ($q) use ($segStart, $segEnd) {
+                            $q->whereBetween('start_date', [$segStart, $segEnd])
+                              ->orWhereBetween('end_date', [$segStart, $segEnd]);
+                        })
+                        ->with('leaveType')
+                        ->get();
 
-                // 2. Aggregate att_prepares dalam periode
-                $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)
-                    ->whereBetween('date', [$startDate, $endDate])
-                    ->get();
+                    $cuti = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'leave')->sum('total_days');
+                    $izin = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'permit')->sum('total_days');
+                    $sakit = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'sick')->sum('total_days');
 
-                $absen = $prepares->where('status', 'absent')->count();
-                $lateMinutes = $prepares->sum('late_minutes');
-                $lm = $prepares->sum('lm');
-                $lmCount = $prepares->sum('lm_count');
-                $lembur = $prepares->sum('overtime');
-                $lemburCount = $prepares->sum('overtime_count');
+                    // 2. Aggregate att_prepares dalam rentang segmen
+                    $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)
+                        ->whereBetween('date', [$segStart, $segEnd])
+                        ->get();
 
-                // 3. Hitung
-                $deductDay = $izin + $absen;   // hari pemotongan
-                $hariKerja = max(0, $fixedDays - $deductDay);
+                    $absen = $prepares->where('status', 'absent')->count();
+                    $lateMinutes = $prepares->sum('late_minutes');
+                    $lm = $prepares->sum('lm');
+                    $lmCount = $prepares->sum('lm_count');
+                    $lembur = $prepares->sum('overtime');
+                    $lemburCount = $prepares->sum('overtime_count');
 
-                // 4. Upsert
-                \App\Modules\Attendance\Models\AttendanceRecord::updateOrCreate(
-                    [
-                        'employee_id' => $employee->id,
-                        'pay_period_id' => $periodId,
-                    ],
-                    [
-                        'hari_kerja' => $hariKerja,
-                        'cuti' => $cuti,
-                        'izin' => $izin,
-                        'sakit' => $sakit,
-                        'absen' => $absen,
-                        'deduct_day' => $deductDay,
-                        'late_minutes' => $lateMinutes,
-                        'lm' => $lm,
-                        'lm_count' => $lmCount,
-                        'lembur' => $lembur,
-                        'lembur_count' => $lemburCount,
-                        'status' => 'generated',
-                    ]
-                );
+                    // 3. Hitung
+                    $deductDay = $izin + $absen;   // hari pemotongan
+                    $hariKerja = max(0, $hk - $deductDay);
+
+                    // 4. Upsert per segment
+                    \App\Modules\Attendance\Models\AttendanceRecord::updateOrCreate(
+                        [
+                            'employee_id'   => $employee->id,
+                            'pay_period_id' => $periodId,
+                            'segment'       => $seg['segment'],
+                        ],
+                        [
+                            'hari_kerja'   => $hariKerja,
+                            'cuti'         => $cuti,
+                            'izin'         => $izin,
+                            'sakit'        => $sakit,
+                            'absen'        => $absen,
+                            'deduct_day'   => $deductDay,
+                            'late_minutes' => $lateMinutes,
+                            'lm'           => $lm,
+                            'lm_count'     => $lmCount,
+                            'lembur'       => $lembur,
+                            'lembur_count' => $lemburCount,
+                            'status'       => 'generated',
+                        ]
+                    );
+                }
 
                 $generatedCount++;
             }

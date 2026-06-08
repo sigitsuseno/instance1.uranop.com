@@ -42,17 +42,18 @@ hari_kerja = HK - deduct_day.
 
 sama seperti hitungan split part 2.
 
-bisa buatkan deteksi jadwal dari file excel ini, keluarannya excel juga juga boleh.
+1. gaji = (gaji_pokok / HK) x (hari_kerja)
+2. upah_lembur = ((gaji_pokok + tj_masa_kerja + tunjangan)/173) x (lm_count + lembur_count) -> dibulatkan keatas 100
+3. premi_hadir = (premi / HK) x (hari_kerja)
+4. revisi = kosongkan,
+5. gaji_kotor = gaji + upah_lembur + premi_hadir + tunjangan
 
-aturannya,
-
-jika karyawan dengan nip = [163, 288, 57, 90]
-
-- salah satu scan ada di range 05.30 - 06.30 = P
-- salah satu scan ada di range 13.30 - 14.30 = S
-- salah satu scan ada di range 21.30 - 22.30 = ML
-
-jika karyawan dengan nip != [163, 288, 57, 90]
-
-- salah satu scan ada di range 06.30 - 08.30 = P
-- salah satu scan ada di range 11.30 - 18.30 = S
+6. bpjs_tk = employee_bpjs->bpjs_tk_karyawan ?? 0
+7. bpjs_kes = employee_bpjs->bpjs_kes_karyawan ?? 0
+8. bpjs_pen = employee_bpjs->bpjs_pensiun ?? 0
+   (bpjs_tk + bpjs_kes + bpjs_pen) -> didapat dari pengelolaan bpjs belum kita buat,
+9. pph = employee_pph->pph_bulanan ?? 0,
+10. cashbon = 0,
+11. pot_kehadiran = deduct_day x (gaji_pokok / HK),
+12. pblt = (pembulatan 100 dari (gaji_kotor - (bpjs_tk + bpjs_kes + bpjs_pen + pph + cashbon + pot_kehadiran))) - (gaji_kotor - (bpjs_tk + bpjs_kes + bpjs_pen + pph + cashbon + pot_kehadiran))
+13. gaji_bersih = gaji_kotor - (bpjs_tk + bpjs_kes + bpjs_pen + pph + cashbon + pot_kehadiran) + pblt
