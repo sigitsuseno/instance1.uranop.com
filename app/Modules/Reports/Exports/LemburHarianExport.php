@@ -96,7 +96,7 @@ class LemburHarianExport implements FromArray, WithHeadings, WithMapping, WithSt
             ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
         // Number format
-        $sheet->getStyle("E5:M{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle("E5:M{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
 
         // Center align
         $sheet->getStyle("A3:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);

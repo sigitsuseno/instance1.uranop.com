@@ -98,7 +98,7 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
             ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
         // Number format
-        $sheet->getStyle("D4:F{$lastRow}")->getNumberFormat()->setFormatCode('#,##0');
+        $sheet->getStyle("D4:F{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
 
         // Wrap text for month columns
         $sheet->getStyle("G4:R{$lastRow}")->getAlignment()->setWrapText(true);

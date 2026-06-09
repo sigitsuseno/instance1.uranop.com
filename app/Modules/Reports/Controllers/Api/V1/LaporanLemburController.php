@@ -118,13 +118,18 @@ class LaporanLemburController extends Controller
             }
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
 
-            $upahPerHari = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 25) : 0;
-            $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173) : 0;
+            $upahPerHari = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 25, 2) : 0;
+            $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
 
-            $lm = $prepare ? (int)$prepare->lm_count : 0;
-            $overtime = $prepare ? (int)$prepare->overtime_count : 0;
-            $totalMenit = $lm + $overtime;
-            $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60)) : 0;
+            // Display: raw values (non-count) — buat tampilan L/M & Lembur
+            $lmRaw = $prepare ? (int)$prepare->lm : 0;
+            $overtimeRaw = $prepare ? (int)$prepare->overtime : 0;
+
+            // Calculation: count values (setelah multiplier) — buat hitung uang
+            $lmCount = $prepare ? (int)$prepare->lm_count : 0;
+            $overtimeCount = $prepare ? (int)$prepare->overtime_count : 0;
+            $totalMenit = $lmCount + $overtimeCount;
+            $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60), 2) : 0;
 
             $shiftKode = $roster && $roster->shift ? $roster->shift->external_code : '';
             $status = $prepare ? $prepare->status : '-';
@@ -136,8 +141,8 @@ class LaporanLemburController extends Controller
                 'tj_mk' => $tjMk, 'tunjangan' => $tunjangan,
                 'upah_per_hari' => $upahPerHari, 'upah_lembur_per_jam' => $hourlyRate,
                 'shift_kode' => $shiftKode, 'status' => $status,
-                'lembur_minggu' => $lm > 0 ? round($lm / 60, 2) : 0,
-                'lembur' => $overtime > 0 ? round($overtime / 60, 2) : 0,
+                'lembur_minggu' => $lmRaw > 0 ? round($lmRaw / 60, 2) : 0,
+                'lembur' => $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0,
                 'nominal' => $uangLembur,
                 'group_name' => $employee->groups->pluck('reference_code')->first() ?? '',
             ];
@@ -172,7 +177,7 @@ class LaporanLemburController extends Controller
                 $tjMk = $employee->tunjangan_masa_kerja($year . '-12');
             }
             $tunjangan = $latestPayRecord ? (float)($latestPayRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
-            $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173) : 0;
+            $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
 
             $months = [];
             $preparesByMonth = $empPrepares->groupBy(fn($p) => Carbon::parse($p->date)->month);
@@ -184,7 +189,7 @@ class LaporanLemburController extends Controller
                 $lmCountTotal = $mp->sum('lm_count');
                 $overtimeCountTotal = $mp->sum('overtime_count');
                 $totalMinutes = $lmCountTotal + $overtimeCountTotal;
-                $overtimePay = $hourlyRate > 0 ? round($hourlyRate * ($totalMinutes / 60)) : 0;
+                $overtimePay = $hourlyRate > 0 ? round($hourlyRate * ($totalMinutes / 60), 2) : 0;
 
                 $months[$m] = [
                     'lm' => $lmTotal, 'overtime' => $overtimeTotal,
