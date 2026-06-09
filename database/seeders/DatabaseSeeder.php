@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             PayPeriodSeeder::class,
             WorkingCalendarSeeder::class,
             HolidaySeeder::class,
+            WorkPatternTypeSeeder::class,
             WorkPatternSeeder::class,
             LeaveSettingsSeeder::class,
             WorkPatternAdditionalSeeder::class,

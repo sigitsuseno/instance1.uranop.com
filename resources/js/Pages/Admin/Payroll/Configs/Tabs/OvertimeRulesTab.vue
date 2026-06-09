@@ -238,7 +238,7 @@ async function save() {
 async function deleteRule(id) {
   if (confirm('Yakin ingin menghapus aturan ini?')) {
     try {
-      await api.delete(`/api/v1/settings/payroll-configs/overtime/${id}`)
+      await api.destroy(`/api/v1/settings/payroll-configs/overtime/${id}`)
       notification.success('Aturan lembur dihapus')
       fetchData()
     } catch (err) {

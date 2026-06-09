@@ -170,7 +170,7 @@ async function saveSetting() {
 async function deleteSetting(id) {
   if (confirm('Apakah Anda yakin ingin menghapus pengaturan tab grouping ini?')) {
     try {
-      await api.delete(`/api/v1/settings/employee-data/group-settings/${id}`)
+      await api.destroy(`/api/v1/settings/employee-data/group-settings/${id}`)
       notification.success('Pengaturan Tab berhasil dihapus')
       fetchSettings()
     } catch (err) {

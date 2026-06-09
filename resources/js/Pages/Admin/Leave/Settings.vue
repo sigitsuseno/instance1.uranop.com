@@ -430,11 +430,11 @@ function deletePeriod(item) {
 async function confirmDeleteAction() {
   try {
     if (confirmDelete.type === 'leaveType') {
-      await api.delete(`/api/v1/leave/types/${confirmDelete.id}`)
+      await api.destroy(`/api/v1/leave/types/${confirmDelete.id}`)
     } else if (confirmDelete.type === 'policy') {
-      await api.delete(`/api/v1/leave/policies/${confirmDelete.id}`)
+      await api.destroy(`/api/v1/leave/policies/${confirmDelete.id}`)
     } else if (confirmDelete.type === 'period') {
-      await api.delete(`/api/v1/leave/periods/${confirmDelete.id}`)
+      await api.destroy(`/api/v1/leave/periods/${confirmDelete.id}`)
     }
     notify.success('Data berhasil dihapus')
     fetchData()

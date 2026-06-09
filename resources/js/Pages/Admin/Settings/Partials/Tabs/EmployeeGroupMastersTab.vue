@@ -78,7 +78,7 @@ async function saveGroup() {
 async function deleteGroup(id) {
   if (confirm('Hapus master group ini?')) {
     try {
-      await api.delete(`/api/v1/settings/employee-data/groups/${id}`)
+      await api.destroy(`/api/v1/settings/employee-data/groups/${id}`)
       notification.success('Master Group berhasil dihapus')
       fetchGroups()
     } catch (err) {
