@@ -27,9 +27,7 @@ const allMenus = [
       { title: 'Pekerjaan', icon: 'bx bx-briefcase', route: '/admin/organization/positions' },
       { title: 'Kalender', icon: 'bx bx-calendar', route: '/admin/schedule/calendars' },
       { title: 'Gaji & LTHR', icon: 'bx bx-money', route: '/admin/payroll/configs' },
-      { title: 'Penggajian', icon: 'bx bx-time', route: '/admin/payroll/payroll-periode' },
       { title: 'Pengaturan Cuti', icon: 'bx bx-cog', route: '/admin/leave/settings', visible: isSuperadmin.value || isHrmanager.value },
-      { title: 'PPh 21', icon: 'bx bx-receipt', route: '/admin/payroll/configs' },
     ],
   },
   {
@@ -99,15 +97,22 @@ const allMenus = [
   },
 
   {
+    title: 'PPh 21',
+    icon: 'bx bx-receipt',
+    visible: isSuperadmin.value || isHrmanager.value,
+    children: [
+      { title: 'TER Bulanan', icon: 'bx bx-calendar-edit', route: '/admin/pph/ter' },
+      { title: 'PPh 21 Tahunan', icon: 'bx bx-bar-chart-alt-2', route: '/admin/pph/tahunan' },
+    ],
+  },
+  {
     title: 'Payroll',
     icon: 'bx bx-money',
     visible: isSuperadmin.value || isHrmanager.value,
     children: [
-      { title: 'Payroll', icon: 'bx bx-cog', route: '/admin/payroll' },
-      { title: 'Periode Payroll', icon: 'bx bx-calendar-edit', route: '/admin/payroll/payroll-periode' },
-      { title: 'Payslip', icon: 'bx bx-file', route: '/admin/payroll' },
+      { title: 'Gaji Karyawan', icon: 'bx bx-calculator', route: '/admin/payroll/periods' },
+      { title: 'Slip Gaji', icon: 'bx bx-file', route: '/admin/payroll/slip' },
       { title: 'Perhitungan THR', icon: 'bx bx-gift', route: '/admin/payroll/thr' },
-      { title: 'Laporan PPh 21', icon: 'bx bx-receipt', route: '/admin/payroll/configs' },
     ],
   },
   {

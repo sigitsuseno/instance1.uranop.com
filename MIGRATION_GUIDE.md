@@ -859,19 +859,17 @@ Payroll
 │   ├── 1b. Generate Gaji     ← Kalkulasi & simpan pay_records
 │   ├── 1c. Review & Edit     ← Lihat/ubah pay_records per karyawan
 │   └── 1d. Lock Periode      ← Kunci periode (tidak bisa diedit)
-├── 2. Perhitungan BPJS       ← Konfigurasi + kalkulasi BPJS
-│   ├── 2a. BPJS Kesehatan    ← 4% (1% karyawan, 3% perusahaan)
-│   └── 2b. BPJS TK           ← JKK, JKM, JHT, JP
-├── 3. Perhitungan PPh        ← Konfigurasi + kalkulasi PPh 21
-│   ├── 3a. TER Bulanan       ← Tarif Efektif Rata-rata per bulan
-│   └── 3b. PPh 21 Tahunan    ← Rekonsiliasi akhir tahun
-├── 4. Slip Gaji              ← Render payslip + export
-│   ├── 4a. Individual        ← Slip per karyawan
-│   └── 4b. Bulk Export       ← Export semua slip (PDF/Excel)
-└── 5. Pengelolaan THR        ← Generate + export THR
-    ├── 5a. Konfigurasi THR   ← Rules (masa kerja, proporsional)
-    └── 5b. Generate THR      ← Kalkulasi + simpan ke emp_thr
+├── 2. Slip Gaji              ← Render payslip + export
+│   ├── 2a. Individual        ← Slip per karyawan
+│   └── 2b. Bulk Export       ← Export semua slip (PDF/Excel)
+└── 3. Pengelolaan THR        ← Generate + export THR
+    ├── 3a. Konfigurasi THR   ← Rules (masa kerja, proporsional)
+    └── 3b. Generate THR      ← Kalkulasi + simpan ke emp_thr
 ```
+
+> **Catatan:** Submenu Perhitungan BPJS dan Perhitungan PPh dikeluarkan dari Payroll, menjadi menu terpisah:
+> - **BPJS** → menu sendiri: Keanggotaan, Iuran BPJS, Konfigurasi BPJS
+> - **PPh 21** → menu sendiri: TER Bulanan, PPh 21 Tahunan
 
 ---
 
@@ -947,74 +945,7 @@ Pilih Periode → Generate → Kalkulasi → Simpan pay_records → Review → L
 
 ---
 
-#### 8.3 Submenu 2: Perhitungan BPJS
-
-> **Tabel:** `pay_bpjs_configs`
-
-**Komponen BPJS:**
-
-| Jenis | Komponen | Karyawan | Perusahaan | Max Cap |
-|---|---|---|---|---|
-| **Kesehatan** | JKN | 1% | 4% | Rp 12.000.000 |
-| **TK - JKK** | Kecelakaan Kerja | 0% | 0.24% - 1.74% | — |
-| **TK - JKM** | Kematian | 0% | 0.3% | — |
-| **TK - JHT** | Hari Tua | 2% | 3.7% | — |
-| **TK - JP** | Pensiun | 1% | 2% | — |
-
-**Config per komponen:**
-- `component` (enum: jkn, jkk, jkm, jht, jp)
-- `employee_rate` (decimal)
-- `company_rate` (decimal)
-- `max_cap` (decimal, nullable)
-- `effective_date`
-
----
-
-#### 8.4 Submenu 3: Perhitungan PPh
-
-> **Tabel:** `pay_pph_configs`, `pay_ptkp_rates`, `pay_ter_rates`, `pay_progressive_rates`
-
-##### 8.4.1 PTKP (Penghasilan Tidak Kena Pajak)
-
-| Kategori | Kode | Nilai/Tahun |
-|---|---|---|
-| Tidak Kawin | TK/0 | Rp 54.000.000 |
-| Tidak Kawin + 1 tanggungan | TK/1 | Rp 58.500.000 |
-| Kawin | K/0 | Rp 58.500.000 |
-| Kawin + 1 tanggungan | K/1 | Rp 63.000.000 |
-| Kawin + 2 tanggungan | K/2 | Rp 67.500.000 |
-| Kawin + 3 tanggungan | K/3 | Rp 72.000.000 |
-
-##### 8.4.2 TER (Tarif Efektif Rata-rata) — Bulanan
-
-| Kategori | TER A | TER B | TER C |
-|---|---|---|---|
-| **Range gaji** | s.d. 5.4jt | 5.4jt - 10.5jt | > 10.5jt |
-
-> Lihat tabel lengkap di `pay_ter_rates` (PER-2/PJ/2024 untuk TER terbaru).
-
-##### 8.4.3 Kalkulasi PPh 21 per Bulan
-
-```
-Gaji Bruto Sebulan = GROSS (dari pay_records)
-PPh 21 = Gaji Bruto × TER% (sesuai kategori PTKP)
-```
-
-Rekonsiliasi tahunan (Desember): hitung ulang dengan tarif progressive, selisih kurang/lebih bayar.
-
-**Tarif Progressive (Tahunan):**
-
-| Lapisan | PKP | Tarif |
-|---|---|---|
-| I | s.d. 60jt | 5% |
-| II | 60jt - 250jt | 15% |
-| III | 250jt - 500jt | 25% |
-| IV | 500jt - 5M | 30% |
-| V | > 5M | 35% |
-
----
-
-#### 8.5 Submenu 4: Slip Gaji
+#### 8.3 Submenu 2: Slip Gaji
 
 **Render dari `pay_records`**, bukan tabel terpisah.
 
@@ -1052,7 +983,7 @@ Rekonsiliasi tahunan (Desember): hitung ulang dengan tarif progressive, selisih 
 
 ---
 
-#### 8.6 Submenu 5: Pengelolaan THR
+#### 8.4 Submenu 3: Pengelolaan THR
 
 > **Tabel:** `emp_thr` (dibuat di Fase 4)
 

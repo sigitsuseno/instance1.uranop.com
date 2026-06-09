@@ -1,60 +1,187 @@
 <template>
   <div>
+    <!-- Header Section -->
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-xl font-semibold text-(--text-main)">Periode Generate Gaji</h1>
-        <p class="text-sm text-(--text-muted) mt-1">Kelola periode penggajian karyawan</p>
+        <h1 class="text-xl font-semibold text-(--text-main)">Gaji Karyawan</h1>
+        <p class="text-sm text-(--text-muted) mt-1">Rekap penggajian karyawan per periode</p>
       </div>
-      <BaseButton variant="primary" @click="openCreateModal">
-        <template #icon-left>
-          <IconPlus class="w-4 h-4" />
-        </template>
-        Periode Baru
-      </BaseButton>
+      <div class="flex items-center gap-3">
+        <select
+          v-model="selectedPeriodId"
+          class="px-4 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:ring-2 focus:ring-(--primary) focus:border-transparent"
+          @change="onPeriodChange"
+        >
+          <option value="">Pilih Periode</option>
+          <option v-for="p in periods" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </option>
+        </select>
+        <BaseButton
+          variant="primary"
+          :disabled="!selectedPeriodId || generating"
+          @click="handleGenerate"
+        >
+          <template #icon-left>
+            <IconRefresh class="w-4 h-4" />
+          </template>
+          Generate
+        </BaseButton>
+        <BaseButton
+          variant="success"
+          :disabled="!selectedPeriodId"
+          @click="handleExport"
+        >
+          <template #icon-left>
+            <IconDownload class="w-4 h-4" />
+          </template>
+          Export
+        </BaseButton>
+      </div>
     </div>
 
-    <!-- Dashboard cards removed -->
+    <!-- Period Info Banner -->
+    <div v-if="selectedPeriod" class="mb-4 px-4 py-3 rounded-lg bg-(--primary)/5 border border-(--primary)/20">
+      <div class="flex items-center gap-4 text-sm">
+        <span class="font-semibold text-(--primary)">{{ selectedPeriod.name }}</span>
+        <span class="text-(--text-muted)">{{ selectedPeriod.date_range }}</span>
+        <Badge :variant="selectedPeriod.is_split ? 'warning' : 'success'">
+          {{ selectedPeriod.is_split ? 'Split Periode' : 'Periode Normal' }}
+        </Badge>
+        <span class="ml-auto text-(--text-muted)">
+          {{ records.length }} karyawan
+        </span>
+      </div>
+    </div>
 
-    <BaseCard>
-      <DataTable :headers="headers" :items="periods" showSearch>
-        <template #item.period_code="{ value }">
-          <span class="font-medium text-(--primary)">{{ value }}</span>
-        </template>
-        <template #item.date_range="{ item }">
-          <span class="text-sm">{{ item.start_date }} s/d {{ item.end_date }}</span>
-        </template>
-        <template #item.is_split="{ value }">
-          <Badge :variant="value ? 'primary' : 'neutral'">{{ value ? 'Ya' : 'Tidak' }}</Badge>
-        </template>
-        <template #item.status="{ value }">
-          <Badge :variant="statusVariant(value)">{{ statusLabel(value) }}</Badge>
-        </template>
-        <template #item.actions="{ item }">
-          <div class="flex items-center gap-1">
-            <button
-              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors"
-              title="Edit" @click="openEditModal(item)">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button
-              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10 transition-colors"
-              title="Hapus" @click="confirmDelete = item">
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 6h18" />
-                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
-                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
-                <line x1="10" y1="11" x2="10" y2="17" />
-                <line x1="14" y1="11" x2="14" y2="17" />
-              </svg>
-            </button>
-          </div>
-        </template>
-      </DataTable>
-      <Pagination :current-page="1" :total-pages="1" :total="periods.length" :per-page="10" @page-change="() => { }" />
+    <!-- Salary Table -->
+    <BaseCard v-if="selectedPeriod" class="overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-xs border-collapse">
+          <thead>
+            <tr class="bg-(--bg-elevated)">
+              <th rowspan="2" class="sticky left-0 z-10 bg-(--bg-elevated) border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-10">No</th>
+              <th rowspan="2" class="sticky left-10 z-10 bg-(--bg-elevated) border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">ID No</th>
+              <th rowspan="2" class="sticky left-26 z-10 bg-(--bg-elevated) border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) min-w-[140px]">NAMA</th>
+              <th colspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main)">BAGIAN / JABATAN</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-10">L/P</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">THN MASUK<br>KARYAWAN</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">MASA<br>KERJA</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">STATUS<br>(K/TK)</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-14">JML<br>ANAK</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-24">ACCOUNT NO</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">PREMI</th>
+              <th :colspan="7" class="border border-(--border-soft) px-2 py-2 text-center font-bold text-(--primary) bg-(--primary)/5">
+                {{ periodLabel }}
+              </th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">REVISI</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">TUNJANGAN</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">PREMI<br>HADIR</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">PBLT</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-24">TOTAL</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-24">BPJS<br>TENAGA KERJA</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-24">BPJS<br>KESEHATAN</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">BPJS<br>PENSIUN</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">CASHBON</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">PPH</th>
+              <th rowspan="2" class="border border-(--border-soft) px-2 py-2 text-center font-bold text-(--primary) bg-(--primary)/5 w-24">TOTAL<br>TERIMA</th>
+            </tr>
+            <tr class="bg-(--bg-elevated)">
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">GAJI POKOK<br>{{ periodYear }}</th>
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">TJ. MASA<br>KERJA</th>
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-12">HK</th>
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-12">LM</th>
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">LBR JAM</th>
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-20">GAJI</th>
+              <th class="border border-(--border-soft) px-2 py-2 text-center font-semibold text-(--text-main) w-16">LEMBUR</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(record, idx) in records"
+              :key="record.id"
+              class="hover:bg-(--bg-elevated) transition-colors"
+              :class="idx % 2 === 0 ? 'bg-(--bg-main)' : 'bg-(--bg-subtle)'"
+            >
+              <td class="sticky left-0 z-10 border border-(--border-soft) px-2 py-1.5 text-center bg-inherit">{{ idx + 1 }}</td>
+              <td class="sticky left-10 z-10 border border-(--border-soft) px-2 py-1.5 text-center bg-inherit font-mono text-xs">{{ record.employee_code }}</td>
+              <td class="sticky left-26 z-10 border border-(--border-soft) px-2 py-1.5 bg-inherit font-medium">{{ record.name }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.department }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.position }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.gender }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.join_year }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.years_of_service }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.marital_status }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.children_count }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center font-mono text-xs">{{ record.account_no }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.premi) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.gaji_pokok) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.tj_masa_kerja) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.hari_kerja }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.lm }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-center">{{ record.lembur_count }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.gaji) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.upah_lembur) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.revisi) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.tunjangan) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.premi_hadir) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right">{{ formatCurrency(record.pblt) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right font-semibold">{{ formatCurrency(record.total) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right text-(--danger)">{{ formatCurrency(record.bpjs_tk) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right text-(--danger)">{{ formatCurrency(record.bpjs_ks) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right text-(--danger)">{{ formatCurrency(record.bpjs_pen) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right text-(--danger)">{{ formatCurrency(record.cashbon) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right text-(--danger)">{{ formatCurrency(record.pph) }}</td>
+              <td class="border border-(--border-soft) px-2 py-1.5 text-right font-bold text-(--primary) bg-(--primary)/5">{{ formatCurrency(record.gaji_bersih) }}</td>
+            </tr>
+          </tbody>
+          <tfoot v-if="records.length > 0">
+            <tr class="bg-(--bg-elevated) font-bold">
+              <td colspan="11" class="border border-(--border-soft) px-2 py-2 text-right">TOTAL</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.premi) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.gaji_pokok) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.tj_masa_kerja) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-center">{{ totals.hari_kerja }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-center">{{ totals.lm }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-center">{{ totals.lembur_count }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.gaji) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.upah_lembur) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.revisi) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.tunjangan) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.premi_hadir) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.pblt) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right">{{ formatCurrency(totals.total) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right text-(--danger)">{{ formatCurrency(totals.bpjs_tk) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right text-(--danger)">{{ formatCurrency(totals.bpjs_ks) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right text-(--danger)">{{ formatCurrency(totals.bpjs_pen) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right text-(--danger)">{{ formatCurrency(totals.cashbon) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right text-(--danger)">{{ formatCurrency(totals.pph) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right text-(--primary)">{{ formatCurrency(totals.gaji_bersih) }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
     </BaseCard>
 
-    <BaseModal :show="showCreateModal" title="+ Periode Baru" @close="showCreateModal = false">
+    <!-- Empty State -->
+    <BaseCard v-else class="py-16">
+      <div class="text-center">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-(--bg-elevated) flex items-center justify-center">
+          <IconFileInvoice class="w-8 h-8 text-(--text-muted)" />
+        </div>
+        <h3 class="text-lg font-semibold text-(--text-main) mb-2">Belum Ada Periode Dipilih</h3>
+        <p class="text-sm text-(--text-muted) mb-4">Pilih periode dari dropdown di atas untuk melihat rekap gaji karyawan</p>
+        <BaseButton variant="primary" @click="openCreateModal">
+          <template #icon-left>
+            <IconPlus class="w-4 h-4" />
+          </template>
+          Buat Periode Baru
+        </BaseButton>
+      </div>
+    </BaseCard>
+
+    <!-- Create Period Modal -->
+    <BaseModal :show="showCreateModal" title="Buat Periode Baru" @close="showCreateModal = false">
       <div class="space-y-4">
         <TextInput v-model="form.name" label="Nama Periode" placeholder="Contoh: Juni 2026" />
         <div class="grid grid-cols-2 gap-4">
@@ -68,175 +195,133 @@
       </div>
       <template #footer>
         <BaseButton variant="ghost" @click="showCreateModal = false">Batal</BaseButton>
-        <BaseButton variant="primary" @click="handleCreate" :disabled="loading">Generate</BaseButton>
+        <BaseButton variant="primary" @click="handleCreate" :disabled="loading">Simpan</BaseButton>
       </template>
     </BaseModal>
-
-    <BaseModal :show="showEditModal" title="Edit Periode" @close="showEditModal = false">
-      <div class="space-y-4">
-        <TextInput v-model="form.name" label="Nama Periode" placeholder="Contoh: Juni 2026" />
-        <div class="grid grid-cols-2 gap-4">
-          <TextInput v-model="form.start_date" label="Tanggal Mulai" type="date" />
-          <TextInput v-model="form.end_date" label="Tanggal Selesai" type="date" />
-        </div>
-        <div class="flex items-center gap-2">
-          <input type="checkbox" id="edit_is_split" v-model="form.is_split" class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)" />
-          <label for="edit_is_split" class="text-sm font-medium text-(--text-main)">Split Periode</label>
-        </div>
-        <div class="flex items-center gap-2">
-          <input type="checkbox" id="edit_status" v-model="form.status" true-value="active" false-value="inactive" class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)" />
-          <label for="edit_status" class="text-sm font-medium text-(--text-main)">Aktif</label>
-        </div>
-      </div>
-      <template #footer>
-        <BaseButton variant="ghost" @click="showEditModal = false">Batal</BaseButton>
-        <BaseButton variant="primary" @click="handleEdit" :disabled="loading">Simpan</BaseButton>
-      </template>
-    </BaseModal>
-
-    <ConfirmDialog :show="!!confirmDelete" title="Hapus Periode"
-      :message="'Apakah Anda yakin ingin menghapus periode ' + confirmDelete?.name + '?'" confirm-text="Ya, Hapus"
-      variant="danger" @confirm="handleDelete" @cancel="confirmDelete = null" />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import DataTable from '../../../../Components/Table/DataTable.vue'
-import Pagination from '../../../../Components/Table/Pagination.vue'
-import BaseButton from '../../../../Components/BaseButton.vue'
-import BaseCard from '../../../../Components/BaseCard.vue'
-import BaseModal from '../../../../Components/BaseModal.vue'
-import Badge from '../../../../Components/Badge.vue'
-import TextInput from '../../../../Components/TextInput.vue'
-import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
-import { IconPlus, IconEye, IconDownload, IconFileInvoice, IconChartBar, IconClock } from '../../../../Components/Icons/index.js'
-import { useApi } from '../../../../composables/useApi'
+import { ref, computed, onMounted } from 'vue'
+import BaseButton from '@/Components/BaseButton.vue'
+import BaseCard from '@/Components/BaseCard.vue'
+import BaseModal from '@/Components/BaseModal.vue'
+import Badge from '@/Components/Badge.vue'
+import TextInput from '@/Components/TextInput.vue'
+import { IconPlus, IconDownload, IconFileInvoice, IconRefresh } from '@/Components/Icons/index.js'
+import { useApi } from '@/composables/useApi'
 
-const { get, post, put, destroy } = useApi()
-
-const headers = [
-  { key: 'name', label: 'Nama Periode' },
-  { key: 'date_range', label: 'Rentang Tanggal' },
-  { key: 'is_split', label: 'Split' },
-  { key: 'status', label: 'Status' },
-  { key: 'actions', label: 'Aksi', sortable: false, width: '120px' },
-]
+const { get, post } = useApi()
 
 const periods = ref([])
+const selectedPeriodId = ref('')
+const records = ref([])
 const loading = ref(false)
-
+const generating = ref(false)
 const showCreateModal = ref(false)
-const showEditModal = ref(false)
-const editingId = ref(null)
-const cutOffDate = ref(null)
-const confirmDelete = ref(null)
 
 const form = ref({
   name: '',
   start_date: '',
   end_date: '',
   is_split: false,
-  status: 'active'
 })
+
+const selectedPeriod = computed(() => {
+  return periods.value.find(p => p.id === selectedPeriodId.value)
+})
+
+const periodLabel = computed(() => {
+  if (!selectedPeriod.value) return ''
+  const start = new Date(selectedPeriod.value.start_date)
+  const end = new Date(selectedPeriod.value.end_date)
+  const months = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']
+  return `${start.getDate()} ${months[start.getMonth()]} - ${end.getDate()} ${months[end.getMonth()]} ${end.getFullYear().toString().slice(-2)}`
+})
+
+const periodYear = computed(() => {
+  if (!selectedPeriod.value) return ''
+  return new Date(selectedPeriod.value.end_date).getFullYear().toString().slice(-2)
+})
+
+const totals = computed(() => {
+  const sum = (key) => records.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
+  return {
+    premi: sum('premi'),
+    gaji_pokok: sum('gaji_pokok'),
+    tj_masa_kerja: sum('tj_masa_kerja'),
+    hari_kerja: records.value.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
+    lm: records.value.reduce((acc, r) => acc + (parseInt(r.lm) || 0), 0),
+    lembur_count: records.value.reduce((acc, r) => acc + (parseInt(r.lembur_count) || 0), 0),
+    gaji: sum('gaji'),
+    upah_lembur: sum('upah_lembur'),
+    revisi: sum('revisi'),
+    tunjangan: sum('tunjangan'),
+    premi_hadir: sum('premi_hadir'),
+    pblt: sum('pblt'),
+    total: sum('total'),
+    bpjs_tk: sum('bpjs_tk'),
+    bpjs_ks: sum('bpjs_ks'),
+    bpjs_pen: sum('bpjs_pen'),
+    cashbon: sum('cashbon'),
+    pph: sum('pph'),
+    gaji_bersih: sum('gaji_bersih'),
+  }
+})
+
+function formatCurrency(value) {
+  if (!value && value !== 0) return '-'
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
+}
 
 async function fetchPeriods() {
   try {
-    const data = await get('/api/v1/payroll/periods')
-    periods.value = data.data || data
+    const res = await get('/api/v1/payroll/periods')
+    periods.value = res.data || []
   } catch (error) {
     console.error('Error fetching periods', error)
   }
 }
 
-async function fetchSettings() {
+async function fetchRecords() {
+  if (!selectedPeriodId.value) {
+    records.value = []
+    return
+  }
   try {
-    const data = await get('/api/v1/settings/payroll')
-    if (data.data) {
-      cutOffDate.value = data.data.cut_off_date
-    }
+    const res = await get(`/api/v1/payroll/periods/${selectedPeriodId.value}/records`)
+    records.value = res.data || []
   } catch (error) {
-    console.error('Error fetching settings', error)
+    console.error('Error fetching records', error)
+    records.value = []
   }
 }
 
-function calculateDefaultDates(cutOff) {
-  const today = new Date();
-  const y = today.getFullYear();
-  const m = today.getMonth();
-  const d = today.getDate();
+function onPeriodChange() {
+  fetchRecords()
+}
 
-  if (!cutOff) {
-    const start = new Date(y, m, 1);
-    const end = new Date(y, m + 1, 0);
-    const format = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
-    return { start: format(start), end: format(end) };
+async function handleGenerate() {
+  if (!selectedPeriodId.value) return
+  generating.value = true
+  try {
+    await post(`/api/v1/attendance/recap/generate`, { period_id: selectedPeriodId.value })
+    await fetchRecords()
+  } catch (error) {
+    console.error('Error generating', error)
+  } finally {
+    generating.value = false
   }
+}
 
-  const cutOffDay = parseInt(cutOff);
-  let endMonth = m;
-  let endYear = y;
-
-  if (d > cutOffDay) {
-    endMonth = m + 1;
-    if (endMonth > 11) {
-      endMonth = 0;
-      endYear++;
-    }
-  }
-
-  const end = new Date(endYear, endMonth, cutOffDay);
-  const start = new Date(endYear, endMonth - 1, cutOffDay + 1);
-
-  const format = (dt) => {
-    const yr = dt.getFullYear();
-    const mo = String(dt.getMonth() + 1).padStart(2, '0');
-    const da = String(dt.getDate()).padStart(2, '0');
-    return `${yr}-${mo}-${da}`;
-  }
-
-  return { start: format(start), end: format(end) };
+function handleExport() {
+  // TODO: implement export
+  alert('Export coming soon')
 }
 
 function openCreateModal() {
-  const dates = calculateDefaultDates(cutOffDate.value);
-  form.value.start_date = dates.start;
-  form.value.end_date = dates.end;
-
-  // Also auto-generate a period name based on end date month
-  if (form.value.end_date) {
-    const end = new Date(form.value.end_date);
-    const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-    form.value.name = `Periode ${months[end.getMonth()]} ${end.getFullYear()}`;
-  }
-
-  form.value.is_split = false;
-  form.value.status = 'active';
-
-  showCreateModal.value = true;
-}
-
-function openEditModal(item) {
-  editingId.value = item.id;
-  form.value.name = item.name;
-  form.value.start_date = item.start_date;
-  form.value.end_date = item.end_date;
-  form.value.is_split = !!item.is_split;
-  form.value.status = item.status || 'active';
-  showEditModal.value = true;
-}
-
-onMounted(() => {
-  fetchPeriods()
-  fetchSettings()
-})
-
-function statusVariant(status) {
-  return status === 'active' ? 'success' : 'neutral'
-}
-
-function statusLabel(status) {
-  return status === 'active' ? 'Aktif' : 'Tidak Aktif'
+  form.value = { name: '', start_date: '', end_date: '', is_split: false }
+  showCreateModal.value = true
 }
 
 async function handleCreate() {
@@ -244,8 +329,7 @@ async function handleCreate() {
   try {
     await post('/api/v1/payroll/periods', form.value)
     showCreateModal.value = false
-    form.value = { name: '', start_date: '', end_date: '', is_split: false, status: 'active' }
-    fetchPeriods()
+    await fetchPeriods()
   } catch (error) {
     console.error('Error creating period', error)
   } finally {
@@ -253,30 +337,7 @@ async function handleCreate() {
   }
 }
 
-async function handleEdit() {
-  loading.value = true
-  try {
-    await put(`/api/v1/payroll/periods/${editingId.value}`, form.value)
-    showEditModal.value = false
-    editingId.value = null
-    form.value = { name: '', start_date: '', end_date: '', is_split: false, status: 'active' }
-    fetchPeriods()
-  } catch (error) {
-    console.error('Error editing period', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-async function handleDelete() {
-  if (confirmDelete.value) {
-    try {
-      await destroy(`/api/v1/payroll/periods/${confirmDelete.value.id}`)
-      confirmDelete.value = null
-      fetchPeriods()
-    } catch (error) {
-      console.error('Error deleting period', error)
-    }
-  }
-}
+onMounted(() => {
+  fetchPeriods()
+})
 </script>
