@@ -121,8 +121,8 @@ class LaporanLemburController extends Controller
             $upahPerHari = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 25) : 0;
             $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173) : 0;
 
-            $lm = $prepare ? (int)$prepare->lm : 0;
-            $overtime = $prepare ? (int)$prepare->overtime : 0;
+            $lm = $prepare ? (int)$prepare->lm_count : 0;
+            $overtime = $prepare ? (int)$prepare->overtime_count : 0;
             $totalMenit = $lm + $overtime;
             $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60)) : 0;
 

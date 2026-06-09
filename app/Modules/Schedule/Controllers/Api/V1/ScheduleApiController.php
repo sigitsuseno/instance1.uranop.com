@@ -456,6 +456,7 @@ class ScheduleApiController extends Controller
                 'uuid' => (string) \Illuminate\Support\Str::uuid(),
                 'shift_id' => $shift ? $shift->id : null,
                 'shift_code' => $shift ? $shift->code : ($request->is_off ? 'L' : null),
+                'external_code' => $shift ? $shift->external_code : ($request->is_off ? 'L' : null),
                 'is_holiday' => $request->boolean('is_off'),
                 'is_sat' => $carbonDate->dayOfWeek === 6,
                 'is_sun' => $carbonDate->dayOfWeek === 0,

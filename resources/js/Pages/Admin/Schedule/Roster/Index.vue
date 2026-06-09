@@ -490,19 +490,8 @@ async function applyOverride(newShift) {
 
   try {
     await store.overrideRosterCell(payload)
-    
-    const roster = store.getRosterForPeriod(selectedYear.value, selectedMonth.value)
-    const empIdx = roster.findIndex(e => e.id === editingCell.value.employeeId)
-    
-    if (empIdx !== -1) {
-      roster[empIdx].schedule[editingCell.value.dayIndex] = {
-        code: newShift.code,
-        external_code: newShift.external_code || newShift.code,
-        name: newShift.name,
-        is_off: !!newShift.is_off,
-        shift_id: newShift.id || null
-      }
-    }
+    // Refresh data dari server — lebih reliable daripada local patch
+    await store.fetchRosterForPeriod(selectedYear.value, selectedMonth.value)
   } catch (error) {
     alert('Gagal mengupdate jadwal: ' + (error.message || 'Unknown error'))
   }
