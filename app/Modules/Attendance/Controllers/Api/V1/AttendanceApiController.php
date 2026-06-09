@@ -704,6 +704,14 @@ class AttendanceApiController extends Controller
             'payPeriod' => fn($q) => $q->select('id', 'name', 'start_date', 'end_date'),
         ])->where('pay_period_id', $periodId);
 
+        // Filter segment: untuk split → hanya A/B, non-split → hanya null
+        $payPeriod = \App\Modules\Payroll\Models\PayPeriod::find($periodId);
+        if ($payPeriod && $payPeriod->is_split) {
+            $query->whereIn('segment', ['A', 'B']);
+        } else {
+            $query->whereNull('segment');
+        }
+
         if ($search) {
             $query->whereHas('employee', function ($q) use ($search) {
                 $q->where('name', 'like', "%{$search}%")
@@ -769,6 +777,12 @@ class AttendanceApiController extends Controller
                 ['segment' => 'A', 'start' => $startDate, 'end' => $month1End, 'hk' => $hkA],
                 ['segment' => 'B', 'start' => $month2Start, 'end' => $endDate, 'hk' => $hkB],
             ];
+
+            // Cleanup old null-segment records (transisi dari generate versi lama)
+            \App\Modules\Attendance\Models\AttendanceRecord::where('pay_period_id', $periodId)
+                ->whereNull('segment')
+                ->where('status', '!=', 'locked')
+                ->delete();
         } else {
             $segments = [
                 ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
@@ -890,6 +904,16 @@ class AttendanceApiController extends Controller
 
                 $period = $record->payPeriod;
                 $employee = $record->employee;
+
+                // Skip karyawan yang bukan group penggajian — hapus pay_record jika ada
+                if (! $employee->isGroupGaji()) {
+                    \App\Modules\Payroll\Models\PayRecord::where('employee_id', $employee->id)
+                        ->where('pay_period_id', $period->id)
+                        ->where('segment', $record->segment)
+                        ->delete();
+                    continue;
+                }
+
                 $segment = $record->segment; // null / A / B
                 $hk = $record->hari_kerja + $record->deduct_day; // total fixed working days
                 if ($hk == 0) $hk = 22;

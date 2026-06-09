@@ -106,6 +106,26 @@ class Employee extends Model
         return $this->groups()->where('reference_code', $referenceCode)->exists();
     }
 
+    /** Cek apakah karyawan termasuk group penggajian (group Local — non-Jakarta) */
+    public function isGroupGaji(): bool
+    {
+        static $gajiCodes = ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR'];
+        return $this->groups()->whereIn('reference_code', $gajiCodes)->exists();
+    }
+
+    /** Cek apakah karyawan group Jakarta */
+    public function isGroupJakarta(): bool
+    {
+        return $this->hasGroup('GRP-JKT');
+    }
+
+    /** Cek apakah karyawan group Local (non-Jakarta) */
+    public function isGroupLocal(): bool
+    {
+        static $localCodes = ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR'];
+        return $this->groups()->whereIn('reference_code', $localCodes)->exists();
+    }
+
     public function department()
     {
         return $this->belongsTo(Department::class);

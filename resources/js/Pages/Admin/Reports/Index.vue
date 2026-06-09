@@ -91,6 +91,7 @@
 
 <script setup>
 import { ref, reactive, h } from 'vue'
+import { useRouter } from 'vue-router'
 import BaseButton from '../../../Components/BaseButton.vue'
 import BaseCard from '../../../Components/BaseCard.vue'
 import BaseModal from '../../../Components/BaseModal.vue'
@@ -98,6 +99,7 @@ import TextInput from '../../../Components/TextInput.vue'
 import SelectInput from '../../../Components/SelectInput.vue'
 import { IconDownload, IconFileInvoice, IconChartBar, IconClock, IconGift, IconCog } from '../../../Components/Icons/index.js'
 
+const router = useRouter()
 const selectedReport = ref(null)
 
 const reportFilter = reactive({
@@ -250,9 +252,21 @@ const reports = [
       { employee_name: 'Rudi Hartono', years_of_service: '2 Tahun', basic_salary: 'Rp 8.000.000', thr_amount: 'Rp 8.000.000', payment_date: '28 Mar 2026', status: 'Sudah Dibayar' },
     ],
   },
+  {
+    id: 'uang_makan',
+    title: 'Laporan Uang Makan',
+    description: 'Rekapitulasi dan Perhitungan Uang Makan Karyawan',
+    icon: IconFileInvoice,
+    bgClass: 'bg-(--info)/10',
+    iconClass: 'text-indigo-600',
+  },
 ]
 
 function openReportModal(report) {
+  if (report.id === 'uang_makan') {
+    router.push({ name: 'reports.uang-makan' })
+    return
+  }
   selectedReport.value = report
   reportFilter.start_date = ''
   reportFilter.end_date = ''

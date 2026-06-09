@@ -55,6 +55,7 @@ const ScheduleRoster = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const RosterGenerate = () => import('../Pages/Admin/Schedule/Roster/Generate.vue')
 const RosterImport = () => import('../Pages/Admin/Schedule/Roster/Import.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
+const UangMakanReport = () => import('../Pages/Admin/Reports/UangMakan/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
 const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
 
@@ -149,6 +150,7 @@ const routes = [
       { path: 'schedule/roster/generate', name: 'schedule.roster.generate', component: RosterGenerate, meta: { title: 'Generate Roster' } },
       { path: 'schedule/roster/import', name: 'schedule.roster.import', component: RosterImport, meta: { title: 'Import Roster' } },
       { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
+      { path: 'reports/uang-makan', name: 'reports.uang-makan', component: UangMakanReport, meta: { title: 'Laporan Uang Makan' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],
