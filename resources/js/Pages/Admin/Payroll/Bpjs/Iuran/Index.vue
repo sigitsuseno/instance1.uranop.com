@@ -75,7 +75,7 @@
                 <div class="font-medium">{{ r.employee?.name }}</div>
                 <div class="text-[10px] text-(--text-muted)">{{ r.employee?.employee_code }}</div>
               </td>
-              <td class="p-3 text-right text-xs">{{ fmt(r.bpjs_base_salary - (r.tj_masa_kerja + r.tunjangan)) }}</td>
+              <td class="p-3 text-right text-xs">{{ fmt(r.gaji_pokok ?? (r.bpjs_base_salary - (r.tj_masa_kerja + r.tunjangan))) }}</td>
               <td class="p-3 text-right text-xs">{{ fmt(r.tj_masa_kerja) }}</td>
               <td class="p-3 text-right text-xs">{{ fmt(r.tunjangan) }}</td>
               <td class="p-3 text-right font-medium">{{ fmt(r.bpjs_base_salary) }}</td>

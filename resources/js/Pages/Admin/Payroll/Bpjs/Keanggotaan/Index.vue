@@ -216,7 +216,7 @@ import BaseCard from '@/Components/BaseCard.vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 
-const { get, post, put, del } = useApi()
+const { get, post, put, destroy } = useApi()
 
 const employees = ref([])
 const loading = ref(false)
@@ -305,7 +305,7 @@ function openEditModal(emp) {
   isEdit.value = true
   selectedEmployee.value = emp
   // Load full BPJS data
-  get(`/api/v1/bpjs/keanggotaan/${emp.id}`).then(res => {
+  get(`/api/v1/bpjs/keanggotaan/${emp.id}?bpjs_id=${emp.bpjs_id}`).then(res => {
     const d = res.data?.data || res.data
     if (d) {
       formData.value = {
@@ -342,11 +342,14 @@ async function toggleCheckbox(emp, field, event) {
   // Kalau belum ada bpjs_id, auto-create dulu
   if (!emp.bpjs_id) {
     try {
-      const res = await post(`/api/v1/bpjs/keanggotaan/${emp.id}`, {
+      const payload = {
         has_bpjs_tk: field === 'has_bpjs_tk' ? newVal : true,
         has_bpjs_ks: field === 'has_bpjs_ks' ? newVal : true,
         has_bpjs_pen: field === 'has_bpjs_pen' ? newVal : true,
-      })
+      }
+      // Sertakan pay_period_id kalau user udah pilih periode
+      if (payPeriodId.value) payload.pay_period_id = payPeriodId.value
+      const res = await post(`/api/v1/bpjs/keanggotaan/${emp.id}`, payload)
       emp.bpjs_id = res.data?.data?.id || res.data?.id
       emp.has_bpjs_tk = true
       emp.has_bpjs_ks = true
@@ -363,7 +366,7 @@ async function toggleCheckbox(emp, field, event) {
   // Optimistic update untuk yg sudah ada
   emp[field] = newVal
   try {
-    await put(`/api/v1/bpjs/keanggotaan/${emp.id}`, { [field]: newVal })
+    await put(`/api/v1/bpjs/keanggotaan/${emp.id}`, { [field]: newVal, bpjs_id: emp.bpjs_id })
   } catch (e) {
     emp[field] = !newVal
     event.target.checked = !newVal
@@ -385,6 +388,7 @@ async function save() {
     delete payload.employee_code
 
     if (isEdit.value) {
+      payload.bpjs_id = selectedEmployee.value.bpjs_id
       await put(`/api/v1/bpjs/keanggotaan/${selectedEmployee.value.id}`, payload)
     } else {
       await post(`/api/v1/bpjs/keanggotaan/${selectedEmployee.value.id}`, payload)
@@ -407,7 +411,7 @@ async function doDelete() {
   if (!deleteTarget.value) return
   deleting.value = true
   try {
-    await del(`/api/v1/bpjs/keanggotaan/${deleteTarget.value.id}`)
+    await destroy(`/api/v1/bpjs/keanggotaan/${deleteTarget.value.id}?bpjs_id=${deleteTarget.value.bpjs_id}`)
     showDelete.value = false
     deleteTarget.value = null
     fetchData()

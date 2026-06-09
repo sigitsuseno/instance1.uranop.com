@@ -83,9 +83,16 @@ class BpjsEmployeeController extends Controller
     /**
      * Show single employee BPJS data (for form edit).
      */
-    public function show(Employee $employee): JsonResponse
+    public function show(Request $request, Employee $employee): JsonResponse
     {
-        $bpjs = $employee->bpjs;
+        // Cari spesifik by bpjs_id kalau dikirim, atau by pay_period_id
+        $bpjs = null;
+        if ($bpjsId = $request->integer('bpjs_id')) {
+            $bpjs = EmployeeBpjs::where('employee_id', $employee->id)->where('id', $bpjsId)->first();
+        } elseif ($payPeriodId = $request->integer('pay_period_id')) {
+            $bpjs = EmployeeBpjs::where('employee_id', $employee->id)->where('pay_period_id', $payPeriodId)->first();
+        }
+        $bpjs ??= $employee->bpjs;
 
         if (! $bpjs) {
             return response()->json(['data' => null, 'message' => 'Belum ada data BPJS.'], 404);
@@ -116,10 +123,17 @@ class BpjsEmployeeController extends Controller
 
     /**
      * Update BPJS data for an employee.
+     * Lookup by bpjs_id from request (per-period), fallback ke latest.
      */
     public function update(Request $request, Employee $employee): JsonResponse
     {
-        $bpjs = $employee->bpjs;
+        $bpjs = null;
+        if ($bpjsId = $request->integer('bpjs_id')) {
+            $bpjs = EmployeeBpjs::where('employee_id', $employee->id)->where('id', $bpjsId)->first();
+        } elseif ($payPeriodId = $request->integer('pay_period_id')) {
+            $bpjs = EmployeeBpjs::where('employee_id', $employee->id)->where('pay_period_id', $payPeriodId)->first();
+        }
+        $bpjs ??= $employee->bpjs;
 
         if (! $bpjs) {
             return response()->json(['message' => 'Data BPJS belum ada. Tambahkan dulu.'], 404);
@@ -136,11 +150,17 @@ class BpjsEmployeeController extends Controller
     }
 
     /**
-     * Delete BPJS data.
+     * Delete BPJS data. Lookup by bpjs_id (query param), fallback ke latest.
      */
-    public function destroy(Employee $employee): JsonResponse
+    public function destroy(Request $request, Employee $employee): JsonResponse
     {
-        $bpjs = $employee->bpjs;
+        $bpjs = null;
+        if ($bpjsId = $request->integer('bpjs_id')) {
+            $bpjs = EmployeeBpjs::where('employee_id', $employee->id)->where('id', $bpjsId)->first();
+        } elseif ($payPeriodId = $request->integer('pay_period_id')) {
+            $bpjs = EmployeeBpjs::where('employee_id', $employee->id)->where('pay_period_id', $payPeriodId)->first();
+        }
+        $bpjs ??= $employee->bpjs;
 
         if (! $bpjs) {
             return response()->json(['message' => 'Data BPJS tidak ditemukan.'], 404);
@@ -211,9 +231,11 @@ class BpjsEmployeeController extends Controller
                 }
 
                 // Dasar perhitungan = gaji_pokok + tj_masa_kerja + tunjangan
-                $gajiPokok  = (float) ($employee->activeSalary()?->base_salary ?? $employee->base_salary ?? 0);
-                $tjMk       = (float) ($bpjsData->tj_masa_kerja ?? 0);
-                $tunjangan  = (float) ($bpjsData->tunjangan ?? 0);
+                // AMBIL DARI EMPLOYEE MODEL (dinamis by join_date & employee_salaries)
+                $periodStr = $payPeriod->end_date->format('Y-m');
+                $gajiPokok  = (float) $employee->gaji_pokok($periodStr);
+                $tjMk       = (float) $employee->tjMasaKerja($periodStr);
+                $tunjangan  = (float) $employee->tunjangan($periodStr);
                 $baseSalary = $gajiPokok + $tjMk + $tunjangan;
 
                 if ($baseSalary <= 0) {
@@ -231,6 +253,8 @@ class BpjsEmployeeController extends Controller
 
                 $bpjsData->update([
                     'pay_period_id'        => $request->pay_period_id,
+                    'tj_masa_kerja'         => $tjMk,
+                    'tunjangan'             => $tunjangan,
                     'bpjs_base_salary'     => $baseSalary,
                     'employer_jht'         => $result['employer']['jht'],
                     'employer_jkk'         => $result['employer']['jkk'],
@@ -311,6 +335,29 @@ class BpjsEmployeeController extends Controller
                 ->whereColumn('employees.id', 'employee_bpjs.employee_id')
                 ->limit(1)
         )->paginate($request->integer('per_page', 25));
+
+        // Enrich dengan nilai dinamis dari Employee model
+        $payPeriod = $request->pay_period_id ? PayPeriod::find($request->pay_period_id) : null;
+        $periodStr = $payPeriod?->end_date?->format('Y-m');
+
+        if ($periodStr) {
+            $records->getCollection()->transform(function ($bpjs) use ($periodStr) {
+                $emp = $bpjs->employee;
+                if ($emp) {
+                    $gajiPokok = (float) $emp->gaji_pokok($periodStr);
+                    // Selalu ambil dari Employee model (dinamis) — source of truth
+                    $tjMk      = (float) $emp->tjMasaKerja($periodStr);
+                    $tunjangan = (float) $emp->tunjangan($periodStr);
+
+                    $bpjs->gaji_pokok       = $gajiPokok;
+                    $bpjs->tj_masa_kerja    = $tjMk;
+                    $bpjs->tunjangan        = $tunjangan;
+                    // Recalculate base salary (gaji pokok + tj mk + tunjangan)
+                    $bpjs->bpjs_base_salary = $gajiPokok + $tjMk + $tunjangan;
+                }
+                return $bpjs;
+            });
+        }
 
         return response()->json($records);
     }

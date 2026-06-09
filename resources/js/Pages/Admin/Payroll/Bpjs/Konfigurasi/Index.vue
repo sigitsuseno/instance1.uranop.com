@@ -167,7 +167,7 @@ import BaseCard from '@/Components/BaseCard.vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 
-const { get, post, put, del } = useApi()
+const { get, post, put, destroy } = useApi()
 
 const configs = ref([])
 const loading = ref(false)
@@ -243,7 +243,7 @@ async function doDelete() {
   if (!deleteTarget.value) return
   deleting.value = true
   try {
-    await del(`/api/v1/settings/bpjs-configs/${deleteTarget.value.id}`)
+    await destroy(`/api/v1/settings/bpjs-configs/${deleteTarget.value.id}`)
     showDelete.value = false
     fetchConfigs()
   } catch (e) { alert(e.message || 'Gagal menghapus') } finally { deleting.value = false }
