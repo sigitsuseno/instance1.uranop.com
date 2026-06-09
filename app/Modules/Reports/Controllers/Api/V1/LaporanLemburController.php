@@ -40,7 +40,7 @@ class LaporanLemburController extends Controller
                     $gq->whereIn('reference_code', $groups);
                 });
             })
-            ->with(['position', 'activeSalary'])
+            ->with(['position'])
             ->get();
 
         // Cari periode payroll yang mencakup tanggal ini
@@ -153,7 +153,6 @@ class LaporanLemburController extends Controller
                     $gq->whereIn('reference_code', $groups);
                 });
             })
-            ->with(['activeSalary'])
             ->get();
 
         // Ambil pay_records untuk tahun ini (untuk gaji)
