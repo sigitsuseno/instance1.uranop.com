@@ -622,6 +622,11 @@ class AttendanceApiController extends Controller
             'notes'       => $data['notes'] ?? null,
         ]);
 
+        // Update att_prepares: set status + review_status = CSF
+        $this->syncAttPreparesForConsecutive(
+            $data['employee_id'], $data['start_date'], $data['end_date'], $data['type']
+        );
+
         $record->load('employee:id,name,employee_code,department_id');
 
         return response()->json([
@@ -646,6 +651,11 @@ class AttendanceApiController extends Controller
             'notes'       => 'nullable|string|max:500',
         ]);
 
+        // Simpan old range untuk revert
+        $oldEmployeeId = $record->employee_id;
+        $oldStartDate  = $record->start_date->toDateString();
+        $oldEndDate    = $record->end_date->toDateString();
+
         $start = \Carbon\Carbon::parse($data['start_date']);
         $end   = \Carbon\Carbon::parse($data['end_date']);
         $days  = $start->diffInDays($end, true) + 1;
@@ -657,6 +667,14 @@ class AttendanceApiController extends Controller
             'type'       => $data['type'],
             'notes'      => $data['notes'] ?? $record->notes,
         ]);
+
+        // Revert att_prepares di range lama
+        $this->revertAttPreparesForConsecutive($oldEmployeeId, $oldStartDate, $oldEndDate);
+
+        // Apply att_prepares di range baru
+        $this->syncAttPreparesForConsecutive(
+            $record->employee_id, $data['start_date'], $data['end_date'], $data['type']
+        );
 
         $record->load('employee:id,name,employee_code,department_id');
 
@@ -673,12 +691,62 @@ class AttendanceApiController extends Controller
     public function consecutiveDestroy(int $id): JsonResponse
     {
         $record = \App\Modules\Attendance\Models\ConsecutiveDay::findOrFail($id);
+
+        // Revert att_prepares sebelum hapus
+        $this->revertAttPreparesForConsecutive(
+            $record->employee_id,
+            $record->start_date->toDateString(),
+            $record->end_date->toDateString()
+        );
+
         $record->delete();
 
         return response()->json([
             'success' => true,
             'message' => 'Consecutive day berhasil dihapus.',
         ]);
+    }
+
+    // ─── Consecutive Day Helpers ───────────────────────────────────
+
+    /**
+     * Update att_prepares untuk range tanggal dengan status CSF.
+     */
+    private function syncAttPreparesForConsecutive(int $employeeId, string $startDate, string $endDate, string $type): void
+    {
+        $status = $type === 'worked'
+            ? \App\Modules\Attendance\Models\AttendancePrepare::STATUS_HADIR
+            : \App\Modules\Attendance\Models\AttendancePrepare::STATUS_ABSENT;
+
+        $start = \Carbon\Carbon::parse($startDate);
+        $end   = \Carbon\Carbon::parse($endDate);
+
+        for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
+            $dateStr = $date->toDateString();
+            \App\Modules\Attendance\Models\AttendancePrepare::updateOrCreate(
+                [
+                    'employee_id' => $employeeId,
+                    'date'        => $dateStr,
+                ],
+                [
+                    'status'        => $status,
+                    'review_status' => \App\Modules\Attendance\Models\AttendancePrepare::REVIEW_CSF,
+                    'periode_start' => $date->copy()->startOfMonth()->toDateString(),
+                    'periode_end'   => $date->copy()->endOfMonth()->toDateString(),
+                ]
+            );
+        }
+    }
+
+    /**
+     * Revert att_prepares: kembalikan review_status ke 'cek'.
+     */
+    private function revertAttPreparesForConsecutive(int $employeeId, string $startDate, string $endDate): void
+    {
+        \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->where('review_status', \App\Modules\Attendance\Models\AttendancePrepare::REVIEW_CSF)
+            ->update(['review_status' => \App\Modules\Attendance\Models\AttendancePrepare::REVIEW_CEK]);
     }
 
     // ========== RESUME KEHADIRAN (Attendance Records) ==========
