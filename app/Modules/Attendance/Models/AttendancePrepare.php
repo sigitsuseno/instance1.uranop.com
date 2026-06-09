@@ -68,6 +68,7 @@ class AttendancePrepare extends Model
     public const REVIEW_CEK        = 'cek';
     public const REVIEW_PERHATIAN  = 'perhatian';
     public const REVIEW_LENGKAP    = 'lengkap';
+    public const REVIEW_CSF        = 'csf';    // Consecutive Staff Flag
 
     // ─── Relations ────────────────────────────────────────────────────
 
@@ -170,6 +171,7 @@ class AttendancePrepare extends Model
             self::REVIEW_CEK       => 'Cek',
             self::REVIEW_PERHATIAN => 'Perhatian',
             self::REVIEW_LENGKAP   => 'Lengkap',
+            self::REVIEW_CSF       => 'CSF',
             default                => ucfirst($this->review_status ?? ''),
         };
     }
@@ -183,6 +185,7 @@ class AttendancePrepare extends Model
             self::REVIEW_CEK       => 'bg-yellow-100 text-yellow-800',
             self::REVIEW_PERHATIAN => 'bg-orange-100 text-orange-800',
             self::REVIEW_LENGKAP   => 'bg-green-100 text-green-800',
+            self::REVIEW_CSF       => 'bg-blue-100 text-blue-800',
             default                => 'bg-gray-100 text-gray-800',
         };
     }
