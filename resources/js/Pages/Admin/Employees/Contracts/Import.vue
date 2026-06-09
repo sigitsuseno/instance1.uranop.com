@@ -244,11 +244,11 @@ const uploadFile = async () => {
           </div>
           
           <ul class="text-sm text-(--text-main) space-y-3 list-disc pl-5">
-            <li>Gunakan template Excel yang telah disediakan untuk menghindari error format.</li>
-            <li>Kolom yang wajib diisi adalah <strong>NIK</strong> dan <strong>Tanggal Mulai</strong>.</li>
-            <li>Nomor Kontrak akan di-generate otomatis jika dikosongkan.</li>
-            <li>Pastikan format tanggal adalah <code>YYYY-MM-DD</code> (contoh: 2026-05-29).</li>
-            <li>Jika kontrak tipe <strong>PKWT</strong>, maka Tanggal Berakhir wajib diisi.</li>
+            <li>Gunakan format excel dengan baris pertama sebagai Header.</li>
+            <li>Kolom wajib: <strong>Kolom 1 (NIP)</strong>. Jika kosong maka baris akan dilewati.</li>
+            <li>Kolom 4 (AWAL) dan 5 (AKHIR) dst berisi pasangan tanggal mulai dan selesai kontrak.</li>
+            <li>Sistem otomatis membaca kolom kontrak berikutnya hingga menemukan kata <code>HABIS</code> atau sel kosong.</li>
+            <li>Tipe kontrak otomatis diatur sebagai <strong>PKWT</strong>. Semua riwayat lama akan ditimpa (Replace All).</li>
           </ul>
           
           <div class="mt-6">

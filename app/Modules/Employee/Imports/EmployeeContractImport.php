@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Concerns\ToCollection;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use PhpOffice\PhpSpreadsheet\Shared\Date;
 
-class EmployeeContractImport implements ToCollection, WithHeadingRow
+class EmployeeContractImport implements ToCollection, WithMultipleSheets
 {
     protected array $stats = [
         'total' => 0,
@@ -33,197 +33,136 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
     {
     }
 
+    public function sheets(): array
+    {
+        return [
+            0 => $this, // Hanya baca sheet pertama
+        ];
+    }
+
     public function collection(Collection $rows)
     {
-        $this->stats['total'] = $rows->count();
+        // Skip header row
+        $this->stats['total'] = max(0, $rows->count() - 1);
 
         foreach ($rows as $index => $row) {
-            $rowNumber = $index + 2; // header di baris 1
+            // Skip the first row (header)
+            if ($index === 0) {
+                continue;
+            }
 
-            $nipVal = trim((string) ($row['nip'] ?? ''));
-            $tglVal = trim((string) ($row['tanggal_masuk'] ?? ''));
-            $stsVal = trim((string) ($row['status'] ?? ''));
-            $durVal = trim((string) ($row['durasi'] ?? ''));
+            $rowNumber = $index + 1; // 1-based index in Excel
+            $nipVal = trim((string) ($row[0] ?? ''));
 
-            // Skip baris jika NIP kosong (biasanya ghost rows di Excel)
+            // Skip row if NIP is empty (usually ghost rows in Excel)
             if ($nipVal === '') {
                 $this->stats['total']--;
                 continue;
             }
-
-            // Validasi minimal kolom
-            if (empty($row['nip']) || empty($row['tanggal_masuk']) || empty($row['status']) || empty($row['durasi'])) {
-                $this->stats['failed']++;
-                $this->failed[] = [
-                    'row' => $rowNumber,
-                    'nik' => $row['nip'] ?? '-',
-                    'errors' => ['NIP / TANGGAL_MASUK / STATUS / DURASI wajib diisi']
-                ];
-                Log::warning("Baris {$rowNumber} gagal validasi", $row->toArray());
-
+            
+            $colCount = count($row);
+            if ($colCount < 4) {
+                // Not enough columns for a contract, skip silently
+                $this->stats['total']--;
                 continue;
             }
 
             try {
-                $nip = trim((string) $row['nip']);
-                if (! array_key_exists($nip, $this->employeeCache)) {
-                    $emp = Employee::where(function ($q) use ($nip) {
-                        $q->where('nip', $nip)
-                          ->orWhere('employee_code', $nip);
+                if (! array_key_exists($nipVal, $this->employeeCache)) {
+                    $emp = Employee::where(function ($q) use ($nipVal) {
+                        $q->where('nip', $nipVal)
+                          ->orWhere('employee_code', $nipVal);
                     })->first();
                     
                     if (!$emp) {
-                        Log::warning("Employee lookup failed for nip/employee_code: '{$nip}'");
+                        Log::warning("Employee lookup failed for nip/employee_code: '{$nipVal}'");
                     }
                     
-                    $this->employeeCache[$nip] = $emp;
+                    $this->employeeCache[$nipVal] = $emp;
                 }
-                $employee = $this->employeeCache[$nip];
+                $employee = $this->employeeCache[$nipVal];
 
                 if (! $employee) {
                     $this->stats['failed']++;
                     $this->failed[] = [
                         'row' => $rowNumber,
-                        'nik' => $row['nip'],
+                        'nik' => $nipVal,
                         'errors' => ['Karyawan dengan NIP tersebut tidak ditemukan']
                     ];
-
                     continue;
                 }
-
-                $startDate = $this->parseDate($row['tanggal_masuk']);
-
-                if (! $startDate) {
-                    $this->stats['failed']++;
-                    $this->failed[] = "Baris {$rowNumber}: Tanggal masuk tidak valid";
-
-                    continue;
-                }
-
-                // Cek apakah kontrak dengan start_date yang sama sudah ada dari hasil upload ini (prefix CTR)
-                $exists = EmployeeContract::where('employee_id', $employee->id)
-                    ->where('start_date', $startDate->format('Y-m-d'))
-                    ->where('contract_number', 'like', 'CTR%')
-                    ->exists();
-
-                if ($exists) {
-                    // Jika data sudah ada, HAPUS riwayat yang terpotong/setengah jalan akibat timeout sebelumnya,
-                    // agar sistem bisa meng-generate ulang sejarah kontraknya secara utuh sampai hari ini.
-                    EmployeeContract::where('employee_id', $employee->id)
-                        ->where('start_date', '>=', $startDate->format('Y-m-d'))
-                        ->where('contract_number', 'like', 'CTR%')
-                        ->forceDelete();
-                }
-
-                $duration = (int) $row['durasi'];
-
-                if ($duration <= 0) {
-                    $this->stats['failed']++;
-                    $this->failed[] = [
-                        'row' => $rowNumber,
-                        'nik' => $row['nip'],
-                        'errors' => ['DURASI harus lebih besar dari 0']
-                    ];
-
-                    continue;
-                }
-
-                $contractType = $this->mapContractType($row['status'] ?? null);
-
-                if (! $contractType) {
-                    $this->stats['failed']++;
-                    $this->failed[] = [
-                        'row' => $rowNumber,
-                        'nik' => $row['nip'],
-                        'errors' => ['STATUS kontrak tidak dikenali']
-                    ];
-
-                    continue;
-                }
-
-                $rawEnd = $row['end'] ?? $row['end_date'] ?? null;
-                $excelEndDate = $this->parseDate($rawEnd);
 
                 DB::beginTransaction();
 
-                $lastVersion = EmployeeContract::where('employee_id', $employee->id)->max('version') ?? 0;
-                $currentVersion = $lastVersion;
+                // Delete all existing contracts for this employee (Replace All mode)
+                EmployeeContract::where('employee_id', $employee->id)->forceDelete();
 
-                // Set semua kontrak lama karyawan ini menjadi is_latest = false karena kita akan insert yang baru
-                EmployeeContract::where('employee_id', $employee->id)->update(['is_latest' => false]);
-
-                // Opsi B: Kontrak nyambung rapat — end = start + durasi, next start = end + 1 day
-                // Contoh: 01 Jan → 01 Feb, 02 Feb → 02 Mar, dst.
-                $segmentStart = $startDate->copy();
                 $now = Carbon::now();
+                $segmentsInserted = 0;
+                $currentVersion = 0;
+                
                 $segments = [];
 
-                while (true) {
-                    $segmentEnd = $segmentStart->copy()->addMonths($duration);
-                    $currentVersion++;
+                for ($i = 3; $i < $colCount; $i += 2) {
+                    $awalRaw = trim((string) ($row[$i] ?? ''));
+                    $akhirRaw = trim((string) ($row[$i+1] ?? ''));
 
-                    if ($excelEndDate) {
-                        $isLast = $segmentEnd->greaterThanOrEqualTo($excelEndDate);
-                    } else {
-                        $isLast = $segmentEnd->greaterThanOrEqualTo($now);
-                    }
-
-                    // Batas aman 50 segmen
-                    $isLast = $isLast || ($currentVersion - $lastVersion >= 50);
-
-                    if ($isLast) {
-                        $finalEnd = $excelEndDate ?: $segmentEnd;
-
-                        $segments[] = [
-                            'employee_id' => $employee->id,
-                            'contract_number' => $this->generateContractNumber(),
-                            'contract_type' => $contractType,
-                            'start_date' => $segmentStart->copy()->format('Y-m-d'),
-                            'end_date' => $finalEnd->copy()->format('Y-m-d'),
-                            'duration_months' => $duration,
-                            'status' => $finalEnd->greaterThanOrEqualTo($now) ? 'active' : 'expired',
-                            'version' => $currentVersion,
-                            'is_latest' => true,
-                            'compensation_paid_at' => null,
-                            'created_by' => Auth::id(),
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-
+                    // Stop if we hit empty or HABIS
+                    if ($awalRaw === '' || strtoupper($awalRaw) === 'HABIS') {
                         break;
                     }
+
+                    $startDate = $this->parseDate($awalRaw);
+                    $endDate = $this->parseDate($akhirRaw);
+
+                    if (!$startDate || !$endDate) {
+                        Log::warning("Invalid date format on row {$rowNumber}", ['awal' => $awalRaw, 'akhir' => $akhirRaw]);
+                        continue;
+                    }
+
+                    $currentVersion++;
+                    $segmentsInserted++;
+                    $durationMonths = max(1, $startDate->diffInMonths($endDate)); // Nilai terkecil 1 bulan
 
                     $segments[] = [
                         'employee_id' => $employee->id,
                         'contract_number' => $this->generateContractNumber(),
-                        'contract_type' => $contractType,
-                        'start_date' => $segmentStart->copy()->format('Y-m-d'),
-                        'end_date' => $segmentEnd->copy()->format('Y-m-d'),
-                        'duration_months' => $duration,
-                        'status' => 'expired',
+                        'contract_type' => 'pkwt', // Default to pkwt
+                        'start_date' => $startDate->format('Y-m-d'),
+                        'end_date' => $endDate->format('Y-m-d'),
+                        'duration_months' => $durationMonths,
+                        'status' => $endDate->greaterThanOrEqualTo($now) ? 'active' : 'expired',
                         'version' => $currentVersion,
-                        'is_latest' => false,
-                        'compensation_paid_at' => now(),
+                        'is_latest' => false, // Will be updated after loop
+                        'compensation_paid_at' => null,
                         'created_by' => Auth::id(),
                         'created_at' => now(),
                         'updated_at' => now(),
                     ];
-
-                    $segmentStart = $segmentEnd->copy()->addDay();
                 }
 
-                if (! empty($segments)) {
+                if (!empty($segments)) {
+                    // Set is_latest = true for the last segment
+                    $segments[count($segments) - 1]['is_latest'] = true;
                     EmployeeContract::insert($segments);
+                    $this->stats['success']++;
+                } else {
+                    // No valid segments found
+                    $this->stats['failed']++;
+                    $this->failed[] = [
+                        'row' => $rowNumber,
+                        'nik' => $nipVal,
+                        'errors' => ['Tidak ada data periode kontrak yang valid ditemukan']
+                    ];
                 }
 
                 DB::commit();
-                $this->stats['success']++;
             } catch (\Exception $e) {
                 DB::rollBack();
                 $this->stats['failed']++;
                 $this->failed[] = [
                     'row' => $rowNumber,
-                    'nik' => $row['nip'] ?? '-',
+                    'nik' => $nipVal,
                     'errors' => [$e->getMessage()]
                 ];
                 Log::error('EmployeeContractImport error: '.$e->getMessage(), [
@@ -248,19 +187,6 @@ class EmployeeContractImport implements ToCollection, WithHeadingRow
         } catch (\Exception $e) {
             return null;
         }
-    }
-
-    protected function mapContractType(?string $raw): ?string
-    {
-        $val = strtolower(trim((string) $raw));
-
-        return match ($val) {
-            'pkwt' => 'pkwt',
-            'pkwtt' => 'pkwtt',
-            'outsourcing', 'outsource' => 'outsourcing',
-            'freelance' => 'freelance',
-            default => null,
-        };
     }
 
     protected function generateContractNumber(): string
