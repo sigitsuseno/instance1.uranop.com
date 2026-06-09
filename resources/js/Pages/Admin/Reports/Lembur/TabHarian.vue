@@ -15,6 +15,9 @@
         <BaseButton variant="secondary" size="sm" @click="exportExcel" :disabled="loading">
           Export Excel
         </BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="openPrint" :disabled="loading">
+          Print
+        </BaseButton>
       </div>
     </div>
 
@@ -126,8 +129,38 @@ async function fetchData() {
 }
 
 function exportExcel() {
-  // TODO: Phase 2 — export endpoint
-  notification.addNotification('Export Excel belum tersedia (Phase 2)', 'info')
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ date: currentDate.value });
+    props.groups.forEach(g => params.append('groups[]', g));
+    const url = `/api/v1/reports/lembur/harian/export?${params.toString()}`;
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.blob())
+        .then(blob => {
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.setAttribute('download', `Laporan_Lembur_Harian_${currentDate.value}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(downloadUrl);
+        })
+        .catch(err => notification.addNotification('Gagal export Excel', 'error'));
+}
+
+function openPrint() {
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ date: currentDate.value });
+    props.groups.forEach(g => params.append('groups[]', g));
+    const url = `/api/v1/reports/lembur/harian/print?${params.toString()}`;
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.text())
+        .then(html => {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(html);
+            printWindow.document.close();
+        })
+        .catch(err => notification.addNotification('Gagal membuka print', 'error'));
 }
 
 watch(() => props.groups, fetchData, { immediate: true })

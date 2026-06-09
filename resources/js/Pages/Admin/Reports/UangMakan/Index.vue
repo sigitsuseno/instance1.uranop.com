@@ -1,11 +1,12 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import { useApi } from '../../../../Composables/useApi';
+import { ref, onMounted } from 'vue';
+import { useApi } from '../../../../composables/useApi';
 import TabRekapLembur from './TabRekapLembur.vue';
 import TabPerhitungan from './TabPerhitungan.vue';
 import TabResume from './TabResume.vue';
 import BaseButton from '../../../../Components/BaseButton.vue';
 import SelectInput from '../../../../Components/SelectInput.vue';
+import BaseCard from '../../../../Components/BaseCard.vue';
 
 const { get } = useApi();
 
@@ -17,16 +18,36 @@ const isLoading = ref(false);
 
 const activeTab = ref('rekap-lembur');
 const selectedPeriod = ref('');
-const payrollPeriods = ref([]); // Fetch this from API
+const payrollPeriods = ref([]);
 const searchForm = ref({ search: '' });
+
+// Group checkbox filter — mirip Laporan Lembur
+const selectedGroups = ref([]);
+const availableGroups = ref([]);
 
 function setTab(tab) {
     activeTab.value = tab;
 }
 
+const fetchGroups = async () => {
+    try {
+        const res = await get('/api/v1/settings/employee-data/groups');
+        const allGroups = res.data || [];
+        // Filter hanya "Imported Shift/Group"
+        availableGroups.value = allGroups
+            .filter(g => g.group_label === 'Imported Shift/Group')
+            .map(g => ({ code: g.code, name: g.name }));
+
+        // Default semua checked
+        selectedGroups.value = availableGroups.value.map(g => g.code);
+    } catch (e) {
+        console.error('Gagal fetch groups:', e);
+    }
+};
+
 const fetchPeriods = async () => {
     try {
-        const response = await get('/api/v1/payroll/periods'); // adjust if different
+        const response = await get('/api/v1/payroll/periods');
         if (response && response.data) {
             payrollPeriods.value = response.data.map(p => ({
                 id: p.id,
@@ -40,17 +61,19 @@ const fetchPeriods = async () => {
             }
         }
     } catch (e) {
-        console.error("Failed to fetch periods", e);
+        console.error('Failed to fetch periods', e);
     }
 };
 
 const fetchData = async () => {
-    if (!selectedPeriod.value) return;
+    if (!selectedPeriod.value || !selectedGroups.value.length) return;
     isLoading.value = true;
     try {
         const searchParam = searchForm.value.search ? `&search=${encodeURIComponent(searchForm.value.search)}` : '';
-        const response = await get(`/api/v1/reports/uang-makan?period_id=${selectedPeriod.value}${searchParam}`);
-        
+        const groupsParam = selectedGroups.value.map(g => `groups[]=${encodeURIComponent(g)}`).join('&');
+        const queryString = `period_id=${selectedPeriod.value}${searchParam}&${groupsParam}`;
+        const response = await get(`/api/v1/reports/uang-makan?${queryString}`);
+
         if (response.success) {
             employees.value = response.data;
             resumeData.value = response.resumeData;
@@ -58,17 +81,64 @@ const fetchData = async () => {
             period.value = response.period;
         }
     } catch (error) {
-        console.error("Error fetching Uang Makan data:", error);
+        console.error('Error fetching Uang Makan data:', error);
     } finally {
         isLoading.value = false;
     }
 };
 
-onMounted(() => {
+function buildQueryString() {
+    const searchParam = searchForm.value.search ? `&search=${encodeURIComponent(searchForm.value.search)}` : '';
+    const groupsParam = selectedGroups.value.map(g => `groups[]=${encodeURIComponent(g)}`).join('&');
+    return `period_id=${selectedPeriod.value}${searchParam}&${groupsParam}`;
+}
+
+async function exportExcel() {
+    if (!selectedPeriod.value) return;
+    try {
+        const token = localStorage.getItem('token');
+        const url = `/api/v1/reports/uang-makan/export?${buildQueryString()}`;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!response.ok) throw new Error('Export failed');
+        const blob = await response.blob();
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', `Uang_Makan_${period.value.start}_${period.value.end}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+        console.error('Export error:', err);
+    }
+}
+
+async function openPrint() {
+    if (!selectedPeriod.value) return;
+    try {
+        const token = localStorage.getItem('token');
+        const url = `/api/v1/reports/uang-makan/print?${buildQueryString()}`;
+        const response = await fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const html = await response.text();
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+    } catch (err) {
+        console.error('Print error:', err);
+    }
+}
+
+onMounted(async () => {
+    await fetchGroups();
     fetchPeriods();
 });
 
-const companyName = "ALL IN KARANGJATI"; // can make dynamic later
+const companyName = 'ALL IN KARANGJATI';
 
 </script>
 
@@ -86,8 +156,37 @@ const companyName = "ALL IN KARANGJATI"; // can make dynamic later
                     class="w-48"
                     @change="fetchData"
                 />
+                <BaseButton variant="secondary" size="sm" @click="exportExcel" :disabled="isLoading">
+                    📥 Export Excel
+                </BaseButton>
+                <BaseButton variant="secondary" size="sm" @click="openPrint" :disabled="isLoading">
+                    🖨️ Print
+                </BaseButton>
             </div>
         </div>
+
+        <!-- Group Checkbox Filter — mirip Laporan Lembur -->
+        <BaseCard>
+            <div class="flex flex-wrap items-center gap-4">
+                <span class="text-sm font-semibold text-(--text-muted) uppercase tracking-wider">Filter Grup:</span>
+                <label
+                    v-for="group in availableGroups"
+                    :key="group.code"
+                    class="flex items-center gap-2 cursor-pointer group select-none"
+                >
+                    <input
+                        type="checkbox"
+                        :value="group.code"
+                        v-model="selectedGroups"
+                        @change="fetchData"
+                        class="w-4 h-4 rounded text-(--primary) focus:ring-(--primary-glow) border-(--border-soft)"
+                    />
+                    <span class="text-sm font-medium text-(--text-main) group-hover:text-(--primary) transition-colors">
+                        {{ group.name }}
+                    </span>
+                </label>
+            </div>
+        </BaseCard>
 
         <div class="bg-(--bg-card) overflow-hidden shadow-sm rounded-xl border border-(--border-soft) mb-6">
             <div class="border-b border-(--border-soft)">
@@ -122,14 +221,14 @@ const companyName = "ALL IN KARANGJATI"; // can make dynamic later
 
         <div v-else>
             <div v-show="activeTab === 'rekap-lembur'">
-                <TabRekapLembur 
+                <TabRekapLembur
                     :employees="employees"
                     :dates="dates"
                     :period="period"
                 />
             </div>
             <div v-show="activeTab === 'perhitungan'">
-                <TabPerhitungan 
+                <TabPerhitungan
                     :employees="employees"
                     :period="period"
                 />

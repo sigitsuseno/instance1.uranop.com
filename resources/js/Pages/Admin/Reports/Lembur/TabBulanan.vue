@@ -16,6 +16,9 @@
         <BaseButton variant="secondary" size="sm" @click="exportExcel" :disabled="loading">
           Export Excel
         </BaseButton>
+        <BaseButton variant="secondary" size="sm" @click="openPrint" :disabled="loading">
+          Print
+        </BaseButton>
       </div>
     </div>
 
@@ -37,6 +40,7 @@
               <th class="px-3 py-3 text-center font-bold text-(--text-muted) uppercase sticky left-0 bg-(--bg-elevated) z-30">No</th>
               <th class="px-4 py-3 text-left font-bold text-(--text-muted) uppercase sticky left-[40px] bg-(--bg-elevated) z-30 w-48">Nama</th>
               <th class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase">Gaji Pokok</th>
+              <th class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase">Premi</th>
               <th class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase">Tj. MK</th>
               <th class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase">Tunjangan</th>
               <th
@@ -58,6 +62,7 @@
               <td class="px-4 py-4 font-bold text-(--text-main) sticky left-[40px] bg-(--bg-card) group-hover:bg-(--bg-elevated) z-10 truncate">{{ item.name }}</td>
               <td class="px-4 py-4 text-right font-medium text-(--text-main)">{{ formatNumber(item.gaji_pokok) }}</td>
               <td class="px-4 py-4 text-right font-medium text-(--text-main)">{{ formatNumber(item.premi) }}</td>
+              <td class="px-4 py-4 text-right font-medium text-(--text-main)">{{ formatNumber(item.tj_mk) }}</td>
               <td class="px-4 py-4 text-right font-medium text-(--text-main)">{{ formatNumber(item.tunjangan) }}</td>
 
               <td v-for="m in 12" :key="m" class="px-4 py-3 border-l border-(--border-soft)">
@@ -137,7 +142,38 @@ async function fetchData() {
 }
 
 function exportExcel() {
-  notification.addNotification('Export Excel belum tersedia (Phase 2)', 'info')
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ year: currentYear.value });
+    props.groups.forEach(g => params.append('groups[]', g));
+    const url = `/api/v1/reports/lembur/bulanan/export?${params.toString()}`;
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.blob())
+        .then(blob => {
+            const downloadUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.setAttribute('download', `Laporan_Lembur_Bulanan_${currentYear.value}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(downloadUrl);
+        })
+        .catch(err => notification.addNotification('Gagal export Excel', 'error'));
+}
+
+function openPrint() {
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ year: currentYear.value });
+    props.groups.forEach(g => params.append('groups[]', g));
+    const url = `/api/v1/reports/lembur/bulanan/print?${params.toString()}`;
+    fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+        .then(r => r.text())
+        .then(html => {
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(html);
+            printWindow.document.close();
+        })
+        .catch(err => notification.addNotification('Gagal membuka print', 'error'));
 }
 
 watch(() => props.groups, fetchData, { immediate: true })
