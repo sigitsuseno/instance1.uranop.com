@@ -200,6 +200,20 @@ class AttendanceService
             ->get()
             ->groupBy('employee_id');
 
+        // ── 4b. Preload consecutive days ────────────────────────
+        $consecutives = \App\Modules\Attendance\Models\ConsecutiveDay::whereIn('employee_id', $allIds)
+            ->where(function ($q) use ($startDate, $endDate) {
+                // overlap: consecutive range intersect with date range
+                $q->whereBetween('start_date', [$startDate, $endDate])
+                  ->orWhereBetween('end_date', [$startDate, $endDate])
+                  ->orWhere(function ($q2) use ($startDate, $endDate) {
+                      $q2->where('start_date', '<=', $startDate)
+                         ->where('end_date', '>=', $endDate);
+                  });
+            })
+            ->get()
+            ->groupBy('employee_id');
+
         // ── 5. Preload rosters + shifts ──────────────────────────
         $rosterMap = EmployeeShiftRoster::whereIn('employee_id', $allIds)
             ->whereBetween('date', [$startDate, $endDate])
@@ -240,8 +254,28 @@ class AttendanceService
 
                 $update = [];
 
+                // Cek consecutive day
+                $hasConsecutiveWorked = false;
+                $empConsecutives = $consecutives->get($p->employee_id);
+                if ($empConsecutives) {
+                    foreach ($empConsecutives as $cons) {
+                        $consStart = Carbon::parse($cons->start_date);
+                        $consEnd   = Carbon::parse($cons->end_date);
+                        if ($dateCarbon->between($consStart, $consEnd) && $cons->type === 'worked') {
+                            $hasConsecutiveWorked = true;
+                            break;
+                        }
+                    }
+                }
+
+                // ── CONSECUTIVE WORKED ────────────────────────
+                if ($hasConsecutiveWorked && !$hasAny) {
+                    $update['status']        = AttendancePrepare::STATUS_HADIR;
+                    $update['review_status'] = AttendancePrepare::REVIEW_CSF;
+                    $stats['hadir']++;
+                }
                 // ── HOLIDAY ──────────────────────────────────
-                if ($isHoliday) {
+                elseif ($isHoliday) {
                     if ($hasAny) {
                         if (! $hasCheckIn && $workStart) {
                             $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
