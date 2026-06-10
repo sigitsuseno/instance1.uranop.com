@@ -5,9 +5,18 @@ use App\Modules\Reports\Controllers\Api\V1\UangMakanReportController;
 use App\Modules\Reports\Controllers\Api\V1\LaporanLemburController;
 
 Route::prefix('v1/reports')->middleware('auth:sanctum')->group(function () {
-    Route::get('/uang-makan', [UangMakanReportController::class, 'index'])->name('api.reports.uang-makan.index');
-    Route::get('/uang-makan/export', [UangMakanReportController::class, 'export']);
-    Route::get('/uang-makan/print', [UangMakanReportController::class, 'print']);
+    // Laporan Uang Makan
+    Route::prefix('uang-makan')->group(function () {
+        Route::get('/harian', [UangMakanReportController::class, 'harian']);
+        Route::get('/harian/export', [UangMakanReportController::class, 'exportHarian']);
+        Route::get('/harian/print', [UangMakanReportController::class, 'printHarian']);
+        Route::get('/bulanan', [UangMakanReportController::class, 'bulanan']);
+        Route::get('/bulanan/export', [UangMakanReportController::class, 'exportBulanan']);
+        Route::get('/bulanan/print', [UangMakanReportController::class, 'printBulanan']);
+        Route::get('/resume', [UangMakanReportController::class, 'resume']);
+        Route::get('/resume/export', [UangMakanReportController::class, 'exportResume']);
+        Route::get('/resume/print', [UangMakanReportController::class, 'printResume']);
+    });
 
     // Laporan Lembur
     Route::prefix('lembur')->group(function () {
