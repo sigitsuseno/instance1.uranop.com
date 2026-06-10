@@ -147,24 +147,29 @@ class LaporanLemburController extends Controller
             $lmDisplay = $lmRaw > 0 ? round($lmRaw / 60, 2) : 0;
             $overtimeDisplay = $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0;
 
-            // Kode: SG jika employee group SG, else "L"; kosongkan jika tidak lembur
+            // Kode: SG jika employee group SG, else "L"
+            // Ditampilkan kecuali status: absent, libur, off, itm, izn, atau no data
+            $statusRaw = $prepare ? $prepare->status : '-';
             $isSG = $employee->groups->contains('reference_code', 'SG');
-            if ($lmCount + $overtimeCount === 0) {
+            if (in_array($statusRaw, ['absent', 'libur', 'off', 'itm', 'izn', '-'])) {
                 $kode = '';
             } else {
                 $kode = $isSG ? 'SG' : 'L';
             }
 
-            // H/A: mapping 6 nilai
-            $statusRaw = $prepare ? $prepare->status : '-';
-            $ha = match ($statusRaw) {
-                'hadir' => 'H',
-                'absent' => 'A',
-                'cuti' => 'C',
-                'sakit' => 'S',
-                'izin' => 'I',
-                'libur', 'off' => 'OFF',
-                default => $statusRaw === '-' ? '-' : 'I',
+            // H/A: mapping from DB codes (lowercase abbreviations)
+            // DB codes: hadir, absent, libur, off, skt, ct/cm/ckm/cth/ctm/..., itm/imt/ipa/izn/...
+            $ha = match (true) {
+                $statusRaw === 'hadir'          => 'H',
+                $statusRaw === 'absent'         => 'A',
+                $statusRaw === 'libur',
+                $statusRaw === 'off'            => 'OFF',
+                $statusRaw === 'skt'            => 'S',
+                str_starts_with($statusRaw, 'c') => 'C',
+                $statusRaw === 'imt',           // Izin Masuk Terlambat → tetap hadir
+                $statusRaw === 'ipa'            => 'H',  // Izin Pulang Awal → tetap hadir
+                str_starts_with($statusRaw, 'i') => 'I',  // itm, izn, dll → Izin
+                default                         => $statusRaw === '-' ? '-' : 'I',
             };
 
             // Upah per hari: hanya H, C, S yang dapat
@@ -283,23 +288,26 @@ class LaporanLemburController extends Controller
                 $lmDisplay = $lmRaw > 0 ? round($lmRaw / 60, 2) : 0;
                 $overtimeDisplay = $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0;
 
-                // Kode: SG atau "L"; kosongkan jika tidak lembur
-                if ($lmCount + $overtimeCount === 0) {
+                // Kode: SG atau "L"; kosongkan untuk absent, libur, off, itm, izn, atau no data
+                $statusRaw = $prep ? $prep->status : '-';
+                if (in_array($statusRaw, ['absent', 'libur', 'off', 'itm', 'izn', '-'])) {
                     $kode = '';
                 } else {
                     $kode = $isSG ? 'SG' : 'L';
                 }
 
-                // H/A mapping 6 nilai
-                $statusRaw = $prep ? $prep->status : '-';
-                $ha = match ($statusRaw) {
-                    'hadir' => 'H',
-                    'absent' => 'A',
-                    'cuti' => 'C',
-                    'sakit' => 'S',
-                    'izin' => 'I',
-                    'libur', 'off' => 'OFF',
-                    default => $statusRaw === '-' ? '-' : 'I',
+                // H/A mapping 6 nilai — dari DB codes (lowercase abbreviations)
+                $ha = match (true) {
+                    $statusRaw === 'hadir'          => 'H',
+                    $statusRaw === 'absent'         => 'A',
+                    $statusRaw === 'libur',
+                    $statusRaw === 'off'            => 'OFF',
+                    $statusRaw === 'skt'            => 'S',
+                    str_starts_with($statusRaw, 'c') => 'C',
+                    $statusRaw === 'imt',           // Izin Masuk Terlambat → tetap hadir
+                    $statusRaw === 'ipa'            => 'H',  // Izin Pulang Awal → tetap hadir
+                    str_starts_with($statusRaw, 'i') => 'I',  // itm, izn, dll → Izin
+                    default                         => $statusRaw === '-' ? '-' : 'I',
                 };
 
                 // Upah per hari: hanya H, C, S yang dapat
