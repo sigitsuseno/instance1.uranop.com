@@ -60,7 +60,7 @@
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3 mb-6">
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
       <div v-for="stat in statsCards" :key="stat.label"
         class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center">
         <p class="text-2xl font-bold" :class="stat.color">{{ stat.value }}</p>
@@ -147,7 +147,6 @@
           @change="filterData">
           <option value="">Semua Status</option>
           <option value="hadir">Hadir</option>
-          <option value="terlambat">Terlambat</option>
           <option value="absent">Absen</option>
           <option value="cek">Belum Lengkap</option>
         </select>
@@ -224,14 +223,14 @@
                 </div>
                 <!-- Status Badge -->
                 <span class="inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold"
-                  :class="statusBadgeClass(getDayData(emp, d.date).status)">
-                  {{ statusLabel(getDayData(emp, d.date).status) }}
+                  :class="getDayData(emp, d.date).statusBadgeClass || statusBadgeClass(getDayData(emp, d.date).status)">
+                  {{ getDayData(emp, d.date).statusLabel || statusLabel(getDayData(emp, d.date).status) }}
                 </span>
                 <!-- Review Status -->
                 <span v-if="getDayData(emp, d.date).reviewStatus"
                   class="inline-block px-1.5 py-0.5 text-[10px] rounded-full font-semibold"
                   :class="reviewBadgeClass(getDayData(emp, d.date).reviewStatus)">
-                  {{ reviewLabel(getDayData(emp, d.date).reviewStatus) }}
+                  {{ getDayData(emp, d.date).reviewStatusLabel || reviewLabel(getDayData(emp, d.date).reviewStatus) }}
                 </span>
               </div>
             </td>
@@ -293,13 +292,14 @@
           <select v-model="editForm.status" :disabled="editForm.isLocked"
             class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
             <option value="hadir">Hadir</option>
-            <option value="terlambat">Terlambat</option>
             <option value="absent">Absen</option>
-            <option value="cuti">Cuti</option>
-            <option value="izin">Izin</option>
-            <option value="sakit">Sakit</option>
             <option value="libur">Libur</option>
             <option value="off">Off</option>
+            <optgroup label="Cuti / Izin / Sakit">
+              <option v-for="lt in leaveTypeOptions" :key="lt.code" :value="lt.code">
+                {{ lt.name }}
+              </option>
+            </optgroup>
           </select>
         </div>
 
@@ -465,6 +465,9 @@ const showSyncModal = ref(false)
 const showHitungLemburModal = ref(false)
 const processStartDate = ref('')
 const processEndDate = ref('')
+
+// Leave type options untuk edit modal
+const leaveTypeOptions = ref([])
 
 const editForm = ref({
   checkIn: '',
@@ -633,6 +636,20 @@ async function fetchEmployeeGroups() {
   }
 }
 
+async function fetchLeaveTypes() {
+  try {
+    const res = await get('/api/v1/leave/types?active_only=1')
+    const types = Array.isArray(res.data) ? res.data : (res.data?.data || [])
+    leaveTypeOptions.value = types.map(t => ({
+      code: t.code?.toLowerCase() || '',
+      name: t.name || t.code,
+    }))
+  } catch (e) {
+    console.error('Gagal fetch leave types:', e)
+    leaveTypeOptions.value = []
+  }
+}
+
 async function fetchPrepareData() {
   const { start, end } = getPeriodDates()
   try {
@@ -682,7 +699,10 @@ async function fetchPrepareData() {
         lmCount: p.lm_count || 0,
         lateMinutes: p.late_minutes || 0,
         status: p.status || 'absent',
+        statusLabel: p.status_label || statusLabel(p.status),
+        statusBadgeClass: p.status_badge_class || '',
         reviewStatus: p.review_status || 'cek',
+        reviewStatusLabel: p.review_status_label || '',
         isLocked: p.is_locked || false,
         notes: p.notes || '',
         id: p.id,
@@ -705,16 +725,21 @@ async function fetchStats() {
     const stats = res.data || res || {}
 
     // Store stats for computed
+    const total = stats.total || 0
+    const hadir = (stats.hadir || 0)
+    const absent = stats.absent || 0
+    const libur = stats.libur || 0
+    const off = stats.off || 0
+    // leaveTotal = semua record yang bukan hadir/absent/libur/off (yaitu kode leave type)
+    const leaveTotal = total - hadir - absent - libur - off
+
     statsData.value = {
-      total: stats.total || 0,
-      hadir: (stats.hadir || 0) + (stats.terlambat || 0),
-      absent: stats.absent || 0,
-      terlambat: stats.terlambat || 0,
-      cuti: stats.cuti || 0,
-      izin: stats.izin || 0,
-      sakit: stats.sakit || 0,
-      libur: stats.libur || 0,
-      off: stats.off || 0,
+      total,
+      hadir,
+      absent,
+      leaveTotal: leaveTotal > 0 ? leaveTotal : 0,
+      libur,
+      off,
       cek: stats.cek || 0,
       lengkap: stats.lengkap || 0,
       locked: stats.locked || 0,
@@ -736,6 +761,9 @@ async function fetchData() {
     }
     if (employees.value.length === 0) {
       await Promise.all([fetchEmployees(), fetchEmployeeGroups()])
+    }
+    if (leaveTypeOptions.value.length === 0) {
+      await fetchLeaveTypes()
     }
     await Promise.all([fetchPrepareData(), fetchStats()])
   } catch (e) {
@@ -824,10 +852,7 @@ const statsCards = computed(() => {
       { label: 'Total', value: '?', color: 'text-(--text-muted)' },
       { label: 'Hadir', value: '?', color: 'text-(--text-muted)' },
       { label: 'Absen', value: '?', color: 'text-(--text-muted)' },
-      { label: 'Terlambat', value: '?', color: 'text-(--text-muted)' },
-      { label: 'Cuti', value: '?', color: 'text-(--text-muted)' },
-      { label: 'Izin', value: '?', color: 'text-(--text-muted)' },
-      { label: 'Sakit', value: '?', color: 'text-(--text-muted)' },
+      { label: 'Cuti/Izin/Sakit', value: '?', color: 'text-(--text-muted)' },
       { label: 'Belum Lengkap', value: '?', color: 'text-(--text-muted)' },
       { label: 'Terkunci', value: '?', color: 'text-(--text-muted)' },
     ]
@@ -837,10 +862,7 @@ const statsCards = computed(() => {
     { label: 'Total', value: s.total, color: 'text-(--text-main)' },
     { label: 'Hadir', value: s.hadir, color: 'text-green-600 dark:text-green-400' },
     { label: 'Absen', value: s.absent, color: 'text-red-600 dark:text-red-400' },
-    { label: 'Terlambat', value: s.terlambat, color: 'text-yellow-600 dark:text-yellow-400' },
-    { label: 'Cuti', value: s.cuti, color: 'text-blue-600 dark:text-blue-400' },
-    { label: 'Izin', value: s.izin, color: 'text-purple-600 dark:text-purple-400' },
-    { label: 'Sakit', value: s.sakit, color: 'text-orange-500' },
+    { label: 'Cuti/Izin/Sakit', value: s.leaveTotal || 0, color: 'text-blue-600 dark:text-blue-400' },
     { label: 'Belum Lengkap', value: s.cek, color: 'text-orange-600 dark:text-orange-400' },
     { label: 'Terkunci', value: s.locked, color: 'text-gray-500' },
   ]
@@ -869,11 +891,7 @@ function formatDate(dateStr) {
 function statusLabel(status) {
   const map = {
     hadir: 'Hadir',
-    terlambat: 'Terlambat',
     absent: 'Absen',
-    cuti: 'Cuti',
-    izin: 'Izin',
-    sakit: 'Sakit',
     libur: 'Libur',
     off: 'Off',
   }
@@ -883,15 +901,11 @@ function statusLabel(status) {
 function statusBadgeClass(status) {
   const map = {
     hadir: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-    terlambat: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
     absent: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-    cuti: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
-    izin: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400',
-    sakit: 'bg-orange-100 text-orange-800',
     libur: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
     off: 'bg-gray-200 text-gray-500',
   }
-  return map[status] || 'bg-gray-100 text-gray-800'
+  return map[status] || 'bg-blue-100 text-blue-800'
 }
 
 function reviewLabel(status) {

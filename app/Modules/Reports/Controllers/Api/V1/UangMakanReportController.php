@@ -402,8 +402,22 @@ HTML;
 
     private function mapStatus($statusStr)
     {
-        return match (strtolower($statusStr)) {
-            'hadir', 'terlambat' => 'H',
+        $status = strtolower($statusStr);
+
+        // Check leave type codes first
+        $leaveName = \App\Modules\Attendance\Models\AttendancePrepare::getLeaveTypeName($status);
+        if ($leaveName !== null) {
+            // Kategorikan: C (cuti tahunan, menikah, dll), S (sakit), I (izin)
+            $firstChar = strtoupper(substr($status, 0, 1));
+            return match ($firstChar) {
+                'S' => 'SAKIT',
+                'I' => 'I',
+                default => 'CUTI',
+            };
+        }
+
+        return match ($status) {
+            'hadir' => 'H',
             'cuti' => 'CUTI',
             'izin' => 'I',
             'absent', 'alpa' => 'A',

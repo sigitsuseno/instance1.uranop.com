@@ -3,6 +3,7 @@
 namespace App\Modules\Attendance\Models;
 
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Shared\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -52,14 +53,23 @@ class AttendancePrepare extends Model
         'periode_end'   => 'date:Y-m-d',
     ];
 
+    /**
+     * Auto-include accessors in JSON serialization.
+     */
+    protected $appends = ['status_label', 'status_badge_class', 'review_status_label', 'review_status_badge_class'];
+
+    /**
+     * Static cache untuk leave types — hindari N+1 query di accessor.
+     * @var array<string, array{name: string, color_hex: string|null}>|null
+     */
+    protected static ?array $leaveTypeCache = null;
+
     // ─── Status Constants ────────────────────────────────────────────
 
     public const STATUS_HADIR      = 'hadir';
-    public const STATUS_TERLAMBAT  = 'terlambat';
     public const STATUS_ABSENT     = 'absent';
-    public const STATUS_CUTI       = 'cuti';
-    public const STATUS_IZIN       = 'izin';
-    public const STATUS_SAKIT      = 'sakit';
+    // STATUS_TERLAMBAT dihapus — status terlambat tidak dipakai.
+    // Status cuti/izin/sakit sekarang pakai kode LeaveType langsung (ct, cm, skt, itm, dll).
     public const STATUS_LIBUR      = 'libur';
     public const STATUS_OFF        = 'off';
 
@@ -128,38 +138,80 @@ class AttendancePrepare extends Model
 
     /**
      * Label untuk status absensi.
+     * Untuk status leave type (ct, cm, skt, dll), resolve dari tabel LeaveType.
      */
     public function getStatusLabelAttribute(): string
     {
+        // Cek apakah ini kode leave type
+        $leaveName = static::getLeaveTypeName($this->status);
+        if ($leaveName !== null) {
+            return $leaveName;
+        }
+
         return match ($this->status) {
-            self::STATUS_HADIR     => 'Hadir',
-            self::STATUS_TERLAMBAT => 'Terlambat',
-            self::STATUS_ABSENT    => 'Absen',
-            self::STATUS_CUTI      => 'Cuti',
-            self::STATUS_IZIN      => 'Izin',
-            self::STATUS_SAKIT     => 'Sakit',
-            self::STATUS_LIBUR     => 'Libur',
-            self::STATUS_OFF       => 'Off',
-            default                => ucfirst($this->status ?? ''),
+            self::STATUS_HADIR  => 'Hadir',
+            self::STATUS_ABSENT => 'Absen',
+            self::STATUS_LIBUR  => 'Libur',
+            self::STATUS_OFF    => 'Off',
+            default             => ucfirst($this->status ?? ''),
         };
     }
 
     /**
      * Warna badge untuk status absensi.
+     * Untuk leave type, pakai color_hex dari LeaveType.
      */
     public function getStatusBadgeClassAttribute(): string
     {
+        // Cek apakah ini kode leave type
+        $leaveInfo = static::getLeaveTypeInfo($this->status);
+        if ($leaveInfo !== null) {
+            return 'bg-blue-100 text-blue-800';
+        }
+
         return match ($this->status) {
-            self::STATUS_HADIR     => 'bg-green-100 text-green-800',
-            self::STATUS_TERLAMBAT => 'bg-yellow-100 text-yellow-800',
-            self::STATUS_ABSENT    => 'bg-red-100 text-red-800',
-            self::STATUS_CUTI      => 'bg-blue-100 text-blue-800',
-            self::STATUS_IZIN      => 'bg-purple-100 text-purple-800',
-            self::STATUS_SAKIT     => 'bg-orange-100 text-orange-800',
-            self::STATUS_LIBUR     => 'bg-gray-100 text-gray-800',
-            self::STATUS_OFF       => 'bg-gray-200 text-gray-500',
-            default                => 'bg-gray-100 text-gray-800',
+            self::STATUS_HADIR  => 'bg-green-100 text-green-800',
+            self::STATUS_ABSENT => 'bg-red-100 text-red-800',
+            self::STATUS_LIBUR  => 'bg-gray-100 text-gray-800',
+            self::STATUS_OFF    => 'bg-gray-200 text-gray-500',
+            default             => 'bg-gray-100 text-gray-800',
         };
+    }
+
+    // ─── Leave Type Lookup (static cache) ─────────────────────────
+
+    /**
+     * Load semua leave types ke static cache.
+     */
+    public static function loadLeaveTypeCache(): void
+    {
+        if (static::$leaveTypeCache === null) {
+            static::$leaveTypeCache = LeaveType::where('is_active', true)
+                ->pluck('name', 'code')
+                ->map(fn($name, $code) => ['name' => $name, 'code' => $code])
+                ->toArray();
+        }
+    }
+
+    /**
+     * Dapatkan nama leave type dari kode status (case-insensitive).
+     * Return null jika bukan kode leave type.
+     */
+    public static function getLeaveTypeName(string $status): ?string
+    {
+        static::loadLeaveTypeCache();
+        $code = strtoupper($status);
+        return static::$leaveTypeCache[$code]['name'] ?? null;
+    }
+
+    /**
+     * Dapatkan info lengkap leave type dari kode status.
+     */
+    protected static function getLeaveTypeInfo(string $status): ?array
+    {
+        static::loadLeaveTypeCache();
+        $code = strtoupper($status);
+        return static::$leaveTypeCache[$code] ?? null;
     }
 
     /**
@@ -218,10 +270,16 @@ class AttendancePrepare extends Model
 
     /**
      * Apakah status termasuk "tidak hadir karena alasan valid"?
+     * Sekarang leave type disimpan sebagai kode langsung (ct, skt, itm, dll),
+     * jadi kita cek apakah status adalah kode LeaveType yang valid.
      */
     public function isExcused(): bool
     {
-        return in_array($this->status, [self::STATUS_CUTI, self::STATUS_IZIN, self::STATUS_SAKIT, self::STATUS_LIBUR, self::STATUS_OFF]);
+        if (in_array($this->status, [self::STATUS_LIBUR, self::STATUS_OFF])) {
+            return true;
+        }
+        // Cek apakah status adalah kode leave type (pakai static cache)
+        return static::getLeaveTypeName($this->status) !== null;
     }
 
     // ─── Lock Methods ─────────────────────────────────────────────────

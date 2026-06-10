@@ -824,8 +824,9 @@ class AttendanceSyncService
     }
 
     /**
-     * Dapatkan status leave/izin/sakit untuk karyawan pada tanggal tertentu.
-     * Return null jika tidak ada leave.
+     * Dapatkan status leave spesifik berdasarkan kode LeaveType.
+     * Return kode leave type (lowercase) biar bisa langsung dipakai
+     * sebagai status di att_prepares. Contoh: 'ct', 'cm', 'skt', 'itm', dll.
      */
     protected function getLeaveStatus(int $employeeId, string $dateStr): ?string
     {
@@ -839,14 +840,9 @@ class AttendanceSyncService
             return null;
         }
 
-        $code = strtoupper(substr($leave->leaveType->code, 0, 1));
-
-        return match ($code) {
-            'C' => AttendancePrepare::STATUS_CUTI,
-            'I' => AttendancePrepare::STATUS_IZIN,
-            'S' => AttendancePrepare::STATUS_SAKIT,
-            default => AttendancePrepare::STATUS_CUTI, // fallback: cuti
-        };
+        // Return kode leave type apa adanya (lowercase) —
+        // biar frontend bisa resolve ke nama spesifik (Cuti Tahunan, Sakit, dll)
+        return strtolower($leave->leaveType->code);
     }
 
     /**
@@ -877,11 +873,7 @@ class AttendanceSyncService
         return [
             'total'       => $query->count(),
             'hadir'       => (clone $query)->where('status', AttendancePrepare::STATUS_HADIR)->count(),
-            'terlambat'   => (clone $query)->where('status', AttendancePrepare::STATUS_TERLAMBAT)->count(),
             'absent'      => (clone $query)->where('status', AttendancePrepare::STATUS_ABSENT)->count(),
-            'cuti'        => (clone $query)->where('status', AttendancePrepare::STATUS_CUTI)->count(),
-            'izin'        => (clone $query)->where('status', AttendancePrepare::STATUS_IZIN)->count(),
-            'sakit'       => (clone $query)->where('status', AttendancePrepare::STATUS_SAKIT)->count(),
             'libur'       => (clone $query)->where('status', AttendancePrepare::STATUS_LIBUR)->count(),
             'off'         => (clone $query)->where('status', AttendancePrepare::STATUS_OFF)->count(),
             'cek'         => (clone $query)->where('review_status', AttendancePrepare::REVIEW_CEK)->count(),

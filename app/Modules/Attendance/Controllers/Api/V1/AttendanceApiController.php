@@ -493,8 +493,8 @@ class AttendanceApiController extends Controller
             $totalLhb = 0;
 
             foreach ($employee->attendancePrepares as $attendance) {
-                // Check if status is present or late (in database: 'hadir', 'terlambat')
-                if (in_array($attendance->status, ['hadir', 'terlambat'])) {
+                // Count hadir days only (terlambat sudah tidak dipakai)
+                if ($attendance->status === 'hadir') {
                     $totalHadir++;
                 }
 

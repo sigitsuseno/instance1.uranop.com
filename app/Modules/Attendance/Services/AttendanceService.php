@@ -188,6 +188,7 @@ class AttendanceService
 
         $leaves = LeaveRequest::whereIn('employee_id', $allIds)
             ->where('status', 'approved')
+            ->with('leaveType')
             ->where(function ($q) use ($startDate, $endDate) {
                 // overlap: leave range intersect with date range
                 $q->whereBetween('start_date', [$startDate, $endDate])
@@ -308,6 +309,7 @@ class AttendanceService
                 else {
                     // Cek cuti
                     $hasLeave  = false;
+                    $leaveCode = null;
                     $empLeaves = $leaves->get($p->employee_id);
 
                     if ($empLeaves) {
@@ -315,16 +317,17 @@ class AttendanceService
                             $leaveStart = Carbon::parse($leave->start_date);
                             $leaveEnd   = Carbon::parse($leave->end_date);
                             if ($dateCarbon->between($leaveStart, $leaveEnd)) {
-                                $hasLeave = true;
+                                $hasLeave  = true;
+                                $leaveCode = strtolower($leave->leaveType->code ?? 'ct');
                                 break;
                             }
                         }
                     }
 
                     if ($hasLeave) {
-                        $update['status']        = AttendancePrepare::STATUS_CUTI;
+                        $update['status']        = $leaveCode ?? 'ct';
                         $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
-                        $stats['cuti']++;
+                        $stats['leave'] = ($stats['leave'] ?? 0) + 1;
                     } elseif ($hasAny) {
                         if (! $hasCheckIn && $workStart) {
                             $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
@@ -462,13 +465,9 @@ class AttendanceService
         $skipped = 0;
 
         foreach ($prepares as $prepare) {
-            // Skip record yang statusnya bukan hari hadir/kerja (cuti/izin/sakit/libur/off)
-            // karena overtime/LM hanya relevan untuk hari hadir + hari libur/minggu
-            if (in_array($prepare->status, [
-                AttendancePrepare::STATUS_CUTI,
-                AttendancePrepare::STATUS_IZIN,
-                AttendancePrepare::STATUS_SAKIT,
-            ])) {
+            // Skip record cuti/izin/sakit saja.
+            // LIBUR dan OFF tetap dihitung karena bisa ada lembur di hari libur.
+            if ($prepare->isExcused() && !$prepare->isOffDay()) {
                 $skipped++;
                 continue;
             }
