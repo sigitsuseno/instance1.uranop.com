@@ -159,26 +159,22 @@ class UangMakanReportController extends Controller
 
             // ── Uang Makan calculation ──
             $groupName = $this->getGroupName($employee);
-            $rates = $this->getGroupRates($groupName);
+            $rates = $this->getGroupRates($groupName, $gaji);
+
+            // Upah/Hari = (gaji_pokok + tj_mk) / 25
+            $upahPerHariValue = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
 
             $lembur = 0;
             $statusRaw = $prepare ? $prepare->status : '-';
-            $isHoliday = ($statusRaw === 'libur');
+            $isHoliday = $roster && $roster->is_holiday;
             $dayOfWeek = $parsedDate->dayOfWeek;
 
-            if ($prepare && $prepare->check_in && $prepare->check_out) {
-                $checkIn = Carbon::parse($prepare->check_in);
-                $checkOut = Carbon::parse($prepare->check_out);
-                $totalHours = $checkOut->diffInMinutes($checkIn) / 60;
-
-                if ($dayOfWeek == 0 || $isHoliday) {
-                    $lembur = min($totalHours, 8);
-                } else {
-                    $lembur = min(max($totalHours - 8, 0), 8);
-                }
+            if ($prepare) {
+                $lemburMinutes = ($prepare->lm ?? 0) + ($prepare->overtime ?? 0);
+                $lembur = round($lemburMinutes / 60, 2);
             }
 
-            $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prepare);
+            $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prepare, $upahPerHariValue);
 
             return [
                 'id' => $employee->id,
@@ -264,7 +260,10 @@ class UangMakanReportController extends Controller
             $hourlyRate  = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
 
             $groupName = $this->getGroupName($employee);
-            $rates = $this->getGroupRates($groupName);
+            $rates = $this->getGroupRates($groupName, $gaji);
+
+            // Upah/Hari = (gaji_pokok + tj_mk) / 25
+            $upahPerHariValue = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
 
             $days = [];
             foreach ($dates as $dateStr) {
@@ -274,22 +273,15 @@ class UangMakanReportController extends Controller
 
                 $lembur = 0;
                 $statusRaw = $prep ? $prep->status : '-';
-                $isHoliday = ($statusRaw === 'libur');
+                $isHoliday = $roster && $roster->is_holiday;
                 $dayOfWeek = $parsedDate->dayOfWeek;
 
-                if ($prep && $prep->check_in && $prep->check_out) {
-                    $checkIn = Carbon::parse($prep->check_in);
-                    $checkOut = Carbon::parse($prep->check_out);
-                    $totalHours = $checkOut->diffInMinutes($checkIn) / 60;
-
-                    if ($dayOfWeek == 0 || $isHoliday) {
-                        $lembur = min($totalHours, 8);
-                    } else {
-                        $lembur = min(max($totalHours - 8, 0), 8);
-                    }
+                if ($prep) {
+                    $lemburMinutes = ($prep->lm ?? 0) + ($prep->overtime ?? 0);
+                    $lembur = round($lemburMinutes / 60, 2);
                 }
 
-                $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prep);
+                $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prep, $upahPerHariValue);
 
                 $days[$dateStr] = [
                     'kode'     => $dayInfo['kode'],
@@ -378,9 +370,9 @@ class UangMakanReportController extends Controller
         return strtoupper($groupMaster?->name ?? '');
     }
 
-    private function getGroupRates(string $groupName): array
+    private function getGroupRates(string $groupName, float $gajiPokok): array
     {
-        $rateWeekday = 15000;
+        $rateWeekday = $gajiPokok > 0 ? round($gajiPokok / 25) : 0;
 
         if (str_contains($groupName, 'KABAG')) {
             return [
@@ -423,12 +415,12 @@ class UangMakanReportController extends Controller
      * Returns:
      *   kode   — 'L' if lembur>0 else ''
      *   ha     — status code (H/A/C/S/I/OFF)
-     *   upah_per_hari — rate rupiah
+     *   upah_per_hari — (gaji+tmk)/25, kosong utk I/A/OFF & Minggu/Holiday
      *   lm     — 'DUA'/'FULL'/'HALF' for Minggu/Libur, '' otherwise
      *   lembur — 'UM'/'DUA'/'FULL' for Weekday/Sabtu, '' otherwise
-     *   nominal — rate rupiah (same as upah_per_hari)
+     *   nominal — 15000 (UM) / rate sabtu / rate minggu
      */
-    private function buildDayInfo(float $lembur, int $dayOfWeek, bool $isHoliday, array $rates, string $statusRaw, $prepare): array
+    private function buildDayInfo(float $lembur, int $dayOfWeek, bool $isHoliday, array $rates, string $statusRaw, $prepare, float $upahPerHari): array
     {
         // H/A mapping
         $ha = match (true) {
@@ -450,37 +442,40 @@ class UangMakanReportController extends Controller
         $lemburStr = '';
         $nominal = 0;
 
+        // Upah/Hari: (gaji+tmk)/25 — KECUALI I, A, OFF, atau Minggu/Holiday
+        $isMingguHoliday = ($dayOfWeek == 0 || $isHoliday);
+        $dapatUpah = !in_array($ha, ['I', 'A', 'OFF']) && !$isMingguHoliday;
+        $upah = $dapatUpah ? $upahPerHari : 0;
+
         if ($lembur > 0) {
             $kode = 'L';
 
-            if ($dayOfWeek == 0 || $isHoliday) {
-                // Minggu / Libur
+            if ($isMingguHoliday) {
+                // Minggu / Libur — Upah/Hari tetap 0
                 if ($lembur >= 8) {
-                    $upah = $rates['minggu_full'];
+                    $nominal = $rates['minggu_full'];
                     $lm = 'FULL';
                 } elseif ($lembur >= 4) {
-                    $upah = $rates['minggu_half'];
+                    $nominal = $rates['minggu_half'];
                     $lm = 'HALF';
                 }
             } elseif ($dayOfWeek == 6) {
                 // Sabtu
                 if ($lembur >= 4) {
-                    $upah = $rates['sabtu_full'];
+                    $nominal = $rates['sabtu_full'];
                     $lemburStr = 'FULL';
                 } elseif ($lembur >= 2) {
-                    $upah = $rates['sabtu_dua'];
+                    $nominal = $rates['sabtu_dua'];
                     $lemburStr = 'DUA';
                 }
             } else {
-                // Weekday
-                if ($lembur >= 3) {
-                    $upah = $rates['weekday'];
+                // Weekday: >= 2 jam → UM, nominal 15.000 fixed
+                if ($lembur >= 2) {
+                    $nominal = 15000;
                     $lemburStr = 'UM';
                 }
             }
         }
-
-        $nominal = $upah;
 
         return [
             'kode'          => $kode,

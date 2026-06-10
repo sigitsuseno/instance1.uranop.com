@@ -127,13 +127,16 @@ onMounted(async () => {
       end_date: p.end_date,
     }))
     if (periods.value.length > 0) {
-      selectedPeriodId.value = periods.value[0].id
+      const today = new Date().toISOString().split('T')[0]
+      const valid = periods.value.find(p => p.start_date <= today)
+      selectedPeriodId.value = valid ? valid.id : periods.value[0].id
     }
   } catch (err) {
     console.error('Gagal fetch periods:', err)
   }
 })
 
+// ─── TabResume ───
 async function fetchData() {
   if (!props.groups.length || !selectedPeriodId.value) return
   loading.value = true

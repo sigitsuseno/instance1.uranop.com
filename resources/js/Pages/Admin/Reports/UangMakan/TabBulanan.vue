@@ -148,9 +148,11 @@ onMounted(async () => {
       start_date: p.start_date,
       end_date: p.end_date,
     }))
-    // Auto-select periode terbaru
+    // Auto-select periode terbaru yg nggak future (start_date <= hari ini)
     if (periods.value.length > 0) {
-      selectedPeriodId.value = periods.value[0].id
+      const today = new Date().toISOString().split('T')[0]
+      const valid = periods.value.find(p => p.start_date <= today)
+      selectedPeriodId.value = valid ? valid.id : periods.value[0].id
     }
   } catch (err) {
     console.error('Gagal fetch periods:', err)
