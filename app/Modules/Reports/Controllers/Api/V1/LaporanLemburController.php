@@ -40,27 +40,34 @@ class LaporanLemburController extends Controller
         return response($html);
     }
 
-    // ─── Monthly ──────────────────────────────────────────────────
+    // ─── Monthly (Daily Detail) ────────────────────────────────────
 
     public function bulanan(Request $request)
     {
-        $data = $this->buildBulananData($request);
-        return response()->json(['data' => $data]);
+        $result = $this->buildBulananData($request);
+        return response()->json($result);
     }
 
     public function exportBulanan(Request $request)
     {
-        $data = $this->buildBulananData($request);
+        $result = $this->buildBulananData($request);
+        $month = $request->input('month', date('m'));
         $year = $request->input('year', date('Y'));
-        $filename = 'Laporan_Lembur_Bulanan_' . $year . '.xlsx';
-        return Excel::download(new LemburBulananExport($data->values()->toArray(), $year), $filename);
+        $label = Carbon::create($year, $month, 1)->translatedFormat('F Y');
+        $filename = 'Laporan_Lembur_Bulanan_' . str_replace(' ', '_', $label) . '.xlsx';
+        return Excel::download(
+            new LemburBulananExport($result['data']->toArray(), $result['dates'], $label),
+            $filename
+        );
     }
 
     public function printBulanan(Request $request)
     {
-        $data = $this->buildBulananData($request);
+        $result = $this->buildBulananData($request);
+        $month = $request->input('month', date('m'));
         $year = $request->input('year', date('Y'));
-        $html = $this->renderBulananPrintHtml($data, $year);
+        $label = Carbon::create($year, $month, 1)->translatedFormat('F Y');
+        $html = $this->renderBulananPrintHtml($result, $label);
         return response($html);
     }
 
@@ -151,60 +158,115 @@ class LaporanLemburController extends Controller
 
     private function buildBulananData(Request $request)
     {
-        $year = (int)$request->input('year', date('Y'));
+        $month = (int)$request->input('month', date('m'));
+        $year  = (int)$request->input('year', date('Y'));
         $groups = $request->input('groups', []);
 
-        $prepares = AttendancePrepare::whereYear('date', $year)->get()->groupBy('employee_id');
+        $startDate = Carbon::create($year, $month, 1);
+        $endDate   = $startDate->copy()->endOfMonth();
+        // Jangan lewati hari ini jika bulan ini
+        $today = Carbon::today();
+        if ($endDate->gt($today)) {
+            $endDate = $today;
+        }
+
+        // Generate list of dates
+        $dates = [];
+        $d = $startDate->copy();
+        while ($d->lte($endDate)) {
+            $dates[] = $d->format('Y-m-d');
+            $d->addDay();
+        }
+
+        $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
+            ->get()->groupBy('employee_id');
 
         $employees = Employee::query()
-            ->whereHas('shiftRosters', fn($q) => $q->whereYear('date', $year))
+            ->whereHas('shiftRosters', fn($q) => $q->whereBetween('date', [$startDate, $endDate]))
             ->when(!empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
+            ->with(['position'])
             ->get();
 
-        $periodIds = PayPeriod::whereYear('end_date', $year)->pluck('id');
-        $payRecords = PayRecord::whereIn('pay_period_id', $periodIds)->get()->groupBy('employee_id');
+        // Ambil semua rosters dalam range
+        $rosters = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
+            ->with('shift')->get()
+            ->groupBy('employee_id');
 
-        return $employees->map(function ($employee) use ($prepares, $payRecords) {
-            $empPrepares = $prepares->get($employee->id, collect());
-            $empPayRecords = $payRecords->get($employee->id, collect());
-            $latestPayRecord = $empPayRecords->sortByDesc('created_at')->first();
+        // Pay period yang mencakup bulan ini (gunakan mid-month untuk cari period)
+        $midMonth = $startDate->copy()->addDays(15);
+        $period = PayPeriod::where('start_date', '<=', $midMonth)
+            ->where('end_date', '>=', $midMonth)->first();
 
-            $gaji = $latestPayRecord ? (float)($latestPayRecord->gaji_pokok ?? 0) : $employee->baseSalary();
-            $premi = $latestPayRecord ? (float)($latestPayRecord->premi ?? 0) : (float)($employee->activeSalary()?->premi ?? 0);
-            $tjMk = $latestPayRecord ? (float)($latestPayRecord->tj_masa_kerja ?? 0) : (float)($employee->salaryComponents()->latest('effective_date')->first()?->tunjangan_masa_kerja ?? 0);
-            // Fallback dinamis: hitung dari join_date kalau static value masih 0
-            if ($tjMk == 0) {
-                $tjMk = $employee->tunjangan_masa_kerja($year . '-12');
+        $payRecords = collect();
+        if ($period) {
+            $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
+        }
+
+        $data = $employees->map(function ($employee) use ($prepares, $rosters, $payRecords, $period, $dates, $startDate) {
+            $empPrepares = $prepares->get($employee->id, collect())->keyBy('date');
+            $empRosters  = $rosters->get($employee->id, collect())->keyBy('date');
+            $empPayRecords = $payRecords->get($employee->id);
+
+            // Hitung komponen gaji
+            $payRecord = null;
+            if ($empPayRecords && $empPayRecords->isNotEmpty()) {
+                $payRecord = $empPayRecords->first();
             }
-            $tunjangan = $latestPayRecord ? (float)($latestPayRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
-            $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
+            $gaji      = $payRecord ? (float)($payRecord->gaji_pokok ?? 0) : $employee->baseSalary();
+            $tjMk      = $payRecord ? (float)($payRecord->tj_masa_kerja ?? 0) : (float)($employee->salaryComponents()->latest('effective_date')->first()?->tunjangan_masa_kerja ?? 0);
+            if ($tjMk == 0) {
+                $tjMk = $employee->tunjangan_masa_kerja($startDate->format('Y-m'));
+            }
+            $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
+            $upahPerHari = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 25, 2) : 0;
+            $hourlyRate  = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
 
-            $months = [];
-            $preparesByMonth = $empPrepares->groupBy(fn($p) => Carbon::parse($p->date)->month);
+            // Bangun data per hari
+            $days = [];
+            foreach ($dates as $dateStr) {
+                $prep = $empPrepares->get($dateStr);
+                $roster = $empRosters->get($dateStr);
 
-            for ($m = 1; $m <= 12; $m++) {
-                $mp = $preparesByMonth->get($m, collect());
-                $lmTotal = $mp->sum('lm');
-                $overtimeTotal = $mp->sum('overtime');
-                $lmCountTotal = $mp->sum('lm_count');
-                $overtimeCountTotal = $mp->sum('overtime_count');
-                $totalMinutes = $lmCountTotal + $overtimeCountTotal;
-                $overtimePay = $hourlyRate > 0 ? round($hourlyRate * ($totalMinutes / 60), 2) : 0;
+                $shiftKode = $roster && $roster->shift ? $roster->shift->external_code : '';
+                $status = $prep ? $prep->status : '-';
 
-                $months[$m] = [
-                    'lm' => $lmTotal, 'overtime' => $overtimeTotal,
-                    'calculated' => round(($lmCountTotal + $overtimeCountTotal) / 60, 2),
-                    'hourlyRate' => $hourlyRate, 'overtimePay' => $overtimePay,
+                // Display raw
+                $lmRaw = $prep ? (int)$prep->lm : 0;
+                $overtimeRaw = $prep ? (int)$prep->overtime : 0;
+
+                // Count values for calculation
+                $lmCount = $prep ? (int)$prep->lm_count : 0;
+                $overtimeCount = $prep ? (int)$prep->overtime_count : 0;
+                $totalMenit = $lmCount + $overtimeCount;
+                $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60), 2) : 0;
+
+                $days[$dateStr] = [
+                    'kode'     => $shiftKode,
+                    'ha'       => $status,
+                    'lm'       => $lmRaw > 0 ? round($lmRaw / 60, 2) : 0,
+                    'lembur'   => $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0,
+                    'nominal'  => $uangLembur,
                 ];
             }
 
             return [
-                'id' => $employee->id, 'name' => $employee->name,
-                'gaji_pokok' => $gaji, 'premi' => $premi, 'tj_mk' => $tjMk, 'tunjangan' => $tunjangan,
-                'months' => $months,
-                'group_name' => $employee->groups->pluck('reference_code')->first() ?? '',
+                'id'                  => $employee->id,
+                'name'                => $employee->name,
+                'jabatan'             => $employee->position->name ?? '-',
+                'gender'              => $employee->gender ?? '',
+                'tj_mk'               => $tjMk,
+                'tunjangan'           => $tunjangan,
+                'upah_per_hari'       => $upahPerHari,
+                'upah_lembur_per_jam' => $hourlyRate,
+                'days'                => $days,
             ];
-        });
+        })->values();
+
+        return [
+            'data'         => $data,
+            'dates'        => $dates,
+            'month_label'  => $startDate->translatedFormat('F Y'),
+        ];
     }
 
     // ─── Print HTML Renderers ──────────────────────────────────────
@@ -253,48 +315,70 @@ td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 HTML;
     }
 
-    private function renderBulananPrintHtml($data, $year)
+    private function renderBulananPrintHtml($result, $label)
     {
-        $months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
-        $monthsHeader = '<th>' . implode('</th><th>', $months) . '</th>';
+        $data  = $result['data'];
+        $dates = $result['dates'];
+
+        // Build date header (two rows)
+        $dayHeaders1 = '';
+        $dayHeaders2 = '';
+        foreach ($dates as $dateStr) {
+            $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
+            $dayHeaders1 .= "<th colspan=\"5\" style='background:#dbeafe'>" . strtoupper($formatted) . "</th>";
+            $dayHeaders2 .= "<th>Kode</th><th>H/A</th><th>L/M</th><th>Lbr</th><th>Nominal</th>";
+        }
+
         $rows = '';
         $i = 0;
         foreach ($data as $item) {
             $i++;
-            $cells = '';
-            for ($m = 1; $m <= 12; $m++) {
-                $md = $item['months'][$m] ?? null;
-                if ($md) {
-                    $cells .= "<td style='font-size:9px'>Upah/jam: ".number_format($md['hourlyRate'],0,',','.')."<br>Lembur: {$md['lm']} / {$md['calculated']}<br>Uang Lbr: ".number_format($md['overtimePay'],0,',','.')."</td>";
+            $gender = $item['gender'] === 'male' ? 'L' : ($item['gender'] === 'female' ? 'P' : ($item['gender'] ?? ''));
+            $dayCells = '';
+            foreach ($dates as $dateStr) {
+                $d = $item['days'][$dateStr] ?? null;
+                if ($d) {
+                    $nominal = $d['nominal'] ? number_format($d['nominal'], 0, ',', '.') : '';
+                    $dayCells .= "<td>{$d['kode']}</td>"
+                              . "<td>{$d['ha']}</td>"
+                              . "<td>" . ($d['lm'] ?: '-') . "</td>"
+                              . "<td>" . ($d['lembur'] ?: '-') . "</td>"
+                              . "<td class='text-right'>" . ($nominal ?: '-') . "</td>";
                 } else {
-                    $cells .= "<td class='text-center'>-</td>";
+                    $dayCells .= "<td>-</td><td>-</td><td>-</td><td>-</td><td class='text-right'>-</td>";
                 }
             }
             $rows .= "<tr>
-                <td>{$i}</td><td>{$item['name']}</td>
-                <td class='text-right'>".number_format($item['gaji_pokok'],0,',','.')."</td>
-                <td class='text-right'>".number_format($item['premi'],0,',','.')."</td>
+                <td>{$i}</td><td>{$item['name']}</td><td>{$item['jabatan']}</td><td>{$gender}</td>
                 <td class='text-right'>".number_format($item['tj_mk'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['tunjangan'],0,',','.')."</td>
-                {$cells}
+                <td class='text-right'>".number_format($item['upah_per_hari'],0,',','.')."</td>
+                <td class='text-right'>".number_format($item['upah_lembur_per_jam'],0,',','.')."</td>
+                {$dayCells}
             </tr>";
         }
 
         return '<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8"><title>Laporan Lembur Bulanan</title>
 <style>
-@page{size:A4 landscape;margin:6mm}body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:9px;color:#1f2937}
-h1{font-size:15px;text-align:center;margin-bottom:2px}
-table{width:100%;border-collapse:collapse}th{background:#e8eaed;font-weight:600;padding:4px 5px;border:1px solid #d1d5db;font-size:8px;text-align:center}
-td{padding:3px 5px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}
-.text-right{text-align:right}.text-center{text-align:center}
+@page{size:A3 landscape;margin:6mm}body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:8px;color:#1f2937}
+h1{font-size:14px;text-align:center;margin-bottom:2px}
+table{width:100%;border-collapse:collapse}th{background:#e8eaed;font-weight:600;padding:3px 4px;border:1px solid #d1d5db;font-size:7px;text-align:center}
+td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}
+.text-right{text-align:right}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<h1>LAPORAN LEMBUR BULANAN — TAHUN ' . $year . '</h1>
-<table><thead><tr>
-<th>No</th><th>Nama</th><th>Gaji Pokok</th><th>Premi</th><th>Tj. MK</th><th>Tunjangan</th>
-' . $monthsHeader . '</tr></thead><tbody>' . $rows . '</tbody></table>
-<div style="text-align:center;margin-top:12px"><button onclick="window.print()" style="padding:8px 20px;font-size:13px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨️ Print</button></div>
+<h1>LAPORAN LEMBUR BULANAN — ' . strtoupper($label) . '</h1>
+<div style="overflow-x:auto">
+<table><thead>
+<tr>
+<th rowspan="2">No</th><th rowspan="2">Nama</th><th rowspan="2">Bagian/Jabatan</th><th rowspan="2">L/P</th>
+<th rowspan="2">Tj. MK</th><th rowspan="2">Tunjangan</th><th rowspan="2">Upah/Hari</th><th rowspan="2">Upah Lbr/Jam</th>
+' . $dayHeaders1 . '</tr>
+<tr>' . $dayHeaders2 . '</tr>
+</thead><tbody>' . $rows . '</tbody></table>
+</div>
+<div style="text-align:center;margin-top:8px"><button onclick="window.print()" style="padding:6px 16px;font-size:12px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨 Print</button></div>
 </body></html>';
     }
 }
