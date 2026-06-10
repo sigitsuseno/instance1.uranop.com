@@ -42,15 +42,15 @@
               <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/P</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tj. MK</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tunjangan</th>
-              <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah/Hari</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah Lembur<br>Per Jam</th>
-              <th colspan="5" class="px-4 py-2 text-center font-bold text-(--text-main) bg-(--bg-soft) uppercase border-b border-(--border-soft)">
+              <th colspan="6" class="px-4 py-2 text-center font-bold text-(--text-main) bg-(--bg-soft) uppercase border-b border-(--border-soft)">
                 {{ formattedDate }}
               </th>
             </tr>
             <tr>
               <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Kode</th>
               <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">H/A</th>
+              <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah/Hari</th>
               <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/M</th>
               <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Lembur</th>
               <th class="px-4 py-2 text-right font-bold text-(--text-muted) uppercase">Nominal</th>
@@ -64,12 +64,12 @@
               <td class="px-2 py-3 text-center text-(--text-muted) border-r border-(--border-soft)">{{ item.gender === 'male' ? 'L' : (item.gender === 'female' ? 'P' : item.gender) }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.tj_mk ? formatNumber(item.tj_mk) : '' }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.tunjangan ? formatNumber(item.tunjangan) : '' }}</td>
-              <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.upah_per_hari ? formatNumber(item.upah_per_hari) : '' }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.upah_lembur_per_jam ? formatNumber(item.upah_lembur_per_jam) : '' }}</td>
               
               <!-- Daily Details -->
-              <td class="px-3 py-3 text-center font-medium text-blue-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.shift_kode || '-' }}</td>
-              <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.status === '-' ? '-' : item.status }}</td>
+              <td class="px-3 py-3 text-center font-medium text-blue-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.kode || '-' }}</td>
+              <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.ha === '-' ? '-' : item.ha }}</td>
+              <td class="px-3 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.upah_per_hari ? formatNumber(item.upah_per_hari) : '-' }}</td>
               <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.lembur_minggu || '' }}</td>
               <td class="px-3 py-3 text-center font-medium text-orange-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.lembur || '' }}</td>
               <td class="px-4 py-3 text-right font-bold text-green-600 bg-blue-50/10">{{ item.nominal ? formatNumber(item.nominal) : '' }}</td>

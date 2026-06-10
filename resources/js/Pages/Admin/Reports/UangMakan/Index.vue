@@ -38,8 +38,11 @@ const fetchGroups = async () => {
             .filter(g => g.group_label === 'Imported Shift/Group')
             .map(g => ({ code: g.code, name: g.name }));
 
-        // Default semua checked
-        selectedGroups.value = availableGroups.value.map(g => g.code);
+        // Default: hanya JKT, ALLIN, GD
+        const defaultGroups = ['GRP-JKT', 'GRP-ALLIN', 'GRP-GD'];
+        selectedGroups.value = availableGroups.value
+            .filter(g => defaultGroups.includes(g.code))
+            .map(g => g.code);
     } catch (e) {
         console.error('Gagal fetch groups:', e);
     }

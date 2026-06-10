@@ -135,10 +135,18 @@ class LaporanLemburController extends Controller
             // Calculation: count values (setelah multiplier) — buat hitung uang
             $lmCount = $prepare ? (int)$prepare->lm_count : 0;
             $overtimeCount = $prepare ? (int)$prepare->overtime_count : 0;
-            $totalMenit = $lmCount + $overtimeCount;
-            $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60), 2) : 0;
 
-            $shiftKode = $roster && $roster->shift ? $roster->shift->external_code : '';
+            // LM: jam pertama gratis (istirahat), sisanya dibayar
+            $lmCountHours = $lmCount / 60;
+            $lmNominal = $lmCountHours > 1 ? round(($lmCountHours - 1) * $hourlyRate, 2) : 0;
+            // Lembur biasa: semua jam dibayar
+            $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
+            $totalNominal = round($lmNominal + $overtimeNominal, 2);
+
+            // Display hours
+            $lmDisplay = $lmRaw > 0 ? round($lmRaw / 60, 2) : 0;
+            $overtimeDisplay = $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0;
+
             // Kode: SG jika employee group SG, else "L"; kosongkan jika tidak lembur
             $isSG = $employee->groups->contains('reference_code', 'SG');
             if ($lmCount + $overtimeCount === 0) {
@@ -146,25 +154,34 @@ class LaporanLemburController extends Controller
             } else {
                 $kode = $isSG ? 'SG' : 'L';
             }
-            // H/A: mapping status
+
+            // H/A: mapping 6 nilai
             $statusRaw = $prepare ? $prepare->status : '-';
             $ha = match ($statusRaw) {
                 'hadir' => 'H',
                 'absent' => 'A',
-                'cuti', 'libur', 'off', 'izin', 'sakit' => 'I',
+                'cuti' => 'C',
+                'sakit' => 'S',
+                'izin' => 'I',
+                'libur', 'off' => 'OFF',
                 default => $statusRaw === '-' ? '-' : 'I',
             };
+
+            // Upah per hari: hanya H, C, S yang dapat
+            $dapatUpah = in_array($ha, ['H', 'C', 'S']);
+            $upahHarian = $dapatUpah ? $upahPerHari : 0;
 
             return [
                 'id' => $employee->id, 'name' => $employee->name,
                 'jabatan' => $employee->position->name ?? '-',
                 'gender' => $employee->gender ?? '',
                 'tj_mk' => $tjMk, 'tunjangan' => $tunjangan,
-                'upah_per_hari' => $upahPerHari, 'upah_lembur_per_jam' => $hourlyRate,
-                'shift_kode' => $kode, 'status' => $ha,
-                'lembur_minggu' => $lmRaw > 0 ? round($lmRaw / 60, 2) : 0,
-                'lembur' => $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0,
-                'nominal' => $uangLembur,
+                'upah_lembur_per_jam' => $hourlyRate,
+                'kode' => $kode, 'ha' => $ha,
+                'upah_per_hari' => $upahHarian,
+                'lembur_minggu' => $lmDisplay,
+                'lembur' => $overtimeDisplay,
+                'nominal' => $totalNominal,
                 'group_name' => $employee->groups->pluck('reference_code')->first() ?? '',
             ];
         });
@@ -247,8 +264,6 @@ class LaporanLemburController extends Controller
                 $prep = $empPrepares->get($dateStr);
                 $roster = $empRosters->get($dateStr);
 
-                $shiftKode = $roster && $roster->shift ? $roster->shift->external_code : '';
-
                 // Display raw
                 $lmRaw = $prep ? (int)$prep->lm : 0;
                 $overtimeRaw = $prep ? (int)$prep->overtime : 0;
@@ -256,8 +271,17 @@ class LaporanLemburController extends Controller
                 // Count values for calculation
                 $lmCount = $prep ? (int)$prep->lm_count : 0;
                 $overtimeCount = $prep ? (int)$prep->overtime_count : 0;
-                $totalMenit = $lmCount + $overtimeCount;
-                $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60), 2) : 0;
+
+                // LM: jam pertama gratis, sisanya dibayar
+                $lmCountHours = $lmCount / 60;
+                $lmNominal = $lmCountHours > 1 ? round(($lmCountHours - 1) * $hourlyRate, 2) : 0;
+                // Lembur biasa: semua jam dibayar
+                $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
+                $totalNominal = round($lmNominal + $overtimeNominal, 2);
+
+                // Display hours
+                $lmDisplay = $lmRaw > 0 ? round($lmRaw / 60, 2) : 0;
+                $overtimeDisplay = $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0;
 
                 // Kode: SG atau "L"; kosongkan jika tidak lembur
                 if ($lmCount + $overtimeCount === 0) {
@@ -265,21 +289,30 @@ class LaporanLemburController extends Controller
                 } else {
                     $kode = $isSG ? 'SG' : 'L';
                 }
-                // H/A mapping
+
+                // H/A mapping 6 nilai
                 $statusRaw = $prep ? $prep->status : '-';
                 $ha = match ($statusRaw) {
                     'hadir' => 'H',
                     'absent' => 'A',
-                    'cuti', 'libur', 'off', 'izin', 'sakit' => 'I',
+                    'cuti' => 'C',
+                    'sakit' => 'S',
+                    'izin' => 'I',
+                    'libur', 'off' => 'OFF',
                     default => $statusRaw === '-' ? '-' : 'I',
                 };
+
+                // Upah per hari: hanya H, C, S yang dapat
+                $dapatUpah = in_array($ha, ['H', 'C', 'S']);
+                $upahHarian = $dapatUpah ? $upahPerHari : 0;
 
                 $days[$dateStr] = [
                     'kode'     => $kode,
                     'ha'       => $ha,
-                    'lm'       => $lmRaw > 0 ? round($lmRaw / 60, 2) : 0,
-                    'lembur'   => $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0,
-                    'nominal'  => $uangLembur,
+                    'upah_per_hari' => $upahHarian,
+                    'lm'       => $lmDisplay,
+                    'lembur'   => $overtimeDisplay,
+                    'nominal'  => $totalNominal,
                 ];
             }
 
@@ -290,7 +323,6 @@ class LaporanLemburController extends Controller
                 'gender'              => $employee->gender ?? '',
                 'tj_mk'               => $tjMk,
                 'tunjangan'           => $tunjangan,
-                'upah_per_hari'       => $upahPerHari,
                 'upah_lembur_per_jam' => $hourlyRate,
                 'days'                => $days,
             ];
@@ -313,13 +345,14 @@ class LaporanLemburController extends Controller
         foreach ($data as $item) {
             $i++;
             $gender = $item['gender'] === 'male' ? 'L' : ($item['gender'] === 'female' ? 'P' : ($item['gender'] ?? ''));
+            $upahHari = $item['upah_per_hari'] ? number_format($item['upah_per_hari'], 0, ',', '.') : '-';
             $rows .= "<tr>
                 <td>{$i}</td><td>{$item['name']}</td><td>{$item['jabatan']}</td><td>{$gender}</td>
                 <td class='text-right'>".number_format($item['tj_mk'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['tunjangan'],0,',','.')."</td>
-                <td class='text-right'>".number_format($item['upah_per_hari'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['upah_lembur_per_jam'],0,',','.')."</td>
-                <td>{$item['shift_kode']}</td><td>{$item['status']}</td>
+                <td>{$item['kode']}</td><td>{$item['ha']}</td>
+                <td class='text-right'>{$upahHari}</td>
                 <td>".($item['lembur_minggu']?:'-')."</td><td>".($item['lembur']?:'-')."</td>
                 <td class='text-right'>".number_format($item['nominal'],0,',','.')."</td>
             </tr>";
@@ -341,8 +374,8 @@ td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 <p class="periode">Tanggal: {$formatted}</p>
 <table><thead><tr>
 <th>No</th><th>Nama</th><th>Bagian/Jabatan</th><th>L/P</th>
-<th>Tj.MK</th><th>Tunjangan</th><th>Upah/Hari</th><th>Upah Lbr/Jam</th>
-<th>Kode</th><th>H/A</th><th>L/M</th><th>Lembur</th><th>Nominal</th>
+<th>Tj.MK</th><th>Tunjangan</th><th>Upah Lbr/Jam</th>
+<th>Kode</th><th>H/A</th><th>Upah/Hari</th><th>L/M</th><th>Lembur</th><th>Nominal</th>
 </tr></thead><tbody>{$rows}</tbody></table>
 <div style="text-align:center;margin-top:16px"><button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨️ Print</button></div>
 </body></html>
@@ -359,8 +392,8 @@ HTML;
         $dayHeaders2 = '';
         foreach ($dates as $dateStr) {
             $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
-            $dayHeaders1 .= "<th colspan=\"5\" style='background:#dbeafe'>" . strtoupper($formatted) . "</th>";
-            $dayHeaders2 .= "<th>Kode</th><th>H/A</th><th>L/M</th><th>Lbr</th><th>Nominal</th>";
+            $dayHeaders1 .= "<th colspan=\"6\" style='background:#dbeafe'>" . strtoupper($formatted) . "</th>";
+            $dayHeaders2 .= "<th>Kode</th><th>H/A</th><th>Upah/Hari</th><th>L/M</th><th>Lbr</th><th>Nominal</th>";
         }
 
         $rows = '';
@@ -373,20 +406,21 @@ HTML;
                 $d = $item['days'][$dateStr] ?? null;
                 if ($d) {
                     $nominal = $d['nominal'] ? number_format($d['nominal'], 0, ',', '.') : '';
+                    $upahHari = $d['upah_per_hari'] ? number_format($d['upah_per_hari'], 0, ',', '.') : '-';
                     $dayCells .= "<td>{$d['kode']}</td>"
                               . "<td>{$d['ha']}</td>"
+                              . "<td class='text-right'>{$upahHari}</td>"
                               . "<td>" . ($d['lm'] ?: '-') . "</td>"
                               . "<td>" . ($d['lembur'] ?: '-') . "</td>"
                               . "<td class='text-right'>" . ($nominal ?: '-') . "</td>";
                 } else {
-                    $dayCells .= "<td>-</td><td>-</td><td>-</td><td>-</td><td class='text-right'>-</td>";
+                    $dayCells .= "<td>-</td><td>-</td><td class='text-right'>-</td><td>-</td><td>-</td><td class='text-right'>-</td>";
                 }
             }
             $rows .= "<tr>
                 <td>{$i}</td><td>{$item['name']}</td><td>{$item['jabatan']}</td><td>{$gender}</td>
                 <td class='text-right'>".number_format($item['tj_mk'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['tunjangan'],0,',','.')."</td>
-                <td class='text-right'>".number_format($item['upah_per_hari'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['upah_lembur_per_jam'],0,',','.')."</td>
                 {$dayCells}
             </tr>";
@@ -407,7 +441,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 <table><thead>
 <tr>
 <th rowspan="2">No</th><th rowspan="2">Nama</th><th rowspan="2">Bagian/Jabatan</th><th rowspan="2">L/P</th>
-<th rowspan="2">Tj. MK</th><th rowspan="2">Tunjangan</th><th rowspan="2">Upah/Hari</th><th rowspan="2">Upah Lbr/Jam</th>
+<th rowspan="2">Tj. MK</th><th rowspan="2">Tunjangan</th><th rowspan="2">Upah Lbr/Jam</th>
 ' . $dayHeaders1 . '</tr>
 <tr>' . $dayHeaders2 . '</tr>
 </thead><tbody>' . $rows . '</tbody></table>

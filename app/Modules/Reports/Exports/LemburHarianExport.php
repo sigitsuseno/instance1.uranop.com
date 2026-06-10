@@ -40,10 +40,10 @@ class LemburHarianExport implements FromArray, WithHeadings, WithMapping, WithSt
             $row['gender'] === 'male' ? 'L' : ($row['gender'] === 'female' ? 'P' : ($row['gender'] ?? '')),
             $row['tj_mk'] ?? 0,
             $row['tunjangan'] ?? 0,
-            $row['upah_per_hari'] ?? 0,
             $row['upah_lembur_per_jam'] ?? 0,
-            $row['shift_kode'] ?? '',
-            $row['status'] ?? '-',
+            $row['kode'] ?? '',
+            $row['ha'] ?? '-',
+            $row['upah_per_hari'] ?? 0,
             $row['lembur_minggu'] ?: '',
             $row['lembur'] ?: '',
             $row['nominal'] ?? 0,
@@ -60,8 +60,8 @@ class LemburHarianExport implements FromArray, WithHeadings, WithMapping, WithSt
             [''],
             [
                 'No', 'Nama', 'Bagian / Jabatan', 'L/P',
-                'Tj. Masa Kerja', 'Tunjangan', 'Upah Per Hari', 'Upah Lembur Per Jam',
-                'Kode', 'H/A', 'L/M', 'Lembur', 'Nominal',
+                'Tj. Masa Kerja', 'Tunjangan', 'Upah Lembur Per Jam',
+                'Kode', 'H/A', 'Upah Per Hari', 'L/M', 'Lembur', 'Nominal',
             ],
         ];
     }

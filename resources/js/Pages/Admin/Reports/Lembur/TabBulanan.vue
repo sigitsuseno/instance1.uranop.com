@@ -51,13 +51,12 @@
               <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/P</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tj. MK</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tunjangan</th>
-              <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah/Hari</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah Lembur<br>Per Jam</th>
               <!-- Date group headers -->
               <th
                 v-for="dateStr in dates"
                 :key="'dh-' + dateStr"
-                colspan="5"
+                colspan="6"
                 class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft)"
               >
                 {{ formatDateHeader(dateStr) }}
@@ -68,6 +67,7 @@
               <template v-for="dateStr in dates" :key="'sh-' + dateStr">
                 <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px]">Kode</th>
                 <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px]">H/A</th>
+                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px]">Upah/Hari</th>
                 <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px]">L/M</th>
                 <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px]">Lembur</th>
                 <th class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase text-[10px]">Nominal</th>
@@ -87,7 +87,6 @@
               <td class="px-2 py-3 text-center text-(--text-muted) border-r border-(--border-soft)">{{ item.gender === 'male' ? 'L' : (item.gender === 'female' ? 'P' : item.gender) }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.tj_mk ? formatNumber(item.tj_mk) : '' }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.tunjangan ? formatNumber(item.tunjangan) : '' }}</td>
-              <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.upah_per_hari ? formatNumber(item.upah_per_hari) : '' }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.upah_lembur_per_jam ? formatNumber(item.upah_lembur_per_jam) : '' }}</td>
 
               <!-- Daily cells -->
@@ -97,6 +96,9 @@
                 </td>
                 <td :class="['px-2 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium' : 'text-gray-300']">
                   {{ item.days[dateStr]?.ha || '-' }}
+                </td>
+                <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
                 </td>
                 <td :class="['px-2 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
                   {{ item.days[dateStr]?.lm > 0 ? item.days[dateStr].lm : '-' }}

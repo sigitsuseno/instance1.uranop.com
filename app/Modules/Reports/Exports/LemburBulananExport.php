@@ -23,9 +23,9 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
     protected $rowNumber = 0;
 
     /** Number of fixed columns before date columns */
-    protected const FIXED_COLS = 8;
+    protected const FIXED_COLS = 7;
     /** Number of sub-columns per date */
-    protected const SUB_COLS = 5;
+    protected const SUB_COLS = 6;
 
     public function __construct($data, $dates, $label)
     {
@@ -51,7 +51,6 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
             $gender,
             $row['tj_mk'] ?? 0,
             $row['tunjangan'] ?? 0,
-            $row['upah_per_hari'] ?? 0,
             $row['upah_lembur_per_jam'] ?? 0,
         ];
 
@@ -61,6 +60,7 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
             $d = $days[$dateStr] ?? null;
             $dayCells[] = $d['kode'] ?? '';
             $dayCells[] = $d['ha'] ?? '';
+            $dayCells[] = ($d['upah_per_hari'] ?? 0) > 0 ? $d['upah_per_hari'] : 0;
             $dayCells[] = ($d['lm'] ?? 0) > 0 ? $d['lm'] : '';
             $dayCells[] = ($d['lembur'] ?? 0) > 0 ? $d['lembur'] : '';
             $dayCells[] = ($d['nominal'] ?? 0) > 0 ? $d['nominal'] : 0;
@@ -80,7 +80,7 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
         $row2 = [''];
 
         // Row 3: Main headers
-        $row3 = ['No', 'Nama', 'Bagian / Jabatan', 'L/P', 'Tj. Masa Kerja', 'Tunjangan', 'Upah Per Hari', 'Upah Lembur Per Jam'];
+        $row3 = ['No', 'Nama', 'Bagian / Jabatan', 'L/P', 'Tj. Masa Kerja', 'Tunjangan', 'Upah Lembur Per Jam'];
         foreach ($this->dates as $dateStr) {
             $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
             $row3[] = strtoupper($formatted);
@@ -91,10 +91,11 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
         }
 
         // Row 4: Sub-headers
-        $row4 = ['', '', '', '', '', '', '', '']; // Empty for fixed cols
+        $row4 = ['', '', '', '', '', '', '']; // Empty for fixed cols
         foreach ($this->dates as $dateStr) {
             $row4[] = 'Kode';
             $row4[] = 'H/A';
+            $row4[] = 'Upah/Hari';
             $row4[] = 'L/M';
             $row4[] = 'Lembur';
             $row4[] = 'Nominal';
@@ -107,13 +108,14 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
     {
         $widths = [
             'A' => 5,  'B' => 30, 'C' => 22, 'D' => 5,
-            'E' => 16, 'F' => 16, 'G' => 16, 'H' => 16,
+            'E' => 16, 'F' => 16, 'G' => 16,
         ];
 
-        $col = 'I';
+        $col = 'H';
         foreach ($this->dates as $i => $dateStr) {
             $widths[$col] = 8;  $col = self::nextCol($col); // Kode
             $widths[$col] = 6;  $col = self::nextCol($col); // H/A
+            $widths[$col] = 14; $col = self::nextCol($col); // Upah/Hari
             $widths[$col] = 8;  $col = self::nextCol($col); // L/M
             $widths[$col] = 8;  $col = self::nextCol($col); // Lembur
             $widths[$col] = 14; $col = self::nextCol($col); // Nominal
@@ -171,13 +173,16 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
                     ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
                 // --- Number formats ---
-                // E (Tj.MK) through H (Upah Lbr/Jam): #,##0.00
-                $sheet->getStyle("E{$dataStartRow}:H{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
+                // E (Tj.MK) through G (Upah Lbr/Jam): #,##0.00
+                $sheet->getStyle("E{$dataStartRow}:G{$lastRow}")->getNumberFormat()->setFormatCode('#,##0.00');
 
-                // Nominal columns: every 5th column starting from col 13 (M)
+                // Nominal & Upah/Hari columns: last sub-col + sub-col 3
                 $colOffset = self::FIXED_COLS;
                 foreach ($this->dates as $i => $dateStr) {
-                    $nominalCol = self::colLetter($colOffset + self::SUB_COLS); // last sub-col
+                    $upahCol = self::colLetter($colOffset + 3);   // Upah/Hari
+                    $nominalCol = self::colLetter($colOffset + self::SUB_COLS); // Nominal
+                    $sheet->getStyle("{$upahCol}{$dataStartRow}:{$upahCol}{$lastRow}")
+                        ->getNumberFormat()->setFormatCode('#,##0.00');
                     $sheet->getStyle("{$nominalCol}{$dataStartRow}:{$nominalCol}{$lastRow}")
                         ->getNumberFormat()->setFormatCode('#,##0.00');
                     $colOffset += self::SUB_COLS;
@@ -187,17 +192,22 @@ class LemburBulananExport implements FromArray, WithHeadings, WithMapping, WithS
                 $sheet->getStyle("A{$dataStartRow}:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("D{$dataStartRow}:D{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                // Center all day sub-columns
+                // Center all day sub-columns except upah/hari & nominal
                 $colOffset = self::FIXED_COLS;
                 foreach ($this->dates as $dateStr) {
                     $kodeCol    = self::colLetter($colOffset + 1);
                     $haCol      = self::colLetter($colOffset + 2);
-                    $lmCol      = self::colLetter($colOffset + 3);
-                    $lemburCol  = self::colLetter($colOffset + 4);
-                    $nominalCol = self::colLetter($colOffset + 5);
+                    $upahCol    = self::colLetter($colOffset + 3);
+                    $lmCol      = self::colLetter($colOffset + 4);
+                    $lemburCol  = self::colLetter($colOffset + 5);
+                    $nominalCol = self::colLetter($colOffset + 6);
 
+                    // Center: Kode, H/A, L/M, Lembur
                     $sheet->getStyle("{$kodeCol}{$dataStartRow}:{$lemburCol}{$lastRow}")
                         ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    // Right: Upah/Hari, Nominal
+                    $sheet->getStyle("{$upahCol}{$dataStartRow}:{$upahCol}{$lastRow}")
+                        ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                     $sheet->getStyle("{$nominalCol}{$dataStartRow}:{$nominalCol}{$lastRow}")
                         ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 

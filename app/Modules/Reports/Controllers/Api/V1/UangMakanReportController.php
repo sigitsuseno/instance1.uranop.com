@@ -168,11 +168,25 @@ class UangMakanReportController extends Controller
             foreach ($dates as $dateObj) {
                 $dateStr = $dateObj['date'];
                 $log = $logs->get($dateStr);
-                $overtimeMinutes = $log ? ((int)$log->overtime ?? 0) : 0;
-                $lembur = round($overtimeMinutes / 60, 2);
                 $statusStr = $log ? $log->status : '-';
                 $isHoliday = ($statusStr === 'libur');
                 $dayOfWeek = Carbon::parse($dateStr)->dayOfWeek;
+
+                // Hitung lembur dari durasi check_in → check_out
+                $lembur = 0;
+                if ($log && $log->check_in && $log->check_out) {
+                    $checkIn = Carbon::parse($log->check_in);
+                    $checkOut = Carbon::parse($log->check_out);
+                    $totalHours = $checkOut->diffInMinutes($checkIn) / 60;
+
+                    if ($dayOfWeek == 0 || $isHoliday) {
+                        // Minggu / Libur: kurangi 0 jam, maks 8
+                        $lembur = min($totalHours, 8);
+                    } else {
+                        // Weekday / Sabtu: kurangi 8 jam, maks 8
+                        $lembur = min(max($totalHours - 8, 0), 8);
+                    }
+                }
 
                 if ($lembur > 0) {
                     if ($dayOfWeek == 0 || $isHoliday) {
