@@ -329,12 +329,15 @@ class AttendanceApiController extends Controller
     /**
      * POST /api/v1/attendance/prepare/lengkapi
      * Lengkapi: isi check_in/check_out yang kosong (bulk).
+     * Support create (kalau id null) + update (kalau id ada).
      */
     public function prepareLengkapi(Request $request): JsonResponse
     {
         $request->validate([
             'records'   => 'required|array',
-            'records.*.id' => 'required|integer',
+            'records.*.id' => 'nullable|integer',
+            'records.*.employee_id' => 'required_without:records.*.id|integer',
+            'records.*.date' => 'required_without:records.*.id|date',
         ]);
 
         $service = new AttendanceService();
@@ -342,7 +345,7 @@ class AttendanceApiController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "Lengkapi selesai. {$result['updated']} record diperbarui.",
+            'message' => "Lengkapi selesai. {$result['updated']} update, {$result['created']} baru.",
             'data'    => $result,
         ]);
     }
@@ -417,6 +420,31 @@ class AttendanceApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => ($request->input('lock') ? 'Lock' : 'Unlock') . " selesai. {$result['updated']} record.",
+            'data'    => $result,
+        ]);
+    }
+
+    /**
+     * POST /api/v1/attendance/prepare/update-status-legacy
+     * Migrasi status generic (cuti/izin/sakit) → kode LeaveType spesifik.
+     * Aman: tidak menyentuh field selain status.
+     */
+    public function prepareUpdateStatusLegacy(Request $request): JsonResponse
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $service = new AttendanceService();
+        $result  = $service->migrateLegacyStatuses(
+            $request->start_date,
+            $request->end_date
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => $result['message'],
             'data'    => $result,
         ]);
     }

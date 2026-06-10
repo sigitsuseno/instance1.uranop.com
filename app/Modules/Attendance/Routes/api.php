@@ -56,6 +56,8 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.prepare.hitung-lembur');
         Route::post('/lock', [AttendanceApiController::class, 'prepareLock'])
             ->name('attendance.prepare.lock');
+        Route::post('/update-status-legacy', [AttendanceApiController::class, 'prepareUpdateStatusLegacy'])
+            ->name('attendance.prepare.update-status-legacy');
         Route::get('/employee-groups', [AttendanceApiController::class, 'prepareEmployeeGroups'])
             ->name('attendance.prepare.employee-groups');
     });

@@ -79,12 +79,33 @@ class AttendanceService
     public function bulkLengkapi(array $records, int $userId): array
     {
         $updated = 0;
+        $created = 0;
         $errors  = [];
 
         DB::beginTransaction();
         try {
             foreach ($records as $item) {
-                $prepare = AttendancePrepare::find($item['id'] ?? 0);
+                $id   = $item['id'] ?? null;
+                $eId  = $item['employee_id'] ?? null;
+                $date = $item['date'] ?? null;
+
+                // Update existing
+                $isNew = false;
+                if ($id) {
+                    $prepare = AttendancePrepare::find($id);
+                } else {
+                    // Create new — cari dulu apakah sudah ada (biar gak duplicate)
+                    $prepare = AttendancePrepare::where('employee_id', $eId)
+                        ->where('date', $date)
+                        ->first();
+                    if (!$prepare) {
+                        $prepare = new AttendancePrepare();
+                        $prepare->employee_id = $eId;
+                        $prepare->date        = $date;
+                        $isNew = true;
+                    }
+                }
+
                 if (!$prepare || $prepare->is_locked) {
                     continue;
                 }
@@ -118,8 +139,8 @@ class AttendanceService
                 }
 
                 if (!empty($updateData)) {
-                    $prepare->update($updateData);
-                    $updated++;
+                    $prepare->fill($updateData)->save();
+                    $isNew ? $created++ : $updated++;
                 }
             }
             DB::commit();
@@ -128,7 +149,7 @@ class AttendanceService
             $errors[] = $e->getMessage();
         }
 
-        return ['updated' => $updated, 'errors' => $errors];
+        return ['updated' => $updated, 'created' => $created, 'errors' => $errors];
     }
 
     /**
@@ -479,6 +500,88 @@ class AttendanceService
         return [
             'updated' => $updated,
             'skipped' => $skipped,
+        ];
+    }
+
+    /**
+     * Migrasi status legacy (cuti/izin/sakit) → kode LeaveType spesifik.
+     *
+     * Cari record att_prepares yang statusnya masih generic, lalu cocokkan
+     * dengan approved leave request untuk mendapatkan kode spesifiknya.
+     *
+     * Aman: tidak menyentuh check_in, check_out, late, overtime, LM.
+     *        Hanya update field `status`.
+     */
+    public function migrateLegacyStatuses(string $startDate, string $endDate): array
+    {
+        $legacyStatuses = ['cuti', 'izin', 'sakit'];
+
+        $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
+            ->whereIn('status', $legacyStatuses)
+            ->where('is_locked', false)
+            ->get();
+
+        if ($prepares->isEmpty()) {
+            return ['updated' => 0, 'skipped' => 0, 'message' => 'Tidak ada status legacy yang perlu dimigrasi.'];
+        }
+
+        // Preload approved leaves untuk range
+        $leaves = \App\Modules\Leave\Models\LeaveRequest::with('leaveType')
+            ->where('status', 'approved')
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('start_date', [$startDate, $endDate])
+                  ->orWhereBetween('end_date', [$startDate, $endDate])
+                  ->orWhere(function ($q2) use ($startDate, $endDate) {
+                      $q2->where('start_date', '<=', $startDate)
+                         ->where('end_date', '>=', $endDate);
+                  });
+            })
+            ->get()
+            ->groupBy('employee_id');
+
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($prepares as $prepare) {
+            $empLeaves = $leaves->get($prepare->employee_id);
+
+            if (!$empLeaves) {
+                $skipped++;
+                continue;
+            }
+
+            $matched = false;
+            foreach ($empLeaves as $leave) {
+                $leaveStart = $leave->start_date instanceof \Carbon\Carbon
+                    ? $leave->start_date
+                    : \Carbon\Carbon::parse($leave->start_date);
+                $leaveEnd = $leave->end_date instanceof \Carbon\Carbon
+                    ? $leave->end_date
+                    : \Carbon\Carbon::parse($leave->end_date);
+                $dateCheck = $prepare->date instanceof \Carbon\Carbon
+                    ? $prepare->date
+                    : \Carbon\Carbon::parse($prepare->date);
+
+                if ($dateCheck->between($leaveStart, $leaveEnd)) {
+                    $newStatus = strtolower($leave->leaveType->code ?? 'ct');
+                    if ($newStatus !== $prepare->status) {
+                        $prepare->update(['status' => $newStatus]);
+                        $updated++;
+                    }
+                    $matched = true;
+                    break;
+                }
+            }
+
+            if (!$matched) {
+                $skipped++;
+            }
+        }
+
+        return [
+            'updated' => $updated,
+            'skipped' => $skipped,
+            'message' => "{$updated} record diperbarui, {$skipped} diskip.",
         ];
     }
 

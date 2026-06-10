@@ -27,6 +27,14 @@
           </template>
           Lengkapi
         </BaseButton>
+        <BaseButton variant="secondary" :loading="isUpdatingStatus" @click="handleUpdateStatus">
+          <template #icon-left>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </template>
+          Perbarui Status
+        </BaseButton>
         <BaseButton variant="secondary" @click="handleKunci" :disabled="true" title="Coming soon — sesi selanjutnya">
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -271,6 +279,11 @@
         </p>
       </div>
 
+      <!-- Error alert -->
+      <div v-if="editError" class="mb-4 p-3 rounded-lg text-sm font-medium bg-red-50 border border-red-200 text-red-800">
+        {{ editError }}
+      </div>
+
       <div class="space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -445,6 +458,7 @@ const { get, post } = useApi()
 const isSyncing = ref(false)
 const isCompleting = ref(false)
 const isCalculating = ref(false)
+const isUpdatingStatus = ref(false)
 const isLoading = ref(true)
 const isSaving = ref(false)
 const syncResult = ref(null)
@@ -465,6 +479,7 @@ const showSyncModal = ref(false)
 const showHitungLemburModal = ref(false)
 const processStartDate = ref('')
 const processEndDate = ref('')
+const editError = ref(null)
 
 // Leave type options untuk edit modal
 const leaveTypeOptions = ref([])
@@ -725,21 +740,13 @@ async function fetchStats() {
     const stats = res.data || res || {}
 
     // Store stats for computed
-    const total = stats.total || 0
-    const hadir = (stats.hadir || 0)
-    const absent = stats.absent || 0
-    const libur = stats.libur || 0
-    const off = stats.off || 0
-    // leaveTotal = semua record yang bukan hadir/absent/libur/off (yaitu kode leave type)
-    const leaveTotal = total - hadir - absent - libur - off
-
     statsData.value = {
-      total,
-      hadir,
-      absent,
-      leaveTotal: leaveTotal > 0 ? leaveTotal : 0,
-      libur,
-      off,
+      total: stats.total || 0,
+      hadir: (stats.hadir || 0),
+      absent: stats.absent || 0,
+      leave: stats.leave || 0,
+      libur: stats.libur || 0,
+      off: stats.off || 0,
       cek: stats.cek || 0,
       lengkap: stats.lengkap || 0,
       locked: stats.locked || 0,
@@ -809,6 +816,37 @@ async function handleProceedSync() {
   }
 }
 
+// ── Update Status Legacy → Kode Spesifik ──
+
+async function handleUpdateStatus() {
+  const { start, end } = getPeriodDates()
+  if (!confirm(`Perbarui status cuti/izin/sakit → kode spesifik untuk periode ${start} s/d ${end}?`)) return
+
+  isUpdatingStatus.value = true
+  syncResult.value = null
+
+  try {
+    const res = await post('/api/v1/attendance/prepare/update-status-legacy', {
+      start_date: start,
+      end_date: end,
+    })
+
+    syncResult.value = {
+      success: true,
+      message: res.message || 'Status diperbarui.',
+    }
+
+    await fetchData()
+  } catch (e) {
+    syncResult.value = {
+      success: false,
+      message: 'Gagal perbarui status: ' + (e.message || 'Unknown error'),
+    }
+  } finally {
+    isUpdatingStatus.value = false
+  }
+}
+
 // ── Computed ──
 
 const filteredEmployees = computed(() => {
@@ -862,7 +900,7 @@ const statsCards = computed(() => {
     { label: 'Total', value: s.total, color: 'text-(--text-main)' },
     { label: 'Hadir', value: s.hadir, color: 'text-green-600 dark:text-green-400' },
     { label: 'Absen', value: s.absent, color: 'text-red-600 dark:text-red-400' },
-    { label: 'Cuti/Izin/Sakit', value: s.leaveTotal || 0, color: 'text-blue-600 dark:text-blue-400' },
+    { label: 'Cuti/Izin/Sakit', value: s.leave, color: 'text-blue-600 dark:text-blue-400' },
     { label: 'Belum Lengkap', value: s.cek, color: 'text-orange-600 dark:text-orange-400' },
     { label: 'Terkunci', value: s.locked, color: 'text-gray-500' },
   ]
@@ -931,6 +969,8 @@ function openEdit(emp, dateObj) {
   editingCell.value = { employee: emp, date: dateObj }
   editForm.value = {
     prepareId: dayData.id || null,
+    employeeId: emp.id,
+    date: dateObj.date,
     checkIn: dayData.checkIn || '',
     checkOut: dayData.checkOut || '',
     status: dayData.status || 'absent',
@@ -940,6 +980,7 @@ function openEdit(emp, dateObj) {
     notes: dayData.notes || '',
     isLocked: dayData.isLocked || false,
   }
+  editError.value = null
 }
 
 function closeEdit() {
@@ -948,32 +989,48 @@ function closeEdit() {
 
 async function handleSaveEdit() {
   isSaving.value = true
+  editError.value = null
   try {
+    const record = {
+      id: editForm.value.prepareId || undefined,
+      check_in: editForm.value.checkIn || null,
+      check_out: editForm.value.checkOut || null,
+      status: editForm.value.status,
+      notes: editForm.value.notes,
+    }
+
+    // Kalau record baru (belum ada id), kirim employee_id + date
+    if (!editForm.value.prepareId) {
+      record.employee_id = editForm.value.employeeId
+      record.date = editForm.value.date
+    }
+
     const res = await post('/api/v1/attendance/prepare/lengkapi', {
-      records: [{
-        id: editForm.value.prepareId,
-        check_in: editForm.value.checkIn || null,
-        check_out: editForm.value.checkOut || null,
-        status: editForm.value.status,
-        notes: editForm.value.notes,
-      }],
+      records: [record],
     })
 
     if (res.success) {
       // Update local data instantly
       const empId = editingCell.value.employee.id
       const dateStr = editingCell.value.date.date
-      if (attendanceData.value[empId]?.[dateStr]) {
-        attendanceData.value[empId][dateStr].checkIn = editForm.value.checkIn
-        attendanceData.value[empId][dateStr].checkOut = editForm.value.checkOut
-        attendanceData.value[empId][dateStr].status = editForm.value.status
-        attendanceData.value[empId][dateStr].reviewStatus = 'lengkap'
-        attendanceData.value[empId][dateStr].notes = editForm.value.notes
+      if (!attendanceData.value[empId]) attendanceData.value[empId] = {}
+      attendanceData.value[empId][dateStr] = {
+        ...attendanceData.value[empId][dateStr],
+        checkIn: editForm.value.checkIn,
+        checkOut: editForm.value.checkOut,
+        status: editForm.value.status,
+        statusLabel: editForm.value.statusLabel || statusLabel(editForm.value.status),
+        reviewStatus: 'lengkap',
+        reviewStatusLabel: 'Lengkap',
+        notes: editForm.value.notes,
       }
       closeEdit()
+    } else {
+      editError.value = res.message || 'Gagal menyimpan.'
     }
   } catch (e) {
     console.error('Gagal simpan edit:', e)
+    editError.value = e.message || 'Gagal menyimpan data.'
   } finally {
     isSaving.value = false
   }

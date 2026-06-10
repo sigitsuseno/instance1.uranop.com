@@ -870,12 +870,19 @@ class AttendanceSyncService
     {
         $query = AttendancePrepare::whereBetween('date', [$startDate, $endDate]);
 
+        // Kumpulkan semua kode leave type aktif (lowercase)
+        $leaveCodes = \App\Modules\Leave\Models\LeaveType::where('is_active', true)
+            ->pluck('code')
+            ->map(fn($c) => strtolower($c))
+            ->toArray();
+
         return [
             'total'       => $query->count(),
             'hadir'       => (clone $query)->where('status', AttendancePrepare::STATUS_HADIR)->count(),
             'absent'      => (clone $query)->where('status', AttendancePrepare::STATUS_ABSENT)->count(),
             'libur'       => (clone $query)->where('status', AttendancePrepare::STATUS_LIBUR)->count(),
             'off'         => (clone $query)->where('status', AttendancePrepare::STATUS_OFF)->count(),
+            'leave'       => (clone $query)->whereIn('status', $leaveCodes)->count(),
             'cek'         => (clone $query)->where('review_status', AttendancePrepare::REVIEW_CEK)->count(),
             'lengkap'     => (clone $query)->where('review_status', AttendancePrepare::REVIEW_LENGKAP)->count(),
             'locked'      => (clone $query)->where('is_locked', true)->count(),
