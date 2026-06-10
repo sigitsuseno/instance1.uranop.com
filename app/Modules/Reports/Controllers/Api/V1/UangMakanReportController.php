@@ -226,6 +226,7 @@ class UangMakanReportController extends Controller
                 'employee_id' => $employee->id,
                 'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
+                'gender' => $employee->gender,
                 'department' => $employee->department?->name,
                 'position' => $employee->position?->name,
                 'title' => $groupName,

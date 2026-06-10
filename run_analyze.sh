@@ -1,0 +1,1 @@
+python H:/laragon/www/instance1.uranop.com/analyze_image.py
