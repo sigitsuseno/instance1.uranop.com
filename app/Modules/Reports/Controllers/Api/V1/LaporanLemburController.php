@@ -137,9 +137,8 @@ class LaporanLemburController extends Controller
             $lmCount = $prepare ? (int)$prepare->lm_count : 0;
             $overtimeCount = $prepare ? (int)$prepare->overtime_count : 0;
 
-            // LM: jam pertama gratis (istirahat), sisanya dibayar
-            $lmCountHours = $lmCount / 60;
-            $lmNominal = $lmCountHours > 1 ? round(($lmCountHours - 1) * $hourlyRate, 2) : 0;
+            // LM: lm_count sudah include potongan 1 jam + multiplier dari code
+            $lmNominal = $lmCount > 0 ? round(($lmCount / 60) * $hourlyRate, 2) : 0;
             // Lembur biasa: semua jam dibayar
             $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
             $totalNominal = round($lmNominal + $overtimeNominal, 2);
@@ -280,9 +279,8 @@ class LaporanLemburController extends Controller
                 $lmCount = $prep ? (int)$prep->lm_count : 0;
                 $overtimeCount = $prep ? (int)$prep->overtime_count : 0;
 
-                // LM: jam pertama gratis, sisanya dibayar
-                $lmCountHours = $lmCount / 60;
-                $lmNominal = $lmCountHours > 1 ? round(($lmCountHours - 1) * $hourlyRate, 2) : 0;
+                // LM: lm_count sudah include potongan 1 jam + multiplier dari code
+                $lmNominal = $lmCount > 0 ? round(($lmCount / 60) * $hourlyRate, 2) : 0;
                 // Lembur biasa: semua jam dibayar
                 $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
                 $totalNominal = round($lmNominal + $overtimeNominal, 2);
@@ -589,11 +587,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $isHoliday = $roster && $roster->is_holiday;
                 $upahHarian = ($isHoliday && $ha === 'H') ? 0 : ($dapatUpah ? $upahPerHari : 0);
 
-                // Overtime nominal
+                // Overtime nominal — lm_count sudah include potongan 1 jam + multiplier
                 $lmCount = $prep ? (int)$prep->lm_count : 0;
                 $overtimeCount = $prep ? (int)$prep->overtime_count : 0;
-                $lmCountHours = $lmCount / 60;
-                $lmNominal = $lmCountHours > 1 ? round(($lmCountHours - 1) * $hourlyRate, 2) : 0;
+                $lmNominal = $lmCount > 0 ? round(($lmCount / 60) * $hourlyRate, 2) : 0;
                 $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
                 $totalNominal = round($lmNominal + $overtimeNominal, 2);
 
