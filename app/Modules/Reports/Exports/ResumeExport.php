@@ -26,11 +26,14 @@ class ResumeExport implements FromArray, WithHeadings, WithMapping, WithStyles, 
     protected const SUB_COLS = 2;   // Hari Kerja, Overtime
     protected const TAIL_COLS = 3;  // Total Hari Kerja, Total Overtime, Total Terima
 
-    public function __construct($data, $dates, $label)
+    protected $title;
+
+    public function __construct($data, $dates, $label, $title = 'RESUME OVERTIME')
     {
         $this->data  = array_values($data instanceof \Illuminate\Support\Collection ? $data->toArray() : (array)$data);
         $this->dates = $dates;
         $this->label = $label;
+        $this->title = $title;
     }
 
     public function array(): array
@@ -70,7 +73,7 @@ class ResumeExport implements FromArray, WithHeadings, WithMapping, WithStyles, 
     {
         Carbon::setLocale('id');
 
-        $row1 = ['RESUME OVERTIME — ' . strtoupper($this->label)];
+        $row1 = [$this->title . ' — ' . strtoupper($this->label)];
         $row2 = [''];
 
         // Row 3: Main headers

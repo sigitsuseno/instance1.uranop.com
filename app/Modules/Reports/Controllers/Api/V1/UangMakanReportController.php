@@ -88,7 +88,7 @@ class UangMakanReportController extends Controller
         $label = $period ? $period->name : 'Resume';
         $filename = 'Resume_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
         return Excel::download(
-            new UangMakanResumeExport($result['data'], $result['dates'], $label),
+            new \App\Modules\Reports\Exports\ResumeExport($result['data'], $result['dates'], $label, 'RESUME UANG MAKAN'),
             $filename
         );
     }
@@ -315,50 +315,145 @@ class UangMakanReportController extends Controller
 
     private function buildResumeData(Request $request)
     {
-        $result = $this->buildBulananData($request);
-        $data = $result['data'];
-        $dates = $result['dates'];
+        $periodId = $request->input('period_id');
+        $groups   = $request->input('groups', []);
 
-        $resumeByPosition = [];
+        $period = PayPeriod::find($periodId);
+        if ($period) {
+            $startDate = Carbon::parse($period->start_date);
+            $endDate   = Carbon::parse($period->end_date);
+            $label     = $period->name . ' (' . $startDate->translatedFormat('d M') . ' - ' . $endDate->translatedFormat('d M Y') . ')';
+        } else {
+            $startDate = Carbon::now()->startOfMonth();
+            $endDate   = Carbon::now()->endOfMonth();
+            $label     = $startDate->translatedFormat('F Y');
+        }
 
-        foreach ($data as $emp) {
-            $groupName = $emp['group_name'] ?? '';
-            if (!str_contains(strtoupper($groupName), 'ALL IN') && !str_contains(strtoupper($groupName), 'ALL-IN')) {
-                continue;
+        $today = Carbon::today();
+        if ($endDate->gt($today)) {
+            $endDate = $today;
+        }
+
+        // Generate list of dates
+        $dates = [];
+        $d = $startDate->copy();
+        while ($d->lte($endDate)) {
+            $dates[] = $d->format('Y-m-d');
+            $d->addDay();
+        }
+
+        $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
+            ->get()->groupBy('employee_id');
+
+        $employees = Employee::query()
+            ->whereHas('shiftRosters', fn($q) => $q->whereBetween('date', [$startDate, $endDate]))
+            ->when(!empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
+            ->with(['position', 'groups.master'])
+            ->get();
+
+        $rosters = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
+            ->with('shift')->get()
+            ->groupBy('employee_id');
+
+        $payRecords = collect();
+        if ($period) {
+            $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
+        }
+
+        // Compute per-employee per-date upah & nominal
+        $employeeData = [];
+        foreach ($employees as $employee) {
+            $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
+            $empRosters  = $rosters->get($employee->id, collect())->keyBy(fn($r) => $r->date->format('Y-m-d'));
+            $empPayRecords = $payRecords->get($employee->id);
+
+            $payRecord = null;
+            if ($empPayRecords && $empPayRecords->isNotEmpty()) {
+                $payRecord = $empPayRecords->first();
             }
+            $gaji      = $payRecord ? (float)($payRecord->gaji_pokok ?? 0) : $employee->baseSalary();
+            $tjMk      = $payRecord ? (float)($payRecord->tj_masa_kerja ?? 0) : (float)($employee->salaryComponents()->latest('effective_date')->first()?->tunjangan_masa_kerja ?? 0);
+            if ($tjMk == 0) {
+                $tjMk = $employee->tunjangan_masa_kerja($startDate->format('Y-m'));
+            }
+            $groupName = $this->getGroupName($employee);
+            $rates = $this->getGroupRates($groupName, $gaji);
+            $upahPerHariValue = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
 
-            $pos = $emp['jabatan'] ?? 'Tanpa Posisi';
-            if (!isset($resumeByPosition[$pos])) {
-                $resumeByPosition[$pos] = [
-                    'bagian' => $pos,
-                    'uang_makan' => 0,
-                    'lembur_sabtu' => 0,
-                    'lembur_minggu' => 0,
-                    'total' => 0,
+            $posName = $employee->position->name ?? '-';
+
+            $perDate = [];
+            foreach ($dates as $dateStr) {
+                $prep = $empPrepares->get($dateStr);
+                $roster = $empRosters->get($dateStr);
+                $parsedDate = Carbon::parse($dateStr);
+
+                $lembur = 0;
+                $statusRaw = $prep ? $prep->status : '-';
+                $isHoliday = $roster && $roster->is_holiday;
+                $dayOfWeek = $parsedDate->dayOfWeek;
+
+                if ($prep) {
+                    $lemburMinutes = ($prep->lm ?? 0) + ($prep->overtime ?? 0);
+                    $lembur = round($lemburMinutes / 60, 2);
+                }
+
+                $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prep, $upahPerHariValue);
+
+                $perDate[$dateStr] = [
+                    'hari_kerja' => $dayInfo['upah_per_hari'],
+                    'overtime'   => $dayInfo['nominal'],
                 ];
             }
 
-            foreach ($dates as $dateStr) {
-                $d = $emp['days'][$dateStr] ?? null;
-                if (!$d) continue;
-
-                $parsedDate = Carbon::parse($dateStr);
-                $dayOfWeek = $parsedDate->dayOfWeek;
-
-                if ($dayOfWeek == 0) {
-                    $resumeByPosition[$pos]['lembur_minggu'] += ($d['nominal'] ?? 0);
-                } elseif ($dayOfWeek == 6) {
-                    $resumeByPosition[$pos]['lembur_sabtu'] += ($d['nominal'] ?? 0);
-                } else {
-                    $resumeByPosition[$pos]['uang_makan'] += ($d['nominal'] ?? 0);
-                }
-                $resumeByPosition[$pos]['total'] += ($d['nominal'] ?? 0);
-            }
+            $employeeData[] = [
+                'position' => $posName,
+                'gender'   => $employee->gender ?? '',
+                'per_date' => $perDate,
+            ];
         }
 
+        // Group by position and aggregate
+        $posGroups = collect($employeeData)->groupBy('position');
+
+        $data = [];
+        foreach ($posGroups as $posName => $emps) {
+            $l = $emps->where('gender', 'L')->count();
+            $p = $emps->where('gender', 'P')->count();
+
+            $days = [];
+            $totalHariKerja = 0;
+            $totalOvertime = 0;
+
+            foreach ($dates as $dateStr) {
+                $hariKerja = $emps->sum(fn($e) => $e['per_date'][$dateStr]['hari_kerja'] ?? 0);
+                $overtime = $emps->sum(fn($e) => $e['per_date'][$dateStr]['overtime'] ?? 0);
+                $days[$dateStr] = [
+                    'hari_kerja' => round($hariKerja, 2),
+                    'overtime'   => round($overtime, 2),
+                ];
+                $totalHariKerja += $hariKerja;
+                $totalOvertime += $overtime;
+            }
+
+            $data[] = [
+                'bagian'           => $posName,
+                'l'                => $l,
+                'p'                => $p,
+                'days'             => $days,
+                'total_hari_kerja' => round($totalHariKerja, 2),
+                'total_overtime'   => round($totalOvertime, 2),
+                'total_terima'     => round($totalHariKerja + $totalOvertime, 2),
+            ];
+        }
+
+        // Sort by department name
+        usort($data, fn($a, $b) => strcmp($a['bagian'], $b['bagian']));
+
         return [
-            'data' => array_values($resumeByPosition),
-            'dates' => $dates,
+            'data'         => $data,
+            'dates'        => $dates,
+            'period_label' => $label,
         ];
     }
 
@@ -608,53 +703,66 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
     private function renderResumePrintHtml($result, $label)
     {
-        $data = $result['data'];
+        $data  = $result['data'];
+        $dates = $result['dates'];
+
+        $dayHeaders = '';
+        foreach ($dates as $dateStr) {
+            $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
+            $dayHeaders .= '<th colspan="2" style="background:#dbeafe">' . strtoupper($formatted) . '</th>';
+        }
+
+        $subHeaders = '';
+        foreach ($dates as $dateStr) {
+            $subHeaders .= '<th>Hari Kerja</th><th>Overtime</th>';
+        }
+
         $rows = '';
         $i = 0;
-        $totalUang = 0; $totalSabtu = 0; $totalMinggu = 0; $grandTotal = 0;
         foreach ($data as $item) {
             $i++;
-            $totalUang += ($item['uang_makan'] ?? 0);
-            $totalSabtu += ($item['lembur_sabtu'] ?? 0);
-            $totalMinggu += ($item['lembur_minggu'] ?? 0);
-            $grandTotal += ($item['total'] ?? 0);
+            $dayCells = '';
+            foreach ($dates as $dateStr) {
+                $d = $item['days'][$dateStr] ?? ['hari_kerja' => 0, 'overtime' => 0];
+                $hk = $d['hari_kerja'] ? number_format($d['hari_kerja'], 0, ',', '.') : '-';
+                $ot = $d['overtime'] ? number_format($d['overtime'], 0, ',', '.') : '-';
+                $dayCells .= "<td class='text-right'>{$hk}</td><td class='text-right'>{$ot}</td>";
+            }
             $rows .= "<tr>
-                <td>{$i}</td>
-                <td>{$item['bagian']}</td>
-                <td class='text-right'>".number_format($item['uang_makan']??0,0,',','.')."</td>
-                <td class='text-right'>".number_format($item['lembur_sabtu']??0,0,',','.')."</td>
-                <td class='text-right'>".number_format($item['lembur_minggu']??0,0,',','.')."</td>
-                <td class='text-right font-bold'>".number_format($item['total']??0,0,',','.')."</td>
+                <td>{$i}</td><td>{$item['bagian']}</td>
+                <td class='text-center'>{$item['l']}</td><td class='text-center'>{$item['p']}</td>
+                {$dayCells}
+                <td class='text-right'>".number_format($item['total_hari_kerja'],0,',','.')."</td>
+                <td class='text-right'>".number_format($item['total_overtime'],0,',','.')."</td>
+                <td class='text-right'><strong>".number_format($item['total_terima'],0,',','.')."</strong></td>
             </tr>";
         }
-        $rows .= "<tr class='total-row'>
-            <td colspan='2' class='text-center'>TOTAL</td>
-            <td class='text-right'>".number_format($totalUang,0,',','.')."</td>
-            <td class='text-right'>".number_format($totalSabtu,0,',','.')."</td>
-            <td class='text-right'>".number_format($totalMinggu,0,',','.')."</td>
-            <td class='text-right font-bold'>".number_format($grandTotal,0,',','.')."</td>
-        </tr>";
 
-        return <<<HTML
-<!DOCTYPE html>
+        return '<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8"><title>Resume Uang Makan</title>
 <style>
-@page{size:A4 landscape;margin:10mm}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;color:#1f2937}
-h1{font-size:16px;text-align:center;margin-bottom:2px}.periode{text-align:center;color:#6b7280;margin-bottom:16px;font-size:12px}
-table{width:100%;border-collapse:collapse;margin-bottom:20px}
-th{background:#e8eaed;font-weight:600;padding:6px 8px;border:1px solid #d1d5db;font-size:10px;text-align:center}
-td{padding:5px 8px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}
-.text-right{text-align:right}.font-bold{font-weight:700}
-.total-row{background:#f3f4f6!important;font-weight:700}
+@page{size:A3 landscape;margin:6mm}body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:8px;color:#1f2937}
+h1{font-size:14px;text-align:center;margin-bottom:2px}
+table{width:100%;border-collapse:collapse}th{background:#e8eaed;font-weight:600;padding:3px 4px;border:1px solid #d1d5db;font-size:7px;text-align:center}
+td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}
+.text-right{text-align:right}.text-center{text-align:center}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<h1>RESUME UANG MAKAN</h1>
-<p class="periode">Periode: {$label}</p>
-<table><thead><tr>
-<th>No</th><th>Bagian</th><th>Uang Makan</th><th>Lembur Sabtu</th><th>Lembur Minggu</th><th>Total</th>
-</tr></thead><tbody>{$rows}</tbody></table>
-<div style="text-align:center;margin-top:16px"><button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨️ Print</button></div>
-</body></html>
-HTML;
+<h1>RESUME UANG MAKAN — ' . strtoupper($label) . '</h1>
+<div style="overflow-x:auto">
+<table><thead>
+<tr>
+<th rowspan="2">No</th><th rowspan="2">Bagian</th><th colspan="2">Jml Karyawan</th>
+' . $dayHeaders . '
+<th rowspan="2">Total Hari Kerja</th><th rowspan="2">Total Overtime</th><th rowspan="2">Total Terima</th>
+</tr>
+<tr>
+<th>L</th><th>P</th>
+' . $subHeaders . '
+</tr>
+</thead><tbody>' . $rows . '</tbody></table>
+</div>
+<div style="text-align:center;margin-top:8px"><button onclick="window.print()" style="padding:6px 16px;font-size:12px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨 Print</button></div>
+</body></html>';
     }
 }
