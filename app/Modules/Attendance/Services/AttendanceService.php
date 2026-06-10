@@ -180,13 +180,26 @@ class AttendanceService
             ];
         }
 
-        // ── 2. Ambil att_prepares yang incomplete (unlocked) ─────
+        // ── 2. Ambil att_prepares yang perlu dilengkapi ──────────
+        //     a) incomplete (check_in/out kosong) — existing
+        //     b) holiday tapi status != 'libur' — status correction
         $prepares = AttendancePrepare::whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$startDate, $endDate])
             ->where('is_locked', false)
-            ->where(function ($q) {
+            ->where(function ($q) use ($startDate, $endDate) {
                 $q->whereNull('check_in')
                   ->orWhereNull('check_out');
+                // Holiday status correction: absent di holiday → off
+                $holidayDates = Holiday::whereBetween('date', [$startDate, $endDate])
+                    ->pluck('date')
+                    ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : $d)
+                    ->toArray();
+                if (!empty($holidayDates)) {
+                    $q->orWhere(function ($q2) use ($holidayDates) {
+                        $q2->whereIn('date', $holidayDates)
+                           ->where('status', AttendancePrepare::STATUS_ABSENT);
+                    });
+                }
             })
             ->get();
 
@@ -305,8 +318,11 @@ class AttendanceService
                         if (! $hasCheckOut && $workEnd) {
                             $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
                         }
+                        $update['status'] = AttendancePrepare::STATUS_LIBUR;
+                    } else {
+                        // No scan on holiday → off (bukan absent/libur)
+                        $update['status'] = AttendancePrepare::STATUS_OFF;
                     }
-                    $update['status']        = AttendancePrepare::STATUS_LIBUR;
                     $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
                     $stats['holiday']++;
                 }
@@ -319,7 +335,7 @@ class AttendanceService
                         if (! $hasCheckOut && $workEnd) {
                             $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
                         }
-                        $update['status'] = AttendancePrepare::STATUS_LIBUR;
+                        $update['status'] = AttendancePrepare::STATUS_HADIR;
                     } else {
                         $update['status'] = AttendancePrepare::STATUS_OFF;
                     }
