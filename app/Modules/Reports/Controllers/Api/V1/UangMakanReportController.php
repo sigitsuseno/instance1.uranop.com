@@ -366,8 +366,12 @@ class UangMakanReportController extends Controller
 
     private function getGroupName($employee): string
     {
-        $groupMaster = $employee->groups->first()?->master;
-        return strtoupper($groupMaster?->name ?? '');
+        // Cari grup dengan master group_label = 'Uang Makan'
+        // (jangan ->first() mentah — bisa kena grup non-Uang Makan)
+        $group = $employee->groups->first(fn($g) =>
+            $g->master && strtoupper($g->master->group_label ?? '') === 'UANG MAKAN'
+        );
+        return strtoupper($group?->master?->name ?? '');
     }
 
     private function getGroupRates(string $groupName, float $gajiPokok): array
