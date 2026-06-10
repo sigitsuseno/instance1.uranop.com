@@ -13,6 +13,12 @@ class OvertimeRule extends Model
 
     protected $guarded = ['id'];
 
+    protected $casts = [
+        'is_active'   => 'boolean',
+        'is_holiday'  => 'boolean',
+        'is_saturday' => 'boolean',
+    ];
+
     public function details()
     {
         return $this->hasMany(OvertimeRuleDetail::class, 'overtime_rule_id')->orderBy('hour');

@@ -36,7 +36,8 @@ class OvertimeRuleSeeder extends Seeder
             'name'             => 'Lembur Hari Biasa',
             'is_active'        => true,
             'is_holiday'       => false,
-            'work_pattern_id'  => null, // berlaku untuk semua pattern
+            'is_saturday'      => false,
+            'work_pattern_id'  => null,
             'description'      => 'Jam ke-1: 1.5x | Jam ke-2+: 2.0x',
         ]);
 
@@ -63,23 +64,64 @@ class OvertimeRuleSeeder extends Seeder
             'name'             => 'Lembur Mingguan / Hari Libur',
             'is_active'        => true,
             'is_holiday'       => true,
+            'is_saturday'      => false,
             'work_pattern_id'  => null,
-            'description'      => '(total_jam - 1 jam istirahat) × 2, maksimal 8 jam',
+            'description'      => 'Jam ke-1 s/d 7: 2.0x',
         ]);
 
-        // Detail LM: hour=1→0 (deduct istirahat), hour=2→2.0 (jam ke-2+)
+        // LM: semua jam ×2.0 (potongan istirahat 1 jam ditangani di rumus lm_count)
+        foreach ([1, 2, 3, 4, 5, 6, 7] as $h) {
+            OvertimeRuleDetail::create([
+                'uuid'              => Str::uuid()->toString(),
+                'overtime_rule_id'  => $holidayRule->id,
+                'hour'              => $h,
+                'multiplier'        => 2.0,
+            ]);
+        }
+
+        // ════════════════════════════════════════════════════════
+        // RULE 3: Lembur Mingguan / Hari Libur — Sabtu
+        // ════════════════════════════════════════════════════════
+        $saturdayRule = OvertimeRule::create([
+            'uuid'             => Str::uuid()->toString(),
+            'code'             => 'OVT-LM-S',
+            'name'             => 'OVERTIME LM SABTU',
+            'is_active'        => true,
+            'is_holiday'       => true,
+            'is_saturday'      => true,
+            'work_pattern_id'  => null,
+            'description'      => 'Jam 1-5: 2.0x | Jam 6: 3.0x | Jam 7: 4.0x',
+        ]);
+
         OvertimeRuleDetail::create([
             'uuid'              => Str::uuid()->toString(),
-            'overtime_rule_id'  => $holidayRule->id,
+            'overtime_rule_id'  => $saturdayRule->id,
             'hour'              => 1,
-            'multiplier'        => 0.0,  // jam pertama → istirahat (tidak dihitung)
+            'multiplier'        => 2.0,
         ]);
-
         OvertimeRuleDetail::create([
             'uuid'              => Str::uuid()->toString(),
-            'overtime_rule_id'  => $holidayRule->id,
+            'overtime_rule_id'  => $saturdayRule->id,
             'hour'              => 2,
             'multiplier'        => 2.0,
+        ]);
+        OvertimeRuleDetail::create([
+            'uuid'              => Str::uuid()->toString(),
+            'overtime_rule_id'  => $saturdayRule->id,
+            'hour'              => 5,
+            'multiplier'        => 2.0,
+        ]);
+        OvertimeRuleDetail::create([
+            'uuid'              => Str::uuid()->toString(),
+            'overtime_rule_id'  => $saturdayRule->id,
+            'hour'              => 6,
+            'multiplier'        => 3.0,
+        ]);
+        OvertimeRuleDetail::create([
+            'uuid'              => Str::uuid()->toString(),
+            'overtime_rule_id'  => $saturdayRule->id,
+            'hour'              => 7,
+            'multiplier'        => 4.0,
         ]);
 
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');

@@ -50,7 +50,7 @@ class AttendanceCalculatorService
         if ($isOffDay) {
             $lm             = $rawOvertime;
             $overtime       = 0;
-            $lmCount        = $this->calculateLmMultiplier($lm, $workPatternId);
+            $lmCount        = $this->calculateLmMultiplier($lm, $workPatternId, $isSaturday);
             $overtimeCount  = 0;
         } else {
             $lm             = 0;
@@ -180,38 +180,10 @@ class AttendanceCalculatorService
             return 0;
         }
 
-        // S (siang): aturan b.1 / b.2 / b.3
+        // S (siang): sementara — OT = total jam kerja - 8 jam
         if ($extCode === 'S') {
-            $toleranceLimit = (clone $scheduleIn)->addMinutes(30);
-            $lateLimit      = (clone $scheduleIn)->addHours(2);
-
-            // b.3: check_in > schedule_in + 2 jam → post-shift
-            if ($checkIn > $lateLimit) {
-                if ($checkOut > $scheduleOut) {
-                    return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
-                }
-                return 0;
-            }
-
-            // b.1 & b.2: check_in dalam toleransi (schedule_in + 30 menit)
-            if ($checkIn < $toleranceLimit) {
-                $earlyMinutes = $scheduleIn->diffInMinutes($checkIn, true);
-                // b.1: early > 30 menit → pre-shift overtime
-                if ($checkIn < $scheduleIn && $earlyMinutes > 30) {
-                    return $this->roundUp($earlyMinutes);
-                }
-                // b.2: early ≤ 30 menit → post-shift overtime
-                if ($checkOut > $scheduleOut) {
-                    return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
-                }
-                return 0;
-            }
-
-            // Fallback: check_in antara +30m s/d +2j → post-shift
-            if ($checkOut > $scheduleOut) {
-                return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true));
-            }
-            return 0;
+            $overtimeMinutes = max(0, $totalMinutes - 480);
+            return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes) : 0;
         }
 
         // Unknown FLEX-SHIFT code: fallback post-shift
@@ -227,17 +199,22 @@ class AttendanceCalculatorService
 
     /**
      * LM Multiplier (lembur mingguan / hari libur).
+     * Minggu/Holiday: SEMUA jam kerja = lembur.
+     * Rumus: (total_jam - 1) × 2 — potong 1 jam istirahat, lalu kali 2.
      * Menggunakan overtime_rule dengan is_holiday=true.
      * Fallback: (min(total_hours, 8) - 1) × 2 × 60
      */
-    protected function calculateLmMultiplier(int $minutes, ?int $workPatternId = null): int
+    protected function calculateLmMultiplier(int $minutes, ?int $workPatternId = null, bool $isSaturday = false): int
     {
         if ($minutes <= 0) {
             return 0;
         }
 
-        return $this->multiplyFromRule($minutes, isHoliday: true, maxHours: 8, workPatternId: $workPatternId)
-            ?? $this->calculateLmMultiplierFallback($minutes);
+        // Potong 1 jam istirahat (60 menit) — minimal 0
+        $effectiveMinutes = max(0, $minutes - 60);
+
+        return $this->multiplyFromRule($effectiveMinutes, isHoliday: true, maxHours: 8, workPatternId: $workPatternId, isSaturday: $isSaturday)
+            ?? $this->calculateLmMultiplierFallback($effectiveMinutes);
     }
 
     /**
@@ -268,10 +245,12 @@ class AttendanceCalculatorService
         bool $isHoliday,
         ?int $maxHours = null,
         ?int $workPatternId = null,
+        bool $isSaturday = false,
     ): ?int {
         // Cari rule yang cocok
         $rule = OvertimeRule::where('is_active', true)
             ->where('is_holiday', $isHoliday)
+            ->where('is_saturday', $isSaturday)
             ->when($workPatternId, function ($q) use ($workPatternId) {
                 // Prioritaskan rule spesifik work_pattern
                 $q->where('work_pattern_id', $workPatternId);
@@ -285,6 +264,7 @@ class AttendanceCalculatorService
         if (!$rule && $workPatternId) {
             $rule = OvertimeRule::where('is_active', true)
                 ->where('is_holiday', $isHoliday)
+                ->where('is_saturday', $isSaturday)
                 ->whereNull('work_pattern_id')
                 ->first();
         }
@@ -332,15 +312,15 @@ class AttendanceCalculatorService
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * LM Multiplier fallback: ((base_hours) - 1) × 2
+     * LM Multiplier fallback: total_jam × 2
+     * Asumsi: potongan 1 jam istirahat sudah dilakukan di calculateLmMultiplier().
      */
     protected function calculateLmMultiplierFallback(int $minutes): int
     {
         $hours = $minutes / 60;
         $clampedHours = min($hours, 8);
-        $workHoursAfterRest = max(0, $clampedHours - 1);
 
-        return (int) round($workHoursAfterRest * 2 * 60);
+        return (int) round($clampedHours * 2 * 60);
     }
 
     /**
