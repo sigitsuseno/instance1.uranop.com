@@ -85,8 +85,10 @@ onMounted(async () => {
       .filter(g => g.group_label === 'Imported Shift/Group')
       .map(g => ({ code: g.code, name: g.name }))
 
-    // Default semua checked
-    selectedGroups.value = availableGroups.value.map(g => g.code)
+    // Default: PS1 aja yang checked
+    selectedGroups.value = availableGroups.value
+      .filter(g => g.code === 'GRP-PS1')
+      .map(g => g.code)
   } catch (err) {
     console.error('Gagal fetch groups:', err)
   }

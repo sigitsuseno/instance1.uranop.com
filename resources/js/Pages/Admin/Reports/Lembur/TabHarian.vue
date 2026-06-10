@@ -68,8 +68,8 @@
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.upah_lembur_per_jam ? formatNumber(item.upah_lembur_per_jam) : '' }}</td>
               
               <!-- Daily Details -->
-              <td class="px-3 py-3 text-center font-medium text-blue-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.shift_kode }}</td>
-              <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.status }}</td>
+              <td class="px-3 py-3 text-center font-medium text-blue-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.shift_kode || '-' }}</td>
+              <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.status === '-' ? '-' : item.status }}</td>
               <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.lembur_minggu || '' }}</td>
               <td class="px-3 py-3 text-center font-medium text-orange-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.lembur || '' }}</td>
               <td class="px-4 py-3 text-right font-bold text-green-600 bg-blue-50/10">{{ item.nominal ? formatNumber(item.nominal) : '' }}</td>

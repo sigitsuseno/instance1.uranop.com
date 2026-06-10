@@ -3,20 +3,16 @@
     <!-- Filter Bar -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
       <div class="flex items-center gap-3">
-        <span class="text-sm font-semibold text-(--text-muted) uppercase tracking-wider">Bulan:</span>
+        <span class="text-sm font-semibold text-(--text-muted) uppercase tracking-wider">Periode:</span>
         <select
-          v-model="currentMonth"
+          v-model="selectedPeriodId"
           @change="fetchData"
-          class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg focus:ring-(--primary) focus:border-(--primary) p-2"
+          class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg focus:ring-(--primary) focus:border-(--primary) p-2 min-w-[300px]"
         >
-          <option v-for="m in monthOptions" :key="m.value" :value="m.value">{{ m.label }}</option>
-        </select>
-        <select
-          v-model="currentYear"
-          @change="fetchData"
-          class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg focus:ring-(--primary) focus:border-(--primary) p-2"
-        >
-          <option v-for="y in years" :key="y" :value="y">{{ y }}</option>
+          <option :value="null" disabled>-- Pilih Periode --</option>
+          <option v-for="p in periods" :key="p.id" :value="p.id">
+            {{ p.name }} ({{ formatDateRange(p.start_date, p.end_date) }})
+          </option>
         </select>
       </div>
       <div class="flex items-center gap-2">
@@ -31,13 +27,17 @@
 
     <!-- Table -->
     <BaseCard>
-      <div v-if="loading" class="p-12 flex flex-col items-center justify-center">
+      <div v-if="!selectedPeriodId" class="p-12 text-center text-(--text-muted)">
+        Silakan pilih periode terlebih dahulu.
+      </div>
+
+      <div v-else-if="loading" class="p-12 flex flex-col items-center justify-center">
         <div class="w-10 h-10 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mb-4"></div>
         <p class="text-(--text-muted)">Memuat data...</p>
       </div>
 
       <div v-else-if="data.length === 0" class="p-12 text-center text-(--text-muted)">
-        Tidak ada data lembur untuk bulan yang dipilih.
+        Tidak ada data lembur untuk periode yang dipilih.
       </div>
 
       <div v-else class="overflow-auto max-h-[65vh]">
@@ -117,7 +117,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 import BaseCard from '../../../../Components/BaseCard.vue'
@@ -130,30 +130,29 @@ const props = defineProps({
 const { get } = useApi()
 const notification = useNotificationStore()
 
-const now = new Date()
-const currentMonth = ref(now.getMonth() + 1)
-const currentYear = ref(now.getFullYear())
+const selectedPeriodId = ref(null)
+const periods = ref([])
 const data = ref([])
 const dates = ref([])
 const monthLabel = ref('')
 const loading = ref(false)
 
-const monthOptions = [
-  { value: 1, label: 'Januari' }, { value: 2, label: 'Februari' },
-  { value: 3, label: 'Maret' }, { value: 4, label: 'April' },
-  { value: 5, label: 'Mei' }, { value: 6, label: 'Juni' },
-  { value: 7, label: 'Juli' }, { value: 8, label: 'Agustus' },
-  { value: 9, label: 'September' }, { value: 10, label: 'Oktober' },
-  { value: 11, label: 'November' }, { value: 12, label: 'Desember' },
-]
-
-const years = computed(() => {
-  const current = new Date().getFullYear()
-  const list = []
-  for (let y = 2024; y <= current; y++) {
-    list.push(y)
+onMounted(async () => {
+  try {
+    const res = await get('/api/v1/payroll/periods')
+    periods.value = (res.data || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      start_date: p.start_date,
+      end_date: p.end_date,
+    }))
+    // Auto-select periode terbaru
+    if (periods.value.length > 0) {
+      selectedPeriodId.value = periods.value[0].id
+    }
+  } catch (err) {
+    console.error('Gagal fetch periods:', err)
   }
-  return list
 })
 
 function formatNumber(num) {
@@ -169,14 +168,17 @@ function formatDateHeader(dateStr) {
   }).format(d).toUpperCase()
 }
 
+function formatDateRange(start, end) {
+  if (!start || !end) return ''
+  const fmt = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+  return fmt.format(new Date(start)) + ' - ' + fmt.format(new Date(end))
+}
+
 async function fetchData() {
-  if (!props.groups.length) return
+  if (!props.groups.length || !selectedPeriodId.value) return
   loading.value = true
   try {
-    const params = new URLSearchParams({
-      month: currentMonth.value,
-      year: currentYear.value
-    })
+    const params = new URLSearchParams({ period_id: selectedPeriodId.value })
     props.groups.forEach(g => params.append('groups[]', g))
     const res = await get(`/api/v1/reports/lembur/bulanan?${params.toString()}`)
     data.value = res.data || []
@@ -191,10 +193,7 @@ async function fetchData() {
 
 function exportExcel() {
   const token = localStorage.getItem('token')
-  const params = new URLSearchParams({
-    month: currentMonth.value,
-    year: currentYear.value
-  })
+  const params = new URLSearchParams({ period_id: selectedPeriodId.value })
   props.groups.forEach(g => params.append('groups[]', g))
   const url = `/api/v1/reports/lembur/bulanan/export?${params.toString()}`
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -203,7 +202,8 @@ function exportExcel() {
       const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.setAttribute('download', `Laporan_Lembur_Bulanan_${monthLabel.value.replace(' ', '_')}.xlsx`)
+      const safeName = monthLabel.value.replace(/\s+/g, '_').replace(/[()]/g, '')
+      link.setAttribute('download', `Laporan_Lembur_${safeName}.xlsx`)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -214,10 +214,7 @@ function exportExcel() {
 
 function openPrint() {
   const token = localStorage.getItem('token')
-  const params = new URLSearchParams({
-    month: currentMonth.value,
-    year: currentYear.value
-  })
+  const params = new URLSearchParams({ period_id: selectedPeriodId.value })
   props.groups.forEach(g => params.append('groups[]', g))
   const url = `/api/v1/reports/lembur/bulanan/print?${params.toString()}`
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -230,5 +227,6 @@ function openPrint() {
     .catch(err => notification.addNotification('Gagal membuka print', 'error'))
 }
 
-watch(() => props.groups, fetchData, { immediate: true })
+watch(() => props.groups, fetchData)
+watch(selectedPeriodId, fetchData)
 </script>

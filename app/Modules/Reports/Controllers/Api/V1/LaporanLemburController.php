@@ -51,10 +51,10 @@ class LaporanLemburController extends Controller
     public function exportBulanan(Request $request)
     {
         $result = $this->buildBulananData($request);
-        $month = $request->input('month', date('m'));
-        $year = $request->input('year', date('Y'));
-        $label = Carbon::create($year, $month, 1)->translatedFormat('F Y');
-        $filename = 'Laporan_Lembur_Bulanan_' . str_replace(' ', '_', $label) . '.xlsx';
+        $periodId = $request->input('period_id');
+        $period = PayPeriod::find($periodId);
+        $label = $period ? $period->name : 'Laporan';
+        $filename = 'Laporan_Lembur_' . str_replace(' ', '_', $label) . '.xlsx';
         return Excel::download(
             new LemburBulananExport($result['data']->toArray(), $result['dates'], $label),
             $filename
@@ -64,9 +64,9 @@ class LaporanLemburController extends Controller
     public function printBulanan(Request $request)
     {
         $result = $this->buildBulananData($request);
-        $month = $request->input('month', date('m'));
-        $year = $request->input('year', date('Y'));
-        $label = Carbon::create($year, $month, 1)->translatedFormat('F Y');
+        $periodId = $request->input('period_id');
+        $period = PayPeriod::find($periodId);
+        $label = $period ? $period->name : 'Laporan';
         $html = $this->renderBulananPrintHtml($result, $label);
         return response($html);
     }
@@ -86,7 +86,7 @@ class LaporanLemburController extends Controller
         $employees = Employee::query()
             ->whereHas('shiftRosters', fn($q) => $q->whereDate('date', $parsedDate))
             ->when(!empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
-            ->with(['position'])
+            ->with(['position', 'groups'])
             ->get();
 
         $period = PayPeriod::where('start_date', '<=', $parsedDate)
@@ -139,7 +139,21 @@ class LaporanLemburController extends Controller
             $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60), 2) : 0;
 
             $shiftKode = $roster && $roster->shift ? $roster->shift->external_code : '';
-            $status = $prepare ? $prepare->status : '-';
+            // Kode: SG jika employee group SG, else "L"; kosongkan jika tidak lembur
+            $isSG = $employee->groups->contains('reference_code', 'SG');
+            if ($lmCount + $overtimeCount === 0) {
+                $kode = '';
+            } else {
+                $kode = $isSG ? 'SG' : 'L';
+            }
+            // H/A: mapping status
+            $statusRaw = $prepare ? $prepare->status : '-';
+            $ha = match ($statusRaw) {
+                'hadir' => 'H',
+                'absent' => 'A',
+                'cuti', 'libur', 'off', 'izin', 'sakit' => 'I',
+                default => $statusRaw === '-' ? '-' : 'I',
+            };
 
             return [
                 'id' => $employee->id, 'name' => $employee->name,
@@ -147,7 +161,7 @@ class LaporanLemburController extends Controller
                 'gender' => $employee->gender ?? '',
                 'tj_mk' => $tjMk, 'tunjangan' => $tunjangan,
                 'upah_per_hari' => $upahPerHari, 'upah_lembur_per_jam' => $hourlyRate,
-                'shift_kode' => $shiftKode, 'status' => $status,
+                'shift_kode' => $kode, 'status' => $ha,
                 'lembur_minggu' => $lmRaw > 0 ? round($lmRaw / 60, 2) : 0,
                 'lembur' => $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0,
                 'nominal' => $uangLembur,
@@ -158,13 +172,23 @@ class LaporanLemburController extends Controller
 
     private function buildBulananData(Request $request)
     {
-        $month = (int)$request->input('month', date('m'));
-        $year  = (int)$request->input('year', date('Y'));
-        $groups = $request->input('groups', []);
+        $periodId = $request->input('period_id');
+        $groups   = $request->input('groups', []);
 
-        $startDate = Carbon::create($year, $month, 1);
-        $endDate   = $startDate->copy()->endOfMonth();
-        // Jangan lewati hari ini jika bulan ini
+        $period = PayPeriod::find($periodId);
+
+        if ($period) {
+            $startDate = Carbon::parse($period->start_date);
+            $endDate   = Carbon::parse($period->end_date);
+            $label     = $period->name . ' (' . $startDate->translatedFormat('d M') . ' - ' . $endDate->translatedFormat('d M Y') . ')';
+        } else {
+            // Fallback: bulan ini
+            $startDate = Carbon::now()->startOfMonth();
+            $endDate   = Carbon::now()->endOfMonth();
+            $label     = $startDate->translatedFormat('F Y');
+        }
+
+        // Jangan lewati hari ini
         $today = Carbon::today();
         if ($endDate->gt($today)) {
             $endDate = $today;
@@ -184,7 +208,7 @@ class LaporanLemburController extends Controller
         $employees = Employee::query()
             ->whereHas('shiftRosters', fn($q) => $q->whereBetween('date', [$startDate, $endDate]))
             ->when(!empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
-            ->with(['position'])
+            ->with(['position', 'groups'])
             ->get();
 
         // Ambil semua rosters dalam range
@@ -192,19 +216,14 @@ class LaporanLemburController extends Controller
             ->with('shift')->get()
             ->groupBy('employee_id');
 
-        // Pay period yang mencakup bulan ini (gunakan mid-month untuk cari period)
-        $midMonth = $startDate->copy()->addDays(15);
-        $period = PayPeriod::where('start_date', '<=', $midMonth)
-            ->where('end_date', '>=', $midMonth)->first();
-
         $payRecords = collect();
         if ($period) {
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
         $data = $employees->map(function ($employee) use ($prepares, $rosters, $payRecords, $period, $dates, $startDate) {
-            $empPrepares = $prepares->get($employee->id, collect())->keyBy('date');
-            $empRosters  = $rosters->get($employee->id, collect())->keyBy('date');
+            $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
+            $empRosters  = $rosters->get($employee->id, collect())->keyBy(fn($r) => $r->date->format('Y-m-d'));
             $empPayRecords = $payRecords->get($employee->id);
 
             // Hitung komponen gaji
@@ -222,13 +241,13 @@ class LaporanLemburController extends Controller
             $hourlyRate  = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
 
             // Bangun data per hari
+            $isSG = $employee->groups->contains('reference_code', 'SG');
             $days = [];
             foreach ($dates as $dateStr) {
                 $prep = $empPrepares->get($dateStr);
                 $roster = $empRosters->get($dateStr);
 
                 $shiftKode = $roster && $roster->shift ? $roster->shift->external_code : '';
-                $status = $prep ? $prep->status : '-';
 
                 // Display raw
                 $lmRaw = $prep ? (int)$prep->lm : 0;
@@ -240,9 +259,24 @@ class LaporanLemburController extends Controller
                 $totalMenit = $lmCount + $overtimeCount;
                 $uangLembur = $hourlyRate > 0 ? round($hourlyRate * ($totalMenit / 60), 2) : 0;
 
+                // Kode: SG atau "L"; kosongkan jika tidak lembur
+                if ($lmCount + $overtimeCount === 0) {
+                    $kode = '';
+                } else {
+                    $kode = $isSG ? 'SG' : 'L';
+                }
+                // H/A mapping
+                $statusRaw = $prep ? $prep->status : '-';
+                $ha = match ($statusRaw) {
+                    'hadir' => 'H',
+                    'absent' => 'A',
+                    'cuti', 'libur', 'off', 'izin', 'sakit' => 'I',
+                    default => $statusRaw === '-' ? '-' : 'I',
+                };
+
                 $days[$dateStr] = [
-                    'kode'     => $shiftKode,
-                    'ha'       => $status,
+                    'kode'     => $kode,
+                    'ha'       => $ha,
                     'lm'       => $lmRaw > 0 ? round($lmRaw / 60, 2) : 0,
                     'lembur'   => $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0,
                     'nominal'  => $uangLembur,
@@ -265,7 +299,7 @@ class LaporanLemburController extends Controller
         return [
             'data'         => $data,
             'dates'        => $dates,
-            'month_label'  => $startDate->translatedFormat('F Y'),
+            'month_label'  => $label,
         ];
     }
 
