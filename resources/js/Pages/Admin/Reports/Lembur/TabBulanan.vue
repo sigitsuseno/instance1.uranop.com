@@ -179,9 +179,9 @@ async function fetchData() {
     })
     props.groups.forEach(g => params.append('groups[]', g))
     const res = await get(`/api/v1/reports/lembur/bulanan?${params.toString()}`)
-    data.value = res.data?.data || []
-    dates.value = res.data?.dates || []
-    monthLabel.value = res.data?.month_label || ''
+    data.value = res.data || []
+    dates.value = res.dates || []
+    monthLabel.value = res.month_label || ''
   } catch (err) {
     notification.addNotification('Gagal mengambil data laporan bulanan', 'error')
   } finally {
