@@ -32,6 +32,17 @@
         >
           Bulanan
         </button>
+        <button
+          :class="[
+            'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
+            activeTab === 'resume'
+              ? 'text-(--primary) border-(--primary)'
+              : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
+          ]"
+          @click="activeTab = 'resume'"
+        >
+          Resume
+        </button>
       </nav>
     </div>
 
@@ -60,6 +71,7 @@
     <!-- Tab Content -->
     <TabHarian v-if="activeTab === 'harian'" :groups="selectedGroups" />
     <TabBulanan v-if="activeTab === 'bulanan'" :groups="selectedGroups" />
+    <TabResume v-if="activeTab === 'resume'" :groups="selectedGroups" />
   </div>
 </template>
 
@@ -69,6 +81,7 @@ import { useApi } from '../../../../composables/useApi'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import TabHarian from './TabHarian.vue'
 import TabBulanan from './TabBulanan.vue'
+import TabResume from './TabResume.vue'
 
 const { get } = useApi()
 

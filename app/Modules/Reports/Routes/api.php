@@ -17,5 +17,8 @@ Route::prefix('v1/reports')->middleware('auth:sanctum')->group(function () {
         Route::get('/bulanan', [LaporanLemburController::class, 'bulanan']);
         Route::get('/bulanan/export', [LaporanLemburController::class, 'exportBulanan']);
         Route::get('/bulanan/print', [LaporanLemburController::class, 'printBulanan']);
+        Route::get('/resume', [LaporanLemburController::class, 'resume']);
+        Route::get('/resume/export', [LaporanLemburController::class, 'exportResume']);
+        Route::get('/resume/print', [LaporanLemburController::class, 'printResume']);
     });
 });
