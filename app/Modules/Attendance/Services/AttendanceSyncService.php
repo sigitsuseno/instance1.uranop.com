@@ -217,6 +217,30 @@ class AttendanceSyncService
 
         // ── 3. Gak ada log ─────────────────────────────────────
         if ($logs->isEmpty()) {
+            // SHIFT (satpam): holiday nggak ngaruh, cuma external_code yang menentukan
+            if ($roster->work_pattern_type === 'SHIFT') {
+                if ($roster->external_code && strtoupper($roster->external_code) === 'L') {
+                    return $this->savePrepare($roster, $dateStr, $shift, [
+                        'check_in'      => null,
+                        'check_out'     => null,
+                        'status'        => AttendancePrepare::STATUS_OFF,
+                        'review_status' => AttendancePrepare::REVIEW_LENGKAP,
+                        'is_holiday'    => $isHoliday,
+                        'is_sunday'     => $isSunday,
+                    ]);
+                }
+                // SHIFT tanpa external_code 'L' + no scan = absent
+                return $this->savePrepare($roster, $dateStr, $shift, [
+                    'check_in'      => null,
+                    'check_out'     => null,
+                    'status'        => AttendancePrepare::STATUS_ABSENT,
+                    'review_status' => AttendancePrepare::REVIEW_CEK,
+                    'is_holiday'    => $isHoliday,
+                    'is_sunday'     => $isSunday,
+                ]);
+            }
+
+            // Non-SHIFT: holiday & sunday normal
             if ($isHoliday) {
                 return $this->savePrepare($roster, $dateStr, $shift, [
                     'check_in'      => null,
@@ -235,6 +259,18 @@ class AttendanceSyncService
                     'review_status' => AttendancePrepare::REVIEW_LENGKAP,
                     'is_holiday'    => $isHoliday,
                     'is_sunday'     => true,
+                ]);
+            }
+
+            // External code 'L' = Libur/Off (non-SHIFT)
+            if ($roster->external_code && strtoupper($roster->external_code) === 'L') {
+                return $this->savePrepare($roster, $dateStr, $shift, [
+                    'check_in'      => null,
+                    'check_out'     => null,
+                    'status'        => AttendancePrepare::STATUS_OFF,
+                    'review_status' => AttendancePrepare::REVIEW_LENGKAP,
+                    'is_holiday'    => $isHoliday,
+                    'is_sunday'     => $isSunday,
                 ]);
             }
 
