@@ -35,6 +35,33 @@ class PayPeriodApiController extends Controller
         ]);
     }
 
+    public function show($id)
+    {
+        $period = PayPeriod::findOrFail($id);
+
+        return response()->json([
+            'data' => [
+                'id' => $period->id,
+                'uuid' => $period->uuid,
+                'period_code' => 'PAY-' . $period->period_year . '-' . str_pad($period->period_month, 2, '0', STR_PAD_LEFT),
+                'name' => $period->name,
+                'period_year' => $period->period_year,
+                'period_month' => $period->period_month,
+                'start_date' => $period->start_date?->format('Y-m-d'),
+                'end_date' => $period->end_date?->format('Y-m-d'),
+                'is_split' => $period->is_split,
+                'status' => $period->status,
+                'date_range' => $period->start_date && $period->end_date
+                    ? $period->start_date->format('d M') . ' - ' . $period->end_date->format('d M Y')
+                    : '-',
+                'created_by' => $period->created_by,
+                'updated_by' => $period->updated_by,
+                'created_at' => $period->created_at?->format('Y-m-d H:i:s'),
+                'updated_at' => $period->updated_at?->format('Y-m-d H:i:s'),
+            ]
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([

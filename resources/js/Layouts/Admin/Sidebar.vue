@@ -27,6 +27,7 @@ const allMenus = [
       { title: 'Pekerjaan', icon: 'bx bx-briefcase', route: '/admin/organization/positions' },
       { title: 'Kalender', icon: 'bx bx-calendar', route: '/admin/schedule/calendars' },
       { title: 'Gaji & LTHR', icon: 'bx bx-money', route: '/admin/payroll/configs' },
+      { title: 'Penggajian', icon: 'bx bx-time', route: '/admin/payroll/periods/crud' },
       { title: 'Pengaturan Cuti', icon: 'bx bx-cog', route: '/admin/leave/settings', visible: isSuperadmin.value || isHrmanager.value },
     ],
   },
@@ -110,7 +111,7 @@ const allMenus = [
     icon: 'bx bx-money',
     visible: isSuperadmin.value || isHrmanager.value,
     children: [
-      { title: 'Gaji Karyawan', icon: 'bx bx-calculator', route: '/admin/payroll/periods' },
+      { title: 'Gaji Karyawan', icon: 'bx bx-calculator', route: '/admin/payroll/gaji-karyawan' },
       { title: 'Slip Gaji', icon: 'bx bx-file', route: '/admin/payroll/slip' },
       { title: 'Perhitungan THR', icon: 'bx bx-gift', route: '/admin/payroll/thr' },
     ],

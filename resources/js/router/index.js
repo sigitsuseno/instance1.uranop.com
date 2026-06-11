@@ -40,7 +40,9 @@ const LeaveIndex = () => import('../Pages/Admin/Leave/Index.vue')
 const LeaveApprovals = () => import('../Pages/Admin/Leave/Approvals.vue')
 const LeaveSettings = () => import('../Pages/Admin/Leave/Settings.vue')
 const PayrollPeriodsIndex = () => import('../Pages/Admin/Payroll/Periods/Index.vue')
+const PayrollPeriodsCrud = () => import('../Pages/Admin/Payroll/Periods/Crud.vue')
 const PayrollPeriodDetail = () => import('../Pages/Admin/Payroll/Periods/Detail.vue')
+const PayrollGajiKaryawan = () => import('../Pages/Admin/Payroll/GajiKaryawan/Index.vue')
 const PayrollConfigsIndex = () => import('../Pages/Admin/Payroll/Configs/Index.vue')
 const PayrollThr = () => import('../Pages/Admin/Payroll/Thr.vue')
 const BpjsKeanggotaanIndex = () => import('../Pages/Admin/Payroll/Bpjs/Keanggotaan/Index.vue')
@@ -135,7 +137,9 @@ const routes = [
       { path: 'leave', name: 'leave', component: LeaveIndex, meta: { title: 'Cuti' } },
       { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals, meta: { title: 'Approval Cuti' } },
       { path: 'leave/settings', name: 'leave.settings', component: LeaveSettings, meta: { title: 'Pengaturan Cuti' } },
-      { path: 'payroll/periods', name: 'payroll.periods', component: PayrollPeriodsIndex, meta: { title: 'Gaji Karyawan' } },
+      { path: 'payroll/periods', name: 'payroll.periods', component: PayrollPeriodsIndex, meta: { title: 'Gaji Karyawan (Legacy)' } },
+      { path: 'payroll/periods/crud', name: 'payroll.periods.crud', component: PayrollPeriodsCrud, meta: { title: 'Penggajian' } },
+      { path: 'payroll/gaji-karyawan', name: 'payroll.gaji-karyawan', component: PayrollGajiKaryawan, meta: { title: 'Gaji Karyawan' } },
       { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail, meta: { title: 'Detail Periode' } },
       { path: 'payroll/slip', name: 'payroll.slip', component: PayrollPeriodsIndex, meta: { title: 'Slip Gaji' } },
       { path: 'payroll/thr', name: 'payroll.thr', component: PayrollThr, meta: { title: 'THR' } },

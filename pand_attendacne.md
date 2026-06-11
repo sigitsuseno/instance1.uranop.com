@@ -1,5 +1,3 @@
-kolom data tambah lm untuk data di tampilan saja, kemudian tabel hitungan tambah 1 kolom gaji,
-
 HK = nilai fixed_work_day dari tabel setting, kalau pay_periode->is_split true = nilainya dari json seperti yang kita omongkan tadi.
 hari_kerja = HK - deduct_day.
 
