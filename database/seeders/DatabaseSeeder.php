@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             LeaveTypeSeeder::class,
             OvertimeRuleSeeder::class,
             BpjsConfigSeeder::class,
+            ConsecutiveDaySeeder::class,
         ]);
     }
 }
