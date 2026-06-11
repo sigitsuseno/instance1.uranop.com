@@ -21,23 +21,24 @@ class UangMakanReportController extends Controller
 
     public function harian(Request $request)
     {
-        $data = $this->buildHarianData($request);
-        return response()->json(['data' => $data]);
+        $result = $this->buildHarianData($request);
+        return response()->json($result);
     }
 
     public function exportHarian(Request $request)
     {
-        $data = $this->buildHarianData($request);
-        $date = $request->input('date', date('Y-m-d'));
-        $filename = 'Uang_Makan_Harian_' . $date . '.xlsx';
-        return Excel::download(new UangMakanHarianExport($data->values()->toArray(), $date), $filename);
+        $result = $this->buildHarianData($request);
+        $filename = 'Uang_Makan_Harian_' . str_replace(' ', '_', $result['date_label']) . '.xlsx';
+        return Excel::download(
+            new UangMakanHarianExport($result['data']->toArray(), $result['dates'], $result['date_label']),
+            $filename
+        );
     }
 
     public function printHarian(Request $request)
     {
-        $data = $this->buildHarianData($request);
-        $date = $request->input('date', date('Y-m-d'));
-        $html = $this->renderHarianPrintHtml($data, $date);
+        $result = $this->buildHarianData($request);
+        $html = $this->renderHarianPrintHtml($result);
         return response($html);
     }
 
@@ -107,40 +108,56 @@ class UangMakanReportController extends Controller
 
     private function buildHarianData(Request $request)
     {
-        $date = $request->input('date', date('Y-m-d'));
+        $startDateInput = $request->input('start_date', date('Y-m-d'));
+        $endDateInput = $request->input('end_date', date('Y-m-d'));
         $groups = $request->input('groups', []);
 
-        $parsedDate = Carbon::parse($date);
+        $startDate = Carbon::parse($startDateInput);
+        $endDate = Carbon::parse($endDateInput);
 
-        $prepares = AttendancePrepare::whereDate('date', $parsedDate)
-            ->get()->keyBy('employee_id');
+        if ($startDate->equalTo($endDate)) {
+            $label = $startDate->translatedFormat('d M Y');
+        } else {
+            $label = $startDate->translatedFormat('d M') . ' - ' . $endDate->translatedFormat('d M Y');
+        }
+
+        $dates = [];
+        $d = $startDate->copy();
+        while ($d->lte($endDate)) {
+            $dates[] = $d->format('Y-m-d');
+            $d->addDay();
+        }
+
+        $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
+            ->get()->groupBy('employee_id');
 
         $employees = Employee::query()
-            ->whereHas('shiftRosters', fn($q) => $q->whereDate('date', $parsedDate))
+            ->whereHas('shiftRosters', fn($q) => $q->whereBetween('date', [$startDate, $endDate]))
             ->when(!empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
             ->with(['position', 'groups.master'])
             ->get();
 
-        $period = PayPeriod::where('start_date', '<=', $parsedDate)
-            ->where('end_date', '>=', $parsedDate)->first();
+        $rosters = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
+            ->with('shift')->get()
+            ->groupBy('employee_id');
+
+        $period = PayPeriod::where('start_date', '<=', $startDate)
+            ->where('end_date', '>=', $startDate)->first();
 
         $payRecords = collect();
         if ($period) {
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
-        $rosters = EmployeeShiftRoster::whereDate('date', $parsedDate)
-            ->with('shift')->get()->keyBy('employee_id');
-
-        return $employees->map(function ($employee) use ($prepares, $payRecords, $period, $parsedDate, $rosters) {
-            $prepare = $prepares->get($employee->id);
-            $roster = $rosters->get($employee->id);
+        $data = $employees->map(function ($employee) use ($prepares, $rosters, $payRecords, $period, $dates, $startDate) {
+            $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
+            $empRosters  = $rosters->get($employee->id, collect())->keyBy(fn($r) => $r->date->format('Y-m-d'));
             $empPayRecords = $payRecords->get($employee->id);
-            $payRecord = null;
 
+            $payRecord = null;
             if ($empPayRecords && $empPayRecords->isNotEmpty()) {
                 if ($period && $period->is_split) {
-                    $day = (int) $parsedDate->day;
+                    $day = (int) $startDate->day;
                     $cutOff = (int) ($period->cut_off_date ?? 25);
                     $segment = ($day >= $cutOff && $day <= 31) ? 'A' : 'B';
                     $payRecord = $empPayRecords->where('segment', $segment)->first() ?? $empPayRecords->first();
@@ -152,47 +169,61 @@ class UangMakanReportController extends Controller
             $gaji = $payRecord ? (float)($payRecord->gaji_pokok ?? 0) : $employee->baseSalary();
             $tjMk = $payRecord ? (float)($payRecord->tj_masa_kerja ?? 0) : (float)($employee->salaryComponents()->latest('effective_date')->first()?->tunjangan_masa_kerja ?? 0);
             if ($tjMk == 0) {
-                $tjMk = $employee->tunjangan_masa_kerja($parsedDate->format('Y-m'));
+                $tjMk = $employee->tunjangan_masa_kerja($startDate->format('Y-m'));
             }
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
             $hourlyRate = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
 
-            // ── Uang Makan calculation ──
             $groupName = $this->getGroupName($employee);
             $rates = $this->getGroupRates($groupName, $gaji);
-
-            // Upah/Hari = (gaji_pokok + tj_mk) / 25
             $upahPerHariValue = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
 
-            $lembur = 0;
-            $statusRaw = $prepare ? $prepare->status : '-';
-            $isHoliday = $roster && $roster->is_holiday;
-            $dayOfWeek = $parsedDate->dayOfWeek;
+            $days = [];
+            foreach ($dates as $dateStr) {
+                $prep = $empPrepares->get($dateStr);
+                $roster = $empRosters->get($dateStr);
+                $parsedDate = Carbon::parse($dateStr);
 
-            if ($prepare) {
-                $lemburMinutes = ($prepare->lm ?? 0) + ($prepare->overtime ?? 0);
-                $lembur = round($lemburMinutes / 60, 2);
+                $lembur = 0;
+                $statusRaw = $prep ? $prep->status : '-';
+                $isHoliday = $roster && $roster->is_holiday;
+                $dayOfWeek = $parsedDate->dayOfWeek;
+
+                if ($prep) {
+                    $lemburMinutes = ($prep->lm ?? 0) + ($prep->overtime ?? 0);
+                    $lembur = round($lemburMinutes / 60, 2);
+                }
+
+                $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prep, $upahPerHariValue);
+
+                $days[$dateStr] = [
+                    'kode'     => $dayInfo['kode'],
+                    'ha'       => $dayInfo['ha'],
+                    'upah_per_hari' => $dayInfo['upah_per_hari'],
+                    'lm'       => $dayInfo['lm'],
+                    'lembur'   => $dayInfo['lembur'],
+                    'nominal'  => $dayInfo['nominal'],
+                ];
             }
 
-            $dayInfo = $this->buildDayInfo($lembur, $dayOfWeek, $isHoliday, $rates, $statusRaw, $prepare, $upahPerHariValue);
-
             return [
-                'id' => $employee->id,
-                'name' => $employee->name,
-                'jabatan' => $employee->position->name ?? '-',
-                'gender' => $employee->gender ?? '',
-                'tj_mk' => $tjMk,
-                'tunjangan' => $tunjangan,
+                'id'                  => $employee->id,
+                'name'                => $employee->name,
+                'jabatan'             => $employee->position->name ?? '-',
+                'gender'              => $employee->gender ?? '',
+                'tj_mk'               => $tjMk,
+                'tunjangan'           => $tunjangan,
                 'upah_lembur_per_jam' => $hourlyRate,
-                'kode' => $dayInfo['kode'],
-                'ha' => $dayInfo['ha'],
-                'upah_per_hari' => $dayInfo['upah_per_hari'],
-                'lembur_minggu' => $dayInfo['lm'],
-                'lembur' => $dayInfo['lembur'],
-                'nominal' => $dayInfo['nominal'],
-                'group_name' => $groupName,
+                'days'                => $days,
+                'group_name'          => $groupName,
             ];
-        });
+        })->values();
+
+        return [
+            'data'       => $data,
+            'dates'      => $dates,
+            'date_label' => $label,
+        ];
     }
 
     private function buildBulananData(Request $request)
@@ -588,50 +619,72 @@ class UangMakanReportController extends Controller
 
     // ─── Print HTML Renderers ──────────────────────────────────────
 
-    private function renderHarianPrintHtml($data, $date)
+    private function renderHarianPrintHtml($result)
     {
-        $formatted = Carbon::parse($date)->translatedFormat('l, d F Y');
+        $data  = $result['data'];
+        $dates = $result['dates'];
+        $label = $result['date_label'];
+
+        $dayHeaders1 = '';
+        $dayHeaders2 = '';
+        foreach ($dates as $dateStr) {
+            $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
+            $dayHeaders1 .= "<th colspan=\"6\" style='background:#dbeafe'>" . strtoupper($formatted) . "</th>";
+            $dayHeaders2 .= "<th>Kode</th><th>H/A</th><th>Upah/Hari</th><th>L/M</th><th>Lbr</th><th>Nominal</th>";
+        }
+
         $rows = '';
         $i = 0;
         foreach ($data as $item) {
             $i++;
             $gender = $item['gender'] === 'male' ? 'L' : ($item['gender'] === 'female' ? 'P' : ($item['gender'] ?? ''));
-            $upahHari = $item['upah_per_hari'] ? number_format($item['upah_per_hari'], 0, ',', '.') : '-';
-            $nominal = $item['nominal'] ? number_format($item['nominal'], 0, ',', '.') : '-';
+            $dayCells = '';
+            foreach ($dates as $dateStr) {
+                $d = $item['days'][$dateStr] ?? null;
+                if ($d) {
+                    $nominal = $d['nominal'] ? number_format($d['nominal'], 0, ',', '.') : '';
+                    $upahHari = $d['upah_per_hari'] ? number_format($d['upah_per_hari'], 0, ',', '.') : '-';
+                    $dayCells .= "<td>{$d['kode']}</td>"
+                              . "<td>{$d['ha']}</td>"
+                              . "<td class='text-right'>{$upahHari}</td>"
+                              . "<td>" . ($d['lm'] ?: '-') . "</td>"
+                              . "<td>" . ($d['lembur'] ?: '-') . "</td>"
+                              . "<td class='text-right'>" . ($nominal ?: '-') . "</td>";
+                } else {
+                    $dayCells .= "<td>-</td><td>-</td><td class='text-right'>-</td><td>-</td><td>-</td><td class='text-right'>-</td>";
+                }
+            }
             $rows .= "<tr>
                 <td>{$i}</td><td>{$item['name']}</td><td>{$item['jabatan']}</td><td>{$gender}</td>
                 <td class='text-right'>".number_format($item['tj_mk'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['tunjangan'],0,',','.')."</td>
                 <td class='text-right'>".number_format($item['upah_lembur_per_jam'],0,',','.')."</td>
-                <td>{$item['kode']}</td><td>{$item['ha']}</td>
-                <td class='text-right'>{$upahHari}</td>
-                <td>".($item['lembur_minggu']?:'-')."</td><td>".($item['lembur']?:'-')."</td>
-                <td class='text-right'>{$nominal}</td>
+                {$dayCells}
             </tr>";
         }
 
-        return <<<HTML
-<!DOCTYPE html>
+        return '<!DOCTYPE html>
 <html lang="id"><head><meta charset="UTF-8"><title>Laporan Uang Makan Harian</title>
 <style>
-@page{size:A4 landscape;margin:8mm}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:10px;color:#1f2937}
-h1{font-size:15px;text-align:center;margin-bottom:2px}.periode{text-align:center;color:#6b7280;margin-bottom:12px;font-size:11px}
-table{width:100%;border-collapse:collapse;margin-bottom:16px}
-th{background:#e8eaed;font-weight:600;padding:5px 6px;border:1px solid #d1d5db;font-size:9px;text-align:center}
-td{padding:4px 6px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}
+@page{size:A3 landscape;margin:6mm}body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:8px;color:#1f2937}
+h1{font-size:14px;text-align:center;margin-bottom:2px}
+table{width:100%;border-collapse:collapse}th{background:#e8eaed;font-weight:600;padding:3px 4px;border:1px solid #d1d5db;font-size:7px;text-align:center}
+td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9fafb}
 .text-right{text-align:right}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<h1>LAPORAN UANG MAKAN HARIAN</h1>
-<p class="periode">Tanggal: {$formatted}</p>
-<table><thead><tr>
-<th>No</th><th>Nama</th><th>Bagian/Jabatan</th><th>L/P</th>
-<th>Tj.MK</th><th>Tunjangan</th><th>Upah Lbr/Jam</th>
-<th>Kode</th><th>H/A</th><th>Upah/Hari</th><th>L/M</th><th>Lembur</th><th>Nominal</th>
-</tr></thead><tbody>{$rows}</tbody></table>
-<div style="text-align:center;margin-top:16px"><button onclick="window.print()" style="padding:10px 24px;font-size:14px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨️ Print</button></div>
-</body></html>
-HTML;
+<h1>LAPORAN UANG MAKAN HARIAN — ' . strtoupper($label) . '</h1>
+<div style="overflow-x:auto">
+<table><thead>
+<tr>
+<th rowspan="2">No</th><th rowspan="2">Nama</th><th rowspan="2">Bagian/Jabatan</th><th rowspan="2">L/P</th>
+<th rowspan="2">Tj. MK</th><th rowspan="2">Tunjangan</th><th rowspan="2">Upah Lbr/Jam</th>
+' . $dayHeaders1 . '</tr>
+<tr>' . $dayHeaders2 . '</tr>
+</thead><tbody>' . $rows . '</tbody></table>
+</div>
+<div style="text-align:center;margin-top:8px"><button onclick="window.print()" style="padding:6px 16px;font-size:12px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨 Print</button></div>
+</body></html>';
     }
 
     private function renderBulananPrintHtml($result, $label)
