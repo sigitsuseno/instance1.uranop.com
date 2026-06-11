@@ -6,16 +6,24 @@
         <span class="text-sm font-semibold text-(--text-muted) uppercase tracking-wider">Tanggal:</span>
         <input
           type="date"
-          v-model="currentDate"
-          @change="fetchData"
+          v-model="startDate"
           class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg focus:ring-(--primary) focus:border-(--primary) p-2"
         />
+        <span class="text-(--text-muted)">s/d</span>
+        <input
+          type="date"
+          v-model="endDate"
+          class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg focus:ring-(--primary) focus:border-(--primary) p-2"
+        />
+        <BaseButton variant="primary" size="sm" @click="fetchData" :disabled="loading">
+          Terapkan
+        </BaseButton>
       </div>
       <div class="flex items-center gap-2">
-        <BaseButton variant="secondary" size="sm" @click="exportExcel" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="exportExcel" :disabled="loading || data.length === 0">
           Export Excel
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="openPrint" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="openPrint" :disabled="loading || data.length === 0">
           Print
         </BaseButton>
       </div>
@@ -29,7 +37,7 @@
       </div>
 
       <div v-else-if="data.length === 0" class="p-12 text-center text-(--text-muted)">
-        Tidak ada data lembur untuk tanggal yang dipilih.
+        Tidak ada data lembur untuk rentang tanggal yang dipilih.
       </div>
 
       <div v-else class="overflow-x-auto max-h-[65vh]">
@@ -43,17 +51,24 @@
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tj. MK</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tunjangan</th>
               <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah Lembur<br>Per Jam</th>
-              <th colspan="6" class="px-4 py-2 text-center font-bold text-(--text-main) bg-(--bg-soft) uppercase border-b border-(--border-soft)">
-                {{ formattedDate }}
+              <th
+                v-for="dateStr in dates"
+                :key="'dh-' + dateStr"
+                colspan="6"
+                class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft)"
+              >
+                {{ formatDateHeader(dateStr) }}
               </th>
             </tr>
             <tr>
-              <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Kode</th>
-              <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">H/A</th>
-              <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah/Hari</th>
-              <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/M</th>
-              <th class="px-3 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Lembur</th>
-              <th class="px-4 py-2 text-right font-bold text-(--text-muted) uppercase">Nominal</th>
+              <template v-for="dateStr in dates" :key="'sh-' + dateStr">
+                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Kode</th>
+                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">H/A</th>
+                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah/Hari</th>
+                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/M</th>
+                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Lembur</th>
+                <th class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase">Nominal</th>
+              </template>
             </tr>
           </thead>
           <tbody class="divide-y divide-(--border-soft)">
@@ -66,13 +81,27 @@
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.tunjangan ? formatNumber(item.tunjangan) : '' }}</td>
               <td class="px-4 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.upah_lembur_per_jam ? formatNumber(item.upah_lembur_per_jam) : '' }}</td>
               
-              <!-- Daily Details -->
-              <td class="px-3 py-3 text-center font-medium text-blue-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.kode || '-' }}</td>
-              <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.ha === '-' ? '-' : item.ha }}</td>
-              <td class="px-3 py-3 text-right font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.upah_per_hari ? formatNumber(item.upah_per_hari) : '-' }}</td>
-              <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft) bg-blue-50/10">{{ item.lembur_minggu || '' }}</td>
-              <td class="px-3 py-3 text-center font-medium text-orange-600 border-r border-(--border-soft) bg-blue-50/10">{{ item.lembur || '' }}</td>
-              <td class="px-4 py-3 text-right font-bold text-green-600 bg-blue-50/10">{{ item.nominal ? formatNumber(item.nominal) : '' }}</td>
+              <!-- Daily cells -->
+              <template v-for="dateStr in dates" :key="'dc-' + item.id + '-' + dateStr">
+                <td :class="['px-2 py-3 text-center border-r border-(--border-soft)', (item.days[dateStr]?.kode) ? 'text-blue-600 font-medium bg-blue-50/10' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.kode || '-' }}
+                </td>
+                <td :class="['px-2 py-3 text-center border-r border-(--border-soft)', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium bg-blue-50/10 text-(--text-main)' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.ha || '-' }}
+                </td>
+                <td :class="['px-2 py-3 text-right border-r border-(--border-soft)', item.days[dateStr]?.upah_per_hari > 0 ? 'text-(--text-main) font-medium bg-blue-50/10' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
+                </td>
+                <td :class="['px-2 py-3 text-center border-r border-(--border-soft)', item.days[dateStr]?.lm > 0 ? 'text-(--text-main) font-medium bg-blue-50/10' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.lm > 0 ? item.days[dateStr].lm : '-' }}
+                </td>
+                <td :class="['px-2 py-3 text-center border-r border-(--border-soft)', item.days[dateStr]?.lembur > 0 ? 'text-orange-600 font-medium bg-blue-50/10' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.lembur > 0 ? item.days[dateStr].lembur : '-' }}
+                </td>
+                <td :class="['px-3 py-3 text-right', item.days[dateStr]?.nominal > 0 ? 'text-green-600 font-bold bg-blue-50/10' : 'text-gray-300']">
+                  {{ item.days[dateStr]?.nominal > 0 ? formatNumber(item.days[dateStr].nominal) : '-' }}
+                </td>
+              </template>
             </tr>
           </tbody>
         </table>
@@ -95,32 +124,39 @@ const props = defineProps({
 const { get } = useApi()
 const notification = useNotificationStore()
 
-const currentDate = ref(new Date().toISOString().split('T')[0])
+const startDate = ref(new Date().toISOString().split('T')[0])
+const endDate = ref(new Date().toISOString().split('T')[0])
 const data = ref([])
+const dates = ref([])
 const loading = ref(false)
-
-const formattedDate = computed(() => {
-  const d = new Date(currentDate.value)
-  return new Intl.DateTimeFormat('id-ID', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric'
-  }).format(d).toUpperCase()
-})
 
 function formatNumber(num) {
   return new Intl.NumberFormat('id-ID').format(num || 0)
 }
 
+function formatDateHeader(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return new Intl.DateTimeFormat('id-ID', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  }).format(d).toUpperCase()
+}
+
 async function fetchData() {
   if (!props.groups.length) return
+  if (!startDate.value || !endDate.value) return
+  if (startDate.value > endDate.value) {
+    notification.addNotification('Tanggal awal tidak boleh lebih besar dari tanggal akhir', 'warning')
+    return
+  }
   loading.value = true
   try {
-    const params = new URLSearchParams({ date: currentDate.value })
+    const params = new URLSearchParams({ start_date: startDate.value, end_date: endDate.value })
     props.groups.forEach(g => params.append('groups[]', g))
     const res = await get(`/api/v1/reports/lembur/harian?${params.toString()}`)
     data.value = res.data || []
+    dates.value = res.dates || []
   } catch (err) {
     notification.addNotification('Gagal mengambil data laporan harian', 'error')
   } finally {
@@ -130,7 +166,7 @@ async function fetchData() {
 
 function exportExcel() {
     const token = localStorage.getItem('token');
-    const params = new URLSearchParams({ date: currentDate.value });
+    const params = new URLSearchParams({ start_date: startDate.value, end_date: endDate.value });
     props.groups.forEach(g => params.append('groups[]', g));
     const url = `/api/v1/reports/lembur/harian/export?${params.toString()}`;
     fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -139,7 +175,11 @@ function exportExcel() {
             const downloadUrl = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = downloadUrl;
-            link.setAttribute('download', `Laporan_Lembur_Harian_${currentDate.value}.xlsx`);
+            let fileName = `Laporan_Lembur_Harian_${startDate.value}.xlsx`;
+            if (startDate.value !== endDate.value) {
+                fileName = `Laporan_Lembur_Harian_${startDate.value}_to_${endDate.value}.xlsx`;
+            }
+            link.setAttribute('download', fileName);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -150,7 +190,7 @@ function exportExcel() {
 
 function openPrint() {
     const token = localStorage.getItem('token');
-    const params = new URLSearchParams({ date: currentDate.value });
+    const params = new URLSearchParams({ start_date: startDate.value, end_date: endDate.value });
     props.groups.forEach(g => params.append('groups[]', g));
     const url = `/api/v1/reports/lembur/harian/print?${params.toString()}`;
     fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
@@ -165,3 +205,4 @@ function openPrint() {
 
 watch(() => props.groups, fetchData, { immediate: true })
 </script>
+
