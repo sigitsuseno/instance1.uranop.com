@@ -537,67 +537,98 @@ class AttendanceService
             ->where('is_locked', false)
             ->get();
 
-        if ($prepares->isEmpty()) {
-            return ['updated' => 0, 'skipped' => 0, 'message' => 'Tidak ada status legacy yang perlu dimigrasi.'];
+        $updated = 0;
+        $skipped = 0;
+
+        if ($prepares->isNotEmpty()) {
+            // Preload approved leaves untuk range
+            $leaves = \App\Modules\Leave\Models\LeaveRequest::with('leaveType')
+                ->where('status', 'approved')
+                ->where(function ($q) use ($startDate, $endDate) {
+                    $q->whereBetween('start_date', [$startDate, $endDate])
+                      ->orWhereBetween('end_date', [$startDate, $endDate])
+                      ->orWhere(function ($q2) use ($startDate, $endDate) {
+                          $q2->where('start_date', '<=', $startDate)
+                             ->where('end_date', '>=', $endDate);
+                      });
+                })
+                ->get()
+                ->groupBy('employee_id');
+
+            foreach ($prepares as $prepare) {
+                $empLeaves = $leaves->get($prepare->employee_id);
+
+                if (!$empLeaves) {
+                    $skipped++;
+                    continue;
+                }
+
+                $matched = false;
+                foreach ($empLeaves as $leave) {
+                    $leaveStart = $leave->start_date instanceof \Carbon\Carbon
+                        ? $leave->start_date
+                        : \Carbon\Carbon::parse($leave->start_date);
+                    $leaveEnd = $leave->end_date instanceof \Carbon\Carbon
+                        ? $leave->end_date
+                        : \Carbon\Carbon::parse($leave->end_date);
+                    $dateCheck = $prepare->date instanceof \Carbon\Carbon
+                        ? $prepare->date
+                        : \Carbon\Carbon::parse($prepare->date);
+
+                    if ($dateCheck->between($leaveStart, $leaveEnd)) {
+                        $newStatus = strtolower($leave->leaveType->code ?? 'ct');
+                        if ($newStatus !== $prepare->status) {
+                            $prepare->update(['status' => $newStatus]);
+                            $updated++;
+                        }
+                        $matched = true;
+                        break;
+                    }
+                }
+
+                if (!$matched) {
+                    $skipped++;
+                }
+            }
         }
 
-        // Preload approved leaves untuk range
-        $leaves = \App\Modules\Leave\Models\LeaveRequest::with('leaveType')
-            ->where('status', 'approved')
-            ->where(function ($q) use ($startDate, $endDate) {
+        // TAMBAHAN: Sinkronisasi Status dari Consecutive Days
+        $consecutives = \App\Modules\Attendance\Models\ConsecutiveDay::where(function ($q) use ($startDate, $endDate) {
                 $q->whereBetween('start_date', [$startDate, $endDate])
                   ->orWhereBetween('end_date', [$startDate, $endDate])
                   ->orWhere(function ($q2) use ($startDate, $endDate) {
                       $q2->where('start_date', '<=', $startDate)
                          ->where('end_date', '>=', $endDate);
                   });
-            })
-            ->get()
-            ->groupBy('employee_id');
+            })->get();
 
-        $updated = 0;
-        $skipped = 0;
+        $consecutiveUpdated = 0;
 
-        foreach ($prepares as $prepare) {
-            $empLeaves = $leaves->get($prepare->employee_id);
+        foreach ($consecutives as $consecutive) {
+            $consStart = \Carbon\Carbon::parse($consecutive->start_date)->max(\Carbon\Carbon::parse($startDate));
+            $consEnd = \Carbon\Carbon::parse($consecutive->end_date)->min(\Carbon\Carbon::parse($endDate));
 
-            if (!$empLeaves) {
-                $skipped++;
-                continue;
-            }
+            $statusToSet = $consecutive->type === 'worked' 
+                ? AttendancePrepare::STATUS_HADIR 
+                : AttendancePrepare::STATUS_ABSENT;
 
-            $matched = false;
-            foreach ($empLeaves as $leave) {
-                $leaveStart = $leave->start_date instanceof \Carbon\Carbon
-                    ? $leave->start_date
-                    : \Carbon\Carbon::parse($leave->start_date);
-                $leaveEnd = $leave->end_date instanceof \Carbon\Carbon
-                    ? $leave->end_date
-                    : \Carbon\Carbon::parse($leave->end_date);
-                $dateCheck = $prepare->date instanceof \Carbon\Carbon
-                    ? $prepare->date
-                    : \Carbon\Carbon::parse($prepare->date);
+            $updatedRows = AttendancePrepare::where('employee_id', $consecutive->employee_id)
+                ->whereBetween('date', [$consStart->toDateString(), $consEnd->toDateString()])
+                ->where('is_locked', false)
+                ->where('status', '!=', $statusToSet)
+                ->update([
+                    'status' => $statusToSet,
+                    'review_status' => AttendancePrepare::REVIEW_CSF
+                ]);
 
-                if ($dateCheck->between($leaveStart, $leaveEnd)) {
-                    $newStatus = strtolower($leave->leaveType->code ?? 'ct');
-                    if ($newStatus !== $prepare->status) {
-                        $prepare->update(['status' => $newStatus]);
-                        $updated++;
-                    }
-                    $matched = true;
-                    break;
-                }
-            }
-
-            if (!$matched) {
-                $skipped++;
-            }
+            $consecutiveUpdated += $updatedRows;
+            $updated += $updatedRows;
         }
 
         return [
             'updated' => $updated,
             'skipped' => $skipped,
-            'message' => "{$updated} record diperbarui, {$skipped} diskip.",
+            'message' => "{$updated} record diperbarui (termasuk {$consecutiveUpdated} dari konsekutif), {$skipped} diskip.",
         ];
     }
 

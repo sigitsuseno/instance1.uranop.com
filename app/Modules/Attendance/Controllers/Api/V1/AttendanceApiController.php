@@ -800,13 +800,8 @@ class AttendanceApiController extends Controller
             'payPeriod' => fn($q) => $q->select('id', 'name', 'start_date', 'end_date'),
         ])->where('pay_period_id', $periodId);
 
-        // Filter segment: untuk split → hanya A/B, non-split → hanya null
-        $payPeriod = \App\Modules\Payroll\Models\PayPeriod::find($periodId);
-        if ($payPeriod && $payPeriod->is_split) {
-            $query->whereIn('segment', ['A', 'B']);
-        } else {
-            $query->whereNull('segment');
-        }
+        // Selalu ambil record utuh (segment = null)
+        $query->whereNull('segment');
 
         if ($search) {
             $query->whereHas('employee', function ($q) use ($search) {
@@ -859,31 +854,16 @@ class AttendanceApiController extends Controller
         // Fixed days — ambil dari setting
         $fixedDays = (int) (\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22);
 
-        // Tentukan segment(s)
-        if ($period->is_split) {
-            $month1End = Carbon::parse($startDate)->endOfMonth()->toDateString();
-            $month2Start = Carbon::parse($endDate)->startOfMonth()->toDateString();
+        // Selalu 1 segment utuh di tabel kehadiran
+        $segments = [
+            ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
+        ];
 
-            // HK per segment dari JSON, fallback dibagi rata
-            $splitDays = json_decode(\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.split_working_days')->value('value') ?? '{}', true);
-            $hkA = $splitDays['A'] ?? (int) round($fixedDays / 2);
-            $hkB = $splitDays['B'] ?? (int) ($fixedDays - $hkA);
-
-            $segments = [
-                ['segment' => 'A', 'start' => $startDate, 'end' => $month1End, 'hk' => $hkA],
-                ['segment' => 'B', 'start' => $month2Start, 'end' => $endDate, 'hk' => $hkB],
-            ];
-
-            // Cleanup old null-segment records (transisi dari generate versi lama)
-            \App\Modules\Attendance\Models\AttendanceRecord::where('pay_period_id', $periodId)
-                ->whereNull('segment')
-                ->where('status', '!=', 'locked')
-                ->delete();
-        } else {
-            $segments = [
-                ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
-            ];
-        }
+        // Cleanup jika ada record split (A/B) lama yang tersisa dan belum locked
+        \App\Modules\Attendance\Models\AttendanceRecord::where('pay_period_id', $periodId)
+            ->whereNotNull('segment')
+            ->where('status', '!=', 'locked')
+            ->delete();
 
         $generatedCount = 0;
 
@@ -1000,89 +980,156 @@ class AttendanceApiController extends Controller
 
                 $period = $record->payPeriod;
                 $employee = $record->employee;
+                $startDate = $period->start_date;
+                $endDate = $period->end_date;
 
-                // Skip karyawan yang bukan group penggajian — hapus pay_record jika ada
-                if (! $employee->isGroupGaji()) {
-                    \App\Modules\Payroll\Models\PayRecord::where('employee_id', $employee->id)
-                        ->where('pay_period_id', $period->id)
-                        ->where('segment', $record->segment)
-                        ->delete();
-                    continue;
+                // ── Tentukan Segmen ──
+                if ($period->is_split) {
+                    $month1End = \Carbon\Carbon::parse($startDate)->endOfMonth()->toDateString();
+                    $month2Start = \Carbon\Carbon::parse($endDate)->startOfMonth()->toDateString();
+                    
+                    $fixedDays = (int) (\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22);
+                    $splitDays = json_decode(\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.split_working_days')->value('value') ?? '{}', true);
+                    $hkA = $splitDays['A'] ?? (int) round($fixedDays / 2);
+                    $hkB = $splitDays['B'] ?? (int) ($fixedDays - $hkA);
+
+                    $segments = [
+                        ['segment' => 'A', 'start' => $startDate, 'end' => $month1End, 'hk' => $hkA],
+                        ['segment' => 'B', 'start' => $month2Start, 'end' => $endDate, 'hk' => $hkB],
+                    ];
+                } else {
+                    $segments = [
+                        ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $record->hari_kerja + $record->deduct_day],
+                    ];
                 }
 
-                $segment = $record->segment; // null / A / B
-                $hk = $record->hari_kerja + $record->deduct_day; // total fixed working days
-                if ($hk == 0) $hk = 22;
+                foreach ($segments as $seg) {
+                    $segment = $seg['segment'];
+                    $segStart = $seg['start'];
+                    $segEnd = $seg['end'];
+                    $hk = $seg['hk'];
+                    if ($hk == 0) $hk = 22;
 
-                // ── DATA MASUKAN ──
-                $gajiPokok = $employee->gaji_pokok($period->start_date->format('Y-m'));
-                $premi = $employee->premi($period->start_date->format('Y-m'));
-                $tjMasaKerja = $employee->tunjangan_masa_kerja($period->start_date->format('Y-m'));
-                $tunjangan = $employee->tunjangan($period->start_date->format('Y-m'));
-                $hariKerja = $record->hari_kerja;
-                $deductDay = $record->deduct_day;
-                $lm = $record->lm;
-                $lmCount = $record->lm_count;
-                $lemburCount = $record->lembur_count;
+                    // Skip karyawan yang bukan group penggajian — hapus pay_record jika ada
+                    if (! $employee->isGroupGaji()) {
+                        \App\Modules\Payroll\Models\PayRecord::where('employee_id', $employee->id)
+                            ->where('pay_period_id', $period->id)
+                            ->where('segment', $segment)
+                            ->delete();
+                        continue;
+                    }
 
-                // ── HITUNGAN ──
-                $gaji = round(($gajiPokok / $hk) * $hariKerja, 2);
-                $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * ($lmCount + $lemburCount) / 100) * 100;
-                $premiHadir = round(($premi / $hk) * $hariKerja, 2);
+                    if ($segment !== null) {
+                        // HITUNG ULANG UNTUK SEGMEN A/B
+                        $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)
+                            ->whereBetween('date', [$segStart, $segEnd])
+                            ->get();
 
-                // Part 1 vs Part 2
-                $isPart1 = ($segment === 'A');
-                $revisi = $isPart1 ? ($tjMasaKerja * -1) : 0;
-                $bpjsTk = $isPart1 ? 0 : ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
-                $bpjsKs = $isPart1 ? 0 : ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
-                $bpjsPen = $isPart1 ? 0 : ($employee->bpjs?->bpjs_pensiun ?? 0);
-                $pph = $isPart1 ? 0 : 0; // TODO: dari pengelolaan PPH
-                $cashbon = 0;
+                        $leaves = \App\Modules\Leave\Models\LeaveRequest::where('employee_id', $employee->id)
+                            ->where('status', 'approved')
+                            ->where(function ($q) use ($segStart, $segEnd) {
+                                $q->whereBetween('start_date', [$segStart, $segEnd])
+                                  ->orWhereBetween('end_date', [$segStart, $segEnd])
+                                  ->orWhere(function ($q2) use ($segStart, $segEnd) {
+                                      $q2->where('start_date', '<=', $segStart)
+                                         ->where('end_date', '>=', $segEnd);
+                                  });
+                            })->get();
 
-                $gajiKotor = $gaji + $upahLembur + $premiHadir + $tunjangan;
-                $potKehadiran = round($deductDay * ($gajiPokok / $hk), 2);
-                $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon + $potKehadiran;
+                        $absen = $prepares->where('status', 'absent')->count();
+                        $lm = $prepares->sum('lm');
+                        $lmCount = $prepares->sum('lm_count');
+                        $lemburCount = $prepares->sum('overtime_count');
 
-                // Pembulatan 100
-                $beforeRounding = $gajiKotor - $totalPotongan;
-                $rounded = ceil($beforeRounding / 100) * 100;
-                $pblt = $rounded - $beforeRounding;
-                $gajiBersih = $beforeRounding + $pblt;
+                        $cuti = 0; $izin = 0; $sakit = 0;
+                        foreach ($leaves as $l) {
+                            // Hitung durasi irisan cuti di dalam segmen ini (karena bisa menyeberang)
+                            $lStart = \Carbon\Carbon::parse(max($l->start_date->toDateString(), $segStart));
+                            $lEnd = \Carbon\Carbon::parse(min($l->end_date->toDateString(), $segEnd));
+                            $dur = max(0, $lStart->diffInDays($lEnd) + 1);
 
-                // ── CREATE/UPDATE PAY_RECORD ──
-                \App\Modules\Payroll\Models\PayRecord::updateOrCreate(
-                    [
-                        'employee_id' => $employee->id,
-                        'pay_period_id' => $period->id,
-                        'segment' => $segment,
-                    ],
-                    [
-                        'att_record_id' => $record->id,
-                        'gaji_pokok' => $gajiPokok,
-                        'premi' => $premi,
-                        'tj_masa_kerja' => $tjMasaKerja,
-                        'tunjangan' => $tunjangan,
-                        'hari_kerja' => $hariKerja,
-                        'deduct_day' => $deductDay,
-                        'lm' => $lm,
-                        'lm_count' => $lmCount,
-                        'lembur_count' => $lemburCount,
-                        'gaji' => $gaji,
-                        'upah_lembur' => $upahLembur,
-                        'premi_hadir' => $premiHadir,
-                        'revisi' => $revisi,
-                        'gaji_kotor' => $gajiKotor,
-                        'bpjs_tk' => $bpjsTk,
-                        'bpjs_ks' => $bpjsKs,
-                        'bpjs_pen' => $bpjsPen,
-                        'pph' => $pph,
-                        'cashbon' => $cashbon,
-                        'pot_kehadiran' => $potKehadiran,
-                        'pblt' => $pblt,
-                        'gaji_bersih' => $gajiBersih,
-                        'status' => 'generated',
-                    ]
-                );
+                            $cat = optional($l->leaveType)->category;
+                            if ($cat === 'leave') $cuti += $dur;
+                            elseif ($cat === 'permit') $izin += $dur;
+                            elseif ($cat === 'sick') $sakit += $dur;
+                        }
+
+                        $deductDay = $izin + $absen;
+                        $hariKerja = max(0, $hk - $deductDay);
+                    } else {
+                        $hariKerja = $record->hari_kerja;
+                        $deductDay = $record->deduct_day;
+                        $lm = $record->lm;
+                        $lmCount = $record->lm_count;
+                        $lemburCount = $record->lembur_count;
+                    }
+
+                    // ── DATA MASUKAN ──
+                    $gajiPokok = $employee->gaji_pokok($period->start_date->format('Y-m'));
+                    $premi = $employee->premi($period->start_date->format('Y-m'));
+                    $tjMasaKerja = $employee->tunjangan_masa_kerja($period->start_date->format('Y-m'));
+                    $tunjangan = $employee->tunjangan($period->start_date->format('Y-m'));
+
+                    // ── HITUNGAN ──
+                    $gaji = round(($gajiPokok / $hk) * $hariKerja, 2);
+                    $totalLemburJam = ($lmCount + $lemburCount) / 60;
+                    $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100;
+                    $premiHadir = round(($premi / $hk) * $hariKerja, 2);
+
+                    // Part 1 vs Part 2
+                    $isPart1 = ($segment === 'A');
+                    $revisi = $isPart1 ? ($tjMasaKerja * -1) : 0;
+                    $bpjsTk = $isPart1 ? 0 : ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
+                    $bpjsKs = $isPart1 ? 0 : ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
+                    $bpjsPen = $isPart1 ? 0 : ($employee->bpjs?->bpjs_pensiun ?? 0);
+                    $pph = $isPart1 ? 0 : 0; // TODO: dari pengelolaan PPH
+                    $cashbon = 0;
+
+                    $gajiKotor = $gaji + $upahLembur + $premiHadir + $tunjangan;
+                    $potKehadiran = round($deductDay * ($gajiPokok / $hk), 2);
+                    $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon + $potKehadiran;
+
+                    // Pembulatan 100
+                    $beforeRounding = $gajiKotor - $totalPotongan;
+                    $rounded = ceil($beforeRounding / 100) * 100;
+                    $pblt = $rounded - $beforeRounding;
+                    $gajiBersih = $beforeRounding + $pblt;
+
+                    // ── CREATE/UPDATE PAY_RECORD ──
+                    \App\Modules\Payroll\Models\PayRecord::updateOrCreate(
+                        [
+                            'employee_id' => $employee->id,
+                            'pay_period_id' => $period->id,
+                            'segment' => $segment,
+                        ],
+                        [
+                            'att_record_id' => $record->id,
+                            'gaji_pokok' => $gajiPokok,
+                            'premi' => $premi,
+                            'tj_masa_kerja' => $tjMasaKerja,
+                            'tunjangan' => $tunjangan,
+                            'hari_kerja' => $hariKerja,
+                            'deduct_day' => $deductDay,
+                            'lm' => $lm,
+                            'lm_count' => $lmCount,
+                            'lembur_count' => $lemburCount,
+                            'gaji' => $gaji,
+                            'upah_lembur' => $upahLembur,
+                            'premi_hadir' => $premiHadir,
+                            'revisi' => $revisi,
+                            'gaji_kotor' => $gajiKotor,
+                            'bpjs_tk' => $bpjsTk,
+                            'bpjs_ks' => $bpjsKs,
+                            'bpjs_pen' => $bpjsPen,
+                            'pph' => $pph,
+                            'cashbon' => $cashbon,
+                            'pot_kehadiran' => $potKehadiran,
+                            'pblt' => $pblt,
+                            'gaji_bersih' => $gajiBersih,
+                            'status' => 'generated',
+                        ]
+                    );
+                }
 
                 // ── LOCK ATT_RECORD ──
                 $record->update(['status' => 'locked']);
