@@ -4,6 +4,7 @@ import { useApi } from '../../../../composables/useApi';
 import { useNotificationStore } from '../../../../Stores/notification';
 import KanbanColumn from './Components/KanbanColumn.vue';
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue';
+import ImportModal from './Components/ImportModal.vue';
 
 const { get, post } = useApi();
 const notification = useNotificationStore();
@@ -22,6 +23,7 @@ const searchQuery = ref('');
 const selectedIds = ref([]);
 const isBatchModalOpen = ref(false);
 const showAutoEnrollDialog = ref(false);
+const showImportModal = ref(false);
 
 const batchForm = ref({
     employee_ids: [],
@@ -437,6 +439,17 @@ const submitBatch = async () => {
                         <span class="hidden md:inline">Auto Enroll</span>
                     </button>
                 </div>
+
+                <div v-if="!hasChanges && selectedIds.length === 0" class="flex items-center gap-2">
+                    <button 
+                        @click="showImportModal = true"
+                        class="bg-(--primary) text-white px-4 py-2.5 rounded-md font-bold shadow-lg shadow-(--primary)/20 flex items-center gap-2 hover:opacity-90 transition-all"
+                        title="Import Grouping Data"
+                    >
+                        <i class="bx bx-import text-xl"></i>
+                        <span class="hidden md:inline">Import Data</span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -591,6 +604,16 @@ const submitBatch = async () => {
             variant="warning"
             @confirm="handleAutoEnroll"
             @cancel="showAutoEnrollDialog = false"
+        />
+
+        <!-- Import Modal -->
+        <ImportModal 
+            :show="showImportModal"
+            :active-tab="activeTab"
+            :active-month="activeMonth"
+            :active-year="activeYear"
+            @close="showImportModal = false"
+            @success="fetchData"
         />
     </div>
 </template>

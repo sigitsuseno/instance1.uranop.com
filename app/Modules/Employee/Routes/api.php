@@ -56,6 +56,9 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'index'])->name('employees.grouping.index');
             Route::post('/bulk-update', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'bulkUpdate'])->name('employees.grouping.bulk-update');
             Route::post('/auto-enroll', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'autoEnroll'])->name('employees.grouping.auto-enroll');
+            Route::get('/export', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'export'])->name('employees.grouping.export');
+            Route::post('/preview-import', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'previewImport'])->name('employees.grouping.preview-import');
+            Route::post('/import', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'processImport'])->name('employees.grouping.import');
         });
 
         // Submodules
