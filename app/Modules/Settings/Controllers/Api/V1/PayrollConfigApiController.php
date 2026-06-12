@@ -98,9 +98,37 @@ class PayrollConfigApiController extends Controller
         ]);
 
         foreach ($validated['rates'] as $rateData) {
-            PtkpRate::where('id', $rateData['id'])->update(['rate' => $rateData['rate']]);
+            PtkpRate::where('id', $rateData['id'])->update(['value' => $rateData['rate']]);
         }
         return response()->json(['message' => 'PTKP Rates updated']);
+    }
+
+    // === PPh Configs ===
+    public function getPphConfig()
+    {
+        return response()->json(['data' => PphConfig::first()]);
+    }
+
+    public function updatePphConfig(Request $request)
+    {
+        $validated = $request->validate([
+            'calculation_method' => 'required|in:ter,progressive',
+            'pph_method' => 'required|in:gross,gross_up,net',
+            'non_npwp_penalty' => 'boolean',
+            'non_npwp_multiplier' => 'numeric',
+            'description' => 'nullable|string',
+        ]);
+
+        $config = PphConfig::first();
+        if ($config) {
+            $config->update($validated);
+        } else {
+            $validated['uuid'] = (string) \Illuminate\Support\Str::uuid();
+            $validated['effective_date'] = now();
+            $config = PphConfig::create($validated);
+        }
+        
+        return response()->json(['message' => 'PPh Config updated', 'data' => $config]);
     }
 
     // === TER Rates ===
@@ -109,10 +137,50 @@ class PayrollConfigApiController extends Controller
         return response()->json(['data' => TerRate::all()]);
     }
 
+    public function updateTer(Request $request)
+    {
+        $validated = $request->validate([
+            'rates' => 'required|array',
+            'rates.*.id' => 'required|exists:ter_rates,id',
+            'rates.*.min_income' => 'required|numeric',
+            'rates.*.max_income' => 'nullable|numeric',
+            'rates.*.rate' => 'required|numeric',
+        ]);
+
+        foreach ($validated['rates'] as $rateData) {
+            TerRate::where('id', $rateData['id'])->update([
+                'min_income' => $rateData['min_income'],
+                'max_income' => $rateData['max_income'],
+                'rate' => $rateData['rate'],
+            ]);
+        }
+        return response()->json(['message' => 'TER Rates updated']);
+    }
+
     // === Progressive Rates ===
     public function getProgressive()
     {
-        return response()->json(['data' => ProgressiveRate::orderBy('layer')->get()]);
+        return response()->json(['data' => ProgressiveRate::orderBy('sort_order')->get()]);
+    }
+
+    public function updateProgressive(Request $request)
+    {
+        $validated = $request->validate([
+            'rates' => 'required|array',
+            'rates.*.id' => 'required|exists:progressive_rates,id',
+            'rates.*.min_income' => 'required|numeric',
+            'rates.*.max_income' => 'nullable|numeric',
+            'rates.*.rate' => 'required|numeric',
+        ]);
+
+        foreach ($validated['rates'] as $rateData) {
+            ProgressiveRate::where('id', $rateData['id'])->update([
+                'min_income' => $rateData['min_income'],
+                'max_income' => $rateData['max_income'],
+                'rate' => $rateData['rate'],
+            ]);
+        }
+        return response()->json(['message' => 'Progressive Rates updated']);
     }
 
     // === Work Patterns ===

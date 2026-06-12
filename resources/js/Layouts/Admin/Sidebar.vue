@@ -102,6 +102,7 @@ const allMenus = [
     icon: 'bx bx-receipt',
     visible: isSuperadmin.value || isHrmanager.value,
     children: [
+      { title: 'Pajak Karyawan', icon: 'bx bx-user-pin', route: '/admin/pph/employees' },
       { title: 'TER Bulanan', icon: 'bx bx-calendar-edit', route: '/admin/pph/ter' },
       { title: 'PPh 21 Tahunan', icon: 'bx bx-bar-chart-alt-2', route: '/admin/pph/tahunan' },
     ],
@@ -122,7 +123,7 @@ const allMenus = [
     visible: isSuperadmin.value || isHrmanager.value,
     children: [
       { title: 'Laporan Lembur', icon: 'bx bx-grid-alt', route: '/admin/reports/lembur' },
-      { title: 'Laporan Kehadiran', icon: 'bx bx-calendar-check', route: '/admin/reports' },
+      { title: 'Laporan Kehadiran', icon: 'bx bx-calendar-check', route: '/admin/reports/kehadiran' },
       { title: 'Laporan Payroll', icon: 'bx bx-money', route: '/admin/reports' },
       { title: 'Laporan Pajak', icon: 'bx bx-receipt', route: '/admin/reports' },
       { title: 'Laporan BPJS', icon: 'bx bx-shield-quarter', route: '/admin/reports' },

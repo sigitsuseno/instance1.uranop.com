@@ -53,9 +53,14 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         Route::get('/ptkp', [PayrollConfigApiController::class, 'getPtkp']);
         Route::post('/ptkp', [PayrollConfigApiController::class, 'updatePtkp']);
 
+        Route::get('/pph-config', [PayrollConfigApiController::class, 'getPphConfig']);
+        Route::post('/pph-config', [PayrollConfigApiController::class, 'updatePphConfig']);
+
         Route::get('/ter', [PayrollConfigApiController::class, 'getTer']);
+        Route::post('/ter', [PayrollConfigApiController::class, 'updateTer']);
         
         Route::get('/progressive', [PayrollConfigApiController::class, 'getProgressive']);
+        Route::post('/progressive', [PayrollConfigApiController::class, 'updateProgressive']);
 
         Route::get('/work-patterns', [PayrollConfigApiController::class, 'getWorkPatterns']);
 

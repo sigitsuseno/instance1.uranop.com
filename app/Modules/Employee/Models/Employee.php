@@ -206,6 +206,11 @@ class Employee extends Model
         return $this->hasMany(\App\Modules\Attendance\Models\AttendancePrepare::class, 'employee_id');
     }
 
+    public function pphRecords()
+    {
+        return $this->hasMany(\App\Modules\Payroll\Models\EmployeePph::class, 'employee_id');
+    }
+
     // ========== EFFECTIVE DATE PATTERN — METHODS ==========
 
     /**

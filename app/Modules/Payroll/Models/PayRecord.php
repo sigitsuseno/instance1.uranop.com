@@ -107,6 +107,11 @@ class PayRecord extends Model
         return $this->belongsTo(AttendanceRecord::class, 'att_record_id');
     }
 
+    public function pphRecord()
+    {
+        return $this->hasOne(EmployeePph::class, 'pay_record_id');
+    }
+
     // ========== SCOPES ==========
 
     public function scopeForPeriod($query, $periodId)

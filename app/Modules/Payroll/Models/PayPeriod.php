@@ -78,4 +78,9 @@ class PayPeriod extends Model
     {
         return static::orderBy('start_date', 'desc')->get();
     }
+
+    public function pphRecords()
+    {
+        return $this->hasMany(EmployeePph::class, 'pay_period_id');
+    }
 }

@@ -44,6 +44,7 @@ const PayrollPeriodsCrud = () => import('../Pages/Admin/Payroll/Periods/Crud.vue
 const PayrollPeriodDetail = () => import('../Pages/Admin/Payroll/Periods/Detail.vue')
 const PayrollGajiKaryawan = () => import('../Pages/Admin/Payroll/GajiKaryawan/Index.vue')
 const PayrollConfigsIndex = () => import('../Pages/Admin/Payroll/Configs/Index.vue')
+const PayrollSlipIndex = () => import('../Pages/Admin/Payroll/Slip/Index.vue')
 const PayrollThr = () => import('../Pages/Admin/Payroll/Thr.vue')
 const BpjsKeanggotaanIndex = () => import('../Pages/Admin/Payroll/Bpjs/Keanggotaan/Index.vue')
 const BpjsIuranIndex = () => import('../Pages/Admin/Payroll/Bpjs/Iuran/Index.vue')
@@ -59,8 +60,11 @@ const RosterImport = () => import('../Pages/Admin/Schedule/Roster/Import.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
 const UangMakanReport = () => import('../Pages/Admin/Reports/UangMakan/Index.vue')
 const LaporanLemburIndex = () => import('../Pages/Admin/Reports/Lembur/Index.vue')
+const LaporanKehadiranIndex = () => import('../Pages/Admin/Reports/Kehadiran/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
 const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
+const PphConfigIndex = () => import('../Pages/Admin/Payroll/Pph/Index.vue')
+const PphEmployeesIndex = () => import('../Pages/Admin/Payroll/Pph/Employees.vue')
 
 const SupervisorDashboard = () => import('../Pages/Supervisor/Dashboard.vue')
 const SupervisorAttendance = () => import('../Pages/Supervisor/Attendance/Index.vue')
@@ -141,14 +145,15 @@ const routes = [
       { path: 'payroll/periods/crud', name: 'payroll.periods.crud', component: PayrollPeriodsCrud, meta: { title: 'Penggajian' } },
       { path: 'payroll/gaji-karyawan', name: 'payroll.gaji-karyawan', component: PayrollGajiKaryawan, meta: { title: 'Gaji Karyawan' } },
       { path: 'payroll/periods/:id', name: 'payroll.periods.detail', component: PayrollPeriodDetail, meta: { title: 'Detail Periode' } },
-      { path: 'payroll/slip', name: 'payroll.slip', component: PayrollPeriodsIndex, meta: { title: 'Slip Gaji' } },
+      { path: 'payroll/slip', name: 'payroll.slip', component: PayrollSlipIndex, meta: { title: 'Slip Gaji' } },
       { path: 'payroll/thr', name: 'payroll.thr', component: PayrollThr, meta: { title: 'THR' } },
       { path: 'payroll/configs', name: 'payroll.configs', component: PayrollConfigsIndex, meta: { title: 'Konfigurasi Payroll' } },
       { path: 'payroll/bpjs/keanggotaan', name: 'payroll.bpjs.keanggotaan', component: BpjsKeanggotaanIndex, meta: { title: 'Keanggotaan BPJS' } },
       { path: 'payroll/bpjs/iuran', name: 'payroll.bpjs.iuran', component: BpjsIuranIndex, meta: { title: 'Iuran BPJS' } },
       { path: 'payroll/bpjs/konfigurasi', name: 'payroll.bpjs.konfigurasi', component: BpjsKonfigurasiIndex, meta: { title: 'Konfigurasi BPJS' } },
-      { path: 'pph/ter', name: 'pph.ter', component: PayrollConfigsIndex, meta: { title: 'TER Bulanan' } },
-      { path: 'pph/tahunan', name: 'pph.tahunan', component: PayrollConfigsIndex, meta: { title: 'PPh 21 Tahunan' } },
+      { path: 'pph/ter', name: 'pph.ter', component: PphConfigIndex, meta: { title: 'Pengelolaan PPh 21' } },
+      { path: 'pph/tahunan', name: 'pph.tahunan', component: PphConfigIndex, meta: { title: 'Pengelolaan PPh 21' } },
+      { path: 'pph/employees', name: 'pph.employees', component: PphEmployeesIndex, meta: { title: 'Pajak Karyawan' } },
       { path: 'schedule/work-patterns', name: 'schedule.work-patterns', component: WorkPatternsIndex, meta: { title: 'Pola Kerja' } },
       { path: 'schedule/work-patterns/:id/details', name: 'schedule.work-patterns.details', component: WorkPatternsDetails, meta: { title: 'Detail Pola Kerja' } },
       { path: 'schedule/shifts', name: 'schedule.shifts', component: ShiftsIndex, meta: { title: 'Shift' } },
@@ -160,6 +165,7 @@ const routes = [
       { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
       { path: 'reports/uang-makan', name: 'reports.uang-makan', component: UangMakanReport, meta: { title: 'Laporan Uang Makan' } },
       { path: 'reports/lembur', name: 'reports.lembur', component: LaporanLemburIndex, meta: { title: 'Laporan Lembur' } },
+      { path: 'reports/kehadiran', name: 'reports.kehadiran', component: LaporanKehadiranIndex, meta: { title: 'Laporan Kehadiran' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],
