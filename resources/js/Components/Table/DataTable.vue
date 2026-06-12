@@ -20,10 +20,10 @@
       </div>
     </div>
 
-    <div class="overflow-x-auto">
+    <div class="overflow-x-auto max-h-[60vh] relative">
       <table class="w-full border-collapse">
-        <thead>
-          <tr class="bg-(--bg-elevated)">
+        <thead class="sticky top-0 z-10 bg-(--bg-elevated) shadow-sm">
+          <tr>
             <th v-if="selectable" class="px-4 py-3 text-left text-xs font-semibold text-(--text-muted) uppercase tracking-wider w-10">
               <input
                 type="checkbox"
@@ -122,6 +122,27 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination Controls -->
+    <div v-if="pagination && pagination.last_page > 1" class="flex items-center justify-between px-4 py-3 border-t border-(--border-soft) bg-(--bg-card)">
+      <div class="text-sm text-(--text-muted)">
+        Halaman {{ pagination.current_page }} dari {{ pagination.last_page }} (Total: {{ pagination.total }} data)
+      </div>
+      <div class="flex gap-1">
+        <button 
+          @click="emit('page-change', pagination.current_page - 1)" 
+          :disabled="pagination.current_page <= 1"
+          class="px-3 py-1 text-sm border border-(--border-soft) rounded hover:bg-(--bg-elevated) disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-(--text-main)">
+          Sebelumnya
+        </button>
+        <button 
+          @click="emit('page-change', pagination.current_page + 1)" 
+          :disabled="pagination.current_page >= pagination.last_page"
+          class="px-3 py-1 text-sm border border-(--border-soft) rounded hover:bg-(--bg-elevated) disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-(--text-main)">
+          Selanjutnya
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -136,9 +157,10 @@ const props = defineProps({
   selectable: { type: Boolean, default: false },
   selected: { type: Array, default: () => [] },
   showSearch: { type: Boolean, default: false },
+  pagination: { type: Object, default: null },
 })
 
-const emit = defineEmits(['update:selected', 'sort', 'rowClick'])
+const emit = defineEmits(['update:selected', 'sort', 'rowClick', 'page-change'])
 
 const searchQuery = ref('')
 const sortKey = ref('')
