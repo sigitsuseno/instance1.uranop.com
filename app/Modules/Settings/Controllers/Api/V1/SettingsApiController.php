@@ -108,15 +108,19 @@ class SettingsApiController extends Controller
                     'cut_off_date' => null,
                     'working_day_type' => 'fixed',
                     'fixed_working_day' => 21,
+                    'split_days_a' => null,
                 ]
             ]);
         }
+
+        $splitDays = json_decode($setting->value ?? '{}', true);
 
         return response()->json([
             'data' => [
                 'cut_off_date' => $setting->cut_off_date,
                 'working_day_type' => $setting->working_day_type,
                 'fixed_working_day' => $setting->fixed_working_day,
+                'split_days_a' => $splitDays['A'] ?? null,
             ]
         ]);
     }
@@ -127,6 +131,7 @@ class SettingsApiController extends Controller
             'cut_off_date' => 'nullable|integer|min:1|max:31',
             'working_day_type' => 'required|string|in:fixed,calendar,flexible',
             'fixed_working_day' => 'nullable|integer|min:1|max:31',
+            'split_days_a' => 'nullable|integer|min:1|max:31',
         ]);
 
         $setting = SystemSetting::firstOrCreate(
@@ -134,10 +139,17 @@ class SettingsApiController extends Controller
             ['uuid' => (string) Str::uuid()]
         );
 
+        $splitDays = [];
+        if (!empty($validated['split_days_a']) && !empty($validated['fixed_working_day'])) {
+            $splitDays['A'] = (int) $validated['split_days_a'];
+            $splitDays['B'] = (int) $validated['fixed_working_day'] - (int) $validated['split_days_a'];
+        }
+
         $setting->update([
             'cut_off_date' => $validated['cut_off_date'] ?? null,
             'working_day_type' => $validated['working_day_type'],
             'fixed_working_day' => $validated['fixed_working_day'] ?? null,
+            'value' => !empty($splitDays) ? json_encode($splitDays) : null,
             'updated_by' => auth()->id() ?? 1,
         ]);
 

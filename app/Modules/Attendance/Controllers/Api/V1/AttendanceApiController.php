@@ -851,10 +851,14 @@ class AttendanceApiController extends Controller
             })
             ->get();
 
-        // Fixed days — ambil dari setting
-        $fixedDays = (int) (\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22);
+        // Fixed days — ambil dari setting payroll_config
+        $payrollConfig = \App\Modules\Settings\Models\SystemSetting::where('key', 'payroll_config')->first();
+        if (!$payrollConfig || empty($payrollConfig->fixed_working_day)) {
+            return response()->json(['success' => false, 'message' => 'Hari kerja (Fixed Working Day) belum diatur di menu Pengaturan Penggajian.'], 400);
+        }
+        $fixedDays = (int) $payrollConfig->fixed_working_day;
 
-        // Selalu 1 segment utuh di tabel kehadiran
+        // Selalu 1 segment utuh di tabel kehadiran (att_records)
         $segments = [
             ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
         ];
@@ -952,11 +956,13 @@ class AttendanceApiController extends Controller
      * POST /api/v1/attendance/recap/approve
      * Lock att_records + create/update pay_records (dengan split logic)
      */
-    public function recapApprove(Request $request): JsonResponse
+    public function recapApprove(Request $request)
     {
         $request->validate([
-            'ids' => 'required|array|min:1',
-            'ids.*' => 'integer|exists:att_records,id',
+            'ids' => 'required|array',
+            'ids.*' => 'exists:att_records,id',
+            'zero_overtime_groups' => 'nullable|array',
+            'zero_overtime_groups.*' => 'string',
         ]);
 
         $records = \App\Modules\Attendance\Models\AttendanceRecord::with(['employee', 'payPeriod'])
@@ -983,15 +989,23 @@ class AttendanceApiController extends Controller
                 $startDate = $period->start_date;
                 $endDate = $period->end_date;
 
+                $payrollConfig = \App\Modules\Settings\Models\SystemSetting::where('key', 'payroll_config')->first();
+                if (!$payrollConfig || empty($payrollConfig->fixed_working_day)) {
+                    throw new \Exception("Kalkulasi gagal: Hari kerja (Fixed Working Day) belum diatur di menu Pengaturan Penggajian.");
+                }
+                $fixedDays = (int) $payrollConfig->fixed_working_day;
+
                 // ── Tentukan Segmen ──
                 if ($period->is_split) {
                     $month1End = \Carbon\Carbon::parse($startDate)->endOfMonth()->toDateString();
                     $month2Start = \Carbon\Carbon::parse($endDate)->startOfMonth()->toDateString();
                     
-                    $fixedDays = (int) (\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.fixed_days_per_month')->value('value') ?? 22);
-                    $splitDays = json_decode(\App\Modules\Settings\Models\SystemSetting::where('key', 'attendance.split_working_days')->value('value') ?? '{}', true);
-                    $hkA = $splitDays['A'] ?? (int) round($fixedDays / 2);
-                    $hkB = $splitDays['B'] ?? (int) ($fixedDays - $hkA);
+                    $splitDays = json_decode($payrollConfig->value ?? '{}', true);
+                    if (!isset($splitDays['A']) || !isset($splitDays['B'])) {
+                        throw new \Exception("Kalkulasi gagal: Nilai hari kerja untuk split periode (A dan B) belum diatur di menu Pengaturan Penggajian.");
+                    }
+                    $hkA = (int) $splitDays['A'];
+                    $hkB = (int) $splitDays['B'];
 
                     $segments = [
                         ['segment' => 'A', 'start' => $startDate, 'end' => $month1End, 'hk' => $hkA],
@@ -999,7 +1013,7 @@ class AttendanceApiController extends Controller
                     ];
                 } else {
                     $segments = [
-                        ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $record->hari_kerja + $record->deduct_day],
+                        ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
                     ];
                 }
 
@@ -1007,8 +1021,7 @@ class AttendanceApiController extends Controller
                     $segment = $seg['segment'];
                     $segStart = $seg['start'];
                     $segEnd = $seg['end'];
-                    $hk = $seg['hk'];
-                    if ($hk == 0) $hk = 22;
+                    $hkSegment = $seg['hk'];
 
                     // Skip karyawan yang bukan group penggajian — hapus pay_record jika ada
                     if (! $employee->isGroupGaji()) {
@@ -1055,7 +1068,7 @@ class AttendanceApiController extends Controller
                         }
 
                         $deductDay = $izin + $absen;
-                        $hariKerja = max(0, $hk - $deductDay);
+                        $hariKerja = max(0, $hkSegment - $deductDay);
                     } else {
                         $hariKerja = $record->hari_kerja;
                         $deductDay = $record->deduct_day;
@@ -1065,16 +1078,30 @@ class AttendanceApiController extends Controller
                     }
 
                     // ── DATA MASUKAN ──
-                    $gajiPokok = $employee->gaji_pokok($period->start_date->format('Y-m'));
-                    $premi = $employee->premi($period->start_date->format('Y-m'));
-                    $tjMasaKerja = $employee->tunjangan_masa_kerja($period->start_date->format('Y-m'));
-                    $tunjangan = $employee->tunjangan($period->start_date->format('Y-m'));
+                    $segmentMonth = \Carbon\Carbon::parse($segStart)->format('Y-m');
+                    $gajiPokok = $employee->gaji_pokok($segmentMonth);
+                    $premi = $employee->premi($segmentMonth);
+                    $tjMasaKerja = $employee->tunjangan_masa_kerja($segmentMonth);
+                    $tunjangan = $employee->tunjangan($segmentMonth);
 
                     // ── HITUNGAN ──
-                    $gaji = round(($gajiPokok / $hk) * $hariKerja, 2);
+                    // Pembagi selalu fixedDays (Misal: 22), agar gaji per hari valid, bukan dibagi hkSegment (Misal: 11)
+                    $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
                     $totalLemburJam = ($lmCount + $lemburCount) / 60;
-                    $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100;
-                    $premiHadir = round(($premi / $hk) * $hariKerja, 2);
+
+                    $zeroGroups = $request->input('zero_overtime_groups', []);
+                    $isZeroOvertime = false;
+                    if (!empty($zeroGroups)) {
+                        $isZeroOvertime = $employee->groups()->whereIn('reference_code', $zeroGroups)->exists();
+                    }
+
+                    if ($isZeroOvertime) {
+                        $upahLembur = 0;
+                    } else {
+                        $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100;
+                    }
+                    
+                    $premiHadir = round(($premi / $fixedDays) * $hariKerja, 2);
 
                     // Part 1 vs Part 2
                     $isPart1 = ($segment === 'A');
@@ -1085,9 +1112,10 @@ class AttendanceApiController extends Controller
                     $pph = $isPart1 ? 0 : 0; // TODO: dari pengelolaan PPH
                     $cashbon = 0;
 
-                    $gajiKotor = $gaji + $upahLembur + $premiHadir + $tunjangan;
-                    $potKehadiran = round($deductDay * ($gajiPokok / $hk), 2);
-                    $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon + $potKehadiran;
+                    $gajiKotor = $gaji + $tjMasaKerja + $upahLembur + $revisi + $premiHadir + $tunjangan;
+                    $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
+                    // potKehadiran tetap disimpan di DB untuk slip gaji, tapi DITIDAKMASUKKAN ke totalPotongan karena $gaji sudah proporsional
+                    $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
 
                     // Pembulatan 100
                     $beforeRounding = $gajiKotor - $totalPotongan;

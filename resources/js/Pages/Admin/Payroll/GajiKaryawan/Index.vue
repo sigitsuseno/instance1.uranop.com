@@ -23,7 +23,7 @@
 
         <!-- Kalkulasi Button -->
         <BaseButton
-          variant="primary"
+          variant="secondary"
           :disabled="!selectedPeriodId || generating"
           :loading="generating"
           @click="handleGenerate"
@@ -31,7 +31,22 @@
           <template #icon-left>
             <IconRefresh class="w-4 h-4" />
           </template>
-          Kalkulasi
+          Generate Awal
+        </BaseButton>
+
+        <!-- Approve & Kunci Gaji Button -->
+        <BaseButton
+          v-if="hasUnlockedRecaps"
+          variant="primary"
+          @click="isApproveModalOpen = true"
+        >
+          <template #icon-left>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </template>
+          Kalkulasi & Kunci
         </BaseButton>
 
         <!-- Export Button -->
@@ -355,6 +370,35 @@
         </div>
       </div>
     </BaseCard>
+
+    <!-- Modal Kalkulasi & Kunci Gaji -->
+    <BaseModal :show="isApproveModalOpen" @close="isApproveModalOpen = false" title="Kalkulasi & Kunci Gaji">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-main)">
+          Proses ini akan mengkalkulasi ulang gaji berdasarkan data kehadiran terakhir dan <strong>mengunci</strong> data tersebut.
+        </p>
+
+        <div class="bg-(--bg-main) p-4 rounded-md border border-(--border-soft)">
+          <h4 class="text-sm font-semibold text-(--text-main) mb-2">Filter Grup Bebas Lembur (Rp 0)</h4>
+          <p class="text-xs text-(--text-muted) mb-4">Pilih grup karyawan yang <strong>TIDAK</strong> akan mendapatkan uang lembur pada periode ini (misal: karena diganti uang makan atau status staff).</p>
+          
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
+            <label v-for="group in employeeGroups" :key="group.code" class="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-(--bg-elevated) border border-transparent hover:border-(--border-soft) transition-all">
+              <input type="checkbox" :value="group.code" v-model="selectedZeroOvertimeGroups" class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)" />
+              <div class="flex flex-col">
+                <span class="text-sm font-medium text-(--text-main)">{{ group.name }}</span>
+                <span class="text-[10px] text-(--text-muted)">{{ group.code }}</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+          <BaseButton variant="ghost" @click="isApproveModalOpen = false">Batal</BaseButton>
+          <BaseButton variant="primary" :loading="approvingPayroll" @click="handleApprovePayroll">Proses & Kunci Gaji</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -362,6 +406,7 @@
 import { ref, computed, onMounted } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
+import BaseModal from '@/Components/BaseModal.vue'
 import Badge from '@/Components/Badge.vue'
 import { IconDownload, IconFileInvoice, IconRefresh, IconSearch, IconAlertTriangle } from '@/Components/Icons/index.js'
 import { useApi } from '@/composables/useApi'
@@ -381,6 +426,9 @@ const searchQuery = ref('')
 const recapRecords = ref([])
 const loadingRecap = ref(false)
 const approvingPayroll = ref(false)
+const isApproveModalOpen = ref(false)
+const employeeGroups = ref([])
+const selectedZeroOvertimeGroups = ref(['GRP-ALLIN', 'GRP-GD', 'GRP-SS', 'GRP-SPR'])
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
@@ -461,6 +509,15 @@ async function fetchPeriods() {
   }
 }
 
+async function fetchEmployeeGroups() {
+  try {
+    const res = await get('/api/v1/settings/employee-data/groups')
+    employeeGroups.value = res.data || []
+  } catch (error) {
+    console.error('Error fetching employee groups', error)
+  }
+}
+
 async function fetchRecords() {
   if (!selectedPeriodId.value) {
     records.value = []
@@ -535,8 +592,12 @@ async function handleApprovePayroll() {
 
   approvingPayroll.value = true
   try {
-    const res = await post('/api/v1/attendance/recap/approve', { ids: unlockedIds })
+    const res = await post('/api/v1/attendance/recap/approve', { 
+      ids: unlockedIds,
+      zero_overtime_groups: selectedZeroOvertimeGroups.value
+    })
     notification.success(res.message || 'Gaji karyawan berhasil dikalkulasi dan dikunci!')
+    isApproveModalOpen.value = false
     await Promise.all([fetchRecords(), fetchRecapRecords()])
   } catch (error) {
     console.error('Error approving payroll', error)
@@ -552,6 +613,7 @@ function handleExport() {
 
 onMounted(() => {
   fetchPeriods()
+  fetchEmployeeGroups()
 })
 </script>
 

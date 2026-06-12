@@ -12,6 +12,7 @@ const form = ref({
   cut_off_date: '',
   working_day_type: 'fixed',
   fixed_working_day: 21,
+  split_days_a: '',
 })
 const loading = ref(false)
 
@@ -22,6 +23,7 @@ async function fetchSettings() {
       form.value.cut_off_date = data.data.cut_off_date
       form.value.working_day_type = data.data.working_day_type || 'fixed'
       form.value.fixed_working_day = data.data.fixed_working_day
+      form.value.split_days_a = data.data.split_days_a || ''
     }
   } catch (e) {
     console.error('Failed to load settings', e)
@@ -78,6 +80,19 @@ onMounted(() => {
             v-model="form.fixed_working_day" 
             label="Jumlah Hari Kerja Tetap" 
             type="number" 
+          />
+          <TextInput 
+            v-if="form.working_day_type === 'fixed'"
+            v-model="form.split_days_a" 
+            label="Hari Kerja Segmen 1 (Split A)" 
+            type="number" 
+          />
+          <TextInput 
+            v-if="form.working_day_type === 'fixed' && form.split_days_a"
+            :model-value="form.fixed_working_day - form.split_days_a" 
+            label="Hari Kerja Segmen 2 (Split B)" 
+            type="number" 
+            disabled
           />
         </div>
         <div class="flex justify-end">
