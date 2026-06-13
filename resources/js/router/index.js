@@ -60,7 +60,9 @@ const RosterImport = () => import('../Pages/Admin/Schedule/Roster/Import.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
 const UangMakanReport = () => import('../Pages/Admin/Reports/UangMakan/Index.vue')
 const LaporanLemburIndex = () => import('../Pages/Admin/Reports/Lembur/Index.vue')
+const LaporanLemburUangMakan = () => import('../Pages/Admin/Reports/LemburUangMakan/Index.vue')
 const LaporanKehadiranIndex = () => import('../Pages/Admin/Reports/Kehadiran/Index.vue')
+const LaporanPayrollIndex = () => import('../Pages/Admin/Reports/Payroll/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
 const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
 const PphConfigIndex = () => import('../Pages/Admin/Payroll/Pph/Index.vue')
@@ -165,7 +167,9 @@ const routes = [
       { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
       { path: 'reports/uang-makan', name: 'reports.uang-makan', component: UangMakanReport, meta: { title: 'Laporan Uang Makan' } },
       { path: 'reports/lembur', name: 'reports.lembur', component: LaporanLemburIndex, meta: { title: 'Laporan Lembur' } },
+      { path: 'reports/lembur-uang-makan', name: 'reports.lembur-uang-makan', component: LaporanLemburUangMakan, meta: { title: 'Laporan Lembur & Uang Makan' } },
       { path: 'reports/kehadiran', name: 'reports.kehadiran', component: LaporanKehadiranIndex, meta: { title: 'Laporan Kehadiran' } },
+      { path: 'reports/payroll', name: 'reports.payroll', component: LaporanPayrollIndex, meta: { title: 'Laporan Payroll' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],

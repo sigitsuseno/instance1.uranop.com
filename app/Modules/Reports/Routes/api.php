@@ -2,11 +2,56 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Modules\Reports\Controllers\Api\V1\AttendanceReportController;
+use App\Modules\Reports\Controllers\Api\V1\LaporanLemburController;
+use App\Modules\Reports\Controllers\Api\V1\UangMakanReportController;
 
 // Note: Laravel already prefixes with /api, so NO prefix needed here
+Route::prefix('v1/reports')->name('api.reports.')->group(function () {
+
+    // --- Lembur ---
+    Route::prefix('lembur')->name('lembur.')->group(function () {
+        Route::get('/harian', [LaporanLemburController::class, 'harian']);
+        Route::get('/harian/export', [LaporanLemburController::class, 'exportHarian']);
+        Route::get('/harian/print', [LaporanLemburController::class, 'printHarian']);
+        Route::get('/bulanan', [LaporanLemburController::class, 'bulanan']);
+        Route::get('/bulanan/export', [LaporanLemburController::class, 'exportBulanan']);
+        Route::get('/bulanan/print', [LaporanLemburController::class, 'printBulanan']);
+        Route::get('/resume', [LaporanLemburController::class, 'resume']);
+        Route::get('/resume/export', [LaporanLemburController::class, 'exportResume']);
+        Route::get('/resume/print', [LaporanLemburController::class, 'printResume']);
+
+        // Combined (Lembur + Uang Makan)
+        Route::get('/combined-detail', [LaporanLemburController::class, 'combinedDetail']);
+        Route::get('/combined-detail/export', [LaporanLemburController::class, 'exportCombinedDetail']);
+        Route::get('/combined-resume', [LaporanLemburController::class, 'combinedResume']);
+        Route::get('/combined-resume/export', [LaporanLemburController::class, 'exportCombinedResume']);
+    });
+
+    // --- Uang Makan ---
+    Route::prefix('uang-makan')->name('uang-makan.')->group(function () {
+        Route::get('/harian', [UangMakanReportController::class, 'harian']);
+        Route::get('/harian/export', [UangMakanReportController::class, 'exportHarian']);
+        Route::get('/harian/print', [UangMakanReportController::class, 'printHarian']);
+        Route::get('/bulanan', [UangMakanReportController::class, 'bulanan']);
+        Route::get('/bulanan/export', [UangMakanReportController::class, 'exportBulanan']);
+        Route::get('/bulanan/print', [UangMakanReportController::class, 'printBulanan']);
+        Route::get('/resume', [UangMakanReportController::class, 'resume']);
+        Route::get('/resume/export', [UangMakanReportController::class, 'exportResume']);
+        Route::get('/resume/print', [UangMakanReportController::class, 'printResume']);
+    });
+
+});
+
 Route::prefix('v1/laporan')->name('api.laporan.')->group(function () {
 
     Route::get('/kehadiran', [AttendanceReportController::class, 'index'])
         ->name('kehadiran');
+
+    Route::prefix('payroll')->name('payroll.')->group(function () {
+        Route::get('/detail', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'payroll'])->name('detail');
+        Route::get('/detail/export', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'exportPayroll'])->name('detail.export');
+        Route::get('/resume', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'resume'])->name('resume');
+        Route::get('/resume/export', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'exportResume'])->name('resume.export');
+    });
 
 });
