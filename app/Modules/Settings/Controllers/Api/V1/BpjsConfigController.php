@@ -25,9 +25,9 @@ class BpjsConfigController extends Controller
     }
 
     /** Show single config */
-    public function show(BpjsConfig $config): JsonResponse
+    public function show(BpjsConfig $bpjs_config): JsonResponse
     {
-        return response()->json(['data' => $config]);
+        return response()->json(['data' => $bpjs_config]);
     }
 
     /** Create new config. If is_active=true, deactivate other configs. */
@@ -66,7 +66,7 @@ class BpjsConfigController extends Controller
     }
 
     /** Update config */
-    public function update(Request $request, BpjsConfig $config): JsonResponse
+    public function update(Request $request, BpjsConfig $bpjs_config): JsonResponse
     {
         $data = $request->validate([
             'effective_date'       => 'date',
@@ -84,18 +84,18 @@ class BpjsConfigController extends Controller
         ]);
 
         $data['updated_by'] = auth()->id();
-        $config->update($data);
+        $bpjs_config->update($data);
 
         return response()->json([
             'message' => 'Konfigurasi BPJS berhasil diperbarui.',
-            'data'    => $config->fresh(),
+            'data'    => $bpjs_config->fresh(),
         ]);
     }
 
     /** Delete config */
-    public function destroy(BpjsConfig $config): JsonResponse
+    public function destroy(BpjsConfig $bpjs_config): JsonResponse
     {
-        $config->delete();
+        $bpjs_config->delete();
 
         return response()->json(['message' => 'Konfigurasi BPJS berhasil dihapus.']);
     }

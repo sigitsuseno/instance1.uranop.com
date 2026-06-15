@@ -83,7 +83,7 @@
     </BaseCard>
 
     <!-- Modal Form -->
-    <BaseModal :open="showModal" @close="closeModal" :title="isEdit ? 'Edit Konfigurasi' : 'Tambah Konfigurasi'">
+    <BaseModal :show="showModal" @close="closeModal" :title="isEdit ? 'Edit Konfigurasi' : 'Tambah Konfigurasi'">
       <div class="space-y-4 p-2">
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -148,7 +148,7 @@
     </BaseModal>
 
     <!-- Delete Confirmation -->
-    <BaseModal :open="showDelete" @close="showDelete = false" title="Hapus Konfigurasi">
+    <BaseModal :show="showDelete" @close="showDelete = false" title="Hapus Konfigurasi">
       <p class="p-4 text-sm">Hapus konfigurasi ini?</p>
       <template #footer>
         <div class="flex justify-end gap-2 p-4 border-t">

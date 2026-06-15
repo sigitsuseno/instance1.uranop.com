@@ -34,19 +34,21 @@ const selectedGroupNames = computed(() => {
 
 // ── Data ─────────────────────────────────────
 async function fetchData() {
-    if (!selectedPeriodId.value) return
     loading.value = true
+    const params = new URLSearchParams()
+    if (selectedPeriodId.value) params.set('period_id', selectedPeriodId.value)
+    selectedGroups.value.forEach(g => params.append('groups[]', g))
     router.replace({ query: { period_id: selectedPeriodId.value, groups: selectedGroups.value.join(',') } })
     try {
-        const params = new URLSearchParams({
-            period_id: selectedPeriodId.value,
-        })
-        selectedGroups.value.forEach(g => params.append('groups[]', g))
         const res = await get(`/api/v1/laporan/kehadiran?${params}`)
         if (res.success) {
             periods.value = res.data.periods
             dates.value = res.data.dates
             records.value = res.data.records
+            // Auto-select period from response if not set
+            if (!selectedPeriodId.value && res.data.filters?.period_id) {
+                selectedPeriodId.value = res.data.filters.period_id
+            }
         }
     } catch (e) {
         console.error('Gagal ambil data kehadiran:', e)

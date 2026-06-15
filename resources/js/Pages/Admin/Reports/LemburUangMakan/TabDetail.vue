@@ -3,8 +3,21 @@
     <!-- Filter Bar -->
     <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
       <div class="flex items-center gap-3">
-        <span class="text-sm font-semibold text-(--text-muted) uppercase tracking-wider">Periode:</span>
+        <!-- Mode toggle -->
+        <div class="flex rounded-lg border border-(--border-soft) overflow-hidden">
+          <button
+            :class="['px-3 py-2 text-sm font-medium transition-colors', dateMode === 'period' ? 'bg-(--primary) text-white' : 'bg-(--bg-elevated) text-(--text-muted) hover:text-(--text-main)']"
+            @click="dateMode = 'period'"
+          >Periode</button>
+          <button
+            :class="['px-3 py-2 text-sm font-medium transition-colors', dateMode === 'range' ? 'bg-(--primary) text-white' : 'bg-(--bg-elevated) text-(--text-muted) hover:text-(--text-main)']"
+            @click="dateMode = 'range'"
+          >Rentang Tanggal</button>
+        </div>
+
+        <!-- Period dropdown -->
         <select
+          v-if="dateMode === 'period'"
           v-model="selectedPeriodId"
           @change="fetchData"
           class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg focus:ring-(--primary) focus:border-(--primary) p-2 min-w-[300px]"
@@ -14,6 +27,24 @@
             {{ p.name }} ({{ formatDateRange(p.start_date, p.end_date) }})
           </option>
         </select>
+
+        <!-- Date range inputs -->
+        <template v-if="dateMode === 'range'">
+          <input
+            type="date"
+            v-model="startDate"
+            class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg p-2"
+          />
+          <span class="text-(--text-muted)">s/d</span>
+          <input
+            type="date"
+            v-model="endDate"
+            class="bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) text-sm rounded-lg p-2"
+          />
+          <BaseButton variant="primary" size="sm" @click="fetchData" :disabled="!startDate || !endDate">
+            Tampilkan
+          </BaseButton>
+        </template>
       </div>
       <div class="flex items-center gap-2">
         <BaseButton variant="secondary" size="sm" @click="exportExcel" :disabled="loading || !hasData">
@@ -24,8 +55,8 @@
 
     <!-- Table -->
     <BaseCard>
-      <div v-if="!selectedPeriodId" class="p-12 text-center text-(--text-muted)">
-        Silakan pilih periode terlebih dahulu.
+      <div v-if="!hasFilter" class="p-12 text-center text-(--text-muted)">
+        Silakan pilih periode atau rentang tanggal terlebih dahulu.
       </div>
 
       <div v-else-if="loading" class="p-12 flex flex-col items-center justify-center">
@@ -38,56 +69,69 @@
       </div>
 
       <div v-else class="overflow-auto max-h-[65vh]">
-        <table class="min-w-full divide-y divide-(--border-soft) text-[10px] whitespace-nowrap">
-          <!-- Header Row 1 -->
-          <thead class="bg-(--bg-elevated) sticky top-0 z-20">
-            <tr>
-              <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-0 bg-(--bg-elevated) z-30">No</th>
-              <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-[32px] bg-(--bg-elevated) z-30">ID</th>
-              <th rowspan="2" class="px-3 py-3 text-left font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-[76px] bg-(--bg-elevated) z-30 w-44">Nama</th>
-              <th rowspan="2" class="px-3 py-3 text-left font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Bagian / Jabatan</th>
-              <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/P</th>
-              <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tj. MK</th>
-              <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tunjangan</th>
-              <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah / Hari</th>
-              <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah Lbr / Jam</th>
-              <!-- Date group headers -->
-              <th
-                v-for="dateStr in dates"
-                :key="'dh-' + dateStr"
-                colspan="7"
-                class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft) text-[9px]"
-              >
-                {{ formatDateHeader(dateStr) }}
-              </th>
-              <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>Hari Kerja</th>
-              <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>Overtime</th>
-              <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>U.Makan</th>
-              <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase">Total<br>Terima</th>
-            </tr>
-            <!-- Header Row 2 -->
-            <tr>
-              <template v-for="dateStr in dates" :key="'sh-' + dateStr">
-                <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
-                <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">H/A</th>
-                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
-                <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">L/M</th>
-                <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Lbr</th>
-                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Nom.OT</th>
-                <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">U.Makan</th>
-              </template>
-            </tr>
-          </thead>
+        <!-- Render per section -->
+        <template v-for="(section, si) in sections" :key="section.key">
+          <!-- Section Label -->
+          <div class="px-4 py-2 bg-green-50/50 font-bold text-sm text-(--text-main) uppercase sticky left-0 border-b border-(--border-soft)">
+            {{ section.label }}
+          </div>
 
-          <tbody class="divide-y divide-(--border-soft)">
-            <template v-for="section in sections" :key="section.key">
-              <!-- Section Header -->
-              <tr class="bg-green-50/50">
-                <td :colspan="totalCols" class="px-4 py-2 font-bold text-sm text-(--text-main) uppercase">
-                  {{ section.label }}
-                </td>
+          <table class="min-w-full divide-y divide-(--border-soft) text-[10px] whitespace-nowrap mb-4">
+            <thead class="bg-(--bg-elevated) sticky top-0 z-20">
+              <!-- Header Row 1 -->
+              <tr>
+                <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-0 bg-(--bg-elevated) z-30">No</th>
+                <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-[32px] bg-(--bg-elevated) z-30">ID</th>
+                <th rowspan="2" class="px-3 py-3 text-left font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-[76px] bg-(--bg-elevated) z-30 w-44">Nama</th>
+                <th rowspan="2" class="px-3 py-3 text-left font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Bagian / Jabatan</th>
+                <th rowspan="2" class="px-2 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">L/P</th>
+                <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tj. MK</th>
+                <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Tunjangan</th>
+                <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah / Hari</th>
+                <th rowspan="2" class="px-3 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Upah Lbr / Jam</th>
+                <!-- Date group headers -->
+                <th
+                  v-for="dateStr in dates"
+                  :key="'dh-' + section.key + '-' + dateStr"
+                  :colspan="section.type === 'uang_makan' ? 6 : 6"
+                  class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft) text-[9px]"
+                >
+                  {{ formatDateHeader(dateStr) }}
+                </th>
+                <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>Hari Kerja</th>
+                <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>Overtime</th>
+                <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>U.Makan</th>
+                <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase">Total<br>Terima</th>
               </tr>
 
+              <!-- Header Row 2 — per section type -->
+              <tr>
+                <template v-if="section.type === 'uang_makan'">
+                  <!-- ALL IN: Uang Makan columns -->
+                  <template v-for="dateStr in dates" :key="'sh-' + section.key + '-' + dateStr">
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">H/A</th>
+                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">L/M</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Lembur</th>
+                    <th class="px-2 py-2 text-right font-bold text-(--text-muted) uppercase text-[9px]">Nominal</th>
+                  </template>
+                </template>
+                <template v-else>
+                  <!-- PRINTING: Lembur columns -->
+                  <template v-for="dateStr in dates" :key="'sh-' + section.key + '-' + dateStr">
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Durasi</th>
+                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Tarif Lbr</th>
+                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">U.Makan</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Konfirm</th>
+                  </template>
+                </template>
+              </tr>
+            </thead>
+
+            <tbody class="divide-y divide-(--border-soft)">
               <!-- Employee Rows -->
               <tr
                 v-for="(item, index) in section.data"
@@ -104,29 +148,52 @@
                 <td class="px-3 py-3 text-right font-medium border-r border-(--border-soft)">{{ item.upah_per_hari ? formatNumber(item.upah_per_hari) : '' }}</td>
                 <td class="px-3 py-3 text-right font-medium border-r border-(--border-soft)">{{ item.upah_lembur_per_jam ? formatNumber(item.upah_lembur_per_jam) : '' }}</td>
 
-                <!-- Daily cells -->
-                <template v-for="dateStr in dates" :key="'dc-' + item.id + '-' + dateStr">
-                  <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', (item.days[dateStr]?.kode) ? 'text-blue-600 font-medium' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.kode || '-' }}
-                  </td>
-                  <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.ha || '-' }}
-                  </td>
-                  <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
-                  </td>
-                  <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.lm > 0 ? item.days[dateStr].lm : '-' }}
-                  </td>
-                  <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lembur > 0 ? 'text-orange-600 font-medium' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.lembur > 0 ? item.days[dateStr].lembur : '-' }}
-                  </td>
-                  <td :class="['px-2 py-3 text-right text-xs border-r border-(--border-soft)', item.days[dateStr]?.overtime_nominal > 0 ? 'text-green-600 font-bold' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.overtime_nominal > 0 ? formatNumber(item.days[dateStr].overtime_nominal) : '-' }}
-                  </td>
-                  <td :class="['px-2 py-3 text-right text-xs', item.days[dateStr]?.uang_makan > 0 ? 'text-amber-600 font-bold' : 'text-gray-300']">
-                    {{ item.days[dateStr]?.uang_makan > 0 ? formatNumber(item.days[dateStr].uang_makan) : '-' }}
-                  </td>
+                <!-- Daily cells — ALL IN (uang_makan) -->
+                <template v-if="section.type === 'uang_makan'">
+                  <template v-for="dateStr in dates" :key="'dc-' + item.id + '-' + dateStr">
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.kode ? 'text-blue-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.kode || '-' }}
+                    </td>
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.ha || '-' }}
+                    </td>
+                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
+                    </td>
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.lm > 0 ? item.days[dateStr].lm : '-' }}
+                    </td>
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lembur > 0 ? 'text-orange-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.lembur > 0 ? item.days[dateStr].lembur : '-' }}
+                    </td>
+                    <td :class="['px-2 py-3 text-right text-xs', item.days[dateStr]?.nominal > 0 ? 'text-green-600 font-bold' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.nominal > 0 ? formatNumber(item.days[dateStr].nominal) : '-' }}
+                    </td>
+                  </template>
+                </template>
+
+                <!-- Daily cells — PRINTING (lembur) -->
+                <template v-else>
+                  <template v-for="dateStr in dates" :key="'dc-' + item.id + '-' + dateStr">
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.kode ? 'text-blue-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.kode || '-' }}
+                    </td>
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.durasi > 0 ? 'text-orange-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.durasi > 0 ? item.days[dateStr].durasi : '-' }}
+                    </td>
+                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
+                    </td>
+                    <td :class="['px-1 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.tarif_lembur > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.tarif_lembur > 0 ? formatNumber(item.days[dateStr].tarif_lembur) : '-' }}
+                    </td>
+                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.uang_makan > 0 ? 'text-amber-600 font-bold' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.uang_makan > 0 ? formatNumber(item.days[dateStr].uang_makan) : '-' }}
+                    </td>
+                    <td :class="['px-1 py-3 text-center text-xs', item.days[dateStr]?.konfirmasi ? 'text-green-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.konfirmasi || '-' }}
+                    </td>
+                  </template>
                 </template>
 
                 <!-- Employee Totals -->
@@ -138,39 +205,29 @@
 
               <!-- Section Totals -->
               <tr v-if="section.totals && section.totals.count > 0" class="bg-green-100/50 font-bold">
-                <td :colspan="fixedCols" class="px-3 py-2 text-right text-xs uppercase">
+                <td :colspan="9" class="px-3 py-2 text-right text-xs uppercase">
                   TOTAL {{ section.label }}
                 </td>
                 <template v-for="dateStr in dates" :key="'st-' + section.key + '-' + dateStr">
-                  <td :colspan="7" class="px-2 py-2"></td>
+                  <td :colspan="6" class="px-2 py-2"></td>
                 </template>
                 <td class="px-3 py-2 text-right text-xs text-emerald-700 border-r">{{ formatNumber(section.totals.total_hari_kerja) }}</td>
                 <td class="px-3 py-2 text-right text-xs text-green-700 border-r">{{ formatNumber(section.totals.total_overtime) }}</td>
                 <td class="px-3 py-2 text-right text-xs text-amber-700 border-r">{{ formatNumber(section.totals.total_uang_makan) }}</td>
                 <td class="px-3 py-2 text-right text-xs text-(--primary)">{{ formatNumber(section.totals.total_terima) }}</td>
               </tr>
+            </tbody>
+          </table>
+        </template>
 
-              <!-- Spacer -->
-              <tr>
-                <td :colspan="totalCols" class="p-1"></td>
-              </tr>
-            </template>
-
-            <!-- Grand Totals -->
-            <tr v-if="grandTotals" class="bg-blue-50 font-bold border-t-2 border-(--primary)">
-              <td :colspan="fixedCols" class="px-3 py-3 text-right text-sm uppercase text-(--primary)">
-                TOTAL KESELURUHAN
-              </td>
-              <template v-for="dateStr in dates" :key="'gt-' + dateStr">
-                <td :colspan="7" class="px-2 py-3"></td>
-              </template>
-              <td class="px-3 py-3 text-right text-sm text-emerald-700 border-r">{{ formatNumber(grandTotals.total_hari_kerja) }}</td>
-              <td class="px-3 py-3 text-right text-sm text-green-700 border-r">{{ formatNumber(grandTotals.total_overtime) }}</td>
-              <td class="px-3 py-3 text-right text-sm text-amber-700 border-r">{{ formatNumber(grandTotals.total_uang_makan) }}</td>
-              <td class="px-3 py-3 text-right text-sm text-(--primary)">{{ formatNumber(grandTotals.total_terima) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- Grand Totals -->
+        <div v-if="grandTotals" class="px-4 py-3 bg-blue-50 font-bold border-t-2 border-(--primary) flex justify-end gap-4 text-sm">
+          <span class="uppercase text-(--primary)">TOTAL KESELURUHAN</span>
+          <span class="text-emerald-700">{{ formatNumber(grandTotals.total_hari_kerja) }}</span>
+          <span class="text-green-700">{{ formatNumber(grandTotals.total_overtime) }}</span>
+          <span class="text-amber-700">{{ formatNumber(grandTotals.total_uang_makan) }}</span>
+          <span class="text-(--primary)">{{ formatNumber(grandTotals.total_terima) }}</span>
+        </div>
       </div>
     </BaseCard>
   </div>
@@ -190,7 +247,10 @@ const props = defineProps({
 const { get } = useApi()
 const notification = useNotificationStore()
 
+const dateMode = ref('period')
 const selectedPeriodId = ref(null)
+const startDate = ref('')
+const endDate = ref('')
 const periods = ref([])
 const sections = ref([])
 const dates = ref([])
@@ -198,9 +258,10 @@ const monthLabel = ref('')
 const grandTotals = ref(null)
 const loading = ref(false)
 
-const fixedCols = 9
-const subCols = 7
-const totalCols = computed(() => fixedCols + (subCols * dates.value.length) + 4)
+const hasFilter = computed(() => {
+  if (dateMode.value === 'period') return !!selectedPeriodId.value
+  return !!(startDate.value && endDate.value)
+})
 
 const hasData = computed(() => {
   return sections.value.some(s => s.data && s.data.length > 0)
@@ -242,12 +303,24 @@ function formatDateRange(start, end) {
   return fmt.format(new Date(start)) + ' - ' + fmt.format(new Date(end))
 }
 
+function buildParams() {
+  const params = new URLSearchParams()
+  if (dateMode.value === 'range') {
+    params.set('start_date', startDate.value)
+    params.set('end_date', endDate.value)
+  } else {
+    params.set('period_id', selectedPeriodId.value)
+  }
+  props.groups.forEach(g => params.append('groups[]', g))
+  return params
+}
+
 async function fetchData() {
-  if (!props.groups.length || !selectedPeriodId.value) return
+  if (!props.groups.length) return
+  if (!hasFilter.value) return
   loading.value = true
   try {
-    const params = new URLSearchParams({ period_id: selectedPeriodId.value })
-    props.groups.forEach(g => params.append('groups[]', g))
+    const params = buildParams()
     const res = await get(`/api/v1/reports/lembur/combined-detail?${params.toString()}`)
     sections.value = res.sections || []
     dates.value = res.dates || []
@@ -262,8 +335,7 @@ async function fetchData() {
 
 function exportExcel() {
   const token = localStorage.getItem('token')
-  const params = new URLSearchParams({ period_id: selectedPeriodId.value })
-  props.groups.forEach(g => params.append('groups[]', g))
+  const params = buildParams()
   const url = `/api/v1/reports/lembur/combined-detail/export?${params.toString()}`
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => r.blob())
@@ -282,5 +354,6 @@ function exportExcel() {
 }
 
 watch(() => props.groups, fetchData)
-watch(selectedPeriodId, fetchData)
+watch(selectedPeriodId, () => { if (dateMode.value === 'period') fetchData() })
+watch(dateMode, () => { selectedPeriodId.value = null; startDate.value = ''; endDate.value = '' })
 </script>

@@ -133,7 +133,7 @@
     </BaseCard>
 
     <!-- Modal Form -->
-    <BaseModal :open="showModal" @close="closeModal" :title="formTitle">
+    <BaseModal :show="showModal" @close="closeModal" :title="formTitle">
       <div class="space-y-4 p-2">
         <!-- Nama (readonly) -->
         <div v-if="formData.employee_name">
@@ -197,7 +197,7 @@
     </BaseModal>
 
     <!-- Delete Confirmation -->
-    <BaseModal :open="showDelete" @close="showDelete = false" title="Hapus BPJS">
+    <BaseModal :show="showDelete" @close="showDelete = false" title="Hapus BPJS">
       <p class="p-4 text-sm">Hapus data BPJS untuk <strong>{{ deleteTarget?.name }}</strong>? Data iuran yang sudah di-generate akan tetap ada.</p>
       <template #footer>
         <div class="flex justify-end gap-2 p-4 border-t border-(--border-soft)">

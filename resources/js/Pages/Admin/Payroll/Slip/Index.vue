@@ -28,7 +28,7 @@
           @click="doBulkPrint"
         >
           <template #icon-left>
-            <IconPrinter class="w-4 h-4" />
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
           </template>
           Cetak Semua ({{ isSplit ? '4' : '6' }}/lembar)
         </BaseButton>
@@ -221,11 +221,7 @@ import { IconSearch, IconFileInvoice } from '@/Components/Icons/index.js'
 import { useApi } from '@/composables/useApi'
 import { useNotificationStore } from '@/Stores/notification'
 
-// Inline printer icon (not in Icons set)
-const IconPrinter = {
-  template: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>`
-}
-
+// No inline templates allowed due to vue runtime compiler restriction
 const { get } = useApi()
 const notification = useNotificationStore()
 
