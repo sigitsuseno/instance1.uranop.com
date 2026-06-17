@@ -987,13 +987,12 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     // ═══════════════════════════════════════════════
                     //  SECTION A — ALL IN (Uang Makan logic)
                     // ═══════════════════════════════════════════════
-                    $kode = '';
+                    $kode = in_array($ha, ['H', 'S', 'C']) ? 'L' : '';
                     $nominal = 0;
                     $lmStr = '';
                     $lemburStr = '';
 
                     if ($lemburTotal > 0) {
-                        $kode = 'L';
                         $isMingguHoliday = ($dayOfWeek == 0 || $isHoliday);
 
                         if ($isMingguHoliday) {
