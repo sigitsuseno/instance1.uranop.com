@@ -29,7 +29,7 @@ const selectedGroups = ref([])
 // ── Section Grouping ─────────────────────────
 const KELOMPOK = {
     'A. JAKARTA':  ['GRP-JKT'],
-    'B. ALL IN':   ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR'],
+    'B. ALL IN':   ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-SPC'],
     'C. PRINTING': ['GRP-PS1', 'GRP-SS'],
 }
 

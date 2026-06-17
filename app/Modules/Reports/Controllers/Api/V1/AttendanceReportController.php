@@ -40,7 +40,7 @@ class AttendanceReportController extends Controller
         // Group into 3 sections (same as frontend)
         $kelompok = [
             'A. JAKARTA'  => ['GRP-JKT'],
-            'B. ALL IN'   => ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR'],
+            'B. ALL IN'   => ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-SPC'],
             'C. PRINTING' => ['GRP-PS1', 'GRP-SS'],
         ];
 

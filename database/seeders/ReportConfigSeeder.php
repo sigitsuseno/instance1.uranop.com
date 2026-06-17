@@ -42,7 +42,7 @@ class ReportConfigSeeder extends Seeder
         ReportConfig::updateOrCreate(
             ['report_type' => 'absensi'],
             [
-                'employee_groups' => ['GRP-JKT', 'GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-PS1', 'GRP-SS'],
+                'employee_groups' => ['GRP-JKT', 'GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-PS1', 'GRP-SS', 'GRP-SPC'],
                 'config'          => [],
             ]
         );
