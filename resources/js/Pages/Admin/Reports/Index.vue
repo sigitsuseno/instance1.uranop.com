@@ -271,6 +271,10 @@ function openReportModal(report) {
     router.push({ name: 'reports.bpjs' })
     return
   }
+  if (report.id === 'tax') {
+    router.push({ name: 'reports.pph' })
+    return
+  }
   selectedReport.value = report
   reportFilter.start_date = ''
   reportFilter.end_date = ''

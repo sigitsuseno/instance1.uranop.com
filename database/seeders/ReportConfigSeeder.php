@@ -55,9 +55,21 @@ class ReportConfigSeeder extends Seeder
             ]
         );
 
+        ReportConfig::updateOrCreate(
+            ['report_type' => 'pph'],
+            [
+                // PPh berlaku untuk semua group karyawan
+                'employee_groups' => ['GRP-JKT', 'GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-PS1', 'GRP-SS'],
+                'config'          => [
+                    'note' => 'Tarif PPh dikelola di menu Payroll → Pengelolaan PPh 21',
+                ],
+            ]
+        );
+
         // Clear cache biar ReportConfigService ambil data fresh
         \Illuminate\Support\Facades\Cache::forget('report_config:lembur_uang_makan');
         \Illuminate\Support\Facades\Cache::forget('report_config:absensi');
         \Illuminate\Support\Facades\Cache::forget('report_config:bpjs');
+        \Illuminate\Support\Facades\Cache::forget('report_config:pph');
     }
 }

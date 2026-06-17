@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\Reports\Controllers\Api\V1\AttendanceReportController;
 use App\Modules\Reports\Controllers\Api\V1\LaporanLemburController;
 use App\Modules\Reports\Controllers\Api\V1\UangMakanReportController;
+use App\Modules\Reports\Controllers\Api\V1\PphReportController;
 
 // Note: Laravel already prefixes with /api, so NO prefix needed here
 Route::prefix('v1/reports')->name('api.reports.')->group(function () {
@@ -39,6 +40,9 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
         Route::get('/resume/export', [UangMakanReportController::class, 'exportResume']);
         Route::get('/resume/print', [UangMakanReportController::class, 'printResume']);
     });
+
+    // --- PPh 21 ---
+    Route::get('/pph', [PphReportController::class, 'index'])->name('pph');
 
 });
 

@@ -125,7 +125,7 @@ const allMenus = [
       { title: 'Lembur & Uang Makan', icon: 'bx bx-food-menu', route: '/admin/reports/lembur-uang-makan' },
       { title: 'Laporan Kehadiran', icon: 'bx bx-calendar-check', route: '/admin/reports/kehadiran' },
       { title: 'Laporan Payroll', icon: 'bx bx-money', route: '/admin/reports/payroll' },
-      { title: 'Laporan Pajak', icon: 'bx bx-receipt', route: '/admin/reports' },
+      { title: 'Laporan Pajak', icon: 'bx bx-receipt', route: '/admin/reports/pph' },
       { title: 'Laporan BPJS', icon: 'bx bx-shield-quarter', route: '/admin/reports/bpjs' },
     ],
   },

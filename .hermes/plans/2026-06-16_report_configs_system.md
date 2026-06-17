@@ -1,6 +1,6 @@
 # Report Configs System — Detailed Implementation Plan
 
-> **Status:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⏳ | **Phase 4 ✅** | Phase 5-11 ⏳
+> **Status:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⏳ | Phase 4 ✅ | **Phase 5 ✅** | Phase 6-11 ⏳
 > **Last updated:** 2026-06-17
 > **Urutan pengerjaan:** Phase 0 → Phase 1 → Phase 2 → Phase 3 → ... → Phase 11
 
@@ -860,7 +860,7 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 | Phase | # | Slug | Laporan | Kelompok Group | Status |
 |-------|---|------|---------|----------------|--------|
 | 4 | 3 | `bpjs` | BPJS | BPJS-PROD, BPJS-2, BPJS-1 | ✅ |
-| 5 | 4 | `pph` | Rekap PPH | ? | ⏳ |
+| 5 | 4 | `pph` | Rekap PPH | Semua group (GRP-JKT, GRP-ALLIN, GRP-GD, GRP-SPR, GRP-PS1, GRP-SS) | ✅ |
 | 6 | 5 | `cortax` | Cortax | ? | ⏳ |
 | 7 | 6 | `payroll` | Payroll + Resume | ? | ⏳ |
 | 8 | 7 | `rekap_gaji` | Rekap Gaji | ? | ⏳ |
@@ -900,6 +900,9 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 | 2 | `resources/js/Pages/Admin/Reports/LemburUangMakan/Index.vue` | **Refactored:** pakai ReportPageLayout + modal setting. Group dari report_config API. Filter checkbox di halaman DIHAPUS. |
 | 4 | `resources/js/Pages/Admin/Reports/Bpjs/Index.vue` | **NEW:** Halaman laporan BPJS dgn ReportPageLayout + period filter + summary cards + tabel iuran lebar (5 employer + 3 employee cols) |
 | 4 | `resources/js/Components/ReportPage/settings/BpjsSettings.vue` | Placeholder info — rate BPJS dikelola di BpjsConfig terpisah |
+| 5 | `resources/js/Pages/Admin/Reports/Pph/Index.vue` | **NEW:** Halaman laporan PPh 21 dgn ReportPageLayout + period filter + search + tabel 14 kolom + 4 summary cards |
+| 5 | `resources/js/Components/ReportPage/settings/PphSettings.vue` | Placeholder info — rate PPh dikelola di Payroll/Pph |
+| 5 | `app/Modules/Reports/Controllers/Api/V1/PphReportController.php` | **NEW:** Query employee_pph via pay_records + filter group + search
 
 ## Files Modified
 
@@ -911,6 +914,9 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 | `resources/js/Pages/Admin/Reports/Index.vue` | Card BPJS redirect ke `reports.bpjs` (seperti `uang_makan`) |
 | `resources/js/Layouts/Admin/Sidebar.vue` | "Laporan BPJS" → `/admin/reports/bpjs` |
 | `database/seeders/ReportConfigSeeder.php` | Tambah row `bpjs` dgn 6 group + cache forget |
+| `database/seeders/ReportConfigSeeder.php` | Tambah row `pph` dgn semua group + cache forget |
+| `app/Modules/Reports/Routes/api.php` | Tambah import PphReportController + route `GET /v1/reports/pph` |
+| `resources/js/Pages/Admin/Reports/Index.vue` | Card 'tax' redirect ke `reports.pph` |
 
 ## Phase 4 Notes
 
@@ -925,6 +931,19 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 - Summary cards: Total Karyawan, Beban Perusahaan, Potongan Karyawan, Total Iuran
 - Setting modal: group checkboxes (BPJS-PROD, BPJS-2, BPJS-1) + BpjsSettings info
 - Export Excel: placeholder (alert)
+
+## Phase 5 Notes
+
+- **Backend + Frontend complete** — endpoint `GET /api/v1/reports/pph` query dari `employee_pph` via `pay_records`
+- **Data source:** tabel `employee_pph` yang di-join dengan `pay_records` dan `employees`
+- **Filter:** `employee_groups` (semua group, PPh berlaku universal), `pay_period_id` (required)
+- **API controller:** `PphReportController::index()` — return array of PPH records per employee per period
+- **Kolom tabel** (14 kolom): No, Nama, NIP, NPWP, PTKP, Gross Income, Biaya Jabatan, Total Pengurang, Netto Sebulan, PKP Setahun, Tarif (%), PPh 21, Metode (TER/Prog), DTP
+- **Summary cards:** Total Karyawan, Total Gross Income, Total PPh 21, Rata-rata Tarif
+- **Setting modal:** group checkboxes + PphSettings info (tarif PPh dikelola di Payroll → PPh 21)
+- **Export Excel:** placeholder (alert)
+- **Seeder:** `report_type = 'pph'` dengan semua group karyawan
+- **Reports/Index.vue:** card 'tax' sekarang redirect ke `reports.pph`
 
 ## 🐛 Pitfalls & Fixes
 
