@@ -1126,7 +1126,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $sectionMeta = [
             'jakarta'  => ['label' => 'A. KARYAWAN JAKARTA',         'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
             'all_in'   => ['label' => 'B. KARYAWAN ALL IN',          'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
-            'printing' => ['label' => 'C. KARYAWAN BULANAN PRINTING', 'uang_makan_key' => 'uang_makan', 'type' => 'lembur'],
+            'printing' => ['label' => 'C. KARYAWAN BULANAN PRINTING', 'uang_makan_key' => 'nominal', 'type' => 'lembur'],
         ];
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
