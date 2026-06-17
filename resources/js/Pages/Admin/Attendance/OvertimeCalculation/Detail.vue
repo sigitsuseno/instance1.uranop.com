@@ -147,12 +147,11 @@ function getNavigationUrl(empId) {
 
 function extractTime(datetimeStr) {
     if (!datetimeStr) return '--:--';
+    if (datetimeStr.includes('T')) {
+        return datetimeStr.split('T')[1].substring(0, 5);
+    }
     if (datetimeStr.includes(' ')) {
         return datetimeStr.split(' ')[1].substring(0, 5);
-    }
-    if (datetimeStr.includes('T')) {
-        const d = new Date(datetimeStr);
-        return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', hour12: false });
     }
     return datetimeStr.substring(0, 5);
 }
