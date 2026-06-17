@@ -424,6 +424,16 @@
               class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)" />
           </div>
         </div>
+        <div>
+          <label class="block text-xs font-medium text-(--text-main) mb-1">Karyawan (Opsional)</label>
+          <select v-model="syncEmployeeId"
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+            <option value="">Semua Karyawan (di periode ini)</option>
+            <option v-for="emp in employees" :key="emp.id" :value="emp.id">
+              {{ emp.name }} ({{ emp.nip }})
+            </option>
+          </select>
+        </div>
       </div>
       <template #footer>
         <div class="flex gap-3 w-full">
@@ -479,6 +489,7 @@ const showSyncModal = ref(false)
 const showHitungLemburModal = ref(false)
 const processStartDate = ref('')
 const processEndDate = ref('')
+const syncEmployeeId = ref('')
 const editError = ref(null)
 
 // Leave type options untuk edit modal
@@ -798,6 +809,7 @@ async function handleProceedSync() {
     const res = await post('/api/v1/attendance/prepare/sync', {
       start_date: processStartDate.value,
       end_date: processEndDate.value,
+      employee_id: syncEmployeeId.value || null,
     })
 
     syncResult.value = {

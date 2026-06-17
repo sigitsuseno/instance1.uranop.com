@@ -45,15 +45,17 @@ class AttendanceSyncService
      *
      * @return array{processed: int, failed: int, errors: array}
      */
-    public function syncPeriod(string $startDate, string $endDate): array
+    public function syncPeriod(string $startDate, string $endDate, ?int $employeeId = null): array
     {
         Log::info('AttendanceSync: starting period sync', [
             'start' => $startDate,
             'end'   => $endDate,
+            'employee_id' => $employeeId,
         ]);
 
         $rosters = EmployeeShiftRoster::with(['shift', 'employee'])
             ->whereBetween('date', [$startDate, $endDate])
+            ->when($employeeId, fn ($q) => $q->where('employee_id', $employeeId))
             ->orderBy('date')
             ->orderBy('employee_id')
             ->get();

@@ -245,8 +245,9 @@ class AttendanceApiController extends Controller
     public function prepareSync(Request $request): JsonResponse
     {
         $request->validate([
-            'start_date' => 'required|date',
-            'end_date'   => 'required|date|after_or_equal:start_date',
+            'start_date'  => 'required|date',
+            'end_date'    => 'required|date|after_or_equal:start_date',
+            'employee_id' => 'nullable|integer',
         ]);
 
         $syncService = new \App\Modules\Attendance\Services\AttendanceSyncService(
@@ -256,7 +257,8 @@ class AttendanceApiController extends Controller
         try {
             $result = $syncService->syncPeriod(
                 $request->start_date,
-                $request->end_date
+                $request->end_date,
+                $request->employee_id
             );
 
             return response()->json([
