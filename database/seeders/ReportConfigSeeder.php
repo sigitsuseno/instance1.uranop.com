@@ -12,7 +12,7 @@ class ReportConfigSeeder extends Seeder
         ReportConfig::updateOrCreate(
             ['report_type' => 'lembur_uang_makan'],
             [
-                'employee_groups' => ['GRP-JKT', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR'],
+                'employee_groups' => ['GRP-JKT', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR', 'GRP-ALLIN', 'GRP-SPC'],
                 'config' => [
                     'KABAG'   => [
                         'weekday'      => 15000,

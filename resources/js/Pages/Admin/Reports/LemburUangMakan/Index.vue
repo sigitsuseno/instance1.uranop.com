@@ -94,13 +94,12 @@ onMounted(async () => {
     if (savedGroups.length > 0) {
       selectedGroups.value = savedGroups
     } else {
-      // Fallback default
-      selectedGroups.value = ['GRP-JKT', 'GRP-PS1']
+      selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'GRP-SPC']
     }
   } catch (err) {
     console.error('Gagal fetch report config:', err)
     // Fallback default
-    selectedGroups.value = ['GRP-JKT', 'GRP-PS1']
+    selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'GRP-SPC']
   }
 })
 

@@ -878,6 +878,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $jakartaEmployees = collect();
         $allInEmployees = collect();
         $printingEmployees = collect();
+        $spcEmployees = collect();
 
         foreach ($employees as $employee) {
             $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
@@ -912,6 +913,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             );
             $isPrinting = $employee->groups->contains(fn($g) =>
                 in_array($g->reference_code, ['GRP-PS1', 'GRP-SS'])
+            );
+            $isSPC = $employee->groups->contains(fn($g) =>
+                $g->reference_code === 'GRP-SPC'
             );
             $isSG = $employee->groups->contains('reference_code', 'SG');
 
@@ -960,7 +964,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
                 $totalOvertimeNominal = round($lmNominal + $overtimeNominal, 2);
 
-                if ($isPrinting) {
+                if ($isPrinting || $isSPC) {
                     // ═══════════════════════════════════════════════
                     //  SECTION C — BULANAN PRINTING (Lembur logic)
                     // ═══════════════════════════════════════════════
@@ -1060,6 +1064,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $jakartaEmployees->push($item);
             } elseif ($isPrinting) {
                 $printingEmployees->push($item);
+            } elseif ($isSPC) {
+                $spcEmployees->push($item);
             } else {
                 $allInEmployees->push($item);
             }
@@ -1068,6 +1074,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $jakartaEmployees = $jakartaEmployees->sortBy('name')->values();
         $allInEmployees = $allInEmployees->sortBy('name')->values();
         $printingEmployees = $printingEmployees->sortBy('name')->values();
+        $spcEmployees = $spcEmployees->sortBy('name')->values();
 
         $sections = [
             [
@@ -1091,9 +1098,16 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'data'   => $printingEmployees,
                 'totals' => $this->calculateSectionTotals($printingEmployees),
             ],
+            [
+                'label'  => 'D. KARYAWAN SPESIFIK',
+                'key'    => 'spc',
+                'type'   => 'lembur',
+                'data'   => $spcEmployees,
+                'totals' => $this->calculateSectionTotals($spcEmployees),
+            ],
         ];
 
-        $allData = $jakartaEmployees->concat($allInEmployees)->concat($printingEmployees);
+        $allData = $jakartaEmployees->concat($allInEmployees)->concat($printingEmployees)->concat($spcEmployees);
         $grandTotals = $this->calculateSectionTotals($allData);
 
         return [
@@ -1126,6 +1140,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             'jakarta'  => ['label' => 'A. KARYAWAN JAKARTA',         'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
             'all_in'   => ['label' => 'B. KARYAWAN ALL IN',          'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
             'printing' => ['label' => 'C. KARYAWAN BULANAN PRINTING', 'uang_makan_key' => 'nominal', 'type' => 'lembur'],
+            'spc'      => ['label' => 'D. KARYAWAN SPESIFIK',           'uang_makan_key' => 'nominal', 'type' => 'lembur'],
         ];
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
