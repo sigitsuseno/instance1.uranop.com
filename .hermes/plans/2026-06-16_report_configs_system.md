@@ -1,6 +1,6 @@
 # Report Configs System — Detailed Implementation Plan
 
-> **Status:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⏳ | Phase 4-11 ⏳
+> **Status:** Phase 0 ✅ | Phase 1 ✅ | Phase 2 ✅ | Phase 3 ⏳ | **Phase 4 ✅** | Phase 5-11 ⏳
 > **Last updated:** 2026-06-17
 > **Urutan pengerjaan:** Phase 0 → Phase 1 → Phase 2 → Phase 3 → ... → Phase 11
 
@@ -857,16 +857,16 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 
 # PHASE 4-11: Laporan #3 s/d #10
 
-| Phase | # | Slug | Laporan | Kelompok Group |
-|-------|---|------|---------|----------------|
-| 4 | 3 | `bpjs` | BPJS | ? |
-| 5 | 4 | `pph` | Rekap PPH | ? |
-| 6 | 5 | `cortax` | Cortax | ? |
-| 7 | 6 | `payroll` | Payroll + Resume | ? |
-| 8 | 7 | `rekap_gaji` | Rekap Gaji | ? |
-| 9 | 8 | `kompensasi` | Kompensasi | ? |
-| 10 | 9 | `kerja` | Laporan Kerja | ? |
-| 11 | 10 | `gaji_kus` | Gaji Kus | ? |
+| Phase | # | Slug | Laporan | Kelompok Group | Status |
+|-------|---|------|---------|----------------|--------|
+| 4 | 3 | `bpjs` | BPJS | BPJS-PROD, BPJS-2, BPJS-1 | ✅ |
+| 5 | 4 | `pph` | Rekap PPH | ? | ⏳ |
+| 6 | 5 | `cortax` | Cortax | ? | ⏳ |
+| 7 | 6 | `payroll` | Payroll + Resume | ? | ⏳ |
+| 8 | 7 | `rekap_gaji` | Rekap Gaji | ? | ⏳ |
+| 9 | 8 | `kompensasi` | Kompensasi | ? | ⏳ |
+| 10 | 9 | `kerja` | Laporan Kerja | ? | ⏳ |
+| 11 | 10 | `gaji_kus` | Gaji Kus | ? | ⏳ |
 
 *(Detail per phase menyusul setelah Phase 3 selesai)*
 
@@ -882,12 +882,12 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 
 ---
 
-# 📝 Actual Implementation Notes (Phase 0-2)
+# 📝 Actual Implementation Notes (Phase 0-4)
 
 ## Files Created
 
 | Phase | File | Notes |
-|---|---|---|
+|---|---|---|---|
 | 0 | `database/migrations/2026_06_16_000000_create_report_configs_table.php` | Tabel report_configs |
 | 0 | `app/Modules/Settings/Models/ReportConfig.php` | Casts: employee_groups array, config array. Relationship: `updatedBy()` → `App\Modules\Auth\Models\User` |
 | 0 | `app/Modules/Settings/Services/ReportConfigService.php` | Cache 24h, `getFull()` buat API, `getDefaultConfig()` fallback |
@@ -898,6 +898,8 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 | 1 | `resources/js/Components/ReportPage/ReportSettingsModal.vue` | Props: reportType, reportLabel, availableGroups. Emit: close, saved. Slot: config |
 | 2 | `resources/js/Components/ReportPage/settings/LemburUangMakanSettingsTable.vue` | Rate matrix editor: rows=KABAG/KASHIFT/ALL IN, cols=5 rate types |
 | 2 | `resources/js/Pages/Admin/Reports/LemburUangMakan/Index.vue` | **Refactored:** pakai ReportPageLayout + modal setting. Group dari report_config API. Filter checkbox di halaman DIHAPUS. |
+| 4 | `resources/js/Pages/Admin/Reports/Bpjs/Index.vue` | **NEW:** Halaman laporan BPJS dgn ReportPageLayout + period filter + summary cards + tabel iuran lebar (5 employer + 3 employee cols) |
+| 4 | `resources/js/Components/ReportPage/settings/BpjsSettings.vue` | Placeholder info — rate BPJS dikelola di BpjsConfig terpisah |
 
 ## Files Modified
 
@@ -905,6 +907,24 @@ Cek apakah ada hardcode di backend controller laporan kehadiran yang perlu dimig
 |---|---|
 | `UangMakanReportController.php` | `getGroupRates()` (line 503-541) dihapus, ganti panggil `ReportConfigService`. `$nominal = 15000` → `$rates['weekday'] ?? 15000` |
 | `LaporanLemburController.php` | `getUangMakanRates()` (line 1224-1262) dihapus, ganti service. `$uangMakanNominal = 15000` → `$umRates['weekday'] ?? 15000` |
+| `resources/js/router/index.js` | Tambah lazy import `LaporanBpjsIndex` + route `/admin/reports/bpjs` |
+| `resources/js/Pages/Admin/Reports/Index.vue` | Card BPJS redirect ke `reports.bpjs` (seperti `uang_makan`) |
+| `resources/js/Layouts/Admin/Sidebar.vue` | "Laporan BPJS" → `/admin/reports/bpjs` |
+| `database/seeders/ReportConfigSeeder.php` | Tambah row `bpjs` dgn 6 group + cache forget |
+
+## Phase 4 Notes
+
+- **Backend + Frontend complete** — connect ke real API
+- **Data source:** karyawan dari `employee_shift_roster` per periode
+- **Filter:** `employee_groups` WHERE `group_label = 'BPJS GROUP'` (codes: BPJS-PROD, BPJS-2, BPJS-1)
+- **Dynamic salary:** `gaji_pokok(period)`, `tjMasaKerja(period)`, `tunjangan(period)` dari Employee model
+- **BPJS group masters** sudah ada: BPJS-1 (BPJS STAFF 1), BPJS-2 (BPJS STAFF 2), BPJS-PROD (BPJS PRODUKSI)
+- **⚠️ Karyawan belum di-assign ke BPJS GROUP** — perlu Sigit assign via Grouping Karyawan
+- Tabel gabungan (info karyawan 12 kolom + iuran 10 kolom) — total 23 kolom lebar
+- Filter periode dropdown (dari `/api/v1/payroll/periods`)
+- Summary cards: Total Karyawan, Beban Perusahaan, Potongan Karyawan, Total Iuran
+- Setting modal: group checkboxes (BPJS-PROD, BPJS-2, BPJS-1) + BpjsSettings info
+- Export Excel: placeholder (alert)
 
 ## 🐛 Pitfalls & Fixes
 

@@ -47,8 +47,17 @@ class ReportConfigSeeder extends Seeder
             ]
         );
 
+        ReportConfig::updateOrCreate(
+            ['report_type' => 'bpjs'],
+            [
+                'employee_groups' => ['BPJS-PROD', 'BPJS-2', 'BPJS-1'],
+                'config'          => [],
+            ]
+        );
+
         // Clear cache biar ReportConfigService ambil data fresh
         \Illuminate\Support\Facades\Cache::forget('report_config:lembur_uang_makan');
         \Illuminate\Support\Facades\Cache::forget('report_config:absensi');
+        \Illuminate\Support\Facades\Cache::forget('report_config:bpjs');
     }
 }

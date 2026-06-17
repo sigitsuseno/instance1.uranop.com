@@ -267,6 +267,10 @@ function openReportModal(report) {
     router.push({ name: 'reports.uang-makan' })
     return
   }
+  if (report.id === 'bpjs') {
+    router.push({ name: 'reports.bpjs' })
+    return
+  }
   selectedReport.value = report
   reportFilter.start_date = ''
   reportFilter.end_date = ''

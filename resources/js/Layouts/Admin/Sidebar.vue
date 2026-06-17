@@ -126,7 +126,7 @@ const allMenus = [
       { title: 'Laporan Kehadiran', icon: 'bx bx-calendar-check', route: '/admin/reports/kehadiran' },
       { title: 'Laporan Payroll', icon: 'bx bx-money', route: '/admin/reports/payroll' },
       { title: 'Laporan Pajak', icon: 'bx bx-receipt', route: '/admin/reports' },
-      { title: 'Laporan BPJS', icon: 'bx bx-shield-quarter', route: '/admin/reports' },
+      { title: 'Laporan BPJS', icon: 'bx bx-shield-quarter', route: '/admin/reports/bpjs' },
     ],
   },
   {

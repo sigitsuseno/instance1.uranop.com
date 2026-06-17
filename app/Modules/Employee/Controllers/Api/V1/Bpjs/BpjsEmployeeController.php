@@ -363,31 +363,154 @@ class BpjsEmployeeController extends Controller
     }
 
     /**
-     * Reports — summary total iuran per periode.
+     * Reports — laporan BPJS per periode.
+     *
+     * Data source: karyawan dari employee_shift_roster untuk periode terpilih,
+     * difilter berdasarkan group_label = 'BPJS GROUP' (codes: BPJS-PROD, BPJS-2, BPJS-1).
+     * Join ke employee_bpjs untuk data iuran.
+     * Kalkulasi dinamis: gaji_pokok(period), tjMasaKerja(period), tunjangan(period).
      */
     public function reports(Request $request): JsonResponse
     {
-        $request->validate(['pay_period_id' => 'required|exists:pay_periods,id']);
+        $request->validate([
+            'pay_period_id' => 'required|exists:pay_periods,id',
+            'groups'        => 'nullable|string', // comma-separated BPJS group codes
+        ]);
 
-        $records = EmployeeBpjs::with('employee:id,name,employee_code')
-            ->where('pay_period_id', $request->pay_period_id)
-            ->where(function ($q) {
-                $q->where('has_bpjs_tk', true)
-                  ->orWhere('has_bpjs_ks', true)
-                  ->orWhere('has_bpjs_pen', true);
+        $payPeriod = PayPeriod::findOrFail($request->pay_period_id);
+
+        // 1. Ambil karyawan dari employee_shift_roster periode ini
+        if (! $payPeriod->start_date || ! $payPeriod->end_date) {
+            return response()->json(['message' => 'Periode tidak memiliki tanggal mulai/selesai.'], 400);
+        }
+
+        $rosteredIds = EmployeeShiftRoster::whereBetween('date', [
+            $payPeriod->start_date, $payPeriod->end_date,
+        ])->distinct()->pluck('employee_id');
+
+        if ($rosteredIds->isEmpty()) {
+            return response()->json([
+                'data' => [
+                    'period_name'     => $payPeriod->name,
+                    'total_karyawan'  => 0,
+                    'total_employer'  => 0,
+                    'total_employee'  => 0,
+                    'total_all'       => 0,
+                    'details'         => [],
+                ],
+            ]);
+        }
+
+        // 2. Filter by BPJS GROUP
+        $groupCodes = $request->groups
+            ? array_filter(array_map('trim', explode(',', $request->groups)))
+            : [];
+
+        $employees = Employee::whereIn('id', $rosteredIds)
+            ->whereHas('groups', function ($q) {
+                // Hanya karyawan dengan group_label = 'BPJS GROUP'
+                $q->whereHas('master', function ($mq) {
+                    $mq->where('group_label', 'BPJS GROUP');
+                });
             })
+            ->when(! empty($groupCodes), function ($q) use ($groupCodes) {
+                $q->whereHas('groups', function ($gq) use ($groupCodes) {
+                    $gq->whereIn('reference_code', $groupCodes);
+                });
+            })
+            ->orderBy('name')
             ->get();
 
-        $totalEmployer = $records->sum(fn ($r) => $r->total_employer);
-        $totalEmployee = $records->sum(fn ($r) => $r->total_employee);
+        // 3. Load BPJS data untuk periode ini
+        $bpjsByEmployee = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
+            ->where('pay_period_id', $payPeriod->id)
+            ->get()
+            ->keyBy('employee_id');
+
+        // 4. Build detail response
+        $periodStr = $payPeriod->end_date->format('Y-m');
+
+        $details = $employees->map(function ($emp) use ($bpjsByEmployee, $periodStr, $payPeriod) {
+            $bpjs = $bpjsByEmployee->get($emp->id);
+
+            // Salary dinamis dari Employee model
+            $gajiPokok = (float) $emp->gaji_pokok($periodStr);
+            $tjMk      = (float) $emp->tjMasaKerja($periodStr);
+            $tunjangan = (float) $emp->tunjangan($periodStr);
+            $dasar     = $gajiPokok + $tjMk + $tunjangan;
+
+            // Masa kerja (bulan)
+            $masaKerja = $emp->join_date
+                ? $emp->join_date->diffInMonths($payPeriod->end_date)
+                : 0;
+
+            // Group BPJS name
+            $bpjsGroup = $emp->groups()
+                ->whereHas('master', fn ($q) => $q->where('group_label', 'BPJS GROUP'))
+                ->with('master')
+                ->first();
+
+            // Iuran (0 jika belum di-generate)
+            $empJHT = (float) ($bpjs->employer_jht ?? 0);
+            $empJKM = (float) ($bpjs->employer_jkm ?? 0);
+            $empJKK = (float) ($bpjs->employer_jkk ?? 0);
+            $empTK  = round($empJHT + $empJKM + $empJKK, 2);
+            $empJP  = (float) ($bpjs->employer_jp ?? 0);
+            $empKS  = (float) ($bpjs->employer_kesehatan ?? 0);
+
+            $eeJHT = (float) ($bpjs->employee_jht ?? 0);
+            $eeJP  = (float) ($bpjs->employee_jp ?? 0);
+            $eeKS  = (float) ($bpjs->employee_kesehatan ?? 0);
+            $eeTotal = round($eeJHT + $eeJP + $eeKS, 2);
+
+            $grandTotal = round($empTK + $empJP + $empKS + $eeTotal, 2);
+
+            return [
+                'id'                   => $emp->id,
+                'employee'             => [
+                    'name'          => $emp->name,
+                    'nip'           => $emp->nip,
+                    'employee_code' => $emp->employee_code,
+                ],
+                'group'                => $bpjsGroup?->master?->name ?? '-',
+                'group_code'           => $bpjsGroup?->reference_code ?? null,
+                'join_year'            => $emp->join_date?->format('Y'),
+                'masa_kerja'           => $masaKerja,
+                'gaji_pokok'           => $gajiPokok,
+                'tj_masa_kerja'        => $tjMk,
+                'tunjangan'            => $tunjangan,
+                'bpjs_base_salary'     => $dasar,
+                'kpj_tk'               => $emp->bpjs_ketenagakerjaan,
+                'kpj_ks'               => $emp->bpjs_kesehatan,
+                // Employer (Perusahaan)
+                'employer_jht'         => $empJHT,
+                'employer_jkm'         => $empJKM,
+                'employer_jkk'         => $empJKK,
+                'employer_tk_total'    => $empTK,
+                'employer_jp'          => $empJP,
+                'employer_kesehatan'   => $empKS,
+                // Employee (Karyawan)
+                'employee_jht'         => $eeJHT,
+                'employee_jp'          => $eeJP,
+                'employee_kesehatan'   => $eeKS,
+                'employee_total'       => $eeTotal,
+                // Grand
+                'grand_total'          => $grandTotal,
+            ];
+        })->values();
+
+        // 5. Summary totals
+        $totalEmployer = $details->sum(fn ($d) => $d['employer_tk_total'] + $d['employer_jp'] + $d['employer_kesehatan']);
+        $totalEmployee = $details->sum(fn ($d) => $d['employee_total']);
 
         return response()->json([
             'data' => [
-                'total_karyawan' => $records->count(),
-                'total_employer' => $totalEmployer,
-                'total_employee' => $totalEmployee,
-                'total_all'      => $totalEmployer + $totalEmployee,
-                'details'        => $records,
+                'period_name'     => $payPeriod->name,
+                'total_karyawan'  => $details->count(),
+                'total_employer'  => round($totalEmployer, 2),
+                'total_employee'  => round($totalEmployee, 2),
+                'total_all'       => round($totalEmployer + $totalEmployee, 2),
+                'details'         => $details,
             ],
         ]);
     }

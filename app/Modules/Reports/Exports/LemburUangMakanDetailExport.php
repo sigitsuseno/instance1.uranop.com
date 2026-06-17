@@ -31,13 +31,13 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
     /** Sub-headers per section type */
     protected const SUB_HEADERS = [
         'uang_makan' => ['Kode', 'H/A', 'Upah/Hari', 'L/M', 'Lembur', 'Nominal'],
-        'lembur'     => ['Kode', 'Durasi', 'Upah/Hari', 'Tarif Lbr', 'U.Makan', 'Konfirm'],
+        'lembur'     => ['Kode', 'H/A', 'Upah/Hari', 'Tarif Lbr', 'U.Makan', 'Konfirm'],
     ];
 
     /** Data keys per section type (in order matching sub-headers) */
     protected const DATA_KEYS = [
         'uang_makan' => ['kode', 'ha', 'upah_per_hari', 'lm', 'lembur', 'nominal'],
-        'lembur'     => ['kode', 'durasi', 'upah_per_hari', 'tarif_lembur', 'uang_makan', 'konfirmasi'],
+        'lembur'     => ['kode', 'ha', 'upah_per_hari', 'tarif_lembur', 'uang_makan', 'konfirmasi'],
     ];
 
     /** Track row ranges per section type for number formatting */

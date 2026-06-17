@@ -999,7 +999,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
                     $days[$dateStr] = [
                         'kode'             => $kode,
-                        'durasi'           => $lemburTotal > 0 ? $lemburTotal : 0,
+                        'ha'               => $ha,
                         'upah_per_hari'    => $upahHarian,
                         'tarif_lembur'     => $upahLemburPerJam,
                         'uang_makan'       => $uangMakanNominal,

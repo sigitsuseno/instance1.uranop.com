@@ -8,3 +8,9 @@
 8. Laporan Kompensasi.
 9. Laporan Kerja
 10. Laporan Gaji Kus
+
+Jo,
+
+A. KARYAWAN JAKARTA ( dapatnya uang makan )
+B. KARYAWAN ALL IN ( dapatnya uang makan )
+C. KARYAWAN BULANAN PRINTING ( dapatnya uang lembur )

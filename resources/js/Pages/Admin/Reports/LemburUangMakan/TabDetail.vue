@@ -121,7 +121,7 @@
                   <!-- PRINTING: Lembur columns -->
                   <template v-for="dateStr in dates" :key="'sh-' + section.key + '-' + dateStr">
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
-                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Durasi</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">H/A</th>
                     <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Tarif Lbr</th>
                     <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">U.Makan</th>
@@ -178,8 +178,8 @@
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.kode ? 'text-blue-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.kode || '-' }}
                     </td>
-                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.durasi > 0 ? 'text-orange-600 font-medium' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.durasi > 0 ? item.days[dateStr].durasi : '-' }}
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.ha || '-' }}
                     </td>
                     <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
