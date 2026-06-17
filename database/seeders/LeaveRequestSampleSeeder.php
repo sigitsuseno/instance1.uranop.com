@@ -222,9 +222,9 @@ class LeaveRequestSampleSeeder extends Seeder
                 ->first();
 
             if ($decrementRecord) {
-                // Update existing — tambah amount
+                // Update existing — timpa (overwrite) amount agar tidak double
                 $decrementRecord->update([
-                    'amount' => $decrementRecord->amount + $acc['amount'],
+                    'amount' => $acc['amount'],
                     'description' => 'Akumulasi potongan ' . $acc['leave_type_name'],
                     'reference_id' => null,
                 ]);
