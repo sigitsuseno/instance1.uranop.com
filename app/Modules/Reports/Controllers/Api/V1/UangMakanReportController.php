@@ -8,6 +8,7 @@ use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
+use App\Modules\Settings\Services\ReportConfigService;
 use App\Modules\Reports\Exports\UangMakanHarianExport;
 use App\Modules\Reports\Exports\UangMakanBulananExport;
 use App\Modules\Reports\Exports\UangMakanResumeExport;
@@ -502,41 +503,28 @@ class UangMakanReportController extends Controller
 
     private function getGroupRates(string $groupName, float $gajiPokok): array
     {
-        $rateWeekday = $gajiPokok > 0 ? round($gajiPokok / 25) : 0;
+        $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
+        $upper = strtoupper($groupName);
 
-        if (str_contains($groupName, 'KABAG')) {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 55000,
-                'sabtu_full'   => 110000,
-                'minggu_half'  => 110000,
-                'minggu_full'  => 220000,
-            ];
-        } elseif (str_contains($groupName, 'KEPALA SHIFT') || str_contains($groupName, 'KASHIFT')) {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 52500,
-                'sabtu_full'   => 105000,
-                'minggu_half'  => 105000,
-                'minggu_full'  => 210000,
-            ];
-        } elseif (str_contains($groupName, 'ALL IN') || str_contains($groupName, 'ALL-IN')) {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 50000,
-                'sabtu_full'   => 100000,
-                'minggu_half'  => 100000,
-                'minggu_full'  => 200000,
-            ];
-        } else {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 0,
-                'sabtu_full'   => 0,
-                'minggu_half'  => 0,
-                'minggu_full'  => 0,
-            ];
+        // Match with aliases (same logic as old hardcode)
+        if (str_contains($upper, 'KABAG')) {
+            return $config['KABAG'] ?? [];
         }
+        if (str_contains($upper, 'KEPALA SHIFT') || str_contains($upper, 'KASHIFT')) {
+            return $config['KASHIFT'] ?? [];
+        }
+        if (str_contains($upper, 'ALL IN') || str_contains($upper, 'ALL-IN')) {
+            return $config['ALL IN'] ?? [];
+        }
+
+        // Default: weekday only, sabtu/minggu = 0
+        return [
+            'weekday'      => 15000,
+            'sabtu_dua'    => 0,
+            'sabtu_full'   => 0,
+            'minggu_half'  => 0,
+            'minggu_full'  => 0,
+        ];
     }
 
     /**
@@ -548,7 +536,7 @@ class UangMakanReportController extends Controller
      *   upah_per_hari — (gaji+tmk)/25, kosong utk I/A/OFF & Minggu/Holiday
      *   lm     — 'DUA'/'FULL'/'HALF' for Minggu/Libur, '' otherwise
      *   lembur — 'UM'/'DUA'/'FULL' for Weekday/Sabtu, '' otherwise
-     *   nominal — 15000 (UM) / rate sabtu / rate minggu
+     *   nominal — dari config weekday / rate sabtu / rate minggu
      */
     private function buildDayInfo(float $lembur, int $dayOfWeek, bool $isHoliday, array $rates, string $statusRaw, $prepare, float $upahPerHari): array
     {
@@ -599,9 +587,9 @@ class UangMakanReportController extends Controller
                     $lemburStr = 'DUA';
                 }
             } else {
-                // Weekday: >= 2 jam → UM, nominal 15.000 fixed
+                // Weekday: >= 2 jam → UM, nominal dari config
                 if ($lembur >= 2) {
-                    $nominal = 15000;
+                    $nominal = $rates['weekday'] ?? 15000;
                     $lemburStr = 'UM';
                 }
             }

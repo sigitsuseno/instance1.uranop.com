@@ -14,57 +14,97 @@ class AttendanceReportController extends Controller
 {
     /**
      * Laporan Kehadiran — API Matrix Roster Harian.
-     * Dipanggil via GET /api/v1/laporan/kehadiran
-     *
-     * Query params:
-     *   - period_id  (int)    ID periode payroll
-     *   - groups[]   (array)  Kode group (GRP-PS1, GRP-ALLIN, dsb)
      */
     public function index(Request $request)
+    {
+        $data = $this->buildData($request);
+
+        return response()->json([
+            'success' => true,
+            'data'    => $data,
+        ]);
+    }
+
+    /**
+     * GET /api/v1/laporan/kehadiran/export
+     * Export matrix kehadiran ke Excel.
+     */
+    public function export(Request $request)
+    {
+        $data = $this->buildData($request);
+
+        $period = PayPeriod::find($request->integer('period_id'));
+        $label = $period ? $period->name : 'Laporan_Kehadiran';
+        $filename = 'Laporan_Kehadiran_' . str_replace(' ', '_', $label) . '.xlsx';
+
+        // Group into 3 sections (same as frontend)
+        $kelompok = [
+            'A. JAKARTA'  => ['GRP-JKT'],
+            'B. ALL IN'   => ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR'],
+            'C. PRINTING' => ['GRP-PS1', 'GRP-SS'],
+        ];
+
+        $sections = [];
+        foreach ($kelompok as $labelSection => $codes) {
+            $sectionData = $data['records']->filter(fn($r) =>
+                !empty($r['group_codes']) && array_intersect($r['group_codes'], $codes)
+            )->values()->toArray();
+
+            $sections[] = [
+                'label' => $labelSection,
+                'data'  => $sectionData,
+            ];
+        }
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Modules\Reports\Exports\AttendanceMatrixExport(
+                $sections,
+                $data['dates'],
+                $label
+            ),
+            $filename
+        );
+    }
+
+    // ─── Shared Data Builder ────────────────────────────────────
+
+    private function buildData(Request $request): array
     {
         $periodId = $request->integer('period_id');
         $groups   = $request->input('groups', []);
 
-        // ── 1. Daftar periode ─────────────────────────────────
+        // ── 1. Daftar periode
         $periods = PayPeriod::orderBy('start_date', 'desc')->get()
             ->map(fn(PayPeriod $p) => [
                 'id'         => $p->id,
                 'name'       => $p->name,
                 'start_date' => $p->start_date->format('Y-m-d'),
                 'end_date'   => $p->end_date->format('Y-m-d'),
-            ])
-            ->values();
+            ])->values();
 
-        // ── 2. Periode terpilih (default: terbaru) ────────────
+        // ── 2. Periode terpilih
         $period = $periodId
             ? PayPeriod::find($periodId)
             : PayPeriod::orderBy('start_date', 'desc')->first();
 
         if (! $period) {
-            return response()->json([
-                'success' => true,
-                'data'    => [
-                    'periods' => $periods,
-                    'dates'   => [],
-                    'records' => [],
-                    'filters' => [
-                        'groups'    => $groups,
-                        'period_id' => $periodId,
-                    ],
-                ],
-            ]);
+            return [
+                'periods' => $periods,
+                'dates'   => [],
+                'records' => collect(),
+                'filters' => ['groups' => $groups, 'period_id' => $periodId],
+            ];
         }
 
         $startDate = Carbon::parse($period->start_date);
         $endDate   = Carbon::parse($period->end_date);
 
-        // Jangan lewati hari ini
         $today = Carbon::today();
         if ($endDate->gt($today)) {
             $endDate = $today;
         }
 
-        // ── 3. Generate daftar tanggal ────────────────────────
+        // ── 3. Generate daftar tanggal
         $dates = [];
         $d = $startDate->copy();
         while ($d->lte($endDate)) {
@@ -79,12 +119,11 @@ class AttendanceReportController extends Controller
 
         $dateStrings = array_column($dates, 'date');
 
-        // ── 4. Query data kehadiran (att_prepares) ────────────
+        // ── 4. Query att_prepares
         $prepares = AttendancePrepare::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->get()
-            ->groupBy('employee_id');
+            ->get()->groupBy('employee_id');
 
-        // ── 5. Query karyawan (filter group + aktif dalam periode) ──
+        // ── 5. Query karyawan
         $employees = Employee::query()
             ->activeInPeriod($startDate, $endDate)
             ->when(! empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
@@ -92,12 +131,11 @@ class AttendanceReportController extends Controller
             ->orderBy('name')
             ->get();
 
-        // ── 6. Query hari libur ───────────────────────────────
+        // ── 6. Query hari libur
         $holidays = Holiday::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->get()
-            ->keyBy(fn(Holiday $h) => $h->date->format('Y-m-d'));
+            ->get()->keyBy(fn(Holiday $h) => $h->date->format('Y-m-d'));
 
-        // ── 7. Bangun matrix records ──────────────────────────
+        // ── 7. Bangun matrix records
         $records = $employees->map(function (Employee $employee) use ($prepares, $holidays, $dateStrings) {
             $empPrepares = $prepares->get($employee->id, collect())
                 ->keyBy(fn(AttendancePrepare $p) => $p->date->format('Y-m-d'));
@@ -113,18 +151,15 @@ class AttendanceReportController extends Controller
                 if ($prep) {
                     $status = $this->mapStatus($prep->status, $isHoliday);
                 } else {
-                    // Tidak ada record kehadiran
-                    if ($isWeekend || $holiday) {
-                        $status = 'Off';
-                    } else {
-                        $status = '-';
-                    }
+                    $status = ($isWeekend || $holiday) ? 'Off' : '-';
                 }
 
                 $attendance[$dateStr] = [
                     'status'       => $status,
                     'is_holiday'   => $isHoliday,
                     'holiday_name' => $holiday?->name,
+                    'lm'           => $prep?->lm ?? null,
+                    'overtime'     => $prep?->overtime ?? null,
                 ];
             }
 
@@ -132,63 +167,37 @@ class AttendanceReportController extends Controller
                 'id'            => $employee->id,
                 'employee_code' => $employee->employee_code,
                 'name'          => $employee->name,
+                'group_codes'   => $employee->groups->pluck('reference_code')->toArray(),
                 'attendance'    => $attendance,
             ];
-        })->values();
+        });
 
-        return response()->json([
-            'success' => true,
-            'data'    => [
-                'periods' => $periods,
-                'dates'   => $dates,
-                'records' => $records,
-                'filters' => [
-                    'groups'    => $groups,
-                    'period_id' => $period->id,
-                ],
+        return [
+            'periods' => $periods,
+            'dates'   => $dates,
+            'records' => $records,
+            'filters' => [
+                'groups'    => $groups,
+                'period_id' => $period->id,
             ],
-        ]);
+        ];
     }
 
-    // ─── Status Mapping ──────────────────────────────────────────────
+    // ─── Status Mapping ──────────────────────────────────────────
 
-    /**
-     * Konversi status mentah dari att_prepares ke kode tampilan.
-     *
-     * @param  string $statusRaw  Status dari kolom att_prepares.status
-     * @param  bool   $isHoliday  Apakah tanggal ini libur (weekend / holiday)
-     * @return string Kode tampilan: H|A|Off|L|C|I|S|-
-     */
     private function mapStatus(string $statusRaw, bool $isHoliday): string
     {
         return match (true) {
-            // Libur Masuk: hadir di hari libur
             $statusRaw === 'hadir' && $isHoliday => 'L',
-
-            // Hadir biasa
             $statusRaw === 'hadir'                => 'H',
-
-            // Absen
             $statusRaw === 'absent'               => 'A',
-
-            // Libur / Off
             $statusRaw === 'libur',
             $statusRaw === 'off'                  => 'Off',
-
-            // Sakit
             $statusRaw === 'skt'                  => 'S',
-
-            // Cuti (prefix 'c': ct, cm, cl, dll)
             str_starts_with($statusRaw, 'c')      => 'C',
-
-            // Izin Masuk Terlambat / Izin Pulang Awal → tetap Hadir
             $statusRaw === 'imt',
             $statusRaw === 'ipa'                  => $isHoliday ? 'L' : 'H',
-
-            // Izin lainnya (prefix 'i': itm, izn, dll)
             str_starts_with($statusRaw, 'i')      => 'I',
-
-            // Fallback
             default                               => '-',
         };
     }

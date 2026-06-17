@@ -23,8 +23,25 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
 
     /** Fixed columns before date columns */
     protected const FIXED_COLS = 9; // No, ID, Nama, Jabatan, L/P, Tj.MK, Tunjangan, Upah/Hari, Upah Lbr/Jam
-    /** Sub-columns per date */
-    protected const SUB_COLS = 7; // Kode, H/A, Upah/Hari, L/M, Lembur, Nominal Overtime, Uang Makan
+    /** Sub-columns per date (same count for both types: 6) */
+    protected const SUB_COLS = 6;
+    /** End totals columns */
+    protected const TOT_COLS = 4; // Total Hari Kerja, Total Overtime, Total Uang Makan, Total Terima
+
+    /** Sub-headers per section type */
+    protected const SUB_HEADERS = [
+        'uang_makan' => ['Kode', 'H/A', 'Upah/Hari', 'L/M', 'Lembur', 'Nominal'],
+        'lembur'     => ['Kode', 'Durasi', 'Upah/Hari', 'Tarif Lbr', 'U.Makan', 'Konfirm'],
+    ];
+
+    /** Data keys per section type (in order matching sub-headers) */
+    protected const DATA_KEYS = [
+        'uang_makan' => ['kode', 'ha', 'upah_per_hari', 'lm', 'lembur', 'nominal'],
+        'lembur'     => ['kode', 'durasi', 'upah_per_hari', 'tarif_lembur', 'uang_makan', 'konfirmasi'],
+    ];
+
+    /** Track row ranges per section type for number formatting */
+    protected $sectionRanges = [];
 
     public function __construct($sections, $dates, $label, $companyName = 'PT. KEMILAU UNGARAN SUKSES')
     {
@@ -36,48 +53,40 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
 
     public function array(): array
     {
-        // Not used; we build rows in registerEvents
         return [];
     }
 
     public function headings(): array
     {
-        // We build manually in registerEvents
         return [];
     }
 
     public function columnWidths(): array
     {
         $widths = [
-            'A' => 5,  // No
-            'B' => 10, // ID
-            'C' => 28, // Nama
-            'D' => 22, // Jabatan
-            'E' => 5,  // L/P
-            'F' => 15, // Tj.MK
-            'G' => 14, // Tunjangan
-            'H' => 14, // Upah/Hari
-            'I' => 14, // Upah Lbr/Jam
+            'A' => 5,  'B' => 10, 'C' => 28, 'D' => 22, 'E' => 5,
+            'F' => 15, 'G' => 14, 'H' => 14, 'I' => 14,
         ];
 
+        // After fixed cols, 6 sub-cols per date, then 4 totals
+        $totalCols = self::FIXED_COLS + (self::SUB_COLS * count($this->dates)) + self::TOT_COLS;
         $col = 'J';
-        foreach ($this->dates as $dateStr) {
-            $widths[$col] = 7;  $col = self::nextCol($col); // Kode
-            $widths[$col] = 6;  $col = self::nextCol($col); // H/A
+
+        // Date sub-columns
+        for ($i = 0; $i < count($this->dates); $i++) {
+            $widths[$col] = 7;  $col = self::nextCol($col); // Col 1: varies
+            $widths[$col] = 7;  $col = self::nextCol($col); // Col 2: varies
             $widths[$col] = 14; $col = self::nextCol($col); // Upah/Hari
-            $widths[$col] = 8;  $col = self::nextCol($col); // L/M
-            $widths[$col] = 8;  $col = self::nextCol($col); // Lembur
-            $widths[$col] = 16; $col = self::nextCol($col); // Nominal OT
-            $widths[$col] = 14; $col = self::nextCol($col); // Uang Makan
+            $widths[$col] = 10; $col = self::nextCol($col); // Col 4: varies
+            $widths[$col] = 10; $col = self::nextCol($col); // Col 5: varies
+            $widths[$col] = 16; $col = self::nextCol($col); // Col 6: varies
         }
 
-        // End totals columns
-        $widths[$col] = 16; $col = self::nextCol($col); // Total Hari Kerja
-        $widths[$col] = 16;                 // Total Overtime
-        $col = self::nextCol($col);
-        $widths[$col] = 16;                 // Total Uang Makan
-        $col = self::nextCol($col);
-        $widths[$col] = 16;                 // Total Terima
+        // Totals
+        $widths[$col] = 16; $col = self::nextCol($col);
+        $widths[$col] = 16; $col = self::nextCol($col);
+        $widths[$col] = 16; $col = self::nextCol($col);
+        $widths[$col] = 16;
 
         return $widths;
     }
@@ -89,13 +98,12 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
 
     public function registerEvents(): array
     {
-        $totalCols = self::FIXED_COLS + (self::SUB_COLS * count($this->dates)) + 4; // +4 for total columns
+        $totalCols = self::FIXED_COLS + (self::SUB_COLS * count($this->dates)) + self::TOT_COLS;
         $lastCol = self::colLetter($totalCols);
 
         return [
             AfterSheet::class => function (AfterSheet $event) use ($totalCols, $lastCol) {
                 $sheet = $event->sheet->getDelegate();
-
                 Carbon::setLocale('id');
 
                 $currentRow = 1;
@@ -126,78 +134,19 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                 $sheet->setCellValue("A{$currentRow}", 'PERIODE: ' . strtoupper($this->label));
                 $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(11);
                 $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $currentRow += 2; // Skip one row
+                $currentRow += 2;
 
-                // --- Build table header row 1 ---
-                $headerStartRow = $currentRow;
-
-                // Fixed headers (rowspan 2)
-                $fixedHeaders = ['No', 'ID No', 'Nama', 'Bagian / Jabatan', 'L/P', 'Tj. MK', 'Tunjangan', 'Upah/Hari', 'Upah Lbr/Jam'];
-                foreach ($fixedHeaders as $i => $h) {
-                    $col = self::colLetter($i + 1);
-                    $sheet->setCellValue("{$col}{$currentRow}", $h);
-                    $sheet->mergeCells("{$col}{$currentRow}:{$col}" . ($currentRow + 1));
-                }
-
-                // Date group headers
-                $dateStartCol = self::FIXED_COLS + 1;
-                foreach ($this->dates as $dateStr) {
-                    $start = self::colLetter($dateStartCol);
-                    $end = self::colLetter($dateStartCol + self::SUB_COLS - 1);
-                    $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
-                    $sheet->setCellValue("{$start}{$currentRow}", strtoupper($formatted));
-                    $sheet->mergeCells("{$start}{$currentRow}:{$end}{$currentRow}");
-                    $dateStartCol += self::SUB_COLS;
-                }
-
-                // Total headers
-                $totStartCol = $dateStartCol;
-                $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Hari Kerja');
-                $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
-                $totStartCol++;
-                $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Overtime');
-                $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
-                $totStartCol++;
-                $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Uang Makan');
-                $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
-                $totStartCol++;
-                $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Terima');
-                $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
-
-                $currentRow++;
-
-                // --- Build table header row 2 (sub-headers) ---
-                $dateStartCol = self::FIXED_COLS + 1;
-                foreach ($this->dates as $dateStr) {
-                    $subHeaders = ['Kode', 'H/A', 'Upah/Hari', 'L/M', 'Lembur', 'Nom.OT', 'U.Makan'];
-                    foreach ($subHeaders as $sh) {
-                        $sheet->setCellValue(self::colLetter($dateStartCol) . "{$currentRow}", $sh);
-                        $dateStartCol++;
-                    }
-                }
-
-                // Style headers
-                $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$currentRow}")->getFont()->setBold(true)->setSize(8);
-                $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$currentRow}")->getFill()
-                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE8EAED');
-                $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$currentRow}")->getAlignment()
-                    ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-                    ->setVertical(Alignment::VERTICAL_CENTER);
-
-                // Blue tint for date headers
-                $firstDateCol = self::colLetter(self::FIXED_COLS + 1);
-                $lastDateCol = self::colLetter(self::FIXED_COLS + (self::SUB_COLS * count($this->dates)));
-                $sheet->getStyle("{$firstDateCol}{$headerStartRow}:{$lastDateCol}{$headerStartRow}")->getFill()
-                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
-
-                $currentRow++;
-
-                // --- Data rows ---
+                // --- Per-section tables ---
+                $this->sectionRanges = [];
                 $dataStartRow = $currentRow;
-                $grandTotalRow = null;
+                $lastDataRow = $currentRow;
 
                 foreach ($this->sections as $section) {
-                    // Section header
+                    $type = $section['type'] ?? 'uang_makan';
+                    $subHeaders = self::SUB_HEADERS[$type] ?? self::SUB_HEADERS['uang_makan'];
+                    $dataKeys = self::DATA_KEYS[$type] ?? self::DATA_KEYS['uang_makan'];
+
+                    // ── Section label row ──────────────────────────
                     $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
                     $sheet->setCellValue("A{$currentRow}", $section['label']);
                     $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(10);
@@ -205,7 +154,71 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF0FDF4');
                     $currentRow++;
 
+                    // ── Section header row 1 (fixed + date groups) ─
+                    $headerStartRow = $currentRow;
+
+                    $fixedHeaders = ['No', 'ID No', 'Nama', 'Bagian / Jabatan', 'L/P', 'Tj. MK', 'Tunjangan', 'Upah/Hari', 'Upah Lbr/Jam'];
+                    foreach ($fixedHeaders as $i => $h) {
+                        $col = self::colLetter($i + 1);
+                        $sheet->setCellValue("{$col}{$currentRow}", $h);
+                        $sheet->mergeCells("{$col}{$currentRow}:{$col}" . ($currentRow + 1));
+                    }
+
+                    $dateStartCol = self::FIXED_COLS + 1;
+                    foreach ($this->dates as $dateStr) {
+                        $start = self::colLetter($dateStartCol);
+                        $end = self::colLetter($dateStartCol + self::SUB_COLS - 1);
+                        $formatted = Carbon::parse($dateStr)->translatedFormat('D, d/m');
+                        $sheet->setCellValue("{$start}{$currentRow}", strtoupper($formatted));
+                        $sheet->mergeCells("{$start}{$currentRow}:{$end}{$currentRow}");
+                        $dateStartCol += self::SUB_COLS;
+                    }
+
+                    // Total headers
+                    $totStartCol = $dateStartCol;
+                    $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Hari Kerja');
+                    $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
+                    $totStartCol++;
+                    $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Overtime');
+                    $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
+                    $totStartCol++;
+                    $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Uang Makan');
+                    $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
+                    $totStartCol++;
+                    $sheet->setCellValue(self::colLetter($totStartCol) . "{$currentRow}", 'Total Terima');
+                    $sheet->mergeCells(self::colLetter($totStartCol) . "{$currentRow}:" . self::colLetter($totStartCol) . ($currentRow + 1));
+
+                    $currentRow++;
+
+                    // ── Section header row 2 (sub-headers per type) ─
+                    $dateStartCol = self::FIXED_COLS + 1;
+                    foreach ($this->dates as $dateStr) {
+                        foreach ($subHeaders as $sh) {
+                            $sheet->setCellValue(self::colLetter($dateStartCol) . "{$currentRow}", $sh);
+                            $dateStartCol++;
+                        }
+                    }
+
+                    // Style section headers
+                    $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$currentRow}")->getFont()->setBold(true)->setSize(8);
+                    $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$currentRow}")->getFill()
+                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE8EAED');
+                    $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$currentRow}")->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER)
+                        ->setVertical(Alignment::VERTICAL_CENTER);
+
+                    // Blue tint for date headers
+                    $firstDateCol = self::colLetter(self::FIXED_COLS + 1);
+                    $lastDateCol = self::colLetter(self::FIXED_COLS + (self::SUB_COLS * count($this->dates)));
+                    $sheet->getStyle("{$firstDateCol}{$headerStartRow}:{$lastDateCol}{$headerStartRow}")->getFill()
+                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+
+                    $currentRow++;
+
+                    // ── Data rows ──────────────────────────────────
+                    $sectionDataStart = $currentRow;
                     $counter = 0;
+
                     foreach ($section['data'] as $item) {
                         $counter++;
                         $col = 1;
@@ -225,13 +238,11 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $days = $item['days'] ?? [];
                         foreach ($this->dates as $dateStr) {
                             $d = $days[$dateStr] ?? null;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", $d['kode'] ?? ''); $col++;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", $d['ha'] ?? ''); $col++;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ($d['upah_per_hari'] ?? 0) > 0 ? $d['upah_per_hari'] : 0); $col++;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ($d['lm'] ?? 0) > 0 ? $d['lm'] : ''); $col++;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ($d['lembur'] ?? 0) > 0 ? $d['lembur'] : ''); $col++;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ($d['overtime_nominal'] ?? 0) > 0 ? $d['overtime_nominal'] : 0); $col++;
-                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ($d['uang_makan'] ?? 0) > 0 ? $d['uang_makan'] : 0); $col++;
+                            foreach ($dataKeys as $key) {
+                                $val = $d[$key] ?? '';
+                                $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", $val);
+                                $col++;
+                            }
                         }
 
                         // Totals
@@ -243,7 +254,16 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $currentRow++;
                     }
 
-                    // Section totals
+                    $sectionDataEnd = $currentRow - 1;
+
+                    // Track section range for number formatting
+                    $this->sectionRanges[] = [
+                        'type'      => $type,
+                        'dataStart' => $sectionDataStart,
+                        'dataEnd'   => $sectionDataEnd,
+                    ];
+
+                    // ── Section totals row ──────────────────────────
                     if (!empty($section['totals']) && $section['totals']['count'] > 0) {
                         $totals = $section['totals'];
                         $col = 1;
@@ -253,7 +273,7 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true);
                         $col = 6;
 
-                        // Skip fixed value columns, just put totals
+                        // Skip fixed value columns
                         $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ''); $col++;
                         $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ''); $col++;
                         $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", ''); $col++;
@@ -274,46 +294,70 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $currentRow++;
                     }
 
+                    $lastDataRow = $currentRow - 1;
                     $currentRow++; // Blank row between sections
                 }
 
-                $grandTotalRow = $currentRow + 1;
-
-                // --- Borders for data area ---
-                $lastDataRow = $currentRow - 2;
-                $sheet->getStyle("A{$headerStartRow}:{$lastCol}{$lastDataRow}")->getBorders()
+                // ── Borders for data area ──────────────────────────
+                $borderEndRow = $lastDataRow;
+                $sheet->getStyle("A{$dataStartRow}:{$lastCol}{$borderEndRow}")->getBorders()
                     ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
-                // --- Number formats ---
-                $numberCols = [];
-                // F-I: TJ.MK, Tunjangan, Upah/Hari, Upah Lbr/Jam
-                for ($c = 6; $c <= 9; $c++) {
-                    $numberCols[] = self::colLetter($c);
-                }
-                // Per-date: Upah/Hari (offset 2), Nominal OT (offset 5), Uang Makan (offset 6)
-                for ($i = 0; $i < count($this->dates); $i++) {
-                    $base = self::FIXED_COLS + ($i * self::SUB_COLS);
-                    $numberCols[] = self::colLetter($base + 3); // Upah/Hari
-                    $numberCols[] = self::colLetter($base + 6); // Nominal OT
-                    $numberCols[] = self::colLetter($base + 7); // Uang Makan
-                }
-                // Totals
-                $totBase = self::FIXED_COLS + (self::SUB_COLS * count($this->dates));
-                for ($c = 1; $c <= 4; $c++) {
-                    $numberCols[] = self::colLetter($totBase + $c);
+                // ── Number formats (per section type) ───────────────
+                foreach ($this->sectionRanges as $range) {
+                    // Skip empty sections (dataStart > dataEnd)
+                    if ($range['dataStart'] > $range['dataEnd']) continue;
+
+                    $type = $range['type'];
+                    $rangeStr = $range['dataStart'] . ':' . $range['dataEnd'];
+
+                    // Fixed number cols (F-I): Tj.MK, Tunjangan, Upah/Hari, Upah Lbr/Jam
+                    for ($c = 6; $c <= 9; $c++) {
+                        $colLetter = self::colLetter($c);
+                        $sheet->getStyle("{$colLetter}{$range['dataStart']}:{$colLetter}{$range['dataEnd']}")
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
+                    }
+
+                    // Per-date number columns
+                    for ($i = 0; $i < count($this->dates); $i++) {
+                        $base = self::FIXED_COLS + ($i * self::SUB_COLS);
+
+                        // Upah/Hari is always at offset 2 (col index base+3 in 1-based)
+                        $upahCol = self::colLetter($base + 3);
+                        $sheet->getStyle("{$upahCol}{$range['dataStart']}:{$upahCol}{$range['dataEnd']}")
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
+
+                        if ($type === 'uang_makan') {
+                            // Nominal at offset 5 (col index base+6 in 1-based)
+                            $nomCol = self::colLetter($base + 6);
+                            $sheet->getStyle("{$nomCol}{$range['dataStart']}:{$nomCol}{$range['dataEnd']}")
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
+                        } else {
+                            // Tarif Lbr at offset 3 (col index base+4), U.Makan at offset 4 (base+5)
+                            $tarifCol = self::colLetter($base + 4);
+                            $sheet->getStyle("{$tarifCol}{$range['dataStart']}:{$tarifCol}{$range['dataEnd']}")
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
+                            $umCol = self::colLetter($base + 5);
+                            $sheet->getStyle("{$umCol}{$range['dataStart']}:{$umCol}{$range['dataEnd']}")
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
+                        }
+                    }
+
+                    // Totals columns (always number)
+                    $totBase = self::FIXED_COLS + (self::SUB_COLS * count($this->dates));
+                    for ($c = 1; $c <= self::TOT_COLS; $c++) {
+                        $totCol = self::colLetter($totBase + $c);
+                        $sheet->getStyle("{$totCol}{$range['dataStart']}:{$totCol}{$range['dataEnd']}")
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
+                    }
                 }
 
-                foreach ($numberCols as $col) {
-                    $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastDataRow}")
-                        ->getNumberFormat()->setFormatCode('#,##0.00');
-                }
-
-                // --- Alignment ---
+                // ── Alignment ──────────────────────────────────────
                 $sheet->getStyle("A{$dataStartRow}:A{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("E{$dataStartRow}:E{$lastDataRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                 // Freeze pane
-                $sheet->freezePane('D' . ($headerStartRow + 2));
+                $sheet->freezePane('D' . ($dataStartRow + 1));
             },
         ];
     }

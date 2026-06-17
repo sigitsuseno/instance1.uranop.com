@@ -13,6 +13,7 @@ use App\Modules\Reports\Exports\LemburBulananExport;
 use App\Modules\Reports\Exports\ResumeExport;
 use App\Modules\Reports\Exports\LemburUangMakanDetailExport;
 use App\Modules\Reports\Exports\LemburUangMakanResumeExport;
+use App\Modules\Settings\Services\ReportConfigService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
@@ -874,6 +875,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
+        $jakartaEmployees = collect();
         $allInEmployees = collect();
         $printingEmployees = collect();
 
@@ -904,7 +906,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $umGroupName = strtoupper($umGroup?->master?->name ?? '');
             $umRates = $this->getUangMakanRates($umGroupName, $gaji);
 
-            // Section determination: GRP-PS1 / GRP-SS → PRINTING
+            // Section determination: GRP-JKT → JAKARTA, GRP-PS1/GRP-SS → PRINTING
+            $isJakarta = $employee->groups->contains(fn($g) =>
+                $g->reference_code === 'GRP-JKT'
+            );
             $isPrinting = $employee->groups->contains(fn($g) =>
                 in_array($g->reference_code, ['GRP-PS1', 'GRP-SS'])
             );
@@ -983,14 +988,14 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                             }
                         } else {
                             if ($lemburTotal >= 2) {
-                                $uangMakanNominal = 15000;
+                                $uangMakanNominal = $umRates['weekday'] ?? 15000;
                             }
                         }
                     }
 
                     $totalHariKerja += $upahHarian;
                     $totalOvertime += $totalOvertimeNominal;
-                    $totalUangMakan += $uangMakanNominal;
+                    $totalUangMakan += 0; // Printing = Lembur only, no Uang Makan
 
                     $days[$dateStr] = [
                         'kode'             => $kode,
@@ -1040,16 +1045,18 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     }
 
                     $totalHariKerja += $upahHarian;
-                    $totalOvertime += $totalOvertimeNominal;
+                    $totalOvertime += 0; // ALL IN / Jakarta = Uang Makan only, no Overtime pay
                     $totalUangMakan += $nominal;
 
                     $days[$dateStr] = [
-                        'kode'          => $kode,
-                        'ha'            => $ha,
-                        'upah_per_hari' => $upahHarian,
-                        'lm'            => $lm > 0 ? $lm : 0,
-                        'lembur'        => $overtimeDisplay,
-                        'nominal'       => $nominal,
+                        'kode'              => $kode,
+                        'ha'                => $ha,
+                        'upah_per_hari'     => $upahHarian,
+                        'lm'                => $lm > 0 ? $lm : 0,
+                        'lembur'            => $overtimeDisplay,
+                        'nominal'           => $nominal,
+                        'uang_makan'        => $nominal,
+                        'overtime_nominal'  => $totalOvertimeNominal,
                     ];
                 }
             }
@@ -1072,26 +1079,36 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'total_terima'         => round($totalHariKerja + $totalOvertime + $totalUangMakan, 2),
             ];
 
-            if ($isPrinting) {
+            if ($isJakarta) {
+                $jakartaEmployees->push($item);
+            } elseif ($isPrinting) {
                 $printingEmployees->push($item);
             } else {
                 $allInEmployees->push($item);
             }
         }
 
+        $jakartaEmployees = $jakartaEmployees->sortBy('name')->values();
         $allInEmployees = $allInEmployees->sortBy('name')->values();
         $printingEmployees = $printingEmployees->sortBy('name')->values();
 
         $sections = [
             [
-                'label'  => 'A. KARYAWAN ALL IN',
+                'label'  => 'A. KARYAWAN JAKARTA',
+                'key'    => 'jakarta',
+                'type'   => 'uang_makan',
+                'data'   => $jakartaEmployees,
+                'totals' => $this->calculateSectionTotals($jakartaEmployees),
+            ],
+            [
+                'label'  => 'B. KARYAWAN ALL IN',
                 'key'    => 'all_in',
                 'type'   => 'uang_makan',
                 'data'   => $allInEmployees,
                 'totals' => $this->calculateSectionTotals($allInEmployees),
             ],
             [
-                'label'  => 'B. KARYAWAN BULANAN PRINTING',
+                'label'  => 'C. KARYAWAN BULANAN PRINTING',
                 'key'    => 'printing',
                 'type'   => 'lembur',
                 'data'   => $printingEmployees,
@@ -1099,7 +1116,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             ],
         ];
 
-        $allData = $allInEmployees->concat($printingEmployees);
+        $allData = $jakartaEmployees->concat($allInEmployees)->concat($printingEmployees);
         $grandTotals = $this->calculateSectionTotals($allData);
 
         return [
@@ -1127,14 +1144,17 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
         // Group by jabatan within each section
         $sections = [];
+        // Rebuild sections with correct per-type totals
         $sectionMeta = [
-            'all_in'   => ['label' => 'A. ALL IN',        'uang_makan_key' => 'nominal'],
-            'printing' => ['label' => 'B. BULANAN PRINTING', 'uang_makan_key' => 'uang_makan'],
+            'jakarta'  => ['label' => 'A. KARYAWAN JAKARTA',         'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
+            'all_in'   => ['label' => 'B. KARYAWAN ALL IN',          'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
+            'printing' => ['label' => 'C. KARYAWAN BULANAN PRINTING', 'uang_makan_key' => 'uang_makan', 'type' => 'lembur'],
         ];
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
             $posGroups = $sectionEmps->groupBy('jabatan');
             $umKey = $meta['uang_makan_key'];
+            $isUangMakan = $meta['type'] === 'uang_makan'; // Jakarta & ALL IN = Uang Makan, Printing = Lembur
 
             $data = [];
             foreach ($posGroups as $posName => $emps) {
@@ -1148,8 +1168,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
                 foreach ($dates as $dateStr) {
                     $hariKerja = $emps->sum(fn($e) => $e['days'][$dateStr]['upah_per_hari'] ?? 0);
-                    $overtime  = $emps->sum(fn($e) => $e['days'][$dateStr]['overtime_nominal'] ?? 0);
-                    $uangMakan = $emps->sum(fn($e) => $e['days'][$dateStr][$umKey] ?? 0);
+                    // Uang Makan type → overtime = 0; Lembur type → uang_makan = 0
+                    $overtime  = $isUangMakan ? 0 : $emps->sum(fn($e) => $e['days'][$dateStr]['overtime_nominal'] ?? 0);
+                    $uangMakan = $isUangMakan ? $emps->sum(fn($e) => $e['days'][$dateStr][$umKey] ?? 0) : 0;
                     $days[$dateStr] = [
                         'hari_kerja' => round($hariKerja, 2),
                         'overtime'   => round($overtime, 2),
@@ -1168,7 +1189,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     'total_hari_kerja'  => round($totalHariKerja, 2),
                     'total_overtime'    => round($totalOvertime, 2),
                     'total_uang_makan'  => round($totalUangMakan, 2),
-                    'total_terima'      => round($totalHariKerja + $totalOvertime, 2),
+                    'total_terima'      => round($totalHariKerja + $totalOvertime + $totalUangMakan, 2),
                 ];
             }
 
@@ -1203,40 +1224,27 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
     private function getUangMakanRates(string $groupName, float $gajiPokok): array
     {
-        $rateWeekday = $gajiPokok > 0 ? round($gajiPokok / 25) : 0;
+        $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
+        $upper = strtoupper($groupName);
 
-        if (str_contains($groupName, 'KABAG')) {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 55000,
-                'sabtu_full'   => 110000,
-                'minggu_half'  => 110000,
-                'minggu_full'  => 220000,
-            ];
-        } elseif (str_contains($groupName, 'KEPALA SHIFT') || str_contains($groupName, 'KASHIFT')) {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 52500,
-                'sabtu_full'   => 105000,
-                'minggu_half'  => 105000,
-                'minggu_full'  => 210000,
-            ];
-        } elseif (str_contains($groupName, 'ALL IN') || str_contains($groupName, 'ALL-IN')) {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 50000,
-                'sabtu_full'   => 100000,
-                'minggu_half'  => 100000,
-                'minggu_full'  => 200000,
-            ];
-        } else {
-            return [
-                'weekday'      => $rateWeekday,
-                'sabtu_dua'    => 0,
-                'sabtu_full'   => 0,
-                'minggu_half'  => 0,
-                'minggu_full'  => 0,
-            ];
+        // Match with aliases (same logic as old hardcode)
+        if (str_contains($upper, 'KABAG')) {
+            return $config['KABAG'] ?? [];
         }
+        if (str_contains($upper, 'KEPALA SHIFT') || str_contains($upper, 'KASHIFT')) {
+            return $config['KASHIFT'] ?? [];
+        }
+        if (str_contains($upper, 'ALL IN') || str_contains($upper, 'ALL-IN')) {
+            return $config['ALL IN'] ?? [];
+        }
+
+        // Default: weekday only, sabtu/minggu = 0
+        return [
+            'weekday'      => 15000,
+            'sabtu_dua'    => 0,
+            'sabtu_full'   => 0,
+            'minggu_half'  => 0,
+            'minggu_full'  => 0,
+        ];
     }
 }

@@ -6,6 +6,7 @@ use App\Modules\Settings\Controllers\Api\V1\SalaryGradeApiController;
 use App\Modules\Settings\Controllers\Api\V1\EmployeeDataApiController;
 use App\Modules\Settings\Controllers\Api\V1\PayrollConfigApiController;
 use App\Modules\Settings\Controllers\Api\V1\BpjsConfigController;
+use App\Modules\Settings\Controllers\Api\V1\ReportConfigApiController;
 
 Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     Route::get('/general', [SettingsApiController::class, 'getSystemSettings']);
@@ -80,4 +81,11 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     Route::post('bpjs-configs/{config}/activate',   [BpjsConfigController::class, 'activate']);
     Route::post('bpjs-configs/{config}/deactivate', [BpjsConfigController::class, 'deactivate']);
     Route::get('bpjs-configs-active',               [BpjsConfigController::class, 'active']);
+
+    // Report Configs
+    Route::prefix('report-configs')->group(function () {
+        Route::get('/',              [ReportConfigApiController::class, 'index']);
+        Route::get('/{reportType}',  [ReportConfigApiController::class, 'show']);
+        Route::put('/{reportType}',  [ReportConfigApiController::class, 'update']);
+    });
 });

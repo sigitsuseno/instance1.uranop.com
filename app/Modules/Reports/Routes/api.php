@@ -46,6 +46,8 @@ Route::prefix('v1/laporan')->name('api.laporan.')->group(function () {
 
     Route::get('/kehadiran', [AttendanceReportController::class, 'index'])
         ->name('kehadiran');
+    Route::get('/kehadiran/export', [AttendanceReportController::class, 'export'])
+        ->name('kehadiran.export');
 
     Route::prefix('payroll')->name('payroll.')->group(function () {
         Route::get('/detail', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'payroll'])->name('detail');
