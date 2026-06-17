@@ -187,6 +187,50 @@ function resetFilters() {
   fetchEmployees()
 }
 
+async function exportData() {
+  try {
+    const params = new URLSearchParams()
+    if (searchQuery.value) params.set('search', searchQuery.value)
+    if (filterDepartment.value) params.set('department_id', filterDepartment.value)
+    if (filterEmploymentStatus.value) params.set('employment_status', filterEmploymentStatus.value)
+    
+    if (periodStartFilter.value && periodEndFilter.value) {
+      params.set('period_start', periodStartFilter.value)
+      params.set('period_end', periodEndFilter.value)
+    } else if (filterStatus.value !== '') {
+      params.set('is_active', filterStatus.value)
+    }
+
+    const token = localStorage.getItem('token') || ''
+    const headers = {}
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+    }
+
+    notification.addNotification('Memproses export data...', 'info')
+    
+    const response = await fetch(`/api/v1/employees/export?${params.toString()}`, {
+        headers
+    })
+
+    if (!response.ok) throw new Error('Gagal export data')
+
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Data_Karyawan_${new Date().toISOString().split('T')[0]}.xlsx`
+    document.body.appendChild(a)
+    a.click()
+    window.URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    
+    notification.addNotification('Export berhasil', 'success')
+  } catch (error) {
+    notification.addNotification('Gagal export data', 'error')
+  }
+}
+
 // ========== HELPERS ==========
 const getInitials = (name) => {
   if (!name) return '?'
@@ -262,7 +306,7 @@ onMounted(() => {
           </template>
           Import
         </BaseButton>
-        <BaseButton variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30">
+        <BaseButton variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30" @click="exportData">
           <template #icon-left>
             <i class="bx bx-export text-lg"></i>
           </template>

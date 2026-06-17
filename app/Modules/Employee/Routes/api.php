@@ -21,6 +21,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
         // Utility endpoints (harus SEBELUM {employee} agar tidak konflik)
         Route::get('/stats',   [EmployeeApiController::class, 'stats'])->name('employees.stats');
         Route::get('/options', [EmployeeApiController::class, 'options'])->name('employees.options');
+        Route::get('/export',  [EmployeeApiController::class, 'export'])->name('employees.export');
 
         // CRUD utama
         Route::get('/',    [EmployeeApiController::class, 'index'])->name('employees.index');

@@ -228,4 +228,26 @@ class EmployeeApiController extends Controller
             'data' => $this->employeeService->getOptions($activeOnly),
         ]);
     }
+
+    /**
+     * GET /api/employees/export
+     * Export data karyawan ke format Excel.
+     */
+    public function export(Request $request)
+    {
+        $filters = $request->only([
+            'search',
+            'department_id',
+            'position_id',
+            'employment_status',
+            'is_active',
+            'period_start',
+            'period_end',
+        ]);
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Modules\Employee\Exports\EmployeeExport($filters), 
+            'data_karyawan_' . date('Y-m-d_His') . '.xlsx'
+        );
+    }
 }
