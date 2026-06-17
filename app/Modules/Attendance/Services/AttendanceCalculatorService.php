@@ -228,6 +228,11 @@ class AttendanceCalculatorService
             return 0;
         }
 
+        // Jika lembur di bawah 1 jam (misal 25-54 menit yang dibulatkan jadi 30), maka dikalikan 1
+        if ($minutes < 60) {
+            return $minutes;
+        }
+
         return $this->multiplyFromRule($minutes, isHoliday: false, maxHours: null, workPatternId: $workPatternId)
             ?? $this->calculateOvertimeMultiplierFallback($minutes);
     }
