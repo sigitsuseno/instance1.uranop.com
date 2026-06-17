@@ -123,9 +123,9 @@
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">H/A</th>
                     <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
-                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Tarif Lbr</th>
-                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">U.Makan</th>
-                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Konfirm</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">L/M</th>
+                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Lbr</th>
+                    <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Nominal</th>
                   </template>
                 </template>
               </tr>
@@ -160,11 +160,11 @@
                     <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
                     </td>
-                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.lm > 0 ? item.days[dateStr].lm : '-' }}
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm ? 'text-purple-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.lm || '-' }}
                     </td>
-                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lembur > 0 ? 'text-orange-600 font-medium' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.lembur > 0 ? item.days[dateStr].lembur : '-' }}
+                    <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lembur ? 'text-orange-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.lembur || '-' }}
                     </td>
                     <td :class="['px-2 py-3 text-right text-xs', item.days[dateStr]?.nominal > 0 ? 'text-green-600 font-bold' : 'text-gray-300']">
                       {{ item.days[dateStr]?.nominal > 0 ? formatNumber(item.days[dateStr].nominal) : '-' }}
@@ -184,14 +184,14 @@
                     <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
                     </td>
-                    <td :class="['px-1 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.tarif_lembur > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.tarif_lembur > 0 ? formatNumber(item.days[dateStr].tarif_lembur) : '-' }}
+                    <td :class="['px-1 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.lm > 0 ? formatNumber(item.days[dateStr].lm) : '-' }}
                     </td>
-                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.uang_makan > 0 ? 'text-amber-600 font-bold' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.uang_makan > 0 ? formatNumber(item.days[dateStr].uang_makan) : '-' }}
+                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.lembur > 0 ? 'text-amber-600 font-medium' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.lembur > 0 ? formatNumber(item.days[dateStr].lembur) : '-' }}
                     </td>
-                    <td :class="['px-1 py-3 text-center text-xs', item.days[dateStr]?.konfirmasi ? 'text-green-600 font-medium' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.konfirmasi || '-' }}
+                    <td :class="['px-1 py-3 text-right text-xs', item.days[dateStr]?.nominal > 0 ? 'text-green-600 font-bold' : 'text-gray-300']">
+                      {{ item.days[dateStr]?.nominal > 0 ? formatNumber(item.days[dateStr].nominal) : '-' }}
                     </td>
                   </template>
                 </template>

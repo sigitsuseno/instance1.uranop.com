@@ -31,13 +31,13 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
     /** Sub-headers per section type */
     protected const SUB_HEADERS = [
         'uang_makan' => ['Kode', 'H/A', 'Upah/Hari', 'L/M', 'Lembur', 'Nominal'],
-        'lembur'     => ['Kode', 'H/A', 'Upah/Hari', 'Tarif Lbr', 'U.Makan', 'Konfirm'],
+        'lembur'     => ['Kode', 'H/A', 'Upah/Hari', 'L/M', 'Lbr', 'Nominal'],
     ];
 
     /** Data keys per section type (in order matching sub-headers) */
     protected const DATA_KEYS = [
         'uang_makan' => ['kode', 'ha', 'upah_per_hari', 'lm', 'lembur', 'nominal'],
-        'lembur'     => ['kode', 'ha', 'upah_per_hari', 'tarif_lembur', 'uang_makan', 'konfirmasi'],
+        'lembur'     => ['kode', 'ha', 'upah_per_hari', 'lm', 'lembur', 'nominal'],
     ];
 
     /** Track row ranges per section type for number formatting */
@@ -333,12 +333,15 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                             $sheet->getStyle("{$nomCol}{$range['dataStart']}:{$nomCol}{$range['dataEnd']}")
                                 ->getNumberFormat()->setFormatCode('#,##0.00');
                         } else {
-                            // Tarif Lbr at offset 3 (col index base+4), U.Makan at offset 4 (base+5)
-                            $tarifCol = self::colLetter($base + 4);
-                            $sheet->getStyle("{$tarifCol}{$range['dataStart']}:{$tarifCol}{$range['dataEnd']}")
+                            // L/M at offset 3 (col index base+4), Lbr at offset 4 (base+5), Nominal at offset 5 (base+6)
+                            $lmCol = self::colLetter($base + 4);
+                            $sheet->getStyle("{$lmCol}{$range['dataStart']}:{$lmCol}{$range['dataEnd']}")
                                 ->getNumberFormat()->setFormatCode('#,##0.00');
-                            $umCol = self::colLetter($base + 5);
-                            $sheet->getStyle("{$umCol}{$range['dataStart']}:{$umCol}{$range['dataEnd']}")
+                            $lbrCol = self::colLetter($base + 5);
+                            $sheet->getStyle("{$lbrCol}{$range['dataStart']}:{$lbrCol}{$range['dataEnd']}")
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
+                            $nomCol = self::colLetter($base + 6);
+                            $sheet->getStyle("{$nomCol}{$range['dataStart']}:{$nomCol}{$range['dataEnd']}")
                                 ->getNumberFormat()->setFormatCode('#,##0.00');
                         }
                     }

@@ -962,35 +962,12 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
                 if ($isPrinting) {
                     // ═══════════════════════════════════════════════
-                    //  SECTION B — BULANAN PRINTING (Lembur logic)
+                    //  SECTION C — BULANAN PRINTING (Lembur logic)
                     // ═══════════════════════════════════════════════
                     if (in_array($statusRaw, ['absent', 'libur', 'off', 'itm', 'izn', '-'])) {
                         $kode = '';
                     } else {
                         $kode = $isSG ? 'SG' : 'L';
-                    }
-
-                    // Uang Makan (same as before)
-                    $uangMakanNominal = 0;
-                    if ($lemburTotal > 0) {
-                        $isMingguHoliday = ($dayOfWeek == 0 || $isHoliday);
-                        if ($isMingguHoliday) {
-                            if ($lemburTotal >= 8) {
-                                $uangMakanNominal = $umRates['minggu_full'];
-                            } elseif ($lemburTotal >= 4) {
-                                $uangMakanNominal = $umRates['minggu_half'];
-                            }
-                        } elseif ($dayOfWeek == 6) {
-                            if ($lemburTotal >= 4) {
-                                $uangMakanNominal = $umRates['sabtu_full'];
-                            } elseif ($lemburTotal >= 2) {
-                                $uangMakanNominal = $umRates['sabtu_dua'];
-                            }
-                        } else {
-                            if ($lemburTotal >= 2) {
-                                $uangMakanNominal = $umRates['weekday'] ?? 15000;
-                            }
-                        }
                     }
 
                     $totalHariKerja += $upahHarian;
@@ -1001,10 +978,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                         'kode'             => $kode,
                         'ha'               => $ha,
                         'upah_per_hari'    => $upahHarian,
-                        'tarif_lembur'     => $upahLemburPerJam,
-                        'uang_makan'       => $uangMakanNominal,
+                        'lm'               => $lmDisplay,
+                        'lembur'           => $overtimeDisplay,
+                        'nominal'          => $totalOvertimeNominal,
                         'overtime_nominal' => $totalOvertimeNominal,
-                        'konfirmasi'       => ($kode && $lemburTotal > 0) ? 'L' : '',
                     ];
                 } else {
                     // ═══════════════════════════════════════════════
@@ -1012,34 +989,35 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     // ═══════════════════════════════════════════════
                     $kode = '';
                     $nominal = 0;
-                    $lm = 0;
+                    $lmStr = '';
+                    $lemburStr = '';
 
                     if ($lemburTotal > 0) {
+                        $kode = 'L';
                         $isMingguHoliday = ($dayOfWeek == 0 || $isHoliday);
+
                         if ($isMingguHoliday) {
-                            $kode = 'MGG';
                             if ($lemburTotal >= 8) {
                                 $nominal = $umRates['minggu_full'];
-                                $lm = 8;
+                                $lmStr = 'FULL';
                             } elseif ($lemburTotal >= 4) {
                                 $nominal = $umRates['minggu_half'];
-                                $lm = 4;
+                                $lmStr = 'HALF';
                             }
                         } elseif ($dayOfWeek == 6) {
-                            $kode = 'SBT';
+                            // Sabtu
                             if ($lemburTotal >= 4) {
                                 $nominal = $umRates['sabtu_full'];
-                                $lm = $lemburTotal;
+                                $lemburStr = 'FULL';
                             } elseif ($lemburTotal >= 2) {
                                 $nominal = $umRates['sabtu_dua'];
-                                $lm = $lemburTotal;
+                                $lemburStr = 'DUA';
                             }
                         } else {
-                            // Weekday — only if >= 3 jam
+                            // Weekday — ≥ 3 jam
                             if ($lemburTotal >= 3) {
-                                $kode = 'UM';
-                                $nominal = $umRates['weekday'];
-                                $lm = $lemburTotal;
+                                $nominal = $umRates['weekday'] ?? 15000;
+                                $lemburStr = 'UM';
                             }
                         }
                     }
@@ -1052,8 +1030,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                         'kode'              => $kode,
                         'ha'                => $ha,
                         'upah_per_hari'     => $upahHarian,
-                        'lm'                => $lm > 0 ? $lm : 0,
-                        'lembur'            => $overtimeDisplay,
+                        'lm'                => $lmStr,
+                        'lembur'            => $lemburStr,
                         'nominal'           => $nominal,
                         'uang_makan'        => $nominal,
                         'overtime_nominal'  => $totalOvertimeNominal,
