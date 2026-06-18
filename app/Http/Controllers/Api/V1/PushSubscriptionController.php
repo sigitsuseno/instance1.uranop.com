@@ -9,7 +9,7 @@ class PushSubscriptionController extends Controller
 {
     public function subscribe(Request $request)
     {
-        $this->validate($request, [
+        $request->validate([
             'endpoint'    => 'required',
             'keys.auth'   => 'required',
             'keys.p256dh' => 'required'
