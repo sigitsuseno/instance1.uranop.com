@@ -608,7 +608,34 @@ async function handleApprovePayroll() {
 }
 
 function handleExport() {
-  notification.info('Fitur Export Excel akan segera hadir.')
+  const token = localStorage.getItem('token')
+  const params = new URLSearchParams()
+  if (selectedPeriodId.value) params.append('period_id', selectedPeriodId.value)
+  if (activeSegment.value) params.append('segment', activeSegment.value)
+
+  const url = `/api/v1/payroll/gaji-karyawan/export?${params.toString()}`
+  
+  notification.info('Sedang menyiapkan file Excel...')
+  
+  fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => {
+      if (!r.ok) throw new Error('Gagal export Excel')
+      return r.blob()
+    })
+    .then(blob => {
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.setAttribute('download', `Laporan_Gaji_Karyawan_${activeSegment.value ? 'Segmen_'+activeSegment.value : 'Periode'}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
+    })
+    .catch(err => {
+      console.error(err)
+      notification.error('Gagal export Excel')
+    })
 }
 
 onMounted(() => {

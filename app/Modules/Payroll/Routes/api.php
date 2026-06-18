@@ -8,6 +8,7 @@ use App\Modules\Payroll\Controllers\Api\V1\PayslipController;
 Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::apiResource('periods', PayPeriodApiController::class);
     Route::get('gaji-karyawan', [GajiKaryawanController::class, 'index']);
+    Route::get('gaji-karyawan/export', [GajiKaryawanController::class, 'export']);
 
     // Slip Gaji
     Route::get('payslips', [PayslipController::class, 'index']);
