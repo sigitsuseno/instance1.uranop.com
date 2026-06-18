@@ -3,6 +3,12 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
+// Named login route to prevent "Route [login] not defined" error
+// when unauthenticated API requests trigger the auth redirect
+Route::get('/login', function () {
+    return response()->json(['message' => 'Unauthenticated.'], 401);
+})->name('login');
+
 Route::get('/', function () {
     return response()->json([
         'app' => config('app.name'),

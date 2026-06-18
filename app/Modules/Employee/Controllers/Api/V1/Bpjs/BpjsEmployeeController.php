@@ -11,6 +11,7 @@ use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\BpjsConfig;
 use App\Modules\Employee\Exports\BpjsIuranExport;
+use App\Modules\Employee\Exports\BpjsReportExport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -566,6 +567,10 @@ class BpjsEmployeeController extends Controller
                 // Grand
                 'grand_total'          => $grandTotal,
             ];
+        })->sort(function ($a, $b) {
+            $groupCompare = strcmp($a['group_code'] ?? '~', $b['group_code'] ?? '~');
+            if ($groupCompare !== 0) return $groupCompare;
+            return strcmp($a['employee']['name'], $b['employee']['name']);
         })->values();
 
         // 5. Summary totals
@@ -582,6 +587,125 @@ class BpjsEmployeeController extends Controller
                 'details'         => $details,
             ],
         ]);
+    }
+
+    /**
+     * Export Laporan BPJS ke Excel — format sesuai sample_laporan_bpjs.xlsx
+     * Grouped by BPJS group, satu sheet dengan subtotal per group dan grand total.
+     */
+    public function exportReports(Request $request)
+    {
+        $request->validate([
+            'pay_period_id' => 'required|exists:pay_periods,id',
+            'groups'        => 'nullable|string',
+        ]);
+
+        $payPeriod = PayPeriod::findOrFail($request->pay_period_id);
+
+        if (! $payPeriod->start_date || ! $payPeriod->end_date) {
+            return response()->json(['message' => 'Periode tidak valid.'], 400);
+        }
+
+        $rosteredIds = EmployeeShiftRoster::whereBetween('date', [
+            $payPeriod->start_date, $payPeriod->end_date,
+        ])->distinct()->pluck('employee_id');
+
+        $groupCodes = $request->groups
+            ? array_filter(array_map('trim', explode(',', $request->groups)))
+            : [];
+
+        $employees = Employee::whereIn('id', $rosteredIds)
+            ->whereHas('groups', function ($q) {
+                $q->whereHas('master', function ($mq) {
+                    $mq->where('group_label', 'BPJS GROUP');
+                });
+            })
+            ->when(! empty($groupCodes), function ($q) use ($groupCodes) {
+                $q->whereHas('groups', function ($gq) use ($groupCodes) {
+                    $gq->whereIn('reference_code', $groupCodes);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+
+        $bpjsByEmployee = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
+            ->where('pay_period_id', $payPeriod->id)
+            ->get()
+            ->keyBy('employee_id');
+
+        $periodStr = $payPeriod->end_date->format('Y-m');
+
+        $details = $employees->map(function ($emp) use ($bpjsByEmployee, $periodStr, $payPeriod) {
+            $bpjs = $bpjsByEmployee->get($emp->id);
+
+            $gajiPokok = (float) $emp->gaji_pokok($periodStr);
+            $tjMk      = (float) $emp->tjMasaKerja($periodStr);
+            $tunjangan = (float) $emp->tunjangan($periodStr);
+            $dasar     = $gajiPokok + $tjMk + $tunjangan;
+
+            $masaKerja = $emp->join_date
+                ? $emp->join_date->diffInMonths($payPeriod->end_date)
+                : 0;
+
+            $bpjsGroup = $emp->groups()
+                ->whereHas('master', fn ($q) => $q->where('group_label', 'BPJS GROUP'))
+                ->with('master')
+                ->first();
+
+            $empJHT = (float) ($bpjs?->employer_jht ?? 0);
+            $empJKM = (float) ($bpjs?->employer_jkm ?? 0);
+            $empJKK = (float) ($bpjs?->employer_jkk ?? 0);
+            $empTK  = round($empJHT + $empJKM + $empJKK, 2);
+            $empJP  = (float) ($bpjs?->employer_jp ?? 0);
+            $empKS  = (float) ($bpjs?->employer_kesehatan ?? 0);
+
+            $eeJHT = (float) ($bpjs?->employee_jht ?? 0);
+            $eeJP  = (float) ($bpjs?->employee_jp ?? 0);
+            $eeKS  = (float) ($bpjs?->employee_kesehatan ?? 0);
+
+            return [
+                'id'                => $emp->id,
+                'employee'          => ['name' => $emp->name, 'nip' => $emp->nip, 'employee_code' => $emp->employee_code],
+                'group'             => $bpjsGroup?->master?->name ?? '-',
+                'group_code'        => $bpjsGroup?->reference_code ?? null,
+                'join_year'         => $emp->join_date?->format('Y'),
+                'masa_kerja'        => $masaKerja,
+                'gaji_pokok'        => $gajiPokok,
+                'tj_masa_kerja'     => $tjMk,
+                'tunjangan'         => $tunjangan,
+                'bpjs_base_salary'  => $dasar,
+                'kpj_tk'            => $emp->bpjs_ketenagakerjaan,
+                'kpj_ks'            => $emp->bpjs_kesehatan,
+                'employer_jht'      => $empJHT,
+                'employer_jkm'      => $empJKM,
+                'employer_jkk'      => $empJKK,
+                'employer_tk_total' => $empTK,
+                'employer_jp'       => $empJP,
+                'employer_kesehatan'=> $empKS,
+                'employee_jht'      => $eeJHT,
+                'employee_jp'       => $eeJP,
+                'employee_kesehatan'=> $eeKS,
+                'employee_total'    => round($eeJHT + $eeJP + $eeKS, 2),
+                'grand_total'       => round($empTK + $empJP + $empKS + $eeJHT + $eeJP + $eeKS, 2),
+            ];
+        })->sortBy(fn ($r) => ($r['group_code'] ?? '~') . $r['employee']['name'])->values();
+
+        // Group records by group_code for the export
+        $groups = [];
+        foreach ($details as $record) {
+            $key = $record['group_code'] ?? '_other';
+            if (! isset($groups[$key])) {
+                $groups[$key] = ['name' => $record['group'] ?? $key, 'records' => []];
+            }
+            $groups[$key]['records'][] = $record;
+        }
+
+        $fileName = 'Laporan_BPJS_' . str_replace(' ', '_', $payPeriod->name) . '.xlsx';
+
+        return Excel::download(
+            new BpjsReportExport(array_values($groups), $payPeriod->name),
+            $fileName
+        );
     }
 
     /** --- helpers --- */
