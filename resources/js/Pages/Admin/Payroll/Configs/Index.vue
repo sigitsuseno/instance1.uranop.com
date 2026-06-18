@@ -26,6 +26,7 @@
     <div class="mt-4">
       <SalaryComponentsTab v-if="activeTab === 'components'" />
       <OvertimeRulesTab v-if="activeTab === 'overtime'" />
+      <CalculatorConfigsTab v-if="activeTab === 'calculator'" />
       <ThrConfigsTab v-if="activeTab === 'thr'" />
     </div>
   </div>
@@ -35,6 +36,7 @@
 import { ref } from 'vue'
 import SalaryComponentsTab from './Tabs/SalaryComponentsTab.vue'
 import OvertimeRulesTab from './Tabs/OvertimeRulesTab.vue'
+import CalculatorConfigsTab from './Tabs/CalculatorConfigsTab.vue'
 import ThrConfigsTab from './Tabs/ThrConfigsTab.vue'
 
 const activeTab = ref('components')
@@ -42,6 +44,7 @@ const activeTab = ref('components')
 const tabs = [
   { key: 'components', label: 'Komponen Gaji' },
   { key: 'overtime', label: 'Aturan Lembur' },
+  { key: 'calculator', label: 'Konfigurasi Kalkulasi' },
   { key: 'thr', label: 'Tunjangan Hari Raya' },
 ]
 </script>

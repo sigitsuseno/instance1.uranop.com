@@ -12,6 +12,7 @@ use App\Modules\Settings\Models\TerRate;
 use App\Modules\Settings\Models\ProgressiveRate;
 use App\Modules\Settings\Models\OvertimeRule;
 use App\Modules\Settings\Models\OvertimeRuleDetail;
+use App\Modules\Settings\Models\OvertimeCalculatorConfig;
 use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Settings\Models\ServiceYearAllowance;
 use App\Modules\Settings\Models\ThrConfig;
@@ -272,6 +273,78 @@ class PayrollConfigApiController extends Controller
         $rule = OvertimeRule::findOrFail($id);
         $rule->delete(); // details will cascade delete
         return response()->json(['message' => 'Overtime rule deleted']);
+    }
+
+    // === Kalkulator Configs ===
+
+    public function indexCalculator()
+    {
+        return response()->json([
+            'data' => OvertimeCalculatorConfig::with('workPattern')->get()
+        ]);
+    }
+
+    public function storeCalculator(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+            'work_pattern_id' => 'nullable|exists:sch_work_patterns,id',
+            'normal_work_minutes' => 'integer|min:0',
+            'saturday_work_minutes' => 'integer|min:0',
+            'holiday_max_minutes' => 'integer|min:0',
+            'shift_saturday_flat' => 'integer|min:0',
+            'late_deducts_overtime' => 'boolean',
+            'late_tolerance' => 'integer|min:0',
+            'lm_rest_deduction' => 'integer|min:0',
+            'rounding_interval' => 'integer|min:1',
+            'rounding_threshold' => 'integer|min:0',
+            'hourly_divisor' => 'integer|min:1',
+            'description' => 'nullable|string',
+        ]);
+
+        $validated['uuid'] = (string) \Illuminate\Support\Str::uuid();
+        $validated['is_active'] = true;
+
+        $config = OvertimeCalculatorConfig::create($validated);
+
+        return response()->json([
+            'message' => 'Konfigurasi kalkulasi dibuat',
+            'data' => $config->load('workPattern'),
+        ], 201);
+    }
+
+    public function updateCalculator(Request $request, $id)
+    {
+        $config = OvertimeCalculatorConfig::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => 'required|string|max:100',
+            'work_pattern_id' => 'nullable|exists:sch_work_patterns,id',
+            'normal_work_minutes' => 'integer|min:0',
+            'saturday_work_minutes' => 'integer|min:0',
+            'holiday_max_minutes' => 'integer|min:0',
+            'shift_saturday_flat' => 'integer|min:0',
+            'late_deducts_overtime' => 'boolean',
+            'late_tolerance' => 'integer|min:0',
+            'lm_rest_deduction' => 'integer|min:0',
+            'rounding_interval' => 'integer|min:1',
+            'rounding_threshold' => 'integer|min:0',
+            'hourly_divisor' => 'integer|min:1',
+            'description' => 'nullable|string',
+        ]);
+
+        $config->update($validated);
+
+        return response()->json([
+            'message' => 'Konfigurasi kalkulasi diupdate',
+            'data' => $config->load('workPattern'),
+        ]);
+    }
+
+    public function destroyCalculator($id)
+    {
+        OvertimeCalculatorConfig::findOrFail($id)->delete();
+        return response()->json(['message' => 'Konfigurasi kalkulasi dihapus']);
     }
 
     // === THR Configs ===

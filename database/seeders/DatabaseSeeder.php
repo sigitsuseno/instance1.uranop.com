@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             WorkPatternAdditionalSeeder::class,
             LeaveTypeSeeder::class,
             OvertimeRuleSeeder::class,
+            OvertimeCalculatorConfigSeeder::class,
             BpjsConfigSeeder::class,
             ConsecutiveDaySeeder::class,
         ]);
