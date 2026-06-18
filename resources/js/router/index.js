@@ -36,9 +36,13 @@ const OvertimeIndex = () => import('../Pages/Admin/Attendance/Overtime/Index.vue
 const OvertimeCalculationIndex = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Index.vue')
 const OvertimeCalculationDetail = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Detail.vue')
 const ConsecutiveIndex = () => import('../Pages/Admin/Attendance/Consecutive/Index.vue')
-const LeaveIndex = () => import('../Pages/Admin/Leave/Index.vue')
-const LeaveApprovals = () => import('../Pages/Admin/Leave/Approvals.vue')
 const LeaveSettings = () => import('../Pages/Admin/Leave/Settings.vue')
+// New separate leave pages
+const LeaveGenerate = () => import('../Pages/Admin/Leave/Generate.vue')
+const LeaveRequests = () => import('../Pages/Admin/Leave/Requests.vue')
+const LeaveCancellations = () => import('../Pages/Admin/Leave/Cancellations.vue')
+const LeaveBalances = () => import('../Pages/Admin/Leave/Balances.vue')
+const LeaveRecap = () => import('../Pages/Admin/Leave/Recap.vue')
 const PayrollPeriodsIndex = () => import('../Pages/Admin/Payroll/Periods/Index.vue')
 const PayrollPeriodsCrud = () => import('../Pages/Admin/Payroll/Periods/Crud.vue')
 const PayrollPeriodDetail = () => import('../Pages/Admin/Payroll/Periods/Detail.vue')
@@ -142,9 +146,13 @@ const routes = [
       { path: 'attendance/overtime-calculation', name: 'attendance.overtime-calculation', component: OvertimeCalculationIndex, meta: { title: 'Perhitungan Lembur' } },
       { path: 'attendance/overtime-calculation/:id', name: 'attendance.overtime-calculation.detail', component: OvertimeCalculationDetail, meta: { title: 'Detail Perhitungan Lembur' } },
       { path: 'attendance/consecutive', name: 'attendance.consecutive', component: ConsecutiveIndex, meta: { title: 'Consecutive Day' } },
-      { path: 'leave', name: 'leave', component: LeaveIndex, meta: { title: 'Cuti' } },
-      { path: 'leave/approvals', name: 'leave.approvals', component: LeaveApprovals, meta: { title: 'Approval Cuti' } },
       { path: 'leave/settings', name: 'leave.settings', component: LeaveSettings, meta: { title: 'Pengaturan Cuti' } },
+      // New separate leave pages
+      { path: 'leave/generate', name: 'leave.generate', component: LeaveGenerate, meta: { title: 'Generate Cuti Tahunan' } },
+      { path: 'leave/requests', name: 'leave.requests', component: LeaveRequests, meta: { title: 'Pengajuan Cuti' } },
+      { path: 'leave/cancellations', name: 'leave.cancellations', component: LeaveCancellations, meta: { title: 'Pembatalan Cuti' } },
+      { path: 'leave/balances', name: 'leave.balances', component: LeaveBalances, meta: { title: 'Saldo Cuti' } },
+      { path: 'leave/recap', name: 'leave.recap', component: LeaveRecap, meta: { title: 'Rekap Cuti' } },
       { path: 'payroll/periods', name: 'payroll.periods', component: PayrollPeriodsIndex, meta: { title: 'Gaji Karyawan (Legacy)' } },
       { path: 'payroll/periods/crud', name: 'payroll.periods.crud', component: PayrollPeriodsCrud, meta: { title: 'Penggajian' } },
       { path: 'payroll/gaji-karyawan', name: 'payroll.gaji-karyawan', component: PayrollGajiKaryawan, meta: { title: 'Gaji Karyawan' } },

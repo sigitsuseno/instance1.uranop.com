@@ -209,6 +209,100 @@ class LeaveApiController extends Controller
     }
 
     /**
+     * Bulk approve leave requests
+     */
+    public function bulkApprove(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:leave_requests,id',
+        ]);
+
+        $user = Auth::user();
+        $success = 0;
+        $failed = [];
+
+        foreach ($validated['ids'] as $id) {
+            try {
+                $leaveRequest = LeaveRequest::findOrFail($id);
+                $this->leaveService->approveRequest($leaveRequest, $user);
+                $success++;
+            } catch (\Exception $e) {
+                $failed[] = ['id' => $id, 'error' => $e->getMessage()];
+            }
+        }
+
+        return response()->json([
+            'message' => "{$success} pengajuan disetujui" . (count($failed) > 0 ? ', ' . count($failed) . ' gagal' : ''),
+            'success_count' => $success,
+            'failed' => $failed,
+        ]);
+    }
+
+    /**
+     * Bulk reject leave requests
+     */
+    public function bulkReject(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:leave_requests,id',
+            'rejection_reason' => 'required|string',
+        ]);
+
+        $user = Auth::user();
+        $success = 0;
+        $failed = [];
+
+        foreach ($validated['ids'] as $id) {
+            try {
+                $leaveRequest = LeaveRequest::findOrFail($id);
+                $this->leaveService->rejectRequest($leaveRequest, $user, $validated['rejection_reason']);
+                $success++;
+            } catch (\Exception $e) {
+                $failed[] = ['id' => $id, 'error' => $e->getMessage()];
+            }
+        }
+
+        return response()->json([
+            'message' => "{$success} pengajuan ditolak" . (count($failed) > 0 ? ', ' . count($failed) . ' gagal' : ''),
+            'success_count' => $success,
+            'failed' => $failed,
+        ]);
+    }
+
+    /**
+     * Bulk cancel leave requests
+     */
+    public function bulkCancel(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:leave_requests,id',
+        ]);
+
+        $user = Auth::user();
+        $success = 0;
+        $failed = [];
+
+        foreach ($validated['ids'] as $id) {
+            try {
+                $leaveRequest = LeaveRequest::findOrFail($id);
+                $this->leaveService->cancelRequest($leaveRequest, $user);
+                $success++;
+            } catch (\Exception $e) {
+                $failed[] = ['id' => $id, 'error' => $e->getMessage()];
+            }
+        }
+
+        return response()->json([
+            'message' => "{$success} pengajuan dibatalkan" . (count($failed) > 0 ? ', ' . count($failed) . ' gagal' : ''),
+            'success_count' => $success,
+            'failed' => $failed,
+        ]);
+    }
+
+    /**
      * Get list of leave change requests
      */
     public function indexChangeRequests(Request $request)

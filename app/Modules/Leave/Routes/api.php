@@ -29,6 +29,9 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
     Route::post('requests/{id}/approve', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'approve']);
     Route::post('requests/{id}/reject', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'reject']);
     Route::post('requests/{id}/cancel', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'cancel']);
+    Route::post('requests/bulk-approve', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkApprove']);
+    Route::post('requests/bulk-reject', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkReject']);
+    Route::post('requests/bulk-cancel', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkCancel']);
     
     // Leave Change Requests
     Route::get('change-requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'indexChangeRequests']);

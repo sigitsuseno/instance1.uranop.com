@@ -68,10 +68,13 @@ const allMenus = [
   },
   {
     title: 'Pengelolaan Cuti',
-    icon: 'bx bx-umbrella',
+    icon: 'bx bx-calendar-check',
     children: [
-      { title: 'Cuti & Izin', icon: 'bx bx-calendar-edit', route: '/admin/leave' },
-      { title: 'Approval Cuti', icon: 'bx bx-check-shield', route: '/admin/leave/approvals' },
+      { title: 'Generate Cuti Tahunan', icon: 'bx bx-magic-wand', route: '/admin/leave/generate', visible: isSuperadmin.value || isHrmanager.value },
+      { title: 'Pengajuan Cuti', icon: 'bx bx-calendar-edit', route: '/admin/leave/requests' },
+      { title: 'Pembatalan Cuti', icon: 'bx bx-calendar-x', route: '/admin/leave/cancellations', visible: isSuperadmin.value || isHrmanager.value },
+      { title: 'Saldo Cuti', icon: 'bx bx-bar-chart-square', route: '/admin/leave/balances' },
+      { title: 'Rekap Cuti', icon: 'bx bx-archive', route: '/admin/leave/recap', visible: isSuperadmin.value || isHrmanager.value },
     ],
   },
   {
