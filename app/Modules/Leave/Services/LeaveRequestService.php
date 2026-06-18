@@ -6,6 +6,7 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Models\LeavePeriod;
 use App\Modules\Leave\Models\EmployeeLeave;
+use App\Modules\Leave\Models\LeaveChangeRequest;
 use Illuminate\Support\Facades\DB;
 use Exception;
 
@@ -69,6 +70,46 @@ class LeaveRequestService
                 'reason' => $data['reason'] ?? null,
                 'status' => 'pending'
             ]);
+        });
+    }
+
+    /**
+     * Update pengajuan cuti (Hanya jika masih pending)
+     */
+    public function updateRequest(LeaveRequest $request, array $data)
+    {
+        if ($request->status !== 'pending') {
+            throw new Exception('Hanya pengajuan dengan status pending yang dapat diedit.');
+        }
+
+        $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+        
+        // Validasi saldo jika cuti mengurangi jatah
+        if ($leaveType->balance_type === 'decrement') {
+            $available = $this->getAvailableBalance($data['employee_id'], $leaveType->id, $request->leave_period_id);
+            
+            // Hitung pengajuan pending (exclude current request)
+            $pendingDays = LeaveRequest::where('employee_id', $data['employee_id'])
+                ->where('leave_type_id', $leaveType->id)
+                ->where('status', 'pending')
+                ->where('id', '!=', $request->id)
+                ->sum('days_requested');
+                
+            if ($data['days_requested'] > ($available - $pendingDays)) {
+                throw new Exception('Saldo cuti tidak mencukupi atau masih ada pengajuan yang belum di-approve.');
+            }
+        }
+
+        return DB::transaction(function () use ($request, $data) {
+            $request->update([
+                'employee_id' => $data['employee_id'],
+                'leave_type_id' => $data['leave_type_id'],
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+                'days_requested' => $data['days_requested'],
+                'reason' => $data['reason'] ?? null,
+            ]);
+            return $request;
         });
     }
 
@@ -203,5 +244,159 @@ class LeaveRequestService
         });
 
         return $request;
+    }
+
+    /**
+     * Submit pengajuan perubahan cuti
+     */
+    public function submitChangeRequest(LeaveRequest $originalRequest, array $data, $user)
+    {
+        if ($originalRequest->status !== 'approved') {
+            throw new Exception('Hanya cuti yang sudah disetujui yang dapat diajukan perubahannya.');
+        }
+
+        // Check if there is already a pending change request
+        $hasPending = LeaveChangeRequest::where('leave_request_id', $originalRequest->id)
+            ->where('status', 'pending')
+            ->exists();
+            
+        if ($hasPending) {
+            throw new Exception('Sudah ada pengajuan perubahan cuti yang masih pending untuk cuti ini.');
+        }
+
+        return LeaveChangeRequest::create([
+            'leave_request_id' => $originalRequest->id,
+            'new_start_date' => $data['new_start_date'],
+            'new_end_date' => $data['new_end_date'],
+            'new_days_requested' => $data['new_days_requested'],
+            'reason' => $data['reason'] ?? null,
+            'status' => 'pending',
+            'created_by' => $user->id,
+            'updated_by' => $user->id,
+        ]);
+    }
+
+    /**
+     * Approve pengajuan perubahan cuti
+     */
+    public function approveChangeRequest(LeaveChangeRequest $changeRequest, $user)
+    {
+        $roles = $user->roles->pluck('name')->toArray();
+        $allowed = ['superadmin', 'hrmanager', 'hr_manager', 'hr'];
+        if (empty(array_intersect($roles, $allowed))) {
+            throw new Exception('Anda tidak memiliki akses untuk menyetujui perubahan cuti.');
+        }
+
+        if ($changeRequest->status !== 'pending') {
+            throw new Exception('Hanya pengajuan perubahan dengan status pending yang dapat disetujui.');
+        }
+
+        DB::transaction(function () use ($changeRequest, $user) {
+            $originalRequest = $changeRequest->leaveRequest;
+            $leaveType = $originalRequest->leaveType;
+            $period = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
+
+            $oldDays = $originalRequest->days_requested;
+            $newDays = $changeRequest->new_days_requested;
+            $diffDays = $newDays - $oldDays;
+
+            // Validasi saldo jika tipe cuti ini mengurangi jatah dan butuh tambahan hari
+            if ($leaveType->balance_type === 'decrement' && $diffDays > 0) {
+                $available = $this->getAvailableBalance($originalRequest->employee_id, $leaveType->id, $period->id);
+                if ($diffDays > $available) {
+                    throw new Exception('Saldo cuti tidak mencukupi untuk penambahan hari pada perubahan cuti ini.');
+                }
+            }
+
+            // 1. Update status change request
+            $changeRequest->update([
+                'status' => 'approved',
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+            ]);
+
+            // 2. Sesuaikan Ledger Balance (EmployeeLeave)
+            if ($leaveType->balance_type === 'decrement' && $diffDays != 0 && $period) {
+                $transactionType = $diffDays > 0 ? 'decrement' : 'increment';
+                $amount = abs($diffDays);
+                $desc = $diffDays > 0 
+                    ? 'Penambahan hari karena perubahan cuti #' . $originalRequest->id 
+                    : 'Pengembalian saldo karena perubahan cuti #' . $originalRequest->id;
+
+                EmployeeLeave::create([
+                    'employee_id' => $originalRequest->employee_id,
+                    'leave_type_id' => $leaveType->id,
+                    'leave_period_id' => $period->id,
+                    'reference_id' => $originalRequest->id,
+                    'transaction_type' => $transactionType,
+                    'amount' => $amount,
+                    'description' => $desc,
+                    'created_by' => $user->id,
+                    'updated_by' => $user->id,
+                ]);
+            }
+
+            // 3. Clear old rosters
+            DB::table('sch_employee_shift_rosters')
+                ->where('employee_id', $originalRequest->employee_id)
+                ->where('leave_id', $originalRequest->id)
+                ->update([
+                    'external_code' => null,
+                    'is_leave' => 0,
+                    'is_permit' => 0,
+                    'leave_id' => null,
+                    'updated_at' => now(),
+                ]);
+
+            // 4. Update Original Request
+            $originalRequest->update([
+                'start_date' => $changeRequest->new_start_date,
+                'end_date' => $changeRequest->new_end_date,
+                'days_requested' => $changeRequest->new_days_requested,
+                'updated_by' => $user->id,
+            ]);
+
+            // 5. Apply new rosters
+            $isLeave = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
+            $isPermit = ($leaveType->category === 'permit') ? 1 : 0;
+
+            DB::table('sch_employee_shift_rosters')
+                ->where('employee_id', $originalRequest->employee_id)
+                ->whereBetween('date', [$changeRequest->new_start_date, $changeRequest->new_end_date])
+                ->update([
+                    'external_code' => $leaveType->code,
+                    'is_leave' => $isLeave,
+                    'is_permit' => $isPermit,
+                    'leave_id' => $originalRequest->id,
+                    'updated_at' => now(),
+                ]);
+        });
+
+        return $changeRequest;
+    }
+
+    /**
+     * Reject pengajuan perubahan cuti
+     */
+    public function rejectChangeRequest(LeaveChangeRequest $changeRequest, $user, $reason)
+    {
+        $roles = $user->roles->pluck('name')->toArray();
+        $allowed = ['superadmin', 'hrmanager', 'hr_manager', 'hr'];
+        if (empty(array_intersect($roles, $allowed))) {
+            throw new Exception('Anda tidak memiliki akses untuk menolak perubahan cuti.');
+        }
+
+        if ($changeRequest->status !== 'pending') {
+            throw new Exception('Hanya pengajuan perubahan dengan status pending yang dapat ditolak.');
+        }
+
+        $changeRequest->update([
+            'status' => 'rejected',
+            'rejection_reason' => $reason,
+            'approved_by' => $user->id,
+            'approved_at' => now(),
+        ]);
+
+        return $changeRequest;
     }
 }

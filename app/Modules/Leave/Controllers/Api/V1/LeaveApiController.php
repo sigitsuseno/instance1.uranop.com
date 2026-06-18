@@ -8,6 +8,7 @@ use App\Modules\Leave\Models\LeavePeriod;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Models\EmployeeLeave;
 use App\Modules\Leave\Models\LeavePolicy;
+use App\Modules\Leave\Models\LeaveChangeRequest;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Leave\Services\LeaveRequestService;
 use Illuminate\Http\Request;
@@ -61,6 +62,14 @@ class LeaveApiController extends Controller
 
         if ($request->filled('status')) {
             $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('nip', 'like', "%{$search}%");
+            });
         }
 
         // Calculate stats
@@ -127,6 +136,30 @@ class LeaveApiController extends Controller
     }
 
     /**
+     * Update leave request (only pending ones)
+     */
+    public function update(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'employee_id' => 'required|exists:employees,id',
+            'leave_type_id' => 'required|exists:leave_types,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'days_requested' => 'required|integer|min:1',
+            'reason' => 'nullable|string',
+        ]);
+
+        $leaveRequest = LeaveRequest::findOrFail($id);
+
+        try {
+            $result = $this->leaveService->updateRequest($leaveRequest, $validated);
+            return response()->json(['message' => 'Pengajuan cuti berhasil diupdate', 'data' => $result]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
      * Approve leave request
      */
     public function approve(Request $request, $id)
@@ -170,6 +203,93 @@ class LeaveApiController extends Controller
         try {
             $result = $this->leaveService->cancelRequest($leaveRequest, Auth::user());
             return response()->json(['message' => 'Pengajuan cuti dibatalkan dan kuota dikembalikan', 'data' => $result]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        }
+    }
+
+    /**
+     * Get list of leave change requests
+     */
+    public function indexChangeRequests(Request $request)
+    {
+        $query = LeaveChangeRequest::with(['leaveRequest.employee.department', 'leaveRequest.leaveType'])->orderBy('created_at', 'desc');
+
+        $user = Auth::user();
+        $roles = $user->roles->pluck('name')->toArray();
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+
+        if (!$isHr) {
+            if (isset($user->employee_id)) {
+                $query->whereHas('leaveRequest', function($q) use ($user) {
+                    $q->where('employee_id', $user->employee_id);
+                });
+            } else {
+                $query->whereHas('leaveRequest.employee', function($q) use ($user) {
+                    $q->where('user_id', $user->id);
+                });
+            }
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $paginated = $query->paginate(15);
+        return response()->json(['paginated' => $paginated]);
+    }
+
+    /**
+     * Store a new change request
+     */
+    public function storeChangeRequest(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'new_start_date' => 'required|date',
+            'new_end_date' => 'required|date|after_or_equal:new_start_date',
+            'new_days_requested' => 'required|integer|min:1',
+            'reason' => 'required|string',
+        ]);
+
+        $originalRequest = LeaveRequest::findOrFail($id);
+
+        try {
+            $changeRequest = $this->leaveService->submitChangeRequest($originalRequest, $validated, Auth::user());
+            return response()->json(['message' => 'Pengajuan perubahan cuti berhasil disubmit', 'data' => $changeRequest], 201);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Approve change request
+     */
+    public function approveChangeRequest(Request $request, $id)
+    {
+        $changeRequest = LeaveChangeRequest::findOrFail($id);
+
+        try {
+            $result = $this->leaveService->approveChangeRequest($changeRequest, Auth::user());
+            return response()->json(['message' => 'Perubahan cuti disetujui', 'data' => $result]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
+        }
+    }
+
+    /**
+     * Reject change request
+     */
+    public function rejectChangeRequest(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'rejection_reason' => 'required|string'
+        ]);
+
+        $changeRequest = LeaveChangeRequest::findOrFail($id);
+
+        try {
+            $result = $this->leaveService->rejectChangeRequest($changeRequest, Auth::user(), $validated['rejection_reason']);
+            return response()->json(['message' => 'Perubahan cuti ditolak', 'data' => $result]);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 403);
         }

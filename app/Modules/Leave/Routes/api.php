@@ -25,9 +25,16 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
     // Leave Requests (Transactions)
     Route::get('requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'index']);
     Route::post('requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'store']);
+    Route::put('requests/{id}', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'update']);
     Route::post('requests/{id}/approve', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'approve']);
     Route::post('requests/{id}/reject', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'reject']);
     Route::post('requests/{id}/cancel', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'cancel']);
+    
+    // Leave Change Requests
+    Route::get('change-requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'indexChangeRequests']);
+    Route::post('requests/{id}/change', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'storeChangeRequest']);
+    Route::post('change-requests/{id}/approve', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'approveChangeRequest']);
+    Route::post('change-requests/{id}/reject', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'rejectChangeRequest']);
     
     // New Transactions & Period closure routes
     Route::get('balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'balances']);

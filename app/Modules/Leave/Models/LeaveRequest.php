@@ -72,4 +72,9 @@ class LeaveRequest extends Model
     {
         return $this->hasMany(LeaveDocument::class);
     }
+
+    public function changeRequests()
+    {
+        return $this->hasMany(LeaveChangeRequest::class);
+    }
 }

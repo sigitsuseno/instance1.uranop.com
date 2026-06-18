@@ -119,8 +119,8 @@
       <!-- TAB 1: DAFTAR PENGAJUAN -->
       <div v-if="activeTab === 'requests'">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
-          <!-- Status filter tabs (Sub-tabs) -->
-          <div class="flex flex-wrap gap-2">
+          <!-- Status filter tabs (Sub-tabs) & Search -->
+          <div class="flex flex-wrap gap-2 flex-1">
             <button
               v-for="opt in statusFilterOptions"
               :key="opt.value"
@@ -134,6 +134,18 @@
             >
               {{ opt.label }}
             </button>
+
+            <!-- Search Input -->
+            <div class="ml-auto w-full md:w-64 relative">
+              <input
+                type="text"
+                v-model="filters.search"
+                @input="handleSearch"
+                placeholder="Cari NIP atau Nama..."
+                class="w-full pl-9 pr-3 py-1.5 bg-(--bg-card) border border-(--border-soft) rounded-md text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary) focus:border-transparent transition-all h-8"
+              />
+              <i class="bx bx-search absolute left-2.5 top-1/2 -translate-y-1/2 text-(--text-muted)"></i>
+            </div>
           </div>
 
           <!-- Create request button -->
@@ -180,6 +192,30 @@
                     <i class="bx bx-show text-lg"></i>
                   </template>
                 </BaseButton>
+                <!-- Edit request button: visible if pending -->
+                <BaseButton
+                  v-if="item.status === 'pending'"
+                  variant="ghost"
+                  size="sm"
+                  @click="openEditModal(item)"
+                  title="Edit Pengajuan"
+                >
+                  <template #icon-left>
+                    <i class="bx bx-edit text-lg text-(--primary)"></i>
+                  </template>
+                </BaseButton>
+                <!-- Change request button: visible if approved -->
+                <BaseButton
+                  v-if="item.status === 'approved'"
+                  variant="ghost"
+                  size="sm"
+                  @click="openChangeModal(item)"
+                  title="Ajukan Perubahan"
+                >
+                  <template #icon-left>
+                    <i class="bx bx-calendar-edit text-lg text-(--primary)"></i>
+                  </template>
+                </BaseButton>
                 <!-- Cancel request button: visible if pending or approved -->
                 <BaseButton
                   v-if="['pending', 'approved'].includes(item.status)"
@@ -191,6 +227,78 @@
                   <template #icon-left>
                     <i class="bx bx-x-circle text-lg text-(--danger)"></i>
                   </template>
+                </BaseButton>
+              </div>
+            </template>
+          </DataTable>
+
+          <div class="mt-4">
+            <Pagination
+              :current-page="pagination.currentPage"
+              :total-pages="pagination.totalPages"
+              :total="pagination.total"
+              :per-page="pagination.perPage"
+              @page-change="handlePageChange"
+            />
+          </div>
+        </BaseCard>
+      </div>
+
+      <!-- TAB 1.5: DAFTAR PERUBAHAN CUTI -->
+      <div v-if="activeTab === 'change_requests'">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <div class="flex flex-wrap gap-2 flex-1">
+            <button
+              v-for="opt in statusFilterOptions"
+              :key="opt.value"
+              @click="setStatusFilter(opt.value)"
+              class="px-3 py-1.5 text-xs font-medium rounded-full transition-all border h-8 focus:outline-none"
+              :class="[
+                filters.status === opt.value
+                  ? 'bg-(--primary) text-white border-transparent'
+                  : 'bg-(--bg-card) text-(--text-muted) border-(--border-soft) hover:text-(--text-main)'
+              ]"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+        </div>
+
+        <BaseCard>
+          <DataTable
+            :headers="changeRequestHeaders"
+            :items="changeRequests"
+            :loading="loadingChangeRequests"
+            emptyText="Tidak ada pengajuan perubahan cuti."
+          >
+            <template #item.employee_name="{ item }">
+              <span class="font-medium text-(--text-main)">{{ item.leave_request?.employee?.name || '-' }}</span>
+            </template>
+            <template #item.nip="{ item }">
+              <span class="font-mono text-xs text-(--text-muted)">{{ item.leave_request?.employee?.nip || '-' }}</span>
+            </template>
+            <template #item.department="{ item }">
+              <span class="text-xs">{{ item.leave_request?.employee?.department?.name || '-' }}</span>
+            </template>
+            <template #item.leave_type="{ item }">
+              <Badge variant="neutral">{{ item.leave_request?.leave_type?.name || '-' }}</Badge>
+            </template>
+            <template #item.old_date="{ item }">
+              <span class="text-xs text-(--text-muted) line-through">{{ formatDate(item.leave_request?.start_date) }} - {{ formatDate(item.leave_request?.end_date) }} ({{ item.leave_request?.days_requested }} hr)</span>
+            </template>
+            <template #item.new_date="{ item }">
+              <span class="font-semibold">{{ formatDate(item.new_start_date) }} - {{ formatDate(item.new_end_date) }} ({{ item.new_days_requested }} hr)</span>
+            </template>
+            <template #item.status="{ value }">
+              <Badge :variant="statusBadgeVariant(value)">{{ statusLabel(value) }}</Badge>
+            </template>
+            <template #item.actions="{ item }">
+              <div class="flex items-center gap-1" v-if="item.status === 'pending'">
+                <BaseButton variant="primary" size="sm" @click="handleApproveChange(item)" title="Setujui" v-if="isHrOrAdmin">
+                  <template #icon-left><i class="bx bx-check text-lg"></i></template>
+                </BaseButton>
+                <BaseButton variant="danger" size="sm" @click="handleRejectChange(item)" title="Tolak" v-if="isHrOrAdmin">
+                  <template #icon-left><i class="bx bx-x text-lg"></i></template>
                 </BaseButton>
               </div>
             </template>
@@ -386,8 +494,8 @@
 
     </div>
 
-    <!-- MODAL 1: AJUKAN CUTI (CREATE REQUEST) -->
-    <BaseModal :show="showCreateModal" title="Ajukan Cuti" size="md" @close="showCreateModal = false">
+    <!-- MODAL 1: AJUKAN/EDIT CUTI (CREATE/UPDATE REQUEST) -->
+    <BaseModal :show="showCreateModal" :title="isEditing ? 'Edit Pengajuan Cuti' : 'Ajukan Cuti'" size="md" @close="showCreateModal = false">
       <div class="space-y-4">
         <!-- Employee Selector: visible only to HR. For normal user, auto pre-selected and disabled -->
         <div v-if="isHrOrAdmin">
@@ -453,7 +561,67 @@
       </div>
       <template #footer>
         <BaseButton variant="ghost" @click="showCreateModal = false">Batal</BaseButton>
-        <BaseButton variant="primary" @click="submitRequest" :loading="submitting">Ajukan</BaseButton>
+        <BaseButton variant="primary" @click="submitRequest" :loading="submitting">{{ isEditing ? 'Simpan' : 'Ajukan' }}</BaseButton>
+      </template>
+    </BaseModal>
+
+    <!-- MODAL: AJUKAN PERUBAHAN CUTI -->
+    <BaseModal :show="showChangeModal" title="Ajukan Perubahan Cuti" size="md" @close="showChangeModal = false">
+      <div class="space-y-4">
+        <div class="p-3 bg-(--bg-elevated) rounded-md text-sm text-(--text-main) border border-(--border-soft)">
+          <div class="grid grid-cols-2 gap-2 mb-2">
+            <div>
+              <span class="text-xs text-(--text-muted) block">Cuti Asli Mulai:</span>
+              <span class="font-medium text-(--danger) line-through">{{ formatDate(changeForm.old_start_date) }}</span>
+            </div>
+            <div>
+              <span class="text-xs text-(--text-muted) block">Cuti Asli Selesai:</span>
+              <span class="font-medium text-(--danger) line-through">{{ formatDate(changeForm.old_end_date) }}</span>
+            </div>
+          </div>
+          <span class="text-xs text-(--text-muted)">Durasi Lama: {{ changeForm.old_days_requested }} hari</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <TextInput
+            v-model="changeForm.new_start_date"
+            label="Tanggal Mulai Baru"
+            type="date"
+            :required="true"
+            :error="errors.new_start_date"
+            @change="calculateChangeDays"
+          />
+          <TextInput
+            v-model="changeForm.new_end_date"
+            label="Tanggal Selesai Baru"
+            type="date"
+            :required="true"
+            :error="errors.new_end_date"
+            @change="calculateChangeDays"
+          />
+        </div>
+
+        <TextInput
+          v-model="changeForm.new_days_requested"
+          label="Durasi Pengajuan Baru (Hari)"
+          type="number"
+          min="1"
+          placeholder="Masukkan jumlah hari"
+          :required="true"
+          :error="errors.new_days_requested"
+        />
+
+        <TextInput
+          v-model="changeForm.reason"
+          label="Alasan Perubahan"
+          placeholder="Tulis detail alasan perubahan"
+          :required="true"
+          :error="errors.reason"
+        />
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="showChangeModal = false">Batal</BaseButton>
+        <BaseButton variant="primary" @click="submitChangeRequest" :loading="submitting">Ajukan Perubahan</BaseButton>
       </template>
     </BaseModal>
 
@@ -581,6 +749,7 @@ const employeeOptions = ref([])
 // Loaders
 const loadingPeriods = ref(false)
 const loadingRequests = ref(false)
+const loadingChangeRequests = ref(false)
 const loadingBalances = ref(false)
 const generating = ref(false)
 const recapping = ref(false)
@@ -589,6 +758,7 @@ const submitting = ref(false)
 // Tabs config
 const tabs = [
   { id: 'requests', label: 'Daftar Pengajuan', icon: 'bx bx-list-ul' },
+  { id: 'change_requests', label: 'Perubahan Cuti', icon: 'bx bx-calendar-edit' },
   { id: 'balances', label: 'Saldo Cuti', icon: 'bx bx-bar-chart-square' },
   { id: 'generate', label: 'Generate Cuti', icon: 'bx bx-magic-wand', visible: computed(() => isHrOrAdmin.value) },
   { id: 'recap', label: 'Rekap Cuti', icon: 'bx bx-archive', visible: computed(() => isHrOrAdmin.value) },
@@ -597,10 +767,12 @@ const tabs = [
 // Filters
 const filters = reactive({
   status: '',
+  search: '',
 })
 
 // Tables lists
 const requests = ref([])
+const changeRequests = ref([])
 const balances = ref([])
 const stats = reactive({
   total: 0,
@@ -620,12 +792,16 @@ const pagination = reactive({
 
 // Modals / Dialogs states
 const showCreateModal = ref(false)
+const showChangeModal = ref(false)
 const showDetailModal = ref(false)
 const detailItem = ref(null)
 const showConfirmGenerate = ref(false)
 const showConfirmRecap = ref(false)
 
+const isEditing = ref(false)
+
 const createForm = reactive({
+  id: null,
   employee_id: '',
   leave_type_id: '',
   start_date: '',
@@ -641,6 +817,18 @@ const confirmCancel = reactive({
   id: null,
   employeeName: '',
   days: 0,
+})
+
+const changeForm = reactive({
+  id: null,
+  leave_request_id: null,
+  old_start_date: '',
+  old_end_date: '',
+  old_days_requested: '',
+  new_start_date: '',
+  new_end_date: '',
+  new_days_requested: '',
+  reason: '',
 })
 
 // Role check helper
@@ -681,6 +869,17 @@ const requestHeaders = [
   { key: 'actions', label: 'Aksi', sortable: false },
 ]
 
+const changeRequestHeaders = [
+  { key: 'employee_name', label: 'Karyawan' },
+  { key: 'nip', label: 'NIP' },
+  { key: 'department', label: 'Departemen' },
+  { key: 'leave_type', label: 'Tipe' },
+  { key: 'old_date', label: 'Tanggal Asli' },
+  { key: 'new_date', label: 'Tanggal Baru' },
+  { key: 'status', label: 'Status' },
+  { key: 'actions', label: 'Aksi', sortable: false },
+]
+
 const balanceHeaders = [
   { key: 'nip', label: 'NIP' },
   { key: 'employee_name', label: 'Nama Karyawan' },
@@ -712,7 +911,7 @@ function setActiveTab(tabId) {
 function setStatusFilter(status) {
   filters.status = status
   pagination.currentPage = 1
-  fetchRequests()
+  fetchTabSpecificData()
 }
 
 function handlePeriodChange() {
@@ -723,6 +922,8 @@ function handlePeriodChange() {
 function fetchTabSpecificData() {
   if (activeTab.value === 'requests') {
     fetchRequests()
+  } else if (activeTab.value === 'change_requests') {
+    fetchChangeRequests()
   } else if (activeTab.value === 'balances' || activeTab.value === 'recap') {
     fetchBalances()
   }
@@ -778,11 +979,21 @@ async function fetchEmployees() {
   }
 }
 
+let searchTimeout = null
+function handleSearch() {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    pagination.currentPage = 1
+    fetchRequests()
+  }, 500)
+}
+
 async function fetchRequests() {
   if (!selectedPeriodId.value) return
   loadingRequests.value = true
   try {
-    const url = `/api/v1/leave/requests?leave_period_id=${selectedPeriodId.value}&status=${filters.status}&page=${pagination.currentPage}`
+    const searchParam = filters.search ? `&search=${encodeURIComponent(filters.search)}` : ''
+    const url = `/api/v1/leave/requests?leave_period_id=${selectedPeriodId.value}&status=${filters.status}${searchParam}&page=${pagination.currentPage}`
     const res = await api.get(url)
     
     // API returns Stats envelope
@@ -835,14 +1046,32 @@ function calculateDays() {
 // Open modals
 function openCreateModal() {
   errors.value = {}
+  isEditing.value = false
   
   // Reset form
+  createForm.id = null
   createForm.employee_id = isHrOrAdmin.value ? '' : (auth.user?.employee_id || '')
   createForm.leave_type_id = ''
   createForm.start_date = ''
   createForm.end_date = ''
   createForm.days_requested = ''
   createForm.reason = ''
+  
+  showCreateModal.value = true
+}
+
+function openEditModal(item) {
+  errors.value = {}
+  isEditing.value = true
+  
+  createForm.id = item.id
+  createForm.employee_id = item.employee_id
+  createForm.leave_type_id = item.leave_type_id
+  // pastikan format tanggal yyyy-mm-dd
+  createForm.start_date = item.start_date ? item.start_date.substring(0, 10) : ''
+  createForm.end_date = item.end_date ? item.end_date.substring(0, 10) : ''
+  createForm.days_requested = item.days_requested
+  createForm.reason = item.reason || ''
   
   showCreateModal.value = true
 }
@@ -885,8 +1114,13 @@ async function submitRequest() {
       reason: createForm.reason,
     }
     
-    await api.post('/api/v1/leave/requests', payload)
-    notify.success('Pengajuan cuti berhasil disubmit.')
+    if (isEditing.value) {
+      await api.put(`/api/v1/leave/requests/${createForm.id}`, payload)
+      notify.success('Pengajuan cuti berhasil diupdate.')
+    } else {
+      await api.post('/api/v1/leave/requests', payload)
+      notify.success('Pengajuan cuti berhasil disubmit.')
+    }
     showCreateModal.value = false
     fetchRequests()
   } catch (err) {
@@ -955,6 +1189,118 @@ async function executeRecapPeriod() {
     notify.error(err.message || 'Gagal merekap periode cuti.')
   } finally {
     recapping.value = false
+  }
+}
+
+// ==========================================
+// CHANGE REQUESTS METHODS
+// ==========================================
+
+function calculateChangeDays() {
+  if (changeForm.new_start_date && changeForm.new_end_date) {
+    const start = new Date(changeForm.new_start_date)
+    const end = new Date(changeForm.new_end_date)
+    if (end >= start) {
+      const diffTime = Math.abs(end - start)
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1
+      changeForm.new_days_requested = diffDays
+    } else {
+      changeForm.new_days_requested = ''
+    }
+  }
+}
+
+function openChangeModal(item) {
+  errors.value = {}
+  
+  changeForm.id = null
+  changeForm.leave_request_id = item.id
+  changeForm.old_start_date = item.start_date
+  changeForm.old_end_date = item.end_date
+  changeForm.old_days_requested = item.days_requested
+  
+  changeForm.new_start_date = item.start_date.substring(0, 10)
+  changeForm.new_end_date = item.end_date.substring(0, 10)
+  changeForm.new_days_requested = item.days_requested
+  changeForm.reason = ''
+  
+  showChangeModal.value = true
+}
+
+async function submitChangeRequest() {
+  errors.value = {}
+  
+  if (!changeForm.new_start_date) errors.value.new_start_date = 'Tanggal mulai wajib dipilih.'
+  if (!changeForm.new_end_date) errors.value.new_end_date = 'Tanggal selesai wajib dipilih.'
+  if (!changeForm.new_days_requested || changeForm.new_days_requested < 1) errors.value.new_days_requested = 'Jumlah hari harus minimal 1 hari.'
+  if (!changeForm.reason) errors.value.reason = 'Alasan perubahan wajib diisi.'
+
+  if (Object.keys(errors.value).length > 0) return
+
+  submitting.value = true
+  try {
+    const payload = {
+      new_start_date: changeForm.new_start_date,
+      new_end_date: changeForm.new_end_date,
+      new_days_requested: parseInt(changeForm.new_days_requested),
+      reason: changeForm.reason,
+    }
+    
+    await api.post(`/api/v1/leave/requests/${changeForm.leave_request_id}/change`, payload)
+    notify.success('Pengajuan perubahan cuti berhasil dikirim.')
+    showChangeModal.value = false
+    fetchRequests()
+  } catch (err) {
+    notify.error(err.message || 'Gagal mengajukan perubahan cuti.')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function fetchChangeRequests() {
+  loadingChangeRequests.value = true
+  try {
+    const url = `/api/v1/leave/change-requests?status=${filters.status}&page=${pagination.currentPage}`
+    const res = await api.get(url)
+    
+    const dataEnvelope = res.paginated || res
+    changeRequests.value = dataEnvelope.data || []
+    
+    pagination.currentPage = dataEnvelope.current_page || 1
+    pagination.totalPages = dataEnvelope.last_page || 1
+    pagination.total = dataEnvelope.total || 0
+    pagination.perPage = dataEnvelope.per_page || 15
+  } catch (err) {
+    notify.error('Gagal memuat riwayat pengajuan perubahan cuti.')
+  } finally {
+    loadingChangeRequests.value = false
+  }
+}
+
+async function handleApproveChange(item) {
+  if (!confirm('Anda yakin ingin menyetujui perubahan cuti ini? Saldo dan jadwal cuti akan di-update otomatis.')) return
+  try {
+    await api.post(`/api/v1/leave/change-requests/${item.id}/approve`, {})
+    notify.success('Perubahan cuti berhasil disetujui.')
+    fetchChangeRequests()
+  } catch (err) {
+    notify.error(err.message || 'Gagal menyetujui perubahan.')
+  }
+}
+
+async function handleRejectChange(item) {
+  const reason = prompt('Masukkan alasan penolakan perubahan:')
+  if (reason === null) return
+  if (!reason.trim()) {
+    notify.error('Alasan penolakan wajib diisi.')
+    return
+  }
+  try {
+    await api.post(`/api/v1/leave/change-requests/${item.id}/reject`, { rejection_reason: reason })
+    notify.success('Perubahan cuti berhasil ditolak.')
+    fetchChangeRequests()
+  } catch (err) {
+    notify.error(err.message || 'Gagal menolak perubahan.')
   }
 }
 
