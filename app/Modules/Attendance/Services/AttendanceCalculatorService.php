@@ -40,7 +40,7 @@ class AttendanceCalculatorService
         // ── Overtime ──────────────────────────────────────────
         $rawOvertime = $manualOvertime !== null
             ? $manualOvertime
-            : $this->calculateRawOvertime($prepare, $shift, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config);
+            : $this->calculateRawOvertime($prepare, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config);
 
         // ── LM vs Regular Overtime ────────────────────────────
         $isOffDay = $isHoliday || $isSunday;
@@ -102,7 +102,6 @@ class AttendanceCalculatorService
      */
     protected function calculateRawOvertime(
         AttendancePrepare $prepare,
-        ?Shift $shift,
         bool $isHoliday,
         bool $isSunday,
         ?string $workPatternType = null,
@@ -147,49 +146,15 @@ class AttendanceCalculatorService
         }
 
         // ═══════════════════════════════════════════════════════
-        // Hari kerja biasa — butuh schedule_in/out
+        // Hari kerja biasa (FIXED & FLEX-SHIFT):
+        // OT = jarak check_in → check_out dikurangi jam normal
         // ═══════════════════════════════════════════════════════
-        if (!$prepare->schedule_in || !$prepare->schedule_out) {
-            return 0;
-        }
+        $deduction = $isSaturday
+            ? ($config->saturday_work_minutes ?? 360)
+            : ($config->normal_work_minutes ?? 480);
 
-        $dateStr = $prepare->date->toDateString();
-        $scheduleIn  = Carbon::parse($dateStr . ' ' . $prepare->schedule_in->format('H:i:s'))->startOfMinute();
-        $scheduleOut = Carbon::parse($dateStr . ' ' . $prepare->schedule_out->format('H:i:s'))->startOfMinute();
-
-        if ($scheduleOut < $scheduleIn) {
-            $scheduleOut->addDay();
-        }
-
-        // ── FLEX-SHIFT S: always use total - normal formula ──
-        $extCode = $shift?->external_code ?? '';
-
-        if ($extCode === 'S') {
-            $deduction = $isSaturday
-                ? ($config->saturday_work_minutes ?? 360)
-                : ($config->normal_work_minutes ?? 480);
-            $overtimeMinutes = max(0, $totalMinutes - $deduction);
-            return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config) : 0;
-        }
-
-        // ── FIXED + FLEX-SHIFT P ────────────────────────────
-        if ($config->late_deducts_overtime ?? false) {
-            // Formula baru: OT = total - normal - effective_late
-            $normal = $isSaturday
-                ? ($config->saturday_work_minutes ?? 360)
-                : ($config->normal_work_minutes ?? 480);
-            $late          = $prepare->late_minutes ?? 0;
-            $tolerance     = $config->late_tolerance ?? 0;
-            $effectiveLate = max(0, $late - $tolerance);
-            $ot            = max(0, $totalMinutes - $normal - $effectiveLate);
-            return $ot > 0 ? $this->roundUp($ot, $config) : 0;
-        }
-
-        // Default: post-shift only (FIXED + FLEX-SHIFT P)
-        if ($checkOut > $scheduleOut) {
-            return $this->roundUp($checkOut->diffInMinutes($scheduleOut, true), $config);
-        }
-        return 0;
+        $overtimeMinutes = max(0, $totalMinutes - $deduction);
+        return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config) : 0;
     }
 
     // ═══════════════════════════════════════════════════════════
