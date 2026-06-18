@@ -108,7 +108,28 @@ async function fetchBalances() {
   }
 }
 
-function exportExcel() { notify.info('Export Excel akan diimplementasikan.') }
+function exportExcel() {
+  if (!selectedPeriodId.value) {
+    notify.error('Pilih periode terlebih dahulu.')
+    return
+  }
+  const token = localStorage.getItem('token')
+  const url = `/api/v1/leave/export/balances?leave_period_id=${selectedPeriodId.value}`
+  fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => r.blob())
+    .then(blob => {
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.setAttribute('download', `Saldo_Cuti.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
+    })
+    .catch(() => notify.error('Gagal export Excel.'))
+}
+
 function exportPdf() { notify.info('Export PDF akan diimplementasikan.') }
 
 onMounted(async () => {

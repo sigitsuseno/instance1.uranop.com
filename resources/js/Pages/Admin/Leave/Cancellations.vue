@@ -325,7 +325,24 @@ async function executeSingleCancel() {
 
 // --- Export ---
 function exportExcel() {
-  notify.info('Export Excel akan diimplementasikan.')
+  const token = localStorage.getItem('token')
+  const params = new URLSearchParams()
+  if (selectedPeriodId.value) params.append('leave_period_id', selectedPeriodId.value)
+  if (filters.status) params.append('status', filters.status)
+  const url = `/api/v1/leave/export/requests?${params.toString()}`
+  fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    .then(r => r.blob())
+    .then(blob => {
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.setAttribute('download', `Pembatalan_Cuti.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
+    })
+    .catch(() => notify.error('Gagal export Excel.'))
 }
 
 function exportPdf() {

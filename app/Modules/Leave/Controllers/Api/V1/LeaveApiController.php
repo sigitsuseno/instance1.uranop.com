@@ -11,9 +11,12 @@ use App\Modules\Leave\Models\LeavePolicy;
 use App\Modules\Leave\Models\LeaveChangeRequest;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Leave\Services\LeaveRequestService;
+use App\Modules\Leave\Exports\LeaveRequestsExport;
+use App\Modules\Leave\Exports\LeaveBalancesExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 class LeaveApiController extends Controller
 {
@@ -595,5 +598,108 @@ class LeaveApiController extends Controller
             DB::rollBack();
             return response()->json(['message' => 'Gagal mengakhiri periode: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Export leave requests to Excel
+     */
+    public function exportRequests(Request $request)
+    {
+        $periodId = $request->input('leave_period_id');
+        $status = $request->input('status', '');
+
+        $query = LeaveRequest::with(['employee.department', 'leaveType'])
+            ->orderBy('created_at', 'desc');
+
+        if ($periodId) {
+            $period = LeavePeriod::find($periodId);
+            if ($period) {
+                $query->where(function ($q) use ($period) {
+                    $q->whereBetween('start_date', [$period->start_date, $period->end_date])
+                      ->orWhereBetween('end_date', [$period->start_date, $period->end_date])
+                      ->orWhere(function ($sq) use ($period) {
+                          $sq->where('start_date', '<=', $period->start_date)
+                             ->where('end_date', '>=', $period->end_date);
+                      });
+                });
+            }
+        }
+
+        if ($status) {
+            $query->where('status', $status);
+        }
+
+        $data = $query->get()->toArray();
+
+        $periodName = '';
+        if ($periodId) {
+            $period = LeavePeriod::find($periodId);
+            $periodName = $period ? $period->name : '';
+        }
+
+        $filename = 'Pengajuan_Cuti' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.xlsx';
+        return Excel::download(new LeaveRequestsExport($data, $periodName), $filename);
+    }
+
+    /**
+     * Export leave balances to Excel
+     */
+    public function exportBalances(Request $request)
+    {
+        $periodId = $request->input('leave_period_id');
+        if (!$periodId) {
+            $activePeriod = LeavePeriod::where('status', 'active')->first();
+            $periodId = $activePeriod ? $activePeriod->id : null;
+        }
+
+        if (!$periodId) {
+            return response()->json(['message' => 'Tidak ada periode cuti.'], 400);
+        }
+
+        $employees = Employee::with(['department'])
+            ->where('is_active', 1)
+            ->orderBy('name')
+            ->get();
+
+        $leaveTypes = LeaveType::all();
+        $balances = [];
+
+        foreach ($employees as $employee) {
+            foreach ($leaveTypes as $type) {
+                $additions = EmployeeLeave::where('employee_id', $employee->id)
+                    ->where('leave_type_id', $type->id)
+                    ->where('leave_period_id', $periodId)
+                    ->where('transaction_type', 'increment')
+                    ->sum('amount');
+
+                $deductions = EmployeeLeave::where('employee_id', $employee->id)
+                    ->where('leave_type_id', $type->id)
+                    ->where('leave_period_id', $periodId)
+                    ->where('transaction_type', 'decrement')
+                    ->sum('amount');
+
+                $remaining = $additions - $deductions;
+
+                if ($additions > 0 || $deductions > 0) {
+                    $balances[] = [
+                        'employee_id' => $employee->id,
+                        'employee_name' => $employee->name,
+                        'nip' => $employee->nip,
+                        'department_name' => $employee->department?->name ?? '-',
+                        'leave_type_id' => $type->id,
+                        'leave_type_name' => $type->name,
+                        'entitlement' => (float)$additions,
+                        'used' => (float)$deductions,
+                        'balance' => (float)$remaining,
+                    ];
+                }
+            }
+        }
+
+        $period = LeavePeriod::find($periodId);
+        $periodName = $period ? $period->name : '';
+
+        $filename = 'Saldo_Cuti' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.xlsx';
+        return Excel::download(new LeaveBalancesExport($balances, $periodName), $filename);
     }
 }

@@ -43,4 +43,8 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
     Route::get('balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'balances']);
     Route::post('generate-quota', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'generateQuota']);
     Route::post('recap-period', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'recapPeriod']);
+    
+    // Export routes
+    Route::get('export/requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportRequests']);
+    Route::get('export/balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportBalances']);
 });
