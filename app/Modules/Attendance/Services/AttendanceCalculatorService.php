@@ -180,9 +180,10 @@ class AttendanceCalculatorService
             return 0;
         }
 
-        // S (siang): sementara — OT = total jam kerja - 8 jam
+        // S (siang): sementara — OT = total jam kerja - 8 jam (atau 6 jam untuk Sabtu)
         if ($extCode === 'S') {
-            $overtimeMinutes = max(0, $totalMinutes - 480);
+            $deduction = $isSaturday ? 360 : 480;
+            $overtimeMinutes = max(0, $totalMinutes - $deduction);
             return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes) : 0;
         }
 
