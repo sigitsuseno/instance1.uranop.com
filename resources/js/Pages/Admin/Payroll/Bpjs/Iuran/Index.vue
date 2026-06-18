@@ -23,6 +23,12 @@
           <option value="">Semua Periode</option>
           <option v-for="p in payPeriods" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
+        <button @click="exportExcel"
+          :disabled="!payPeriodId || exporting"
+          class="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition">
+          <span v-if="exporting">⏳ Export...</span>
+          <span v-else>📥 Export Excel</span>
+        </button>
       </div>
     </div>
 
@@ -120,6 +126,7 @@ const total = ref(0)
 const search = ref('')
 const payPeriodId = ref('')
 const payPeriods = ref([])
+const exporting = ref(false)
 
 const totalPages = computed(() => Math.ceil(total.value / perPage))
 const visiblePages = computed(() => {
@@ -156,6 +163,33 @@ async function fetchPayPeriods() {
     const res = await get('/api/v1/payroll/periods')
     payPeriods.value = res.data?.data || res.data || []
   } catch (e) {}
+}
+
+async function exportExcel() {
+  exporting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const url = `/api/v1/bpjs/iuran/export?pay_period_id=${payPeriodId.value}`
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    if (!res.ok) {
+      const err = await res.json()
+      alert(err.message || 'Gagal export Excel.')
+      return
+    }
+    const blob = await res.blob()
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.setAttribute('download', 'Iuran_BPJS.xlsx')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+  } catch (e) {
+    alert('Gagal export Excel.')
+  } finally {
+    exporting.value = false
+  }
 }
 
 function goToPage(p) { page.value = p; fetchData() }

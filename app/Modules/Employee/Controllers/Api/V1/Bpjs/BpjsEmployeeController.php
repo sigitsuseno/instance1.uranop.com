@@ -10,9 +10,11 @@ use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\BpjsConfig;
+use App\Modules\Employee\Exports\BpjsIuranExport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Standalone BPJS endpoints: list keanggotaan, generate iuran, reports.
@@ -360,6 +362,73 @@ class BpjsEmployeeController extends Controller
         }
 
         return response()->json($records);
+    }
+
+    /**
+     * Export iuran BPJS ke Excel.
+     */
+    public function exportIuran(Request $request)
+    {
+        $request->validate([
+            'pay_period_id' => 'required|exists:pay_periods,id',
+        ]);
+
+        $payPeriod = PayPeriod::findOrFail($request->pay_period_id);
+        $periodStr = $payPeriod->end_date->format('Y-m');
+
+        // Query sama persis seperti iuranIndex — tanpa pagination
+        $records = EmployeeBpjs::with('employee')
+            ->where(function ($q) {
+                $q->where('employer_jht', '>', 0)
+                  ->orWhere('employer_jkk', '>', 0)
+                  ->orWhere('employer_jkm', '>', 0)
+                  ->orWhere('employer_kesehatan', '>', 0)
+                  ->orWhere('employer_jp', '>', 0)
+                  ->orWhere('employee_jht', '>', 0)
+                  ->orWhere('employee_kesehatan', '>', 0)
+                  ->orWhere('employee_jp', '>', 0);
+            })
+            ->where('pay_period_id', $payPeriod->id)
+            ->orderBy(
+                EmployeeBpjs::select('name')
+                    ->from('employees')
+                    ->whereColumn('employees.id', 'employee_bpjs.employee_id')
+                    ->limit(1)
+            )
+            ->get();
+
+        // Enrich dengan nilai dinamis dari Employee model
+        $rows = $records->map(function ($bpjs) use ($periodStr) {
+            $emp = $bpjs->employee;
+            if (! $emp) return null;
+
+            $gajiPokok = (float) $emp->gaji_pokok($periodStr);
+            $tjMk      = (float) $emp->tjMasaKerja($periodStr);
+            $tunjangan  = (float) $emp->tunjangan($periodStr);
+
+            return [
+                'employee' => [
+                    'name'          => $emp->name,
+                    'employee_code' => $emp->employee_code,
+                ],
+                'gaji_pokok'        => $gajiPokok,
+                'tj_masa_kerja'     => $tjMk,
+                'tunjangan'         => $tunjangan,
+                'bpjs_base_salary'  => $gajiPokok + $tjMk + $tunjangan,
+                'employer_jht'      => (float) $bpjs->employer_jht,
+                'employer_jkk'      => (float) $bpjs->employer_jkk,
+                'employer_jkm'      => (float) $bpjs->employer_jkm,
+                'employer_kesehatan'=> (float) $bpjs->employer_kesehatan,
+                'employer_jp'       => (float) $bpjs->employer_jp,
+                'employee_jht'      => (float) $bpjs->employee_jht,
+                'employee_kesehatan'=> (float) $bpjs->employee_kesehatan,
+                'employee_jp'       => (float) $bpjs->employee_jp,
+            ];
+        })->filter()->values();
+
+        $fileName = 'Iuran_BPJS_' . str_replace(' ', '_', $payPeriod->name) . '.xlsx';
+
+        return Excel::download(new BpjsIuranExport($rows, $payPeriod->name), $fileName);
     }
 
     /**
