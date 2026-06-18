@@ -38,6 +38,11 @@ export function useWebPush() {
   async function subscribe() {
     if (!isSupported.value) return false
     
+    if (!vapidPublicKey) {
+      console.warn('Push notifications: VITE_VAPID_PUBLIC_KEY is not configured')
+      return false
+    }
+    
     try {
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') return false
