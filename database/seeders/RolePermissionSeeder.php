@@ -115,14 +115,20 @@ class RolePermissionSeeder extends Seeder
         ]);
 
         $hrbranch->syncPermissions([
-            'view companies',
-            'view branches',
             'view departments',
             'view positions',
             'view salary_grades',
             'view employees',
             'view attendances',
+            'import attendances',
+            'edit attendances',
+            'manage overtime',
+            'approve overtime',
+            'view payroll',
             'view leave',
+            'manage leave',
+            'approve leave',
+            'export supervisor data',
         ]);
 
         $hrAst->syncPermissions([

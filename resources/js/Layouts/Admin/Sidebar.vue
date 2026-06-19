@@ -10,7 +10,7 @@ const props = defineProps({
 const emit = defineEmits(['toggle'])
 
 const route = useRoute()
-const { isSuperadmin, isHrmanager, isAdmManager, isHrbranch, isHrAst } = useAuth()
+const { isSuperadmin, isHrmanager, isAdmManager, isHrAst } = useAuth()
 
 const allMenus = [
   {
