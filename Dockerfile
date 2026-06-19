@@ -40,6 +40,14 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install -j$(nproc) gd pdo pdo_mysql pdo_sqlite zip bcmath intl \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# Install Supervisor for queue worker management
+RUN apt-get update && apt-get install -y supervisor \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Copy Supervisor configuration
+COPY docker/supervisord.conf /etc/supervisor/supervisord.conf
+COPY docker/laravel-worker.conf /etc/supervisor/conf.d/laravel-worker.conf
+
 # Enable Apache mod_rewrite for Laravel routing
 RUN a2enmod rewrite
 
@@ -68,4 +76,4 @@ RUN chown -R www-data:www-data /var/www/html \
 
 EXPOSE 80
 
-CMD ["apache2-foreground"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf"]
