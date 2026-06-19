@@ -5,7 +5,7 @@ FROM composer:2.7 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock ./
 # Install dependencies without dev packages and ignoring platform requirements 
-RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --ignore-platform-reqs
+RUN composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev --ignore-platform-reqs --no-scripts
 
 # ==========================================
 # Stage 2: Build frontend assets (Vite)
