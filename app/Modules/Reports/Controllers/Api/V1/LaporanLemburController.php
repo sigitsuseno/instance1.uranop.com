@@ -608,7 +608,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             }
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
             $upahPerHari = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 25, 2) : 0;
-            $hourlyRate  = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
+            
+            $isSPC = $employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPC');
+            $hourlyRate  = $gaji > 0 ? ($isSPC ? round($gaji / 173, 2) : round(($gaji + $tjMk + $tunjangan) / 173, 2)) : 0;
 
             $posName = $employee->position->name ?? '-';
 
@@ -896,8 +898,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             }
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
 
+            $isSPC = $employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPC');
+
             $upahPerHari = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
-            $hourlyRate  = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
+            $hourlyRate  = $gaji > 0 ? ($isSPC ? round($gaji / 173, 2) : round(($gaji + $tjMk + $tunjangan) / 173, 2)) : 0;
             $upahLemburPerJam = $hourlyRate;
 
             // Uang Makan group & rates
@@ -913,9 +917,6 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             );
             $isPrinting = $employee->groups->contains(fn($g) =>
                 in_array($g->reference_code, ['GRP-PS1', 'GRP-SS'])
-            );
-            $isSPC = $employee->groups->contains(fn($g) =>
-                $g->reference_code === 'GRP-SPC'
             );
             $isSG = $employee->groups->contains('reference_code', 'SG');
 
