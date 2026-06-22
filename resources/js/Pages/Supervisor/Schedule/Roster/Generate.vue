@@ -327,7 +327,7 @@ const canSubmit = computed(() => {
 })
 
 function goBack() {
-  router.push({ name: 'schedule.roster' })
+  router.push({ name: 'supervisor.schedule.roster' })
 }
 
 function selectPattern(p) {
@@ -380,7 +380,7 @@ async function submitGenerate() {
     
     await store.generateRosterBulk(payload)
     alert(`Roster berhasil di-generate untuk ${form.employee_ids.length} karyawan!`)
-    router.push({ name: 'schedule.roster' })
+    router.push({ name: 'supervisor.schedule.roster' })
   } catch (error) {
     alert('Gagal membuat roster. Silakan coba lagi.')
   } finally {

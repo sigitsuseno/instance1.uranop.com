@@ -295,7 +295,7 @@ const allDaysConfigured = computed(() => {
 })
 
 function goBack() {
-  router.push({ name: 'schedule.work-patterns' })
+  router.push({ name: 'supervisor.schedule.work-patterns' })
 }
 
 function getShiftCode(shiftId) {

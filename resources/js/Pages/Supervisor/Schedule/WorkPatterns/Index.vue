@@ -316,6 +316,6 @@ async function toggleStatus(pattern) {
 }
 
 function openDetailsPage(pattern) {
-  router.push({ name: 'schedule.work-patterns.details', params: { id: pattern.id } })
+  router.push({ name: 'supervisor.schedule.work-patterns.details', params: { id: pattern.id } })
 }
 </script>

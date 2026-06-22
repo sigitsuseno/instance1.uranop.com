@@ -46,7 +46,7 @@
         </button>
 
         <router-link
-          :to="{ name: 'schedule.roster.generate' }"
+          :to="{ name: 'supervisor.schedule.roster.generate' }"
           class="h-10 px-4 bg-(--primary) hover:bg-(--primary-hover) text-white font-semibold rounded-md flex items-center text-xs transition-colors"
         >
           Generate Roster

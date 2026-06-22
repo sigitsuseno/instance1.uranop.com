@@ -203,7 +203,7 @@ const prevMonthYear = computed(() => {
 })
 
 function goBack() {
-  router.push({ name: 'schedule.roster' })
+  router.push({ name: 'supervisor.schedule.roster' })
 }
 
 function triggerFileSelect() {
@@ -260,7 +260,7 @@ async function submitImport() {
     const res = await post('/api/schedule/roster/import', formData)
     
     alert(res.message || `File "${form.file.name}" berhasil di-import.`)
-    router.push({ name: 'schedule.roster' })
+    router.push({ name: 'supervisor.schedule.roster' })
   } catch (error) {
     console.error('Failed to import', error)
     alert(error.message || 'Gagal melakukan import roster.')

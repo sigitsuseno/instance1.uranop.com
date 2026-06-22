@@ -88,6 +88,12 @@ const SupervisorLeave = () => import('../Pages/Supervisor/Leave/Index.vue')
 const SupervisorEmployee = () => import('../Pages/Supervisor/Employee/Index.vue')
 const SupervisorReports = () => import('../Pages/Supervisor/Reports/Index.vue')
 const SupervisorThr = () => import('../Pages/Supervisor/Payroll/Thr.vue')
+const SupervisorScheduleWorkPatterns = () => import('../Pages/Supervisor/Schedule/WorkPatterns/Index.vue')
+const SupervisorScheduleWorkPatternsDetails = () => import('../Pages/Supervisor/Schedule/WorkPatterns/Details.vue')
+const SupervisorScheduleShifts = () => import('../Pages/Supervisor/Schedule/Shifts/Index.vue')
+const SupervisorScheduleRosterIndex = () => import('../Pages/Supervisor/Schedule/Roster/Index.vue')
+const SupervisorScheduleRosterGenerate = () => import('../Pages/Supervisor/Schedule/Roster/Generate.vue')
+const SupervisorScheduleRosterImport = () => import('../Pages/Supervisor/Schedule/Roster/Import.vue')
 
 const routes = [
   {
@@ -240,6 +246,13 @@ const routes = [
       { path: 'employee-data/pph-karyawan', name: 'supervisor.employee.pph', component: () => import('../Pages/Supervisor/Employee/Pph/Employees.vue'), meta: { title: 'PPh Karyawan' } },
 
       { path: 'reports', name: 'supervisor.reports', component: SupervisorReports, meta: { title: 'Laporan' } },
+
+      { path: 'schedule/work-patterns', name: 'supervisor.schedule.work-patterns', component: SupervisorScheduleWorkPatterns, meta: { title: 'Pola Kerja' } },
+      { path: 'schedule/work-patterns/:id/details', name: 'supervisor.schedule.work-patterns.details', component: SupervisorScheduleWorkPatternsDetails, meta: { title: 'Detail Pola Kerja' } },
+      { path: 'schedule/shifts', name: 'supervisor.schedule.shifts', component: SupervisorScheduleShifts, meta: { title: 'Shift' } },
+      { path: 'schedule/roster', name: 'supervisor.schedule.roster', component: SupervisorScheduleRosterIndex, meta: { title: 'Roster' } },
+      { path: 'schedule/roster/generate', name: 'supervisor.schedule.roster.generate', component: SupervisorScheduleRosterGenerate, meta: { title: 'Generate Roster' } },
+      { path: 'schedule/roster/import', name: 'supervisor.schedule.roster.import', component: SupervisorScheduleRosterImport, meta: { title: 'Import Roster' } },
     ],
   },
 
