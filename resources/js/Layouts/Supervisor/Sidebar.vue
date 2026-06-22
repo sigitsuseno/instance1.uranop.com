@@ -21,6 +21,33 @@ const supervisorMenus = [
     visible: true,
   },
   {
+    title: 'Data Master',
+    icon: 'bx bx-server',
+    route: '/supervisor/master',
+  },
+  {
+    title: 'Data Karyawan',
+    icon: 'bx bx-user',
+    children: [
+      { title: 'Karyawan', icon: 'bx bx-group', route: '/supervisor/employee-data/karyawan' },
+      { title: 'Kontrak Kerja', icon: 'bx bx-file-blank', route: '/supervisor/employee-data/kontrak-kerja' },
+      { title: 'Gaji Karyawan', icon: 'bx bx-money', route: '/supervisor/employee-data/gaji-karyawan' },
+      { title: 'Kompensasi', icon: 'bx bx-gift', route: '/supervisor/employee-data/kompensasi' },
+      { title: 'BPJS Karyawan', icon: 'bx bx-shield-plus', route: '/supervisor/employee-data/bpjs-karyawan' },
+      { title: 'PPh Karyawan', icon: 'bx bx-receipt', route: '/supervisor/employee-data/pph-karyawan' },
+    ],
+  },
+  {
+    title: 'Jadwal Kerja',
+    icon: 'bx bx-calendar-event',
+    route: '/supervisor/schedule',
+  },
+  {
+    title: 'Pengelolaan Cuti',
+    icon: 'bx bx-umbrella',
+    route: '/supervisor/leave',
+  },
+  {
     title: 'Absensi',
     icon: 'bx bx-calendar-check',
     children: [
@@ -41,16 +68,6 @@ const supervisorMenus = [
       { title: 'Slip Gaji', icon: 'bx bx-file', route: '/supervisor/payroll/slip' },
       { title: 'Perhitungan THR', icon: 'bx bx-gift', route: '/supervisor/payroll/thr' },
     ],
-  },
-  {
-    title: 'Cuti',
-    icon: 'bx bx-umbrella',
-    route: '/supervisor/leave',
-  },
-  {
-    title: 'Karyawan',
-    icon: 'bx bx-user',
-    route: '/supervisor/employee',
   },
   {
     title: 'Laporan',

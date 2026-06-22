@@ -206,7 +206,39 @@ const routes = [
       { path: 'payroll/slip', name: 'supervisor.payroll.slip', component: SupervisorPayrollSlip, meta: { title: 'Slip Gaji' } },
       { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr, meta: { title: 'Perhitungan THR' } },
       { path: 'leave', name: 'supervisor.leave', component: SupervisorLeave, meta: { title: 'Cuti' } },
-      { path: 'employee', name: 'supervisor.employee', component: SupervisorEmployee, meta: { title: 'Karyawan' } },
+      { path: 'employee-data', name: 'supervisor.employee', component: SupervisorEmployee, meta: { title: 'Karyawan' } },
+      { path: 'master', name: 'supervisor.master', component: () => import('../Pages/Supervisor/Master/Index.vue'), meta: { title: 'Data Master' } },
+      { path: 'master/bpjs', name: 'supervisor.master.bpjs', component: () => import('../Pages/Supervisor/Master/BpjsConfig/Index.vue'), meta: { title: 'Konfigurasi BPJS' } },
+      { path: 'master/pph', name: 'supervisor.master.pph', component: () => import('../Pages/Supervisor/Master/PphConfig/Index.vue'), meta: { title: 'Konfigurasi PPh' } },
+      { path: 'master/thr', name: 'supervisor.master.thr', component: () => import('../Pages/Supervisor/Master/ThrConfig/Index.vue'), meta: { title: 'Konfigurasi THR' } },
+      { path: 'master/scan-detection', name: 'supervisor.master.scan-detection', component: () => import('../Pages/Supervisor/Master/ScanDetection/Index.vue'), meta: { title: 'Aturan Jam Kerja & Denda' } },
+      { path: 'master/departments', name: 'supervisor.master.departments', component: () => import('../Pages/Supervisor/Master/Departments/Index.vue'), meta: { title: 'Departemen' } },
+      { path: 'master/positions', name: 'supervisor.master.positions', component: () => import('../Pages/Supervisor/Master/Positions/Index.vue'), meta: { title: 'Jabatan' } },
+      { path: 'master/leave-settings', name: 'supervisor.master.leave-settings', component: () => import('../Pages/Supervisor/Master/LeaveSettings/Index.vue'), meta: { title: 'Pengaturan Cuti' } },
+      
+      // Employee Data
+      { path: 'employee-data', name: 'supervisor.employee', component: () => import('../Pages/Supervisor/Employee/Index.vue'), meta: { title: 'Data Karyawan Hub' } },
+      
+      { path: 'employee-data/karyawan', name: 'supervisor.employee.karyawan', component: () => import('../Pages/Supervisor/Employee/Karyawan/Index.vue'), meta: { title: 'Karyawan' } },
+      { path: 'employee-data/karyawan/create', name: 'supervisor.employee.karyawan.create', component: () => import('../Pages/Supervisor/Employee/Karyawan/Create.vue'), meta: { title: 'Tambah Karyawan' } },
+      { path: 'employee-data/karyawan/:id', name: 'supervisor.employee.karyawan.show', component: () => import('../Pages/Supervisor/Employee/Karyawan/Show.vue'), meta: { title: 'Detail Karyawan' } },
+      { path: 'employee-data/karyawan/:id/edit', name: 'supervisor.employee.karyawan.edit', component: () => import('../Pages/Supervisor/Employee/Karyawan/Edit.vue'), meta: { title: 'Edit Karyawan' } },
+
+      { path: 'employee-data/kontrak-kerja', name: 'supervisor.employee.contracts', component: () => import('../Pages/Supervisor/Employee/Contracts/Index.vue'), meta: { title: 'Kontrak Kerja' } },
+      { path: 'employee-data/kontrak-kerja/import', name: 'supervisor.employee.contracts.import', component: () => import('../Pages/Supervisor/Employee/Contracts/Import.vue'), meta: { title: 'Import Kontrak' } },
+
+      { path: 'employee-data/gaji-karyawan', name: 'supervisor.employee.salaries', component: () => import('../Pages/Supervisor/Employee/Salaries/Index.vue'), meta: { title: 'Gaji Karyawan' } },
+      { path: 'employee-data/gaji-karyawan/create', name: 'supervisor.employee.salaries.create', component: () => import('../Pages/Supervisor/Employee/Salaries/Create.vue'), meta: { title: 'Tambah Gaji' } },
+      { path: 'employee-data/gaji-karyawan/import', name: 'supervisor.employee.salaries.import', component: () => import('../Pages/Supervisor/Employee/Salaries/Import.vue'), meta: { title: 'Import Gaji' } },
+      { path: 'employee-data/gaji-karyawan/:id', name: 'supervisor.employee.salaries.show', component: () => import('../Pages/Supervisor/Employee/Salaries/Show.vue'), meta: { title: 'Detail Gaji' } },
+      { path: 'employee-data/gaji-karyawan/:id/edit', name: 'supervisor.employee.salaries.edit', component: () => import('../Pages/Supervisor/Employee/Salaries/Edit.vue'), meta: { title: 'Edit Gaji' } },
+
+      { path: 'employee-data/kompensasi', name: 'supervisor.employee.compensation', component: () => import('../Pages/Supervisor/Employee/Kompensasi/Index.vue'), meta: { title: 'Kompensasi' } },
+
+      { path: 'employee-data/bpjs-karyawan', name: 'supervisor.employee.bpjs', component: () => import('../Pages/Supervisor/Employee/Bpjs/Index.vue'), meta: { title: 'BPJS Karyawan' } },
+
+      { path: 'employee-data/pph-karyawan', name: 'supervisor.employee.pph', component: () => import('../Pages/Supervisor/Employee/Pph/Employees.vue'), meta: { title: 'PPh Karyawan' } },
+
       { path: 'reports', name: 'supervisor.reports', component: SupervisorReports, meta: { title: 'Laporan' } },
     ],
   },

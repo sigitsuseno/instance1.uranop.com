@@ -128,6 +128,7 @@ class RolePermissionSeeder extends Seeder
             'view leave',
             'manage leave',
             'approve leave',
+            'view supervisor dashboard',
             'export supervisor data',
         ]);
 

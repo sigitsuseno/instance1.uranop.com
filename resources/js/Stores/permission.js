@@ -19,6 +19,7 @@ export const usePermissionStore = defineStore('permission', () => {
       'view supervisor dashboard', 'manage supervisor data', 'export supervisor data',
     ],
     hrbranch: [
+      'view supervisor dashboard',
       'view departments', 'view positions', 'view salary_grades',
       'view employees',
       'view attendances', 'import attendances', 'edit attendances',

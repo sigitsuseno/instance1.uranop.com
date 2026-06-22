@@ -38,6 +38,15 @@ class UserSeeder extends Seeder
                 'user_type' => 'adm_manager',
                 'email_verified_at' => now(),
             ],
+            [
+                'name' => 'HR Branch',
+                'email' => 'hrbranch@uranop.com',
+                'password' => Hash::make('PassTersulit2026'),
+                'employee_number' => 'HB001',
+                'is_active' => true,
+                'user_type' => 'hrbranch',
+                'email_verified_at' => now(),
+            ],
         ];
 
         foreach ($users as $data) {
@@ -49,6 +58,6 @@ class UserSeeder extends Seeder
             $user->assignRole($data['user_type']);
         }
 
-        $this->command->info('UserSeeder completed! 3 users created.');
+        $this->command->info('UserSeeder completed! ' . count($users) . ' users created.');
     }
 }

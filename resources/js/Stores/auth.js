@@ -7,7 +7,11 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || null)
 
   const isAuthenticated = computed(() => !!token.value)
-  const userRole = computed(() => user.value?.roles?.[0] || user.value?.user_type || null)
+  const userRole = computed(() => {
+    const role = user.value?.roles?.[0]
+    if (role && typeof role === 'object') return role.name
+    return role || user.value?.user_type || null
+  })
   const userName = computed(() => user.value?.name || '')
 
   const isSuperadmin = computed(() => userRole.value === 'superadmin')
