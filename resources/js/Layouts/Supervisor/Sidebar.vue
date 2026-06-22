@@ -40,7 +40,12 @@ const supervisorMenus = [
   {
     title: 'Jadwal Kerja',
     icon: 'bx bx-calendar-event',
-    route: '/supervisor/schedule',
+    children: [
+      { title: 'Jadwal Umum', icon: 'bx bx-calendar', route: '/supervisor/schedule/roster' },
+      { title: 'Pola & Jadwal Kerja', icon: 'bx bx-time-five', route: '/supervisor/schedule/work-patterns' },
+      { title: 'Shift', icon: 'bx bx-transfer-alt', route: '/supervisor/schedule/shifts' },
+      { title: 'Buat Jadwal', icon: 'bx bx-calendar-plus', route: '/supervisor/schedule/roster/generate' },
+    ],
   },
   {
     title: 'Pengelolaan Cuti',
