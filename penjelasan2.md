@@ -65,10 +65,10 @@ Penjadwalan UI untuk supervisor
 
 ## PHASE 6: ABSENSI
 
-- Inti sistem absensi bayangan. Manajemen _raw log_ kehadiran, autolog, sinkronisasi kehadiran, _consecutive day_, lembur staf (_overtime_), hingga pembuatan _snapshot_ absensi bulanan.
-- Bertugas menghitung kalkulasi _late_, _early leave_, dan lembur bayangan.
-- Mengadopsi fungsionalitas dari `AttendanceSnapshotController`, `AttendanceAutologController`, dan `StaffOvertimeController` milik `AuditSection`.
-- **Komponen:** `SupervisorAttendanceController`, Terintegrasi dengan model `AttendanceSnapshot`.
+- proses berbeda dengan aplikasi utama.
+- menu :
+
+1. Import
 
 ## PHASE 7: PENGGAJIAN
 

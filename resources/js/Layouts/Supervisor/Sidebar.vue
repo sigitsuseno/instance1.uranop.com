@@ -50,7 +50,13 @@ const supervisorMenus = [
   {
     title: 'Pengelolaan Cuti',
     icon: 'bx bx-umbrella',
-    route: '/supervisor/leave',
+    children: [
+      { title: 'Generate Cuti Tahunan', icon: 'bx bx-magic-wand', route: '/supervisor/leave/generate' },
+      { title: 'Pengajuan Cuti', icon: 'bx bx-calendar-edit', route: '/supervisor/leave/requests' },
+      { title: 'Pembatalan Cuti', icon: 'bx bx-calendar-x', route: '/supervisor/leave/cancellations' },
+      { title: 'Saldo Cuti', icon: 'bx bx-bar-chart-square', route: '/supervisor/leave/balances' },
+      { title: 'Rekap Cuti', icon: 'bx bx-archive', route: '/supervisor/leave/recap' },
+    ],
   },
   {
     title: 'Absensi',

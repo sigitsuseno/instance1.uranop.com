@@ -84,7 +84,11 @@ const SupervisorAttendanceRecap = () => import('../Pages/Supervisor/Attendance/R
 const SupervisorRoster = () => import('../Pages/Supervisor/Attendance/Roster/Index.vue')
 const SupervisorPayroll = () => import('../Pages/Supervisor/Payroll/Index.vue')
 const SupervisorPayrollSlip = () => import('../Pages/Supervisor/Payroll/Slip.vue')
-const SupervisorLeave = () => import('../Pages/Supervisor/Leave/Index.vue')
+const SupervisorLeaveGenerate = () => import('../Pages/Supervisor/Leave/Generate.vue')
+const SupervisorLeaveRequests = () => import('../Pages/Supervisor/Leave/Requests.vue')
+const SupervisorLeaveCancellations = () => import('../Pages/Supervisor/Leave/Cancellations.vue')
+const SupervisorLeaveBalances = () => import('../Pages/Supervisor/Leave/Balances.vue')
+const SupervisorLeaveRecap = () => import('../Pages/Supervisor/Leave/Recap.vue')
 const SupervisorEmployee = () => import('../Pages/Supervisor/Employee/Index.vue')
 const SupervisorReports = () => import('../Pages/Supervisor/Reports/Index.vue')
 const SupervisorThr = () => import('../Pages/Supervisor/Payroll/Thr.vue')
@@ -211,7 +215,11 @@ const routes = [
       { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll, meta: { title: 'Gaji Karyawan' } },
       { path: 'payroll/slip', name: 'supervisor.payroll.slip', component: SupervisorPayrollSlip, meta: { title: 'Slip Gaji' } },
       { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr, meta: { title: 'Perhitungan THR' } },
-      { path: 'leave', name: 'supervisor.leave', component: SupervisorLeave, meta: { title: 'Cuti' } },
+      { path: 'leave/generate', name: 'supervisor.leave.generate', component: SupervisorLeaveGenerate, meta: { title: 'Generate Cuti Tahunan' } },
+      { path: 'leave/requests', name: 'supervisor.leave.requests', component: SupervisorLeaveRequests, meta: { title: 'Pengajuan Cuti' } },
+      { path: 'leave/cancellations', name: 'supervisor.leave.cancellations', component: SupervisorLeaveCancellations, meta: { title: 'Pembatalan Cuti' } },
+      { path: 'leave/balances', name: 'supervisor.leave.balances', component: SupervisorLeaveBalances, meta: { title: 'Saldo Cuti' } },
+      { path: 'leave/recap', name: 'supervisor.leave.recap', component: SupervisorLeaveRecap, meta: { title: 'Rekap Cuti' } },
       { path: 'employee-data', name: 'supervisor.employee', component: SupervisorEmployee, meta: { title: 'Karyawan' } },
       { path: 'master', name: 'supervisor.master', component: () => import('../Pages/Supervisor/Master/Index.vue'), meta: { title: 'Data Master' } },
       { path: 'master/bpjs', name: 'supervisor.master.bpjs', component: () => import('../Pages/Supervisor/Master/BpjsConfig/Index.vue'), meta: { title: 'Konfigurasi BPJS' } },
