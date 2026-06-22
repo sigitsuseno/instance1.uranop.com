@@ -19,6 +19,44 @@ Route::prefix('v1/supervisor')
         });
 
         Route::prefix('master')->group(function () {
+            Route::apiResource('work-schedules', SupervisorWorkScheduleController::class);
+            Route::post('work-schedules/{id}/activate', [SupervisorWorkScheduleController::class, 'activate']);
+            Route::post('work-schedules/{id}/deactivate', [SupervisorWorkScheduleController::class, 'deactivate']);
+
+            Route::get('shifts', [SupervisorShiftController::class, 'index']);
+            Route::post('shifts', [SupervisorShiftController::class, 'store']);
+            Route::put('shifts/{id}', [SupervisorShiftController::class, 'update']);
+            Route::delete('shifts/{id}', [SupervisorShiftController::class, 'destroy']);
+        });
+
+        Route::prefix('attendance')->group(function () {
+            Route::get('import', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceImportController::class, 'create'])->name('supervisor.attendance.import');
+            Route::post('import', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceImportController::class, 'store']);
+            
+            Route::get('absensi', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'index'])->name('supervisor.attendance.absensi');
+            Route::post('absensi/adjustment', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'adjustment']);
+            Route::get('absensi/export', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'export']);
+            Route::get('absensi/print', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'print']);
+            Route::get('absensi/{id}', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'show']);
+            Route::get('absensi/{id}/print', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'printDetail']);
+
+            Route::get('snapshoot', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceSnapshotController::class, 'index'])->name('supervisor.attendance.snapshot');
+            Route::post('snapshoot', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceSnapshotController::class, 'store']);
+            Route::post('snapshoot/bulk', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceSnapshotController::class, 'storeBulk']);
+            Route::get('snapshoot/print', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceSnapshotController::class, 'print']);
+
+            Route::get('rekap-absensi', [\App\Modules\Supervisor\Attendance\Controllers\RekapAbsensiController::class, 'index'])->name('supervisor.attendance.rekap');
+            Route::get('rekap-absensi/print', [\App\Modules\Supervisor\Attendance\Controllers\RekapAbsensiController::class, 'print']);
+            Route::get('rekap-absensi/export', [\App\Modules\Supervisor\Attendance\Controllers\RekapAbsensiController::class, 'export']);
+
+            Route::get('lembur-staf', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'index'])->name('supervisor.attendance.lembur');
+            Route::get('lembur-staf/print', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'print']);
+            Route::get('lembur-staf/{employee_id}', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'show']);
+            Route::get('lembur-staf/{employee_id}/print', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'printDetail']);
+            Route::post('lembur-staf/adjustment', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'adjustment']);
+        });
+
+        Route::prefix('master')->group(function () {
             Route::apiResource('bpjs-configs', SupervisorBpjsConfigController::class);
             Route::post('bpjs-configs/{id}/activate', [SupervisorBpjsConfigController::class, 'activate']);
             Route::post('bpjs-configs/{id}/deactivate', [SupervisorBpjsConfigController::class, 'deactivate']);

@@ -66,9 +66,28 @@ Penjadwalan UI untuk supervisor
 ## PHASE 6: ABSENSI
 
 - proses berbeda dengan aplikasi utama.
+- lengkapnya lihat di H:\laragon\www\instance1.uranop.com\hris-system\routes\audit_section.php.
 - menu :
 
-1. Import
+1. **Import**
+   - **Fungsi:** Mengimpor data log kehadiran mentah (raw data) secara terpisah ke tabel absensi bayangan supervisor.
+   - **Referensi:** `AttendanceImportController` (Route: `/attendance/import`).
+
+2. **Data Absensi**
+   - **Fungsi:** Menampilkan log kehadiran harian. Terdapat fitur **adjustment** untuk memanipulasi atau menyesuaikan jam masuk, jam pulang, dan status secara manual khusus untuk versi supervisor.
+   - **Referensi:** `AttendanceAutologController` (Route: `/attendance/absensi`, Endpoint `adjustment`).
+
+3. **Snapshot**
+   - **Fungsi:** Mengunci dan merekap total kehadiran, keterlambatan, pulang cepat, dan ketidakhadiran dalam satu periode (bulanan). Snapshot ini menjadi dasar perhitungan _Shadow Payroll_ (Gaji Bayangan).
+   - **Referensi:** `AttendanceSnapshotController` (Route: `/attendance/snapshoot`, mendukung simpan tunggal maupun _bulk_).
+
+4. **Rekap Absensi**
+   - **Fungsi:** Menyediakan laporan rekapitulasi kehadiran karyawan secara keseluruhan dengan kemampuan filter, _print_, dan ekspor.
+   - **Referensi:** `RekapAbsensiController` (Route: `/attendance/rekap-absensi`).
+
+5. **Lembur Staf**
+   - **Fungsi:** Manajemen kalkulasi lembur staf (overtime) berdasarkan data bayangan. Juga berintegrasi dengan audit lembur untuk memodifikasi jam lembur yang diakui.
+   - **Referensi:** `StaffOvertimeController` (Route: `/attendance/lembur-staf`) dan `AttendanceAuditController` (Route: `/attendance/audit/update`).
 
 ## PHASE 7: PENGGAJIAN
 

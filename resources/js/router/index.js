@@ -77,6 +77,7 @@ const PphEmployeesIndex = () => import('../Pages/Admin/Payroll/Pph/Employees.vue
 const SupervisorDashboard = () => import('../Pages/Supervisor/Dashboard.vue')
 const SupervisorAttendance = () => import('../Pages/Supervisor/Attendance/Index.vue')
 const SupervisorAttendanceImport = () => import('../Pages/Supervisor/Attendance/Import.vue')
+const SupervisorAttendanceAutologShow = () => import('../Pages/Supervisor/Attendance/Autolog/Show.vue')
 const SupervisorAttendanceSync = () => import('../Pages/Supervisor/Attendance/SyncKehadiran.vue')
 const SupervisorAttendanceConsecutive = () => import('../Pages/Supervisor/Attendance/Consecutive.vue')
 const SupervisorAttendanceOvertime = () => import('../Pages/Supervisor/Attendance/Overtime/Index.vue')
@@ -206,6 +207,7 @@ const routes = [
     children: [
       { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard, meta: { title: 'Dashboard Supervisor' } },
       { path: 'attendance', name: 'supervisor.attendance', component: SupervisorAttendance, meta: { title: 'Data Absensi' } },
+      { path: 'attendance/autolog/:id', name: 'supervisor.attendance.autolog', component: SupervisorAttendanceAutologShow, meta: { title: 'Detail Autolog Absensi' } },
       { path: 'attendance/import', name: 'supervisor.attendance.import', component: SupervisorAttendanceImport, meta: { title: 'Import Kehadiran' } },
       { path: 'attendance/sync', name: 'supervisor.attendance.sync', component: SupervisorAttendanceSync, meta: { title: 'Sync Kehadiran' } },
       { path: 'attendance/consecutive', name: 'supervisor.attendance.consecutive', component: SupervisorAttendanceConsecutive, meta: { title: 'Consecutive Day' } },

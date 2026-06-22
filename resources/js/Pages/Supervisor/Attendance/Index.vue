@@ -1,154 +1,357 @@
 <script setup>
-import { ref, computed } from 'vue'
-import BaseCard from '../../../Components/BaseCard.vue'
-import BaseButton from '../../../Components/BaseButton.vue'
-import Badge from '../../../Components/Badge.vue'
-import SelectInput from '../../../Components/SelectInput.vue'
-import DataTable from '../../../Components/Table/DataTable.vue'
-import Pagination from '../../../Components/Table/Pagination.vue'
-import {
-  IconCalendarCheck,
-  IconClock,
-  IconFileInvoice,
-  IconDownload,
-} from '../../../Components/Icons/index.js'
+import { ref, onMounted, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useApi } from '../../../composables/useApi'
 
-const selectedDate = ref('2026-05-27')
+const router = useRouter()
+const route = useRoute()
+const { get, post } = useApi()
 
-const attendanceData = ref([
-  { id: 1, employeeName: 'Andi Prasetyo', nip: '2024001', department: 'Produksi', date: '2026-05-27', checkIn: '07:45', checkOut: '17:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 60 },
-  { id: 2, employeeName: 'Budi Santoso', nip: '2024002', department: 'Produksi', date: '2026-05-27', checkIn: '08:10', checkOut: '17:00', status: 'Terlambat', lateMinutes: 40, overtimeMinutes: 0 },
-  { id: 3, employeeName: 'Citra Dewi', nip: '2024003', department: 'QC', date: '2026-05-27', checkIn: '07:50', checkOut: '16:30', status: 'Terlambat', lateMinutes: 20, overtimeMinutes: 0 },
-  { id: 4, employeeName: 'Dian Permata', nip: '2024004', department: 'Gudang', date: '2026-05-27', checkIn: '07:30', checkOut: '17:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 0 },
-  { id: 5, employeeName: 'Eko Wahyudi', nip: '2024005', department: 'Produksi', date: '2026-05-27', checkIn: '07:40', checkOut: '17:30', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 30 },
-  { id: 6, employeeName: 'Fitriani', nip: '2024006', department: 'QC', date: '2026-05-27', checkIn: '--', checkOut: '--', status: 'Izin', lateMinutes: 0, overtimeMinutes: 0 },
-  { id: 7, employeeName: 'Gunawan', nip: '2024007', department: 'Gudang', date: '2026-05-27', checkIn: '--', checkOut: '--', status: 'Alfa', lateMinutes: 0, overtimeMinutes: 0 },
-  { id: 8, employeeName: 'Hendra Gunawan', nip: '2024008', department: 'Produksi', date: '2026-05-27', checkIn: '07:25', checkOut: '18:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 120 },
-  { id: 9, employeeName: 'Indah Sari', nip: '2024009', department: 'QC', date: '2026-05-27', checkIn: '07:50', checkOut: '16:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 0 },
-  { id: 10, employeeName: 'Joko Purnomo', nip: '2024010', department: 'Produksi', date: '2026-05-27', checkIn: '08:05', checkOut: '17:00', status: 'Terlambat', lateMinutes: 35, overtimeMinutes: 0 },
-  { id: 11, employeeName: 'Kartika Dewi', nip: '2024011', department: 'Gudang', date: '2026-05-27', checkIn: '07:30', checkOut: '17:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 45 },
-  { id: 12, employeeName: 'Lukman Hakim', nip: '2024012', department: 'Produksi', date: '2026-05-27', checkIn: '--', checkOut: '--', status: 'Izin', lateMinutes: 0, overtimeMinutes: 0 },
-  { id: 13, employeeName: 'Maya Anggraini', nip: '2024013', department: 'QC', date: '2026-05-27', checkIn: '07:15', checkOut: '17:30', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 90 },
-  { id: 14, employeeName: 'Nugroho Adi', nip: '2024014', department: 'Produksi', date: '2026-05-27', checkIn: '07:40', checkOut: '17:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 0 },
-  { id: 15, employeeName: 'Oka Prasetya', nip: '2024015', department: 'Gudang', date: '2026-05-27', checkIn: '07:35', checkOut: '17:00', status: 'Hadir', lateMinutes: 0, overtimeMinutes: 0 },
-])
+const employees = ref([])
+const stats = ref({})
+const period = ref({})
+const filters = ref({})
+const departments = ref([])
+const workPatterns = ref([])
+const payrollPeriods = ref([])
+const pagination = ref({})
+const isDataExists = ref(true)
 
-const stats = computed(() => {
-  const hadir = attendanceData.value.filter(d => d.status === 'Hadir').length
-  const terlambat = attendanceData.value.filter(d => d.status === 'Terlambat').length
-  const izin = attendanceData.value.filter(d => d.status === 'Izin').length
-  const alfa = attendanceData.value.filter(d => d.status === 'Alfa').length
-  return { hadir, terlambat, izin, alfa }
+const isLoading = ref(true)
+const isAdjusting = ref(false)
+
+const selectedPeriod = ref('')
+const startDate = ref('')
+const endDate = ref('')
+
+const searchForm = ref({
+    search: '',
+    department_id: '',
+    work_pattern_id: '',
 })
 
-const headers = [
-  { key: 'employeeName', label: 'Nama' },
-  { key: 'nip', label: 'NIP' },
-  { key: 'department', label: 'Departemen' },
-  { key: 'checkIn', label: 'Check In' },
-  { key: 'checkOut', label: 'Check Out' },
-  { key: 'status', label: 'Status' },
-  { key: 'lateMinutes', label: 'Terlambat' },
-  { key: 'overtimeMinutes', label: 'Lembur' },
-]
+async function fetchData(params = {}) {
+    isLoading.value = true
+    try {
+        const queryParams = new URLSearchParams()
+        for (const [key, value] of Object.entries(params)) {
+            if (value) queryParams.append(key, value)
+        }
+        
+        const response = await get(`/api/v1/supervisor/attendance/absensi?${queryParams.toString()}`)
+        
+        employees.value = response.employees.data || response.employees
+        stats.value = response.stats || {}
+        period.value = response.period || {}
+        filters.value = response.filters || {}
+        departments.value = response.departments || []
+        workPatterns.value = response.workPatterns || []
+        payrollPeriods.value = response.payrollPeriods || []
+        pagination.value = response.employees || {}
+        isDataExists.value = response.isDataExists !== false
+        
+        selectedPeriod.value = period.value.period_id || ''
+        startDate.value = period.value.start || ''
+        endDate.value = period.value.end || ''
+        
+        searchForm.value.search = filters.value.search || ''
+        searchForm.value.department_id = filters.value.department_id || ''
+        searchForm.value.work_pattern_id = filters.value.work_pattern_id || ''
 
-const currentPage = ref(1)
-const perPage = ref(10)
-const totalPages = computed(() => Math.ceil(attendanceData.value.length / perPage.value))
-const paginated = computed(() => {
-  const start = (currentPage.value - 1) * perPage.value
-  return attendanceData.value.slice(start, start + perPage.value)
+    } catch (error) {
+        console.error('Error fetching data:', error)
+    } finally {
+        isLoading.value = false
+    }
+}
+
+onMounted(() => {
+    fetchData(route.query)
 })
 
-function statusBadge(status) {
-  switch (status) {
-    case 'Hadir': return 'success'
-    case 'Terlambat': return 'warning'
-    case 'Izin': return 'info'
-    case 'Alfa': return 'danger'
-    default: return 'neutral'
-  }
+function applyPeriod() {
+    if (!selectedPeriod.value) return;
+    const p = payrollPeriods.value.find(x => x.id === selectedPeriod.value);
+    if (!p) return;
+    
+    startDate.value = p.start_date;
+    endDate.value = p.end_date;
+    
+    submitFilter();
+}
+
+function submitFilter() {
+    const params = {
+        start_date: startDate.value,
+        end_date: endDate.value,
+        search: searchForm.value.search,
+        department_id: searchForm.value.department_id,
+        work_pattern_id: searchForm.value.work_pattern_id,
+    }
+    
+    router.push({ path: route.path, query: params })
+    fetchData(params)
+}
+
+function resetFilter() {
+    searchForm.value.search = '';
+    searchForm.value.department_id = '';
+    searchForm.value.work_pattern_id = '';
+    submitFilter();
+}
+
+function formatDateRange() {
+    if (!startDate.value || !endDate.value) return '';
+    const start = new Date(startDate.value);
+    const end = new Date(endDate.value);
+    const formatDate = (date) => date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `${formatDate(start)} - ${formatDate(end)}`;
+}
+
+function openPrintPage() {
+    let url = `/api/v1/supervisor/attendance/absensi/print?start_date=${startDate.value}&end_date=${endDate.value}`;
+    if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
+    if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
+    if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
+    window.open(url, '_blank');
+}
+
+async function runAdjustment() {
+    if (!startDate.value || !endDate.value) {
+        alert('Pilih periode terlebih dahulu');
+        return;
+    }
+    
+    if (!confirm('Apakah Anda yakin ingin menjalankan adjustment? Data leave dan overtime akan diperbarui.')) {
+        return;
+    }
+    
+    isAdjusting.value = true;
+    try {
+        await post('/api/v1/supervisor/attendance/absensi/adjustment', {
+            start_date: startDate.value,
+            end_date: endDate.value,
+        });
+        fetchData(route.query);
+    } catch (error) {
+        alert(error.message || 'Terjadi kesalahan saat adjustment');
+    } finally {
+        isAdjusting.value = false;
+    }
+}
+
+function goToPage(urlStr) {
+    if (!urlStr) return;
+    try {
+        const url = new URL(urlStr);
+        const params = Object.fromEntries(url.searchParams.entries());
+        fetchData(params);
+        router.push({ path: route.path, query: params });
+    } catch (e) {
+        // Fallback for simple path mapping
+        const parts = urlStr.split('?');
+        if (parts.length > 1) {
+            const params = new URLSearchParams(parts[1]);
+            const p = Object.fromEntries(params.entries());
+            fetchData(p);
+            router.push({ path: route.path, query: p });
+        }
+    }
 }
 </script>
 
 <template>
-  <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <div>
-        <h3 class="text-xl font-semibold text-(--text-main)">Data Kehadiran</h3>
-        <p class="text-sm text-(--text-muted) mt-1">Data kehadiran tim Anda</p>
-      </div>
-      <div class="flex items-center gap-3">
-        <input
-          type="date"
-          :value="selectedDate"
-          @input="selectedDate = $event.target.value"
-          class="px-3 py-2 rounded-md border bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary)/25 focus:border-(--primary) transition-colors text-sm"
-        />
-        <BaseButton variant="secondary" size="sm">
-          <template #icon-left>
-            <IconDownload class="w-4 h-4" />
-          </template>
-          Export
-        </BaseButton>
-      </div>
-    </div>
+    <div class="p-4 sm:p-6 lg:p-8">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-(--text-main)">Absensi</h1>
+                <p class="text-sm text-(--text-muted) mt-1">
+                    <i class="bx bx-calendar-alt mr-1"></i>
+                    Periode: {{ formatDateRange() }}
+                </p>
+                <p class="text-xs text-(--text-soft) mt-1">
+                    Data absensi 
+                </p>
+            </div>
+            
+            <div class="flex gap-2">
+                <button 
+                    @click="runAdjustment"
+                    class="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition disabled:opacity-50"
+                    :disabled="!startDate || !endDate || isAdjusting"
+                >
+                    <i class="bx bx-sync text-lg" :class="{ 'animate-spin': isAdjusting }"></i>
+                    {{ isAdjusting ? 'Processing...' : 'Perhitungan Lembur' }}
+                </button>
+                <button 
+                    @click="openPrintPage"
+                    class="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition disabled:opacity-50"
+                    :disabled="!startDate || !endDate"
+                >
+                    <i class="bx bx-printer text-lg"></i>
+                    Print
+                </button>
+            </div>
+        </div>
+        
+        <div v-if="isLoading" class="flex justify-center my-12">
+            <i class="bx bx-loader-alt animate-spin text-4xl text-indigo-600"></i>
+        </div>
 
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div class="bg-(--bg-card) rounded-md border border-(--border-soft) p-4">
-        <div class="flex items-center gap-2">
-          <IconCalendarCheck class="w-4 h-4 text-(--success)" />
-          <span class="text-xs text-(--text-muted) uppercase tracking-wider">Hadir</span>
-        </div>
-        <p class="text-xl font-bold text-(--text-main) mt-1">{{ stats.hadir }}</p>
-      </div>
-      <div class="bg-(--bg-card) rounded-md border border-(--border-soft) p-4">
-        <div class="flex items-center gap-2">
-          <IconClock class="w-4 h-4 text-(--warning)" />
-          <span class="text-xs text-(--text-muted) uppercase tracking-wider">Terlambat</span>
-        </div>
-        <p class="text-xl font-bold text-(--text-main) mt-1">{{ stats.terlambat }}</p>
-      </div>
-      <div class="bg-(--bg-card) rounded-md border border-(--border-soft) p-4">
-        <div class="flex items-center gap-2">
-          <IconFileInvoice class="w-4 h-4 text-(--primary)" />
-          <span class="text-xs text-(--text-muted) uppercase tracking-wider">Izin</span>
-        </div>
-        <p class="text-xl font-bold text-(--text-main) mt-1">{{ stats.izin }}</p>
-      </div>
-      <div class="bg-(--bg-card) rounded-md border border-(--border-soft) p-4">
-        <div class="flex items-center gap-2">
-          <IconClock class="w-4 h-4 text-(--danger)" />
-          <span class="text-xs text-(--text-muted) uppercase tracking-wider">Alfa</span>
-        </div>
-        <p class="text-xl font-bold text-(--text-main) mt-1">{{ stats.alfa }}</p>
-      </div>
-    </div>
+        <template v-else>
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md">
+                    <p class="text-2xl font-bold text-(--text-main)">{{ stats.total_employees || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Karyawan</p>
+                </div>
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md border-l-4 border-l-green-500">
+                    <p class="text-2xl font-bold text-green-600">{{ stats.present || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Hadir</p>
+                </div>
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md border-l-4 border-l-orange-500">
+                    <p class="text-2xl font-bold text-orange-600">{{ stats.total_overtime || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Lembur (jam)</p>
+                </div>
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md border-l-4 border-l-blue-500">
+                    <p class="text-2xl font-bold text-blue-600">{{ stats.leave || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Cuti</p>
+                </div>
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md border-l-4 border-l-purple-500">
+                    <p class="text-2xl font-bold text-purple-600">{{ stats.permit || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Izin</p>
+                </div>
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md border-l-4 border-l-teal-500">
+                    <p class="text-2xl font-bold text-teal-600">{{ stats.sakit || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Sakit</p>
+                </div>
+                <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md border-l-4 border-l-red-500">
+                    <p class="text-2xl font-bold text-red-600">{{ stats.absent || 0 }}</p>
+                    <p class="text-xs text-(--text-muted)">Absen</p>
+                </div>
+            </div>
+            
+            <!-- Period Selection -->
+            <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div class="flex flex-col sm:flex-row gap-3 items-center">
+                        <div>
+                            <label class="block text-xs font-medium text-(--text-muted) mb-1">
+                                <i class="bx bx-calendar mr-1"></i> Periode Penggajian
+                            </label>
+                            <select v-model="selectedPeriod" @change="applyPeriod"
+                                class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-indigo-500 min-w-[280px]">
+                                <option value="">Pilih Periode</option>
+                                <option v-for="p in payrollPeriods" :key="p.id" :value="p.id">
+                                    {{ p.name }} ({{ new Date(p.start_date).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'}) }} - {{ new Date(p.end_date).toLocaleDateString('id-ID', {day:'numeric', month:'short', year:'numeric'}) }})
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Filter Bar -->
+            <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
+                <div class="flex flex-wrap gap-3">
+                    <div class="relative">
+                        <i class="bx bx-search absolute left-3 top-1/2 -translate-y-1/2 text-(--text-soft)"></i>
+                        <input v-model="searchForm.search" type="text" placeholder="Cari karyawan..." 
+                            class="pl-9 pr-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm w-64 focus:ring-2 focus:ring-indigo-500" 
+                            @keyup.enter="submitFilter" />
+                    </div>
+                    
+                    <select v-model="searchForm.department_id" @change="submitFilter" 
+                        class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Semua Departemen</option>
+                        <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
+                    </select>
 
-    <BaseCard>
-      <DataTable :headers="headers" :items="paginated" :show-search="true">
-        <template #item.employeeName="{ value }">
-          <span class="font-medium text-(--text-main)">{{ value }}</span>
+                    <select v-model="searchForm.work_pattern_id" @change="submitFilter" 
+                        class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-indigo-500">
+                        <option value="">Semua Pola Kerja</option>
+                        <option v-for="wp in workPatterns" :key="wp.id" :value="wp.id">{{ wp.name }}</option>
+                    </select>
+                    
+                    <button v-if="searchForm.search || searchForm.department_id || searchForm.work_pattern_id" @click="resetFilter" 
+                        class="p-2 rounded-lg border border-(--border-soft) hover:bg-red-50 hover:text-red-600 transition" title="Reset Filter">
+                        <i class="bx bx-reset text-lg"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Employees Table -->
+            <div class="overflow-x-auto bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-(--border-soft) bg-(--bg-elevated)">
+                            <th class="px-4 py-3 text-left text-xs font-medium text-(--text-muted) uppercase tracking-wider">Karyawan</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Hadir</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Lembur</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Cuti</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Izin</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Sakit</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Absen</th>
+                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="emp in employees" :key="emp.id" class="border-b border-(--border-soft) hover:bg-indigo-50/30 transition group">
+                            <td class="px-4 py-3">
+                                <div class="font-medium text-(--text-main) group-hover:text-indigo-600">{{ emp.employee_name }}</div>
+                                <div class="text-xs text-(--text-muted)">{{ emp.employee_code }}</div>
+                                <div class="text-xs text-(--text-soft)">{{ emp.department }} | {{ emp.position }}</div>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="px-2 py-1 rounded-lg bg-green-50 text-green-700 font-bold">{{ emp.hadir }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-center text-orange-600 font-medium">
+                                <i class="bx bx-time-five mr-1"></i>{{ emp.lembur }} jam
+                            </td>
+                            <td class="px-4 py-3 text-center text-blue-600">{{ emp.cuti }}</td>
+                            <td class="px-4 py-3 text-center text-purple-600">{{ emp.izin }}</td>
+                            <td class="px-4 py-3 text-center text-teal-600">{{ emp.sakit }}</td>
+                            <td class="px-4 py-3 text-center">
+                                <span :class="emp.absen > 0 ? 'text-red-600 font-bold' : 'text-gray-400'">{{ emp.absen }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <router-link :to="`/supervisor/attendance/autolog/${emp.id}?start_date=${startDate}&end_date=${endDate}`" 
+                                    class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-medium transition shadow-sm">
+                                    <i class="bx bx-show"></i> Detail Log
+                                </router-link>
+                            </td>
+                        </tr>
+                        <tr v-if="employees?.length === 0">
+                            <td colspan="8" class="px-4 py-12 text-center text-(--text-muted)">
+                                <i class="bx bx-data text-4xl mb-3 block text-gray-300"></i>
+                                Tidak ada data auditor log untuk periode ini
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="mt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-sm text-(--text-muted)">
+                    Menampilkan {{ pagination.from || 0 }} - {{ pagination.to || 0 }} dari {{ pagination.total || 0 }} karyawan
+                </div>
+                <div class="flex gap-2">
+                    <button 
+                        v-if="pagination.links?.find(l => l.label.includes('Previous'))?.url" 
+                        @click="goToPage(pagination.links.find(l => l.label.includes('Previous')).url)" 
+                        class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center gap-1 transition cursor-pointer">
+                        <i class="bx bx-chevron-left text-lg"></i> Sebelumnya
+                    </button>
+                    <button 
+                        v-if="pagination.links?.find(l => l.label.includes('Next'))?.url" 
+                        @click="goToPage(pagination.links.find(l => l.label.includes('Next')).url)" 
+                        class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center gap-1 transition cursor-pointer">
+                        Selanjutnya <i class="bx bx-chevron-right text-lg"></i>
+                    </button>
+                </div>
+            </div>
         </template>
-        <template #item.status="{ value }">
-          <Badge :variant="statusBadge(value)">{{ value }}</Badge>
-        </template>
-        <template #item.lateMinutes="{ value }">
-          <span v-if="value > 0" class="text-(--warning) font-medium">{{ value }} mnt</span>
-          <span v-else class="text-(--text-muted)">-</span>
-        </template>
-        <template #item.overtimeMinutes="{ value }">
-          <span v-if="value > 0" class="text-(--primary) font-medium">{{ value }} mnt</span>
-          <span v-else class="text-(--text-muted)">-</span>
-        </template>
-      </DataTable>
-      <Pagination
-        :current-page="currentPage"
-        :total-pages="totalPages"
-        :total="attendanceData.length"
-        :per-page="perPage"
-        @page-change="currentPage = $event"
-      />
-    </BaseCard>
-  </div>
+    </div>
 </template>
