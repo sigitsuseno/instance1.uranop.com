@@ -17,6 +17,7 @@ use App\Modules\Reports\Helpers\Lembur\JakartaHelper;
 use App\Modules\Reports\Helpers\Lembur\AllInHelper;
 use App\Modules\Reports\Helpers\Lembur\PrintingHelper;
 use App\Modules\Reports\Helpers\Lembur\SpcHelper;
+use App\Modules\Reports\Helpers\Lembur\TknHelper;
 use App\Modules\Reports\Helpers\Lembur\LemburHelperTrait;
 use App\Modules\Settings\Services\ReportConfigService;
 use Illuminate\Http\Request;
@@ -890,6 +891,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $allInHelper    = new AllInHelper();
         $printingHelper = new PrintingHelper();
         $spcHelper      = new SpcHelper();
+        $tknHelper      = new TknHelper();
 
         $jakartaEmployees  = collect();
         $allInEmployees    = collect();
@@ -913,6 +915,18 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
 
             // ── Classify & process ─────────────────────────────────
+            // KRY-TKN: flag teknisi — override formula, tetap di section GRP asli
+            if (TknHelper::matches($employee)) {
+                $item = $tknHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
+
+                if (JakartaHelper::matches($employee)) {
+                    $jakartaEmployees->push($item);
+                } else {
+                    $allInEmployees->push($item);
+                }
+                continue;
+            }
+
             // Saat section D aktif, prioritaskan KRY-SPC di atas Jakarta
             $showSpc = SpcHelper::shouldShow($period?->id);
 
