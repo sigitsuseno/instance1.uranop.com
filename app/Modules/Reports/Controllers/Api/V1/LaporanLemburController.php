@@ -917,6 +917,21 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $showSpc = SpcHelper::shouldShow($period?->id);
 
             if ($showSpc && SpcHelper::matches($employee)) {
+                // Filter SPC: employee harus punya minimal 1 group selain KRY-SPC
+                // yang ada di selected groups (kalau ada filter group)
+                if (!empty($groups)) {
+                    $nonSpcGroups = array_values(array_filter($groups, fn($g) => $g !== 'KRY-SPC'));
+                    // Jika masih ada group lain yang dipilih selain KRY-SPC,
+                    // pastikan employee punya salah satunya
+                    if (!empty($nonSpcGroups)) {
+                        $hasMatchingGroup = $employee->groups->contains(
+                            fn($g) => in_array($g->reference_code, $nonSpcGroups)
+                        );
+                        if (!$hasMatchingGroup) {
+                            continue; // Employee ini ga match group yang dipilih → skip
+                        }
+                    }
+                }
                 $item = $spcHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $spcEmployees->push($item);
             } elseif (JakartaHelper::matches($employee)) {
