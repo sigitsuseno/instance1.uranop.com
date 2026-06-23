@@ -142,7 +142,12 @@ class AttendanceCalculatorService
         // Holiday / Minggu (FIXED & FLEX-SHIFT): full, max capped
         // ═══════════════════════════════════════════════════════
         if ($isHoliday || $isSunday) {
-            return $this->roundUp(min($totalMinutes, $config->holiday_max_minutes ?? 480), $config);
+            // KRY-TKN: mulai Juni 2026, teknisi maksimal 20 jam lembur holiday
+            $isTkn = $prepare->date >= '2026-06-01'
+                && in_array($prepare->employee_id, [31, 115, 174]);
+            $maxMinutes = $isTkn ? 1200 : ($config->holiday_max_minutes ?? 480);
+
+            return $this->roundUp(min($totalMinutes, $maxMinutes), $config);
         }
 
         // ═══════════════════════════════════════════════════════
