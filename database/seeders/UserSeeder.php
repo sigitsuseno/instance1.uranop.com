@@ -47,6 +47,15 @@ class UserSeeder extends Seeder
                 'user_type' => 'hrbranch',
                 'email_verified_at' => now(),
             ],
+            [
+                'name' => 'Manajemen',
+                'email' => 'management@uranop.com',
+                'password' => Hash::make('PassTersulit2026'),
+                'employee_number' => 'MN001',
+                'is_active' => true,
+                'user_type' => 'manajemen',
+                'email_verified_at' => now(),
+            ],
         ];
 
         foreach ($users as $data) {
