@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/login', [AuthApiController::class, 'login']);
 
+// Mobile login — khusus karyawan
+Route::post('/mobile/login', [AuthApiController::class, 'mobileLogin'])->name('mobile.login');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthApiController::class, 'logout']);
     Route::get('/user', [AuthApiController::class, 'user']);

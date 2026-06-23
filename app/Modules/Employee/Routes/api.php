@@ -73,6 +73,10 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::patch('/toggle-status', [EmployeeApiController::class, 'toggleStatus'])->name('employees.toggle-status');
             Route::patch('/deactivate', [EmployeeApiController::class, 'deactivate'])->name('employees.deactivate');
 
+            // Mobile access — generate token untuk QR code login
+            Route::post('/generate-mobile-access', [EmployeeApiController::class, 'generateMobileAccess'])
+                ->name('employees.generate-mobile-access');
+
             // Sub-resource: Contracts
             Route::prefix('contracts')->group(function () {
                 Route::get('/',      [ContractApiController::class, 'index'])->name('employees.contracts.index');

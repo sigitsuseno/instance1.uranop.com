@@ -207,6 +207,37 @@ class EmployeeApiController extends Controller
     }
 
     /**
+     * POST /api/employees/{employee}/generate-mobile-access
+     * Generate Sanctum token untuk akses mobile (QR code login).
+     * Digunakan oleh HR/Admin untuk memberikan akses mobile ke karyawan.
+     */
+    public function generateMobileAccess(Employee $employee): JsonResponse
+    {
+        $user = $employee->user;
+
+        if (! $user) {
+            return response()->json([
+                'message' => 'Karyawan ini belum memiliki akun user. Hubungkan user terlebih dahulu.',
+            ], 422);
+        }
+
+        // Hapus semua token mobile-access yang lama
+        $user->tokens()->where('name', 'mobile-access')->delete();
+
+        // Buat token baru (tidak expired)
+        $token = $user->createToken('mobile-access');
+
+        return response()->json([
+            'message' => 'Token akses mobile berhasil dibuat.',
+            'data' => [
+                'token' => $token->plainTextToken,
+                'employee_name' => $employee->name,
+                'employee_code' => $employee->employee_code,
+            ],
+        ]);
+    }
+
+    /**
      * GET /api/employees/stats
      */
     public function stats(): JsonResponse

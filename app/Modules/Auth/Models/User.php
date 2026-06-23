@@ -47,6 +47,11 @@ class User extends Authenticatable
         return $this->hasOne(UserPreference::class);
     }
 
+    public function employee()
+    {
+        return $this->hasOne(\App\Modules\Employee\Models\Employee::class);
+    }
+
     public function branches()
     {
         return $this->belongsToMany(\App\Modules\Organization\Models\Branch::class, 'user_branches')
