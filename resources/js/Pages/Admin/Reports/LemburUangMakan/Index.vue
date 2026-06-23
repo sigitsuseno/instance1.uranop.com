@@ -42,12 +42,14 @@
       report-type="lembur_uang_makan"
       report-label="Lembur & Uang Makan"
       :available-groups="groupCodes"
+      :extra-data="extraData"
       @close="showSettings = false"
       @saved="onSettingsSaved"
     >
-      <template #config="{ config, updateConfig }">
+      <template #config="{ config, updateConfig, extraData }">
         <LemburUangMakanSettingsTable
           :config="config"
+          :extra-data="extraData"
           @update:config="updateConfig"
         />
       </template>
@@ -70,9 +72,14 @@ const activeTab = ref('detail')
 const selectedGroups = ref([])
 const availableGroups = ref([])
 const showSettings = ref(false)
+const spcEmployees = ref([])
+const periods = ref([])
 
-// Extract just the codes for the modal checkboxes
 const groupCodes = computed(() => availableGroups.value.map(g => g.code))
+const extraData = computed(() => ({
+  periods: periods.value,
+  spcEmployees: spcEmployees.value,
+}))
 
 onMounted(async () => {
   // 1. Load all available groups (for modal checkboxes)
@@ -94,17 +101,27 @@ onMounted(async () => {
     if (savedGroups.length > 0) {
       selectedGroups.value = savedGroups
     } else {
-      selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'GRP-SPC']
+      selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'KRY-SPC']
     }
   } catch (err) {
     console.error('Gagal fetch report config:', err)
-    // Fallback default
-    selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'GRP-SPC']
+    selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'KRY-SPC']
+  }
+
+  // 3. Load periods + SPC employees (for settings modal)
+  try {
+    const [periodsRes, spcRes] = await Promise.all([
+      get('/api/v1/settings/employee-data/pay-periods'),
+      get('/api/v1/settings/employee-data/by-group/KRY-SPC'),
+    ])
+    periods.value = periodsRes.data || []
+    spcEmployees.value = spcRes.data || []
+  } catch (err) {
+    console.error('Gagal fetch extra data:', err)
   }
 })
 
 function onSettingsSaved(payload) {
-  // Reload groups from saved settings
   if (payload.employee_groups && payload.employee_groups.length > 0) {
     selectedGroups.value = payload.employee_groups
   }

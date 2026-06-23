@@ -13,6 +13,11 @@ use App\Modules\Reports\Exports\LemburBulananExport;
 use App\Modules\Reports\Exports\ResumeExport;
 use App\Modules\Reports\Exports\LemburUangMakanDetailExport;
 use App\Modules\Reports\Exports\LemburUangMakanResumeExport;
+use App\Modules\Reports\Helpers\Lembur\JakartaHelper;
+use App\Modules\Reports\Helpers\Lembur\AllInHelper;
+use App\Modules\Reports\Helpers\Lembur\PrintingHelper;
+use App\Modules\Reports\Helpers\Lembur\SpcHelper;
+use App\Modules\Reports\Helpers\Lembur\LemburHelperTrait;
 use App\Modules\Settings\Services\ReportConfigService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
@@ -609,7 +614,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
             $upahPerHari = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 25, 2) : 0;
             
-            $isSPC = $employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPC');
+            $isSPC = $employee->groups->contains(fn($g) => $g->reference_code === 'KRY-SPC');
             $hourlyRate  = $gaji > 0 ? ($isSPC ? round($gaji / 173, 2) : round(($gaji + $tjMk + $tunjangan) / 173, 2)) : 0;
 
             $posName = $employee->position->name ?? '-';
@@ -827,7 +832,6 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $label     = $startDate->equalTo($endDate)
                 ? $startDate->translatedFormat('d M Y')
                 : $startDate->translatedFormat('d M') . ' - ' . $endDate->translatedFormat('d M Y');
-            // find nearest period for pay records
             $period = PayPeriod::where('start_date', '<=', $startDate)
                 ->where('end_date', '>=', $startDate)->first();
         } elseif ($periodId) {
@@ -859,6 +863,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $d->addDay();
         }
 
+        // ── Fetch data ─────────────────────────────────────────────
         $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
             ->get()->groupBy('employee_id');
 
@@ -877,10 +882,19 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
-        $jakartaEmployees = collect();
-        $allInEmployees = collect();
+        // ── Config ─────────────────────────────────────────────────
+        $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
+
+        // ── Helpers ────────────────────────────────────────────────
+        $jakartaHelper  = new JakartaHelper();
+        $allInHelper    = new AllInHelper();
+        $printingHelper = new PrintingHelper();
+        $spcHelper      = new SpcHelper();
+
+        $jakartaEmployees  = collect();
+        $allInEmployees    = collect();
         $printingEmployees = collect();
-        $spcEmployees = collect();
+        $spcEmployees      = collect();
 
         foreach ($employees as $employee) {
             $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
@@ -898,218 +912,72 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             }
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0) : (float)($employee->activeSalary()?->tunjangan ?? 0);
 
-            $isSPC = $employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPC');
+            // ── Classify & process ─────────────────────────────────
+            // Saat section D aktif, prioritaskan KRY-SPC di atas Jakarta
+            $showSpc = SpcHelper::shouldShow($period?->id);
 
-            $upahPerHari = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
-            $hourlyRate  = $gaji > 0 ? ($isSPC ? round($gaji / 173, 2) : round(($gaji + $tjMk + $tunjangan) / 173, 2)) : 0;
-            $upahLemburPerJam = $hourlyRate;
-
-            // Uang Makan group & rates
-            $umGroup = $employee->groups->first(fn($g) =>
-                $g->master && strtoupper($g->master->group_label ?? '') === 'UANG MAKAN'
-            );
-            $umGroupName = strtoupper($umGroup?->master?->name ?? '');
-            $umRates = $this->getUangMakanRates($umGroupName, $gaji);
-
-            // Section determination: GRP-JKT → JAKARTA, GRP-PS1/GRP-SS → PRINTING
-            $isJakarta = $employee->groups->contains(fn($g) =>
-                $g->reference_code === 'GRP-JKT'
-            );
-            $isPrinting = $employee->groups->contains(fn($g) =>
-                in_array($g->reference_code, ['GRP-PS1', 'GRP-SS'])
-            );
-            $isSG = $employee->groups->contains('reference_code', 'SG');
-
-            $days = [];
-            $totalHariKerja = 0;
-            $totalOvertime = 0;
-            $totalUangMakan = 0;
-
-            foreach ($dates as $dateStr) {
-                $prep   = $empPrepares->get($dateStr);
-                $roster = $empRosters->get($dateStr);
-                $parsedDate = Carbon::parse($dateStr);
-
-                $statusRaw  = $prep ? $prep->status : '-';
-                $isHoliday  = $roster && $roster->is_holiday;
-                $dayOfWeek  = $parsedDate->dayOfWeek;
-
-                // ── common H/A ──────────────────────────────────────
-                $ha = match (true) {
-                    $statusRaw === 'hadir'          => 'H',
-                    $statusRaw === 'absent'         => 'A',
-                    $statusRaw === 'libur',
-                    $statusRaw === 'off'            => 'OFF',
-                    $statusRaw === 'skt'            => 'S',
-                    str_starts_with($statusRaw, 'c') => 'C',
-                    $statusRaw === 'imt',
-                    $statusRaw === 'ipa'            => 'H',
-                    str_starts_with($statusRaw, 'i') => 'I',
-                    default                         => $statusRaw === '-' ? '-' : 'I',
-                };
-
-                $dapatUpah = in_array($ha, ['H', 'C', 'S']);
-                $upahHarian = ($isHoliday && $ha === 'H') ? 0 : ($dapatUpah ? $upahPerHari : 0);
-
-                // ── lembur raw ──────────────────────────────────────
-                $lmRaw       = $prep ? (int)$prep->lm : 0;
-                $overtimeRaw = $prep ? (int)$prep->overtime : 0;
-                $lmCount      = $prep ? (int)$prep->lm_count : 0;
-                $overtimeCount = $prep ? (int)$prep->overtime_count : 0;
-
-                $lmDisplay      = $lmRaw > 0 ? round($lmRaw / 60, 2) : 0;
-                $overtimeDisplay = $overtimeRaw > 0 ? round($overtimeRaw / 60, 2) : 0;
-                $lemburTotal    = $lmDisplay + $overtimeDisplay;
-
-                $lmNominal       = $lmCount > 0 ? round(($lmCount / 60) * $hourlyRate, 2) : 0;
-                $overtimeNominal = $overtimeCount > 0 ? round(($overtimeCount / 60) * $hourlyRate, 2) : 0;
-                $totalOvertimeNominal = round($lmNominal + $overtimeNominal, 2);
-
-                if ($isPrinting || $isSPC) {
-                    // ═══════════════════════════════════════════════
-                    //  SECTION C — BULANAN PRINTING (Lembur logic)
-                    // ═══════════════════════════════════════════════
-                    if (in_array($statusRaw, ['absent', 'libur', 'off', 'itm', 'izn', '-'])) {
-                        $kode = '';
-                    } else {
-                        $kode = $isSG ? 'SG' : 'L';
-                    }
-
-                    $totalHariKerja += $upahHarian;
-                    $totalOvertime += $totalOvertimeNominal;
-                    $totalUangMakan += 0; // Printing = Lembur only, no Uang Makan
-
-                    $days[$dateStr] = [
-                        'kode'             => $kode,
-                        'ha'               => $ha,
-                        'upah_per_hari'    => $upahHarian,
-                        'lm'               => $lmDisplay,
-                        'lembur'           => $overtimeDisplay,
-                        'nominal'          => $totalOvertimeNominal,
-                        'overtime_nominal' => $totalOvertimeNominal,
-                    ];
-                } else {
-                    // ═══════════════════════════════════════════════
-                    //  SECTION A — ALL IN (Uang Makan logic)
-                    // ═══════════════════════════════════════════════
-                    $kode = in_array($ha, ['H', 'S', 'C']) ? 'L' : '';
-                    $nominal = 0;
-                    $lmStr = '';
-                    $lemburStr = '';
-
-                    if ($lemburTotal > 0) {
-                        $isMingguHoliday = ($dayOfWeek == 0 || $isHoliday);
-
-                        if ($isMingguHoliday) {
-                            if ($lemburTotal >= 8) {
-                                $nominal = $umRates['minggu_full'];
-                                $lmStr = 'FULL';
-                            } elseif ($lemburTotal >= 4) {
-                                $nominal = $umRates['minggu_half'];
-                                $lmStr = 'HALF';
-                            }
-                        } elseif ($dayOfWeek == 6) {
-                            // Sabtu
-                            if ($lemburTotal >= 4) {
-                                $nominal = $umRates['sabtu_full'];
-                                $lemburStr = 'FULL';
-                            } elseif ($lemburTotal >= 2) {
-                                $nominal = $umRates['sabtu_dua'];
-                                $lemburStr = 'DUA';
-                            }
-                        } else {
-                            // Weekday — ≥ 3 jam
-                            if ($lemburTotal >= 3) {
-                                $nominal = $umRates['weekday'] ?? 15000;
-                                $lemburStr = 'UM';
-                            }
-                        }
-                    }
-
-                    $totalHariKerja += $upahHarian;
-                    $totalOvertime += 0; // ALL IN / Jakarta = Uang Makan only, no Overtime pay
-                    $totalUangMakan += $nominal;
-
-                    $days[$dateStr] = [
-                        'kode'              => $kode,
-                        'ha'                => $ha,
-                        'upah_per_hari'     => $upahHarian,
-                        'lm'                => $lmStr,
-                        'lembur'            => $lemburStr,
-                        'nominal'           => $nominal,
-                        'uang_makan'        => $nominal,
-                        'overtime_nominal'  => $totalOvertimeNominal,
-                    ];
-                }
-            }
-
-            $gender = $employee->gender ?? '';
-
-            $item = [
-                'id'                   => $employee->id,
-                'name'                 => $employee->name,
-                'jabatan'              => $employee->position->name ?? '-',
-                'gender'               => $gender,
-                'tj_mk'                => $tjMk,
-                'tunjangan'            => $tunjangan,
-                'upah_per_hari'        => $upahPerHari,
-                'upah_lembur_per_jam'  => $upahLemburPerJam,
-                'days'                 => $days,
-                'total_hari_kerja'     => round($totalHariKerja, 2),
-                'total_overtime'       => round($totalOvertime, 2),
-                'total_uang_makan'     => round($totalUangMakan, 2),
-                'total_terima'         => round($totalHariKerja + $totalOvertime + $totalUangMakan, 2),
-            ];
-
-            if ($isJakarta) {
-                $jakartaEmployees->push($item);
-            } elseif ($isPrinting) {
-                $printingEmployees->push($item);
-            } elseif ($isSPC) {
+            if ($showSpc && SpcHelper::matches($employee)) {
+                $item = $spcHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $spcEmployees->push($item);
+            } elseif (JakartaHelper::matches($employee)) {
+                $item = $jakartaHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
+                $jakartaEmployees->push($item);
+            } elseif (PrintingHelper::matches($employee)) {
+                $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
+                $printingEmployees->push($item);
             } else {
+                $item = $allInHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $allInEmployees->push($item);
             }
         }
 
-        $jakartaEmployees = $jakartaEmployees->sortBy('name')->values();
-        $allInEmployees = $allInEmployees->sortBy('name')->values();
+        // ── Sort ───────────────────────────────────────────────────
+        $jakartaEmployees  = $jakartaEmployees->sortBy('name')->values();
+        $allInEmployees    = $allInEmployees->sortBy('name')->values();
         $printingEmployees = $printingEmployees->sortBy('name')->values();
-        $spcEmployees = $spcEmployees->sortBy('name')->values();
+        $spcEmployees      = $spcEmployees->sortBy('name')->values();
 
+        // ── Assemble sections ──────────────────────────────────────
         $sections = [
             [
-                'label'  => 'A. KARYAWAN JAKARTA',
-                'key'    => 'jakarta',
-                'type'   => 'uang_makan',
+                'label'  => JakartaHelper::getLabel(),
+                'key'    => JakartaHelper::getKey(),
+                'type'   => JakartaHelper::getType(),
                 'data'   => $jakartaEmployees,
-                'totals' => $this->calculateSectionTotals($jakartaEmployees),
+                'totals' => LemburHelperTrait::calculateSectionTotals($jakartaEmployees),
             ],
             [
-                'label'  => 'B. KARYAWAN ALL IN',
-                'key'    => 'all_in',
-                'type'   => 'uang_makan',
+                'label'  => AllInHelper::getLabel(),
+                'key'    => AllInHelper::getKey(),
+                'type'   => AllInHelper::getType(),
                 'data'   => $allInEmployees,
-                'totals' => $this->calculateSectionTotals($allInEmployees),
+                'totals' => LemburHelperTrait::calculateSectionTotals($allInEmployees),
             ],
             [
-                'label'  => 'C. KARYAWAN BULANAN PRINTING',
-                'key'    => 'printing',
-                'type'   => 'lembur',
+                'label'  => PrintingHelper::getLabel(),
+                'key'    => PrintingHelper::getKey(),
+                'type'   => PrintingHelper::getType(),
                 'data'   => $printingEmployees,
-                'totals' => $this->calculateSectionTotals($printingEmployees),
-            ],
-            [
-                'label'  => 'D. KARYAWAN SPESIFIK',
-                'key'    => 'spc',
-                'type'   => 'lembur',
-                'data'   => $spcEmployees,
-                'totals' => $this->calculateSectionTotals($spcEmployees),
+                'totals' => LemburHelperTrait::calculateSectionTotals($printingEmployees),
             ],
         ];
 
-        $allData = $jakartaEmployees->concat($allInEmployees)->concat($printingEmployees)->concat($spcEmployees);
-        $grandTotals = $this->calculateSectionTotals($allData);
+        // Section D: conditional (berdasarkan spc_start_period_id)
+        if (SpcHelper::shouldShow($period?->id)) {
+            $sections[] = [
+                'label'  => SpcHelper::getLabel(),
+                'key'    => SpcHelper::getKey(),
+                'type'   => SpcHelper::getType(),
+                'data'   => $spcEmployees,
+                'totals' => LemburHelperTrait::calculateSectionTotals($spcEmployees),
+            ];
+        }
+
+        $allData = $jakartaEmployees->concat($allInEmployees)->concat($printingEmployees);
+        if (SpcHelper::shouldShow($period?->id)) {
+            $allData = $allData->concat($spcEmployees);
+        }
+        $grandTotals = LemburHelperTrait::calculateSectionTotals($allData);
 
         return [
             'sections'     => $sections,
@@ -1138,11 +1006,19 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $sections = [];
         // Rebuild sections with correct per-type totals
         $sectionMeta = [
-            'jakarta'  => ['label' => 'A. KARYAWAN JAKARTA',         'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
-            'all_in'   => ['label' => 'B. KARYAWAN ALL IN',          'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
-            'printing' => ['label' => 'C. KARYAWAN BULANAN PRINTING', 'uang_makan_key' => 'nominal', 'type' => 'lembur'],
-            'spc'      => ['label' => 'D. KARYAWAN SPESIFIK',           'uang_makan_key' => 'nominal', 'type' => 'lembur'],
+            'jakarta'  => ['label' => JakartaHelper::getLabel(),         'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
+            'all_in'   => ['label' => AllInHelper::getLabel(),           'uang_makan_key' => 'nominal', 'type' => 'uang_makan'],
+            'printing' => ['label' => PrintingHelper::getLabel(),        'uang_makan_key' => 'nominal', 'type' => 'lembur'],
         ];
+
+        // Conditional: SPC hanya jika periode memenuhi syarat
+        $period = null;
+        if ($periodId = $request->input('period_id')) {
+            $period = PayPeriod::find($periodId);
+        }
+        if (SpcHelper::shouldShow($period?->id)) {
+            $sectionMeta['spc'] = ['label' => SpcHelper::getLabel(), 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
+        }
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
             $posGroups = $sectionEmps->groupBy('jabatan');

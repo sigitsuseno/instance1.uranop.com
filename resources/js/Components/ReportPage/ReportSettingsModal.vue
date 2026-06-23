@@ -67,7 +67,7 @@
               <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-(--text-main)">
                 <i class="bx bx-slider text-lg"></i> Pengaturan Spesifik
               </h3>
-              <slot name="config" :config="localConfig" :update-config="updateLocalConfig" />
+              <slot name="config" :config="localConfig" :update-config="updateLocalConfig" :extra-data="extraData" />
             </div>
           </template>
 
@@ -115,6 +115,7 @@ const props = defineProps({
   reportType: { type: String, required: true },
   reportLabel: { type: String, required: true },
   availableGroups: { type: Array, default: () => [] },
+  extraData: { type: Object, default: () => ({}) }, // { periods, spcEmployees, ... }
 });
 
 const emit = defineEmits(['close', 'saved']);

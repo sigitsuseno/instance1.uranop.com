@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Modules\Settings\Models\EmployeeGroupSetting;
+use App\Modules\Employee\Models\Employee;
+use App\Modules\Payroll\Models\PayPeriod;
 
 class EmployeeDataApiController extends Controller
 {
@@ -101,5 +103,48 @@ class EmployeeDataApiController extends Controller
         $group->delete();
 
         return response()->json(['message' => 'Group master deleted successfully']);
+    }
+
+    // === Employees by Group ===
+    /**
+     * GET /api/v1/settings/employee-data/by-group/{code}
+     * Ambil daftar karyawan berdasarkan reference_code group.
+     */
+    public function getEmployeesByGroup(string $code)
+    {
+        $employees = Employee::whereHas('groups', fn($q) =>
+            $q->where('reference_code', $code)
+        )
+        ->with(['position', 'groups', 'groups.master'])
+        ->orderBy('name')
+        ->get()
+        ->map(fn($e) => [
+            'id'       => $e->id,
+            'nip'      => $e->nip ?? '-',
+            'name'     => $e->name,
+            'jabatan'  => $e->position->name ?? '-',
+            'gender'   => $e->gender ?? '',
+        ]);
+
+        return response()->json(['data' => $employees]);
+    }
+
+    // === Pay Periods ===
+    /**
+     * GET /api/v1/settings/employee-data/pay-periods
+     * Ambil daftar periode payroll (untuk dropdown setting).
+     */
+    public function getPayPeriods()
+    {
+        $periods = PayPeriod::orderBy('start_date', 'desc')
+            ->get()
+            ->map(fn($p) => [
+                'id'         => $p->id,
+                'name'       => $p->name,
+                'start_date' => $p->start_date->format('Y-m-d'),
+                'end_date'   => $p->end_date->format('Y-m-d'),
+            ]);
+
+        return response()->json(['data' => $periods]);
     }
 }

@@ -129,6 +129,8 @@ class ReportConfigService
                     'minggu_half'  => 100000,
                     'minggu_full'  => 200000,
                 ],
+                'spc_start_period_id' => null,
+                'spc_base_salary'     => null,
             ],
             default => [],
         };

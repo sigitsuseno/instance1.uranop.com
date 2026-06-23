@@ -39,6 +39,10 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         Route::post('/group-settings', [EmployeeDataApiController::class, 'storeGroupSetting']);
         Route::put('/group-settings/{id}', [EmployeeDataApiController::class, 'updateGroupSetting']);
         Route::delete('/group-settings/{id}', [EmployeeDataApiController::class, 'destroyGroupSetting']);
+
+        // Karyawan by group & Pay Periods (untuk setting laporan)
+        Route::get('/by-group/{code}', [EmployeeDataApiController::class, 'getEmployeesByGroup']);
+        Route::get('/pay-periods', [EmployeeDataApiController::class, 'getPayPeriods']);
     });
 
     // Payroll Configs
