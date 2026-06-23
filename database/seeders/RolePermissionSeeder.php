@@ -74,6 +74,7 @@ class RolePermissionSeeder extends Seeder
         $admManager = Role::firstOrCreate(['name' => 'adm_manager', 'guard_name' => 'web']);
         $hrbranch = Role::firstOrCreate(['name' => 'hrbranch', 'guard_name' => 'web']);
         $hrAst = Role::firstOrCreate(['name' => 'hr_ast', 'guard_name' => 'web']);
+        $manajemen = Role::firstOrCreate(['name' => 'manajemen', 'guard_name' => 'web']);
 
         $superadmin->syncPermissions(Permission::all());
 
@@ -143,6 +144,23 @@ class RolePermissionSeeder extends Seeder
             'view leave',
         ]);
 
-        $this->command->info('RolePermissionSeeder completed! 5 roles + ' . count($permissions) . ' permissions created.');
+        $manajemen->syncPermissions([
+            'view companies',
+            'view branches',
+            'view departments',
+            'view positions',
+            'view salary_grades',
+            'view employees',
+            'export employees',
+            'view attendances',
+            'view payroll',
+            'export payroll',
+            'print payslip',
+            'view leave',
+            'view supervisor dashboard',
+            'export supervisor data',
+        ]);
+
+        $this->command->info('RolePermissionSeeder completed! 6 roles + ' . count($permissions) . ' permissions created.');
     }
 }

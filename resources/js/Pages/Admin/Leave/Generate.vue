@@ -50,9 +50,10 @@
 
         <BaseButton
           variant="primary"
-          @click="showConfirmGenerate = true"
+          @click="auth.isManajemen ? null : (showConfirmGenerate = true)"
           :loading="generating"
-          :disabled="!selectedPeriodId || !selectedPolicyId || generating"
+          :disabled="auth.isManajemen || !selectedPeriodId || !selectedPolicyId || generating"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
         >
           <template #icon-left>
             <i class="bx bx-magic-wand text-base"></i>
@@ -66,7 +67,13 @@
     <BaseCard>
       <template #title>Daftar Periode Cuti</template>
       <template #actions>
-        <BaseButton variant="primary" size="sm" @click="openPeriodForm(null)">
+        <BaseButton 
+          variant="primary" 
+          size="sm" 
+          @click="auth.isManajemen ? null : openPeriodForm(null)"
+          :disabled="auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
           <template #icon-left>
             <i class="bx bx-plus text-base"></i>
           </template>
@@ -91,14 +98,26 @@
         </template>
         <template #item.actions="{ item }">
           <div class="flex items-center gap-1">
-            <BaseButton variant="ghost" size="sm" @click="openPeriodForm(item)">
+            <BaseButton 
+              variant="ghost" 
+              size="sm" 
+              @click="auth.isManajemen ? null : openPeriodForm(item)"
+              :disabled="auth.isManajemen"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+            >
               <template #icon-left>
-                <i class="bx bx-edit text-lg text-(--primary)"></i>
+                <i class="bx bx-edit text-lg" :class="auth.isManajemen ? '' : 'text-(--primary)'"></i>
               </template>
             </BaseButton>
-            <BaseButton variant="ghost" size="sm" @click="confirmDeletePeriod(item)">
+            <BaseButton 
+              variant="ghost" 
+              size="sm" 
+              @click="auth.isManajemen ? null : confirmDeletePeriod(item)"
+              :disabled="auth.isManajemen"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+            >
               <template #icon-left>
-                <i class="bx bx-trash text-lg text-(--danger)"></i>
+                <i class="bx bx-trash text-lg" :class="auth.isManajemen ? '' : 'text-(--danger)'"></i>
               </template>
             </BaseButton>
           </div>
@@ -181,9 +200,11 @@ import SelectInput from '../../../Components/SelectInput.vue'
 import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { useApi } from '../../../composables/useApi'
+import { useAuth } from '../../../composables/useAuth'
 import { useNotification } from '../../../composables/useNotification'
 
 const api = useApi()
+const auth = useAuth()
 const notify = useNotification()
 
 // --- State ---

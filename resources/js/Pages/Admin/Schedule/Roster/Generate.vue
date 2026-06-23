@@ -240,6 +240,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useScheduleStore } from '../../../../Stores/schedule'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import TextInput from '../../../../Components/TextInput.vue'
@@ -249,6 +250,11 @@ import { IconArrowLeft } from '../../../../Components/Icons/index.js'
 const router = useRouter()
 const store = useScheduleStore()
 const { get } = useApi()
+const auth = useAuth()
+
+if (auth.isManajemen) {
+  router.replace('/admin/schedule/roster')
+}
 
 const form = reactive({
   monthStr: '2026-06',

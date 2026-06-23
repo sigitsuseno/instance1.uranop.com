@@ -34,6 +34,15 @@ export const usePermissionStore = defineStore('permission', () => {
       'view attendances',
       'view leave',
     ],
+    manajemen: [
+      'view companies', 'view branches',
+      'view departments', 'view positions', 'view salary_grades',
+      'view employees', 'export employees',
+      'view attendances',
+      'view payroll', 'export payroll', 'print payslip',
+      'view leave',
+      'view supervisor dashboard', 'export supervisor data',
+    ],
   }
 
   function can(permission) {

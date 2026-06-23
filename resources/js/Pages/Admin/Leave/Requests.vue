@@ -142,7 +142,13 @@
         </BaseButton>
 
         <!-- Create button -->
-        <BaseButton variant="primary" size="sm" @click="openCreateModal">
+        <BaseButton 
+          variant="primary" 
+          size="sm" 
+          @click="auth.isManajemen ? null : openCreateModal()"
+          :disabled="auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
           <template #icon-left><i class="bx bx-plus text-base"></i></template>
           Ajukan Cuti
         </BaseButton>

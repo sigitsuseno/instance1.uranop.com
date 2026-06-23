@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
+import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
@@ -12,6 +13,7 @@ import Badge from '../../../../Components/Badge.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
+const permission = usePermissionStore()
 const { get, patch, destroy: apiDelete } = useApi()
 
 // State
@@ -300,19 +302,19 @@ onMounted(() => {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <BaseButton variant="secondary" @click="$router.push('/admin/employees/import')">
+        <BaseButton v-if="permission.can('import employees')" variant="secondary" @click="$router.push('/admin/employees/import')">
           <template #icon-left>
             <i class="bx bx-import text-lg"></i>
           </template>
           Import
         </BaseButton>
-        <BaseButton variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30" @click="exportData">
+        <BaseButton v-if="permission.can('export employees')" variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:border-emerald-500/30" @click="exportData">
           <template #icon-left>
             <i class="bx bx-export text-lg"></i>
           </template>
           Export
         </BaseButton>
-        <BaseButton variant="primary" @click="$router.push('/admin/employees/create')" class="shadow-lg shadow-(--primary-glow)">
+        <BaseButton v-if="permission.can('create employees')" variant="primary" @click="$router.push('/admin/employees/create')" class="shadow-lg shadow-(--primary-glow)">
           <template #icon-left>
             <i class="bx bx-plus text-lg"></i>
           </template>
@@ -475,7 +477,7 @@ onMounted(() => {
               </div>
             </div>
             <!-- Status Badge Checkmark -->
-            <button v-if="emp.is_active" @click="confirmDeactivate(emp)" class="absolute -top-2 -right-2 w-7 h-7 bg-(--bg-card) rounded-full flex items-center justify-center border-2 border-emerald-500 shadow-sm hover:bg-emerald-50 transition-colors cursor-pointer" title="Klik untuk nonaktifkan">
+            <button v-if="emp.is_active && permission.can('terminate employees')" @click="confirmDeactivate(emp)" class="absolute -top-2 -right-2 w-7 h-7 bg-(--bg-card) rounded-full flex items-center justify-center border-2 border-emerald-500 shadow-sm hover:bg-emerald-50 transition-colors cursor-pointer" title="Klik untuk nonaktifkan">
               <i class="bx bx-check text-emerald-500 text-sm font-bold"></i>
             </button>
             <div v-else class="absolute -top-2 -right-2 w-6 h-6 bg-(--bg-card) rounded-full flex items-center justify-center border-2 border-red-500 shadow-sm" title="Nonaktif">
@@ -495,10 +497,10 @@ onMounted(() => {
                   </div>
                 </div>
                 <div class="shrink-0 flex items-center">
-                  <button @click="editEmployee(emp.id)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors" title="Edit">
+                  <button v-if="permission.can('edit employees')" @click="editEmployee(emp.id)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors" title="Edit">
                     <i class="bx bx-edit-alt text-lg"></i>
                   </button>
-                  <button @click="confirmDelete(emp)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-muted) hover:text-red-600 hover:bg-red-600/10 transition-colors" title="Hapus">
+                  <button v-if="permission.can('delete employees')" @click="confirmDelete(emp)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-muted) hover:text-red-600 hover:bg-red-600/10 transition-colors" title="Hapus">
                     <i class="bx bx-trash text-lg"></i>
                   </button>
                 </div>
@@ -560,7 +562,7 @@ onMounted(() => {
         <BaseButton variant="ghost" @click="resetFilters">
           Reset Filter
         </BaseButton>
-        <BaseButton variant="primary" @click="$router.push('/admin/employees/create')">
+        <BaseButton v-if="permission.can('create employees')" variant="primary" @click="$router.push('/admin/employees/create')">
           <template #icon-left>
             <i class="bx bx-plus text-lg"></i>
           </template>

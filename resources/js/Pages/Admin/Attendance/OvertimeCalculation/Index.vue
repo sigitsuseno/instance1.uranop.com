@@ -19,9 +19,11 @@
       <div class="flex items-center gap-2">
         <BaseButton 
           variant="primary"
-          @click="handleCalculate"
+          @click="auth.isManajemen ? null : handleCalculate()"
+          :disabled="auth.isManajemen"
           :loading="isCalculating"
           class="shadow-sm flex items-center gap-2"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
         >
           <template #icon-left>
             <i class="bx bx-calculator text-lg"></i>
@@ -206,8 +208,10 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/Components/BaseButton.vue'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 
 const { get, post } = useApi()
+const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
 

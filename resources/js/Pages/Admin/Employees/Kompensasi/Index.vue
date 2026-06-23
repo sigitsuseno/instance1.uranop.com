@@ -3,6 +3,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
+import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
@@ -10,6 +11,7 @@ import Badge from '../../../../Components/Badge.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
+const permission = usePermissionStore()
 const { get, patch } = useApi()
 
 // State
@@ -554,12 +556,12 @@ onMounted(() => {
 
                             <!-- Aksi -->
                             <td class="px-4 py-3 whitespace-nowrap text-right">
-                                <BaseButton v-if="!contract.is_compensation_paid" variant="ghost"
+                                <BaseButton v-if="!contract.is_compensation_paid && permission.can('edit employees')" variant="ghost"
                                     @click="confirmMarkPaid(contract)"
                                     class="h-8 px-2 text-xs bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700">
                                     <i class="bx bx-check mr-1 text-sm"></i> Tandai Dibayar
                                 </BaseButton>
-                                <BaseButton v-else variant="ghost" @click="confirmMarkUnpaid(contract)"
+                                <BaseButton v-else-if="permission.can('edit employees')" variant="ghost" @click="confirmMarkUnpaid(contract)"
                                     class="h-8 px-2 text-xs bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-700">
                                     <i class="bx bx-undo mr-1 text-sm"></i> Batalkan
                                 </BaseButton>

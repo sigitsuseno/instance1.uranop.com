@@ -39,7 +39,7 @@ class AuthApiController extends Controller
         }
 
         // === GATE: karyawan murni (punya employee record tapi nggak punya role admin) ditolak ===
-        $adminRoles = ['superadmin', 'hrmanager', 'adm_manager', 'hrbranch', 'hr_ast'];
+        $adminRoles = ['superadmin', 'hrmanager', 'adm_manager', 'hrbranch', 'hr_ast', 'manajemen'];
         $hasAdminRole = $user->hasAnyRole($adminRoles);
 
         if (! $hasAdminRole) {

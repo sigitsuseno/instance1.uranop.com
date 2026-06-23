@@ -5,7 +5,7 @@
         <h1 class="text-xl font-semibold text-(--text-main)">Pola Kerja</h1>
         <p class="text-sm text-(--text-muted) mt-1">Pola dasar jadwal kerja karyawan — digunakan untuk generate roster</p>
       </div>
-      <BaseButton variant="primary" @click="openForm(null)">
+      <BaseButton :disabled="auth.isManajemen" variant="primary" @click="auth.isManajemen ? null : openForm(null)">
         <template #icon-left>
           <IconPlus class="w-4 h-4" />
         </template>
@@ -54,31 +54,44 @@
             </Badge>
           </template>
           <template #item.status="{ item }">
-            <button @click="toggleStatus(item)" class="px-2 py-1 text-xs rounded-md border border-(--border-soft) transition-all"
-              :class="item.is_active ? 'bg-green-500/10 text-green-600' : 'bg-(--bg-elevated) text-(--text-muted)'">
+            <button
+              @click="auth.isManajemen ? null : toggleStatus(item)"
+              class="px-2 py-1 text-xs rounded-md border transition-all"
+              :disabled="auth.isManajemen"
+              :class="[
+                item.is_active ? 'bg-green-500/10 text-green-600 border-green-200' : 'bg-(--bg-elevated) text-(--text-muted) border-(--border-soft)',
+                auth.isManajemen ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-80'
+              ]"
+            >
               {{ item.is_active ? 'Aktif' : 'Nonaktif' }}
             </button>
           </template>
           <template #item.actions="{ item }">
             <div class="flex items-center gap-1">
               <button
-                class="inline-flex items-center h-8 px-2 text-xs font-semibold text-(--primary) bg-(--primary)/10 hover:bg-(--primary)/20 rounded-md transition-colors gap-1"
+                class="inline-flex items-center h-8 px-2 text-xs font-semibold rounded-md transition-colors gap-1"
+                :class="auth.isManajemen ? 'text-(--primary)/50 bg-(--primary)/5 cursor-not-allowed' : 'text-(--primary) bg-(--primary)/10 hover:bg-(--primary)/20'"
+                :disabled="auth.isManajemen"
                 title="Atur Siklus Detail"
-                @click="openDetailsPage(item)"
+                @click="auth.isManajemen ? null : openDetailsPage(item)"
               >
                 <span>Siklus</span>
               </button>
               <button
-                class="p-1.5 rounded-md text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors"
+                class="p-1.5 rounded-md transition-colors"
+                :class="auth.isManajemen ? 'text-(--text-muted)/50 cursor-not-allowed' : 'text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10'"
+                :disabled="auth.isManajemen"
                 title="Edit"
-                @click="openForm(item)"
+                @click="auth.isManajemen ? null : openForm(item)"
               >
                 <IconPencil class="w-4 h-4" />
               </button>
               <button
-                class="p-1.5 rounded-md text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10 transition-colors"
+                class="p-1.5 rounded-md transition-colors"
+                :class="auth.isManajemen ? 'text-(--text-muted)/50 cursor-not-allowed' : 'text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10'"
+                :disabled="auth.isManajemen"
                 title="Hapus"
-                @click="confirmDelete = item"
+                @click="auth.isManajemen ? null : (confirmDelete = item)"
               >
                 <IconTrash class="w-4 h-4" />
               </button>
@@ -160,6 +173,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 import { useNotificationStore } from '../../../../Stores/notification'
 import { useScheduleStore } from '../../../../Stores/schedule'
 import DataTable from '../../../../Components/Table/DataTable.vue'
@@ -176,6 +190,7 @@ import { IconPlus, IconPencil, IconTrash } from '../../../../Components/Icons/in
 const { get, post, put, destroy } = useApi()
 const notificationStore = useNotificationStore()
 const router = useRouter()
+const auth = useAuth()
 
 const headers = [
   { key: 'code', label: 'Kode' },

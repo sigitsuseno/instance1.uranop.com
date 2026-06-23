@@ -24,7 +24,7 @@
         <!-- Kalkulasi Button -->
         <BaseButton
           variant="secondary"
-          :disabled="!selectedPeriodId || generating"
+          :disabled="!selectedPeriodId || generating || isManajemen"
           :loading="generating"
           @click="handleGenerate"
         >
@@ -38,6 +38,7 @@
         <BaseButton
           v-if="hasUnlockedRecaps"
           variant="primary"
+          :disabled="isManajemen"
           @click="isApproveModalOpen = true"
         >
           <template #icon-left>
@@ -410,7 +411,10 @@ import BaseModal from '@/Components/BaseModal.vue'
 import Badge from '@/Components/Badge.vue'
 import { IconDownload, IconFileInvoice, IconRefresh, IconSearch, IconAlertTriangle } from '@/Components/Icons/index.js'
 import { useApi } from '@/composables/useApi'
+import { useAuth } from '@/composables/useAuth'
 import { useNotificationStore } from '@/Stores/notification'
+
+const { isManajemen } = useAuth()
 
 const { get, post } = useApi()
 const notification = useNotificationStore()

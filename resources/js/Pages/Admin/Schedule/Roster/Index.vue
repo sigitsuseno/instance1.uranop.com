@@ -39,18 +39,28 @@
     <div class="bg-(--bg-card) border border-(--border-soft) rounded-md p-3 flex gap-3 items-center flex-wrap justify-between">
       <div class="flex items-center gap-2 border-r border-(--border-soft) pr-3">
         <button
-          @click="showImportModal = true"
-          class="h-10 px-4 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 font-semibold rounded-md flex items-center text-xs transition-colors"
+          @click="auth.isManajemen ? null : (showImportModal = true)"
+          :disabled="auth.isManajemen"
+          class="h-10 px-4 font-semibold rounded-md flex items-center text-xs transition-colors"
+          :class="auth.isManajemen ? 'bg-emerald-50/50 text-emerald-600/50 cursor-not-allowed dark:bg-emerald-500/5 dark:text-emerald-400/50' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400'"
         >
           Import Excel
         </button>
 
         <router-link
+          v-if="!auth.isManajemen"
           :to="{ name: 'schedule.roster.generate' }"
           class="h-10 px-4 bg-(--primary) hover:bg-(--primary-hover) text-white font-semibold rounded-md flex items-center text-xs transition-colors"
         >
           Generate Roster
         </router-link>
+        <button
+          v-else
+          disabled
+          class="h-10 px-4 bg-(--primary)/50 text-white/70 cursor-not-allowed font-semibold rounded-md flex items-center text-xs transition-colors"
+        >
+          Generate Roster
+        </button>
       </div>
 
       <!-- Search Input -->
@@ -134,7 +144,8 @@
                 v-for="(day, idx) in daysInMonthRange"
                 :key="idx"
                 @click="openOverrideModal(emp, day, idx)"
-                class="px-0 py-1 text-center border-r border-(--border-soft)/30 cursor-pointer hover:bg-(--primary-glow)/10 transition-colors"
+                class="px-0 py-1 text-center border-r border-(--border-soft)/30 transition-colors"
+                :class="auth.isManajemen ? 'cursor-default' : 'cursor-pointer hover:bg-(--primary-glow)/10'"
               >
                 <div class="flex justify-center items-center h-8">
                   <span
@@ -368,11 +379,13 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useScheduleStore } from '../../../../Stores/schedule'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
 
 const store = useScheduleStore()
+const auth = useAuth()
 
 const monthFilter = ref('2026-06')
 const selectedYear = ref(2026)
@@ -464,6 +477,8 @@ function getShiftStyle(scheduleDay) {
 }
 
 function openOverrideModal(employee, dayInfo, dayIndex) {
+  if (auth.isManajemen) return
+  
   editingCell.value = {
     employeeId: employee.id,
     employeeName: employee.name,

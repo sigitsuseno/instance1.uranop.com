@@ -14,7 +14,7 @@ const emit = defineEmits(['toggle-sidebar', 'toggle-theme'])
 
 const router = useRouter()
 const auth = useAuth()
-const { user, userName, userRole, isSuperadmin, logout } = auth
+const { user, userName, userRole, isSuperadmin, isManajemen, logout } = auth
 
 const userInitial = computed(() => (user.value?.name?.charAt(0) || 'U'))
 
@@ -40,7 +40,7 @@ async function handleLogout() {
 
       <h1 class="text-xl font-semibold text-(--text-main)">{{ title }}</h1>
 
-      <template v-if="isSuperadmin">
+      <template v-if="isSuperadmin || isManajemen">
         <span class="text-(--text-soft) mx-2">|</span>
         <div class="flex rounded-md bg-(--bg-elevated) p-0.5">
           <button

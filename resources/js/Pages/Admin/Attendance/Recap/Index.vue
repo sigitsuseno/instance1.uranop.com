@@ -9,7 +9,13 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <BaseButton variant="primary" :loading="isGenerating" :disabled="!canRegenerate" @click="handleGenerate">
+        <BaseButton 
+          variant="primary" 
+          :loading="isGenerating" 
+          :disabled="!canRegenerate || auth.isManajemen" 
+          @click="auth.isManajemen ? null : handleGenerate()"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
@@ -21,8 +27,9 @@
         <span v-if="!canRegenerate" class="text-xs text-(--text-muted) italic">(data sudah di-approve)</span>
         <BaseButton
           :variant="isApproving ? 'primary' : 'secondary'"
-          :class="isApproving ? '!bg-green-600' : ''"
-          @click="toggleApproveMode"
+          :class="[isApproving ? '!bg-green-600' : '', auth.isManajemen ? 'opacity-50 cursor-not-allowed' : '']"
+          @click="auth.isManajemen ? null : toggleApproveMode()"
+          :disabled="auth.isManajemen"
         >
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -35,8 +42,10 @@
           v-if="isApproving && checkedIds.length > 0"
           variant="primary"
           class="!bg-green-600"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
           :loading="isProcessing"
-          @click="handleProses"
+          @click="auth.isManajemen ? null : handleProses()"
+          :disabled="auth.isManajemen"
         >
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -186,9 +195,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import BaseButton from '@/Components/BaseButton.vue'
-import { useApi } from '@/composables/useApi'
-import { useAuth } from '@/composables/useAuth'
+import BaseButton from '../../../../Components/BaseButton.vue'
+import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
+
 
 const { get, post } = useApi()
 const auth = useAuth()

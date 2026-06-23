@@ -19,13 +19,14 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmManager = computed(() => userRole.value === 'adm_manager')
   const isHrbranch = computed(() => userRole.value === 'hrbranch')
   const isHrAst = computed(() => userRole.value === 'hr_ast')
+  const isManajemen = computed(() => userRole.value === 'manajemen')
 
   const canAccessAdmin = computed(() =>
-    ['superadmin', 'hrmanager', 'hr_ast'].includes(userRole.value)
+    ['superadmin', 'hrmanager', 'hr_ast', 'manajemen'].includes(userRole.value)
   )
 
   const canAccessSupervisor = computed(() =>
-    ['superadmin', 'adm_manager', 'hrbranch'].includes(userRole.value)
+    ['superadmin', 'adm_manager', 'hrbranch', 'manajemen'].includes(userRole.value)
   )
 
   function setToken(value) {
@@ -78,6 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmManager,
     isHrbranch,
     isHrAst,
+    isManajemen,
     canAccessAdmin,
     canAccessSupervisor,
     login,

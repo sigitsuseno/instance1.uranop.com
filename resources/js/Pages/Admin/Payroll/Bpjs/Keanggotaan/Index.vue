@@ -8,13 +8,13 @@
         </p>
       </div>
       <div class="flex gap-2">
-        <BaseButton variant="primary" @click="openAddModal" v-if="selectedEmployee === null">
+        <BaseButton variant="primary" @click="openAddModal" v-if="selectedEmployee === null" :disabled="isManajemen">
           <template #icon-left>
             <span class="text-lg">+</span>
           </template>
           Tambah BPJS
         </BaseButton>
-        <BaseButton variant="amber" :loading="isGenerating" @click="handleGenerate">
+        <BaseButton variant="amber" :loading="isGenerating" @click="handleGenerate" :disabled="isManajemen">
           <template #icon-left>
             <span class="text-lg">⚡</span>
           </template>
@@ -80,33 +80,33 @@
               <td class="p-3 text-center">
                 <input type="checkbox" :checked="emp.has_bpjs_tk"
                   @change="toggleCheckbox(emp, 'has_bpjs_tk', $event)"
-                  class="w-4 h-4 rounded accent-(--primary) cursor-pointer" />
+                  class="w-4 h-4 rounded accent-(--primary) cursor-pointer" :disabled="isManajemen" />
               </td>
               <td class="p-3 text-center">
                 <input type="checkbox" :checked="emp.has_bpjs_ks"
                   @change="toggleCheckbox(emp, 'has_bpjs_ks', $event)"
-                  class="w-4 h-4 rounded accent-(--primary) cursor-pointer" />
+                  class="w-4 h-4 rounded accent-(--primary) cursor-pointer" :disabled="isManajemen" />
               </td>
               <td class="p-3 text-center">
                 <input type="checkbox" :checked="emp.has_bpjs_pen"
                   @change="toggleCheckbox(emp, 'has_bpjs_pen', $event)"
-                  class="w-4 h-4 rounded accent-(--primary) cursor-pointer" />
+                  class="w-4 h-4 rounded accent-(--primary) cursor-pointer" :disabled="isManajemen" />
               </td>
               <td class="p-3 text-center">
                 <div class="flex justify-center gap-1">
                   <button v-if="emp.bpjs_id" @click="openEditModal(emp)"
-                    class="p-1.5 rounded hover:bg-(--bg-hover) text-(--text-muted) hover:text-(--primary)"
-                    title="Edit BPJS">
+                    class="p-1.5 rounded hover:bg-(--bg-hover) text-(--text-muted) hover:text-(--primary) disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Edit BPJS" :disabled="isManajemen">
                     ✏️
                   </button>
                   <button v-else @click="openAddForEmployee(emp)"
-                    class="p-1.5 rounded hover:bg-(--bg-hover) text-(--text-muted) hover:text-green-500"
-                    title="Tambah BPJS">
+                    class="p-1.5 rounded hover:bg-(--bg-hover) text-(--text-muted) hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Tambah BPJS" :disabled="isManajemen">
                     ＋
                   </button>
                   <button v-if="emp.bpjs_id" @click="confirmDelete(emp)"
-                    class="p-1.5 rounded hover:bg-red-50 text-(--text-muted) hover:text-red-500"
-                    title="Hapus BPJS">
+                    class="p-1.5 rounded hover:bg-red-50 text-(--text-muted) hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Hapus BPJS" :disabled="isManajemen">
                     🗑
                   </button>
                 </div>
@@ -212,11 +212,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
+import { useAuth } from '@/composables/useAuth'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 
 const { get, post, put, destroy } = useApi()
+const { isManajemen } = useAuth()
 
 const employees = ref([])
 const loading = ref(false)

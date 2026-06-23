@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
+import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import Badge from '../../../../Components/Badge.vue'
@@ -11,6 +12,7 @@ const route = useRoute()
 const router = useRouter()
 const { get } = useApi()
 const notification = useNotificationStore()
+const permission = usePermissionStore()
 
 const salaryId = route.params.id
 const loading = ref(true)
@@ -66,7 +68,7 @@ const getChangeTypeBadge = (type) => {
           <template #icon-left><i class="bx bx-arrow-back text-lg"></i></template>
           Kembali
         </BaseButton>
-        <BaseButton v-if="salary" variant="primary" @click="$router.push(`/admin/employees/salaries/${salary.id}/edit`)">
+        <BaseButton v-if="salary && permission.can('edit employees')" variant="primary" @click="$router.push(`/admin/employees/salaries/${salary.id}/edit`)">
           <template #icon-left><i class="bx bx-edit text-lg"></i></template>
           Edit
         </BaseButton>

@@ -11,7 +11,13 @@
       <BaseCard>
         <template #title>Tipe Cuti</template>
         <template #actions>
-          <BaseButton variant="primary" size="sm" @click="openLeaveTypeForm(null)">
+          <BaseButton 
+            variant="primary" 
+            size="sm" 
+            @click="auth.isManajemen ? null : openLeaveTypeForm(null)"
+            :disabled="auth.isManajemen"
+            :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+          >
             <template #icon-left>
               <IconPlus class="w-4 h-4" />
             </template>
@@ -38,11 +44,23 @@
           </template>
           <template #item.actions="{ item }">
             <div class="flex items-center gap-1">
-              <BaseButton variant="ghost" size="sm" @click="openLeaveTypeForm(item)">
+              <BaseButton 
+                variant="ghost" 
+                size="sm" 
+                @click="auth.isManajemen ? null : openLeaveTypeForm(item)"
+                :disabled="auth.isManajemen"
+                :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+              >
                 <IconPencil class="w-4 h-4" />
               </BaseButton>
-              <BaseButton variant="ghost" size="sm" @click="deleteLeaveType(item)">
-                <IconTrash class="w-4 h-4 text-(--danger)" />
+              <BaseButton 
+                variant="ghost" 
+                size="sm" 
+                @click="auth.isManajemen ? null : deleteLeaveType(item)"
+                :disabled="auth.isManajemen"
+                :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+              >
+                <IconTrash class="w-4 h-4" :class="auth.isManajemen ? '' : 'text-(--danger)'" />
               </BaseButton>
             </div>
           </template>
@@ -57,17 +75,35 @@
           <DataTable :headers="policyHeaders" :items="policies" :loading="loadingPolicies">
              <template #item.actions="{ item }">
                <div class="flex items-center gap-1">
-                 <BaseButton variant="ghost" size="sm" @click="openPolicyForm(item)">
+                 <BaseButton 
+                   variant="ghost" 
+                   size="sm" 
+                   @click="auth.isManajemen ? null : openPolicyForm(item)"
+                   :disabled="auth.isManajemen"
+                   :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+                 >
                    <IconPencil class="w-4 h-4" />
                  </BaseButton>
-                 <BaseButton variant="ghost" size="sm" @click="deletePolicy(item)">
-                   <IconTrash class="w-4 h-4 text-(--danger)" />
+                 <BaseButton 
+                   variant="ghost" 
+                   size="sm" 
+                   @click="auth.isManajemen ? null : deletePolicy(item)"
+                   :disabled="auth.isManajemen"
+                   :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+                 >
+                   <IconTrash class="w-4 h-4" :class="auth.isManajemen ? '' : 'text-(--danger)'" />
                  </BaseButton>
                </div>
              </template>
           </DataTable>
           <div class="flex justify-start">
-             <BaseButton variant="outline" size="sm" @click="openPolicyForm(null)">Tambah Kebijakan</BaseButton>
+             <BaseButton 
+               variant="outline" 
+               size="sm" 
+               @click="auth.isManajemen ? null : openPolicyForm(null)"
+               :disabled="auth.isManajemen"
+               :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+             >Tambah Kebijakan</BaseButton>
           </div>
         </div>
       </BaseCard>
@@ -85,17 +121,35 @@
              </template>
              <template #item.actions="{ item }">
                <div class="flex items-center gap-1">
-                 <BaseButton variant="ghost" size="sm" @click="openPeriodForm(item)">
+                 <BaseButton 
+                   variant="ghost" 
+                   size="sm" 
+                   @click="auth.isManajemen ? null : openPeriodForm(item)"
+                   :disabled="auth.isManajemen"
+                   :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+                 >
                    <IconPencil class="w-4 h-4" />
                  </BaseButton>
-                 <BaseButton variant="ghost" size="sm" @click="deletePeriod(item)">
-                   <IconTrash class="w-4 h-4 text-(--danger)" />
+                 <BaseButton 
+                   variant="ghost" 
+                   size="sm" 
+                   @click="auth.isManajemen ? null : deletePeriod(item)"
+                   :disabled="auth.isManajemen"
+                   :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+                 >
+                   <IconTrash class="w-4 h-4" :class="auth.isManajemen ? '' : 'text-(--danger)'" />
                  </BaseButton>
                </div>
              </template>
           </DataTable>
           <div class="flex justify-start">
-            <BaseButton variant="primary" size="sm" @click="openPeriodForm(null)">Tambah Periode</BaseButton>
+            <BaseButton 
+              variant="primary" 
+              size="sm" 
+              @click="auth.isManajemen ? null : openPeriodForm(null)"
+              :disabled="auth.isManajemen"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+            >Tambah Periode</BaseButton>
           </div>
         </div>
       </BaseCard>
@@ -194,9 +248,11 @@ import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { IconPlus, IconPencil, IconTrash } from '../../../Components/Icons/index.js'
 import { useApi } from '../../../composables/useApi'
+import { useAuth } from '../../../composables/useAuth'
 import { useNotification } from '../../../composables/useNotification'
 
 const api = useApi()
+const auth = useAuth()
 const notify = useNotification()
 
 // State Data

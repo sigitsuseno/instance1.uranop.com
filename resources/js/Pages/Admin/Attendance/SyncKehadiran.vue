@@ -9,7 +9,13 @@
         </p>
       </div>
       <div class="flex gap-2">
-        <BaseButton variant="primary" :loading="isSyncing" @click="handleSync">
+        <BaseButton 
+          variant="primary" 
+          :loading="isSyncing" 
+          @click="auth.isManajemen ? null : handleSync()"
+          :disabled="auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
           <template #icon-left>
             <svg class="w-4 h-4" :class="{ 'animate-spin': isSyncing }" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2.5">
@@ -19,7 +25,13 @@
           </template>
           Sync Kehadiran
         </BaseButton>
-        <BaseButton variant="secondary" :loading="isCompleting" @click="handleLengkapi">
+        <BaseButton 
+          variant="secondary" 
+          :loading="isCompleting" 
+          @click="auth.isManajemen ? null : handleLengkapi()"
+          :disabled="auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 11l3 3L22 4" />
@@ -27,7 +39,13 @@
           </template>
           Lengkapi
         </BaseButton>
-        <BaseButton variant="secondary" :loading="isUpdatingStatus" @click="handleUpdateStatus">
+        <BaseButton 
+          variant="secondary" 
+          :loading="isUpdatingStatus" 
+          @click="auth.isManajemen ? null : handleUpdateStatus()"
+          :disabled="auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
@@ -208,8 +226,13 @@
 
             <!-- Date columns -->
             <td v-for="d in visibleDates" :key="d.date"
-              class="px-2 py-0 text-center align-top cursor-pointer hover:bg-(--bg-elevated) transition border-l border-(--border-soft)/30"
-              :class="{ 'bg-red-50/20 dark:bg-red-900/5': d.isWeekend }" @click="openEdit(emp, d)">
+              class="px-2 py-0 text-center align-top transition border-l border-(--border-soft)/30"
+              :class="[
+                { 'bg-red-50/20 dark:bg-red-900/5': d.isWeekend },
+                auth.isManajemen ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-(--bg-elevated)'
+              ]"
+              @click="auth.isManajemen ? null : openEdit(emp, d)"
+            >
               <div class="py-2 space-y-[6px]">
                 <!-- Check In -->
                 <div class="text-xs font-mono"
@@ -461,8 +484,10 @@ import { ref, computed, watch } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 import { useApi } from '../../../composables/useApi'
+import { useAuth } from '../../../composables/useAuth'
 
 const { get, post } = useApi()
+const auth = useAuth()
 
 // ── State ──
 const isSyncing = ref(false)

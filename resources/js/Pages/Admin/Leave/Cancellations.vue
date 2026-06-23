@@ -59,8 +59,9 @@
         <BaseButton
           variant="danger"
           size="sm"
-          @click="toggleCancelMode"
-          :class="{ 'ring-2 ring-(--danger)': cancelMode }"
+          @click="auth.isManajemen ? null : toggleCancelMode()"
+          :disabled="auth.isManajemen"
+          :class="{ 'ring-2 ring-(--danger)': cancelMode, 'opacity-50 cursor-not-allowed': auth.isManajemen }"
         >
           <template #icon-left><i class="bx bx-x-circle text-base"></i></template>
           Batalkan
@@ -111,8 +112,15 @@
         </template>
         <template #item.actions="{ item }">
           <div class="flex items-center gap-1">
-            <BaseButton variant="ghost" size="sm" @click="singleCancel(item)" title="Batalkan">
-              <template #icon-left><i class="bx bx-x-circle text-lg text-(--danger)"></i></template>
+            <BaseButton 
+              variant="ghost" 
+              size="sm" 
+              @click="auth.isManajemen ? null : singleCancel(item)" 
+              title="Batalkan"
+              :disabled="auth.isManajemen"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed text-gray-400' : ''"
+            >
+              <template #icon-left><i class="bx bx-x-circle text-lg" :class="auth.isManajemen ? '' : 'text-(--danger)'"></i></template>
             </BaseButton>
           </div>
         </template>
@@ -160,9 +168,11 @@ import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import Pagination from '../../../Components/Table/Pagination.vue'
 import { useApi } from '../../../composables/useApi'
+import { useAuth } from '../../../composables/useAuth'
 import { useNotification } from '../../../composables/useNotification'
 
 const api = useApi()
+const auth = useAuth()
 const notify = useNotification()
 
 // --- State ---

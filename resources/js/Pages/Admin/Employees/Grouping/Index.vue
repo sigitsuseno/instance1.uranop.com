@@ -1,10 +1,15 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useApi } from '../../../../composables/useApi';
 import { useNotificationStore } from '../../../../Stores/notification';
+import { usePermissionStore } from '../../../../Stores/permission';
 import KanbanColumn from './Components/KanbanColumn.vue';
 import ConfirmDialog from '../../../../Components/ConfirmDialog.vue';
 import ImportModal from './Components/ImportModal.vue';
+
+const router = useRouter();
+const permission = usePermissionStore();
 
 const { get, post } = useApi();
 const notification = useNotificationStore();
@@ -400,7 +405,7 @@ const submitBatch = async () => {
             
             <div class="flex items-center gap-3">
                 <transition name="slide-fade">
-                    <div v-if="hasChanges" class="flex items-center gap-2">
+                    <div v-if="hasChanges && permission.can('edit employees')" class="flex items-center gap-2">
                         <button 
                             @click="cancelChanges"
                             class="px-4 py-2.5 rounded-md font-bold text-(--text-soft) hover:text-(--text-main) transition-all"
@@ -418,7 +423,7 @@ const submitBatch = async () => {
                 </transition>
 
                 <transition name="slide-fade">
-                    <div v-if="selectedIds.length > 0 && !hasChanges" class="flex items-center gap-2">
+                    <div v-if="selectedIds.length > 0 && !hasChanges && permission.can('edit employees')" class="flex items-center gap-2">
                         <button 
                             @click="openBatchAssign"
                             class="bg-(--primary) text-white px-6 py-2.5 rounded-md font-bold shadow-lg shadow-(--primary-glow) flex items-center gap-2 hover:scale-105 transition-all"
@@ -429,7 +434,7 @@ const submitBatch = async () => {
                     </div>
                 </transition>
 
-                <div v-if="activeTab === 'payroll_cycle' && !hasChanges && selectedIds.length === 0" class="flex items-center gap-2">
+                <div v-if="activeTab === 'payroll_cycle' && !hasChanges && selectedIds.length === 0 && permission.can('edit employees')" class="flex items-center gap-2">
                     <button 
                         @click="autoEnroll"
                         class="bg-(--warning) text-white px-4 py-2.5 rounded-md font-bold shadow-lg shadow-(--warning)/20 flex items-center gap-2 hover:opacity-90 transition-all"
@@ -440,7 +445,7 @@ const submitBatch = async () => {
                     </button>
                 </div>
 
-                <div v-if="!hasChanges && selectedIds.length === 0" class="flex items-center gap-2">
+                <div v-if="!hasChanges && selectedIds.length === 0 && permission.can('import employees')" class="flex items-center gap-2">
                     <button 
                         @click="showImportModal = true"
                         class="bg-(--primary) text-white px-4 py-2.5 rounded-md font-bold shadow-lg shadow-(--primary)/20 flex items-center gap-2 hover:opacity-90 transition-all"

@@ -3,12 +3,19 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
+import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
 const { get, post } = useApi()
+const permission = usePermissionStore()
+
+// Guard: redirect jika tidak punya permission create
+if (!permission.can('create employees')) {
+  router.replace('/admin/employees/salaries')
+}
 
 const employees = ref([])
 const loading = ref(false)

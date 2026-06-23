@@ -3,6 +3,7 @@ import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
+import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import Pagination from '../../../../Components/Table/Pagination.vue'
@@ -10,6 +11,7 @@ import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
+const permission = usePermissionStore()
 const { get, destroy: apiDelete } = useApi()
 
 const loading = ref(false)
@@ -137,11 +139,11 @@ onMounted(() => {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <BaseButton variant="secondary" @click="$router.push('/admin/employees/salaries/import')">
+        <BaseButton v-if="permission.can('import employees')" variant="secondary" @click="$router.push('/admin/employees/salaries/import')">
           <template #icon-left><i class="bx bx-import text-lg"></i></template>
           Import
         </BaseButton>
-        <BaseButton variant="primary" @click="$router.push('/admin/employees/salaries/create')">
+        <BaseButton v-if="permission.can('create employees')" variant="primary" @click="$router.push('/admin/employees/salaries/create')">
           <template #icon-left><i class="bx bx-plus text-lg"></i></template>
           Tambah Gaji
         </BaseButton>
@@ -224,8 +226,8 @@ onMounted(() => {
               <td class="px-4 py-3 text-right">
                 <div class="flex items-center justify-end gap-1">
                   <button @click="viewSalary(salary.id)" class="w-8 h-8 rounded text-(--text-muted) hover:text-(--primary) hover:bg-(--bg-elevated) transition-all"><i class="bx bx-show"></i></button>
-                  <button @click="editSalary(salary.id)" class="w-8 h-8 rounded text-(--text-muted) hover:text-(--primary) hover:bg-(--bg-elevated) transition-all"><i class="bx bx-edit"></i></button>
-                  <button @click="confirmDelete(salary)" class="w-8 h-8 rounded text-(--text-muted) hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"><i class="bx bx-trash"></i></button>
+                  <button v-if="permission.can('edit employees')" @click="editSalary(salary.id)" class="w-8 h-8 rounded text-(--text-muted) hover:text-(--primary) hover:bg-(--bg-elevated) transition-all"><i class="bx bx-edit"></i></button>
+                  <button v-if="permission.can('delete employees')" @click="confirmDelete(salary)" class="w-8 h-8 rounded text-(--text-muted) hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"><i class="bx bx-trash"></i></button>
                 </div>
               </td>
             </tr>

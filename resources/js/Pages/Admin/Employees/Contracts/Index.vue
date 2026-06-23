@@ -3,6 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
+import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
@@ -13,6 +14,8 @@ import ContractForm from './Form.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
+const permission = usePermissionStore()
+
 const { get, post, patch, destroy: apiDelete } = useApi()
 
 // State
@@ -260,7 +263,7 @@ onMounted(() => {
         </div>
       </div>
       <div class="flex items-center gap-3">
-        <BaseButton variant="secondary" @click="$router.push('/admin/employees/contracts/import')">
+        <BaseButton v-if="permission.can('import employees')" variant="secondary" @click="$router.push('/admin/employees/contracts/import')">
           <template #icon-left>
             <i class="bx bx-upload text-lg"></i>
           </template>
@@ -473,7 +476,7 @@ onMounted(() => {
                   <button @click="fetchContractHistory(emp)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-soft) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors" title="Riwayat Kontrak">
                     <i class="bx bx-history text-lg"></i>
                   </button>
-                  <button @click="openCreateModal(emp)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-soft) hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Tambah Kontrak Baru">
+                  <button v-if="permission.can('create employees')" @click="openCreateModal(emp)" class="w-8 h-8 flex items-center justify-center rounded-md text-(--text-soft) hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors" title="Tambah Kontrak Baru">
                     <i class="bx bx-plus-circle text-lg"></i>
                   </button>
                 </div>
@@ -516,7 +519,7 @@ onMounted(() => {
         <div v-for="contract in contractHistory" :key="contract.id" class="p-4 rounded-md border border-(--border-soft) bg-(--bg-elevated) relative group">
           <div class="absolute top-4 right-4 flex gap-2">
             <!-- Edit Button -->
-            <button @click="openEditModal(contract, selectedEmployee)" class="text-(--text-soft) hover:text-(--primary) transition-colors">
+            <button v-if="permission.can('edit employees')" @click="openEditModal(contract, selectedEmployee)" class="text-(--text-soft) hover:text-(--primary) transition-colors">
               <i class="bx bx-edit text-lg"></i>
             </button>
             <span v-if="contract.is_latest" class="text-[9px] font-bold bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded border border-blue-500/20 uppercase">LATEST</span>
@@ -543,7 +546,7 @@ onMounted(() => {
                 <Badge :variant="contract.compensation_paid_at ? 'success' : 'warning'" class="text-[10px]">
                   {{ contract.compensation_paid_at ? 'Sudah Dibayar' : 'Belum Dibayar' }}
                 </Badge>
-                <button v-if="!contract.compensation_paid_at && getStatusBadgeVariant(contract) === 'danger'" 
+                <button v-if="!contract.compensation_paid_at && getStatusBadgeVariant(contract) === 'danger' && permission.can('edit employees')" 
                         @click="markCompensationPaid(contract.id, selectedEmployee.id)"
                         class="text-xs text-blue-500 hover:underline">
                   Tandai Selesai
@@ -557,7 +560,7 @@ onMounted(() => {
       
       <template #footer>
         <BaseButton variant="secondary" @click="showHistoryModal = false">Tutup</BaseButton>
-        <BaseButton variant="primary" @click="openCreateModal()">Tambah Kontrak Baru</BaseButton>
+        <BaseButton v-if="permission.can('create employees')" variant="primary" @click="openCreateModal()">Tambah Kontrak Baru</BaseButton>
       </template>
     </BaseModal>
 

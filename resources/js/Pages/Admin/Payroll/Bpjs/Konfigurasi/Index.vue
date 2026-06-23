@@ -7,7 +7,7 @@
           Atur persentase iuran BPJS — versi berlaku berdasarkan tanggal efektif
         </p>
       </div>
-      <BaseButton variant="primary" @click="openAdd">
+      <BaseButton variant="primary" @click="openAdd" :disabled="isManajemen">
         <template #icon-left>＋</template>
         Tambah Konfigurasi
       </BaseButton>
@@ -70,10 +70,10 @@
               </td>
               <td class="p-3 text-center">
                 <div class="flex justify-center gap-1">
-                  <button @click="openEdit(c)" class="p-1.5 hover:text-(--primary)" title="Edit">✏️</button>
-                  <button v-if="!c.is_active" @click="toggleActive(c, true)" class="p-1.5 hover:text-green-500" title="Aktifkan">✅</button>
-                  <button v-if="c.is_active" @click="toggleActive(c, false)" class="p-1.5 hover:text-yellow-500" title="Nonaktifkan">⏸</button>
-                  <button @click="confirmDelete(c)" class="p-1.5 hover:text-red-500" title="Hapus">🗑</button>
+                  <button @click="openEdit(c)" class="p-1.5 hover:text-(--primary) disabled:opacity-50 disabled:cursor-not-allowed" title="Edit" :disabled="isManajemen">✏️</button>
+                  <button v-if="!c.is_active" @click="toggleActive(c, true)" class="p-1.5 hover:text-green-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Aktifkan" :disabled="isManajemen">✅</button>
+                  <button v-if="c.is_active" @click="toggleActive(c, false)" class="p-1.5 hover:text-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Nonaktifkan" :disabled="isManajemen">⏸</button>
+                  <button @click="confirmDelete(c)" class="p-1.5 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed" title="Hapus" :disabled="isManajemen">🗑</button>
                 </div>
               </td>
             </tr>
@@ -163,11 +163,13 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
+import { useAuth } from '@/composables/useAuth'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 
 const { get, post, put, destroy } = useApi()
+const { isManajemen } = useAuth()
 
 const configs = ref([])
 const loading = ref(false)

@@ -2,6 +2,8 @@
 import { ref, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
+import { useAuthStore } from '../../Stores/auth'
+import { usePermissionStore } from '../../Stores/permission'
 
 const props = defineProps({
   collapsed: Boolean,
@@ -10,7 +12,9 @@ const props = defineProps({
 const emit = defineEmits(['toggle'])
 
 const route = useRoute()
-const { isSuperadmin, isHrmanager, isAdmManager, isHrAst } = useAuth()
+const { isSuperadmin, isHrmanager, isAdmManager, isHrAst, isManajemen } = useAuth()
+const authStore = useAuthStore()
+const permission = usePermissionStore()
 
 const allMenus = [
   {
@@ -34,7 +38,7 @@ const allMenus = [
   {
     title: 'Perusahaan',
     icon: 'bx bx-building-house',
-    visible: isSuperadmin.value || isHrmanager.value,
+    visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Profil Perusahaan', icon: 'bx bx-building', route: '/admin/organization/company-profile' },
       { title: 'Admin', icon: 'bx bx-user-pin', route: '/admin/organization/admins', visible: isSuperadmin.value },
@@ -45,15 +49,15 @@ const allMenus = [
     icon: 'bx bx-group',
     children: [
       { title: 'Karyawan', icon: 'bx bx-user', route: '/admin/employees' },
-      { title: 'Import Karyawan', icon: 'bx bx-upload', route: '/admin/employees/import' },
-      { title: 'Grouping Karyawan', icon: 'bx bx-layer', route: '/admin/employees/grouping' },
+      { title: 'Import Karyawan', icon: 'bx bx-upload', route: '/admin/employees/import', visible: permission.can('import employees') },
+      { title: 'Grouping Karyawan', icon: 'bx bx-layer', route: '/admin/employees/grouping', visible: !isManajemen.value },
       { title: 'Gaji Karyawan', icon: 'bx bx-money', route: '/admin/employees/salaries' },
-      { title: 'Kontrak Kerja', icon: 'bx bx-file', route: '/admin/employees/contracts' },
+      { title: 'Kontrak Kerja', icon: 'bx bx-file', route: '/admin/employees/contracts', visible: !isManajemen.value },
       { title: 'Kompensasi', icon: 'bx bx-money-withdraw', route: '/admin/employees/kompensasi' },
-      { title: 'Riwayat Pekerjaan', icon: 'bx bx-history', route: '/admin/employees/position-histories' },
-      { title: 'Keluarga & Tanggungan', icon: 'bx bx-heart', route: '/admin/employees/families' },
-      { title: 'Dokumen', icon: 'bx bx-folder', route: '/admin/employees/documents' },
-      { title: 'Resign & PHK', icon: 'bx bx-exit', route: '/admin/employees/terminations' },
+      { title: 'Riwayat Pekerjaan', icon: 'bx bx-history', route: '/admin/employees/position-histories', visible: !isManajemen.value },
+      { title: 'Keluarga & Tanggungan', icon: 'bx bx-heart', route: '/admin/employees/families', visible: !isManajemen.value },
+      { title: 'Dokumen', icon: 'bx bx-folder', route: '/admin/employees/documents', visible: !isManajemen.value },
+      { title: 'Resign & PHK', icon: 'bx bx-exit', route: '/admin/employees/terminations', visible: !isManajemen.value },
     ],
   },
   {
@@ -63,7 +67,7 @@ const allMenus = [
       { title: 'Jadwal Umum', icon: 'bx bx-calendar', route: '/admin/schedule/roster' },
       { title: 'Pola & Jadwal Kerja', icon: 'bx bx-time-five', route: '/admin/schedule/work-patterns' },
       { title: 'Shift', icon: 'bx bx-transfer-alt', route: '/admin/schedule/shifts' },
-      { title: 'Buat Jadwal', icon: 'bx bx-calendar-plus', route: '/admin/schedule/roster/generate' },
+      { title: 'Buat Jadwal', icon: 'bx bx-calendar-plus', route: '/admin/schedule/roster/generate', visible: !isManajemen.value },
     ],
   },
   {
@@ -74,13 +78,13 @@ const allMenus = [
       { title: 'Pengajuan Cuti', icon: 'bx bx-calendar-edit', route: '/admin/leave/requests' },
       { title: 'Pembatalan Cuti', icon: 'bx bx-calendar-x', route: '/admin/leave/cancellations', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Saldo Cuti', icon: 'bx bx-bar-chart-square', route: '/admin/leave/balances' },
-      { title: 'Rekap Cuti', icon: 'bx bx-archive', route: '/admin/leave/recap', visible: isSuperadmin.value || isHrmanager.value },
+      { title: 'Rekap Cuti', icon: 'bx bx-archive', route: '/admin/leave/recap', visible: isSuperadmin.value || isHrmanager.value || isManajemen.value },
     ],
   },
   {
     title: 'Kehadiran',
     icon: 'bx bx-calendar-check',
-    visible: isSuperadmin.value || isHrmanager.value,
+    visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Import Kehadiran', icon: 'bx bx-upload', route: '/admin/attendance/import', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Sync Kehadiran', icon: 'bx bx-sync', route: '/admin/attendance/sync', visible: isSuperadmin.value || isHrmanager.value },
@@ -92,7 +96,7 @@ const allMenus = [
   {
     title: 'Pengelolaan BPJS',
     icon: 'bx bx-health',
-    visible: isSuperadmin.value || isHrmanager.value,
+    visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Keanggotaan', icon: 'bx bx-group', route: '/admin/payroll/bpjs/keanggotaan' },
       { title: 'Iuran BPJS', icon: 'bx bx-calculator', route: '/admin/payroll/bpjs/iuran' },
@@ -103,7 +107,7 @@ const allMenus = [
   {
     title: 'PPh 21',
     icon: 'bx bx-receipt',
-    visible: isSuperadmin.value || isHrmanager.value,
+    visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Pajak Karyawan', icon: 'bx bx-user-pin', route: '/admin/pph/employees' },
       { title: 'TER Bulanan', icon: 'bx bx-calendar-edit', route: '/admin/pph/ter' },
@@ -113,7 +117,7 @@ const allMenus = [
   {
     title: 'Payroll',
     icon: 'bx bx-money',
-    visible: isSuperadmin.value || isHrmanager.value,
+    visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Gaji Karyawan', icon: 'bx bx-calculator', route: '/admin/payroll/gaji-karyawan' },
       { title: 'Slip Gaji', icon: 'bx bx-file', route: '/admin/payroll/slip' },
@@ -123,7 +127,7 @@ const allMenus = [
   {
     title: 'Laporan',
     icon: 'bx bxs-report',
-    visible: isSuperadmin.value || isHrmanager.value,
+    visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Lembur & Uang Makan', icon: 'bx bx-food-menu', route: '/admin/reports/lembur-uang-makan' },
       { title: 'Laporan Kehadiran', icon: 'bx bx-calendar-check', route: '/admin/reports/kehadiran' },
@@ -140,12 +144,25 @@ const allMenus = [
   },
 ]
 
+// Submenu yang di-hide dari manajemen
+const manajemenHiddenRoutes = [
+  '/admin/employees/import',
+  '/admin/employees/position-histories',
+  '/admin/employees/families',
+  '/admin/employees/documents',
+  '/admin/employees/terminations',
+]
+
 const menuItems = computed(() => {
   return allMenus
     .filter(parent => parent.visible !== false)
     .map(parent => {
       if (parent.children) {
-        const filteredChildren = parent.children.filter(child => child.visible !== false)
+        const filteredChildren = parent.children.filter(child => {
+          if (child.visible === false) return false
+          if (authStore.userRole === 'manajemen' && manajemenHiddenRoutes.includes(child.route)) return false
+          return true
+        })
         if (filteredChildren.length === 0) return null
         return { ...parent, children: filteredChildren }
       }
@@ -260,7 +277,7 @@ watch(
             class="mt-1 ml-4 space-y-1 border-l border-(--border-soft) pl-2"
           >
             <router-link
-              v-for="child in item.children"
+              v-for="child in item.children.filter(c => !(authStore.userRole === 'manajemen' && manajemenHiddenRoutes.includes(c.route)))"
               :key="child.title"
               :to="child.route !== '#' ? child.route : ''"
               :class="[

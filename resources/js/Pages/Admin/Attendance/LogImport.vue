@@ -45,12 +45,15 @@
           </div>
 
           <div
-            class="border-2 border-dashed border-(--border-soft) rounded-md p-8 text-center cursor-pointer hover:border-(--primary)/50 hover:bg-(--primary)/5 transition-colors"
-            :class="{ 'border-(--primary) bg-(--primary)/5': dragOver }"
-            @click="triggerFileInput"
-            @dragover.prevent="dragOver = true"
-            @dragleave.prevent="dragOver = false"
-            @drop.prevent="handleDrop"
+            class="border-2 border-dashed rounded-md p-8 text-center transition-colors"
+            :class="[
+              auth.isManajemen ? 'border-(--border-soft) opacity-50 cursor-not-allowed' : 'border-(--border-soft) cursor-pointer hover:border-(--primary)/50 hover:bg-(--primary)/5',
+              dragOver && !auth.isManajemen ? 'border-(--primary) bg-(--primary)/5' : ''
+            ]"
+            @click="auth.isManajemen ? null : triggerFileInput()"
+            @dragover.prevent="auth.isManajemen ? null : (dragOver = true)"
+            @dragleave.prevent="auth.isManajemen ? null : (dragOver = false)"
+            @drop.prevent="auth.isManajemen ? null : handleDrop($event)"
           >
             <input
               ref="fileInput"
@@ -72,13 +75,25 @@
               <p class="text-sm font-medium text-(--text-main)">{{ selectedFile.name }}</p>
               <p class="text-xs text-(--text-muted)">{{ formatFileSize(selectedFile.size) }}</p>
             </div>
-            <BaseButton variant="ghost" size="sm" @click="clearFile">
-              <IconTrash class="w-4 h-4" />
+            <BaseButton 
+              variant="ghost" 
+              size="sm" 
+              @click="auth.isManajemen ? null : clearFile()"
+              :disabled="auth.isManajemen"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+            >
+              <IconTrash class="w-4 h-4" :class="auth.isManajemen ? 'text-gray-400' : ''" />
             </BaseButton>
           </div>
 
           <div v-if="selectedFile" class="flex justify-end">
-            <BaseButton variant="primary" :loading="importing" @click="handleImport">
+            <BaseButton 
+              variant="primary" 
+              :loading="importing" 
+              @click="auth.isManajemen ? null : handleImport()"
+              :disabled="auth.isManajemen || importing"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+            >
               <template #icon-left>
                 <IconUpload class="w-4 h-4" />
               </template>
@@ -134,9 +149,11 @@ import BaseButton from '../../../Components/BaseButton.vue'
 import Badge from '../../../Components/Badge.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { IconDownload, IconUpload, IconTrash } from '../../../Components/Icons/index.js'
-import { useApi } from '../../../composables/useApi.js'
+import { useApi } from '../../../composables/useApi'
+import { useAuth } from '../../../composables/useAuth'
 
 const { post, get } = useApi()
+const auth = useAuth()
 
 const fileInput = ref(null)
 const selectedFile = ref(null)

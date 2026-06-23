@@ -5,7 +5,7 @@
         <h1 class="text-xl font-semibold text-(--text-main)">Shift Kerja</h1>
         <p class="text-sm text-(--text-muted) mt-1">Kelola master shift kerja karyawan</p>
       </div>
-      <BaseButton variant="primary" @click="openForm(null)">
+      <BaseButton :disabled="auth.isManajemen" variant="primary" @click="auth.isManajemen ? null : openForm(null)">
         <template #icon-left>
           <IconPlus class="w-4 h-4" />
         </template>
@@ -54,16 +54,20 @@
         <template #item.actions="{ item }">
           <div class="flex items-center gap-1">
             <button
-              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10 transition-colors"
+              class="p-1.5 rounded-md transition-colors"
+              :class="auth.isManajemen ? 'text-(--text-muted)/50 cursor-not-allowed' : 'text-(--text-muted) hover:text-(--primary) hover:bg-(--primary)/10'"
+              :disabled="auth.isManajemen"
               title="Edit"
-              @click="openForm(item)"
+              @click="auth.isManajemen ? null : openForm(item)"
             >
               <IconPencil class="w-4 h-4" />
             </button>
             <button
-              class="p-1.5 rounded-md text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10 transition-colors"
+              class="p-1.5 rounded-md transition-colors"
+              :class="auth.isManajemen ? 'text-(--text-muted)/50 cursor-not-allowed' : 'text-(--text-muted) hover:text-(--danger) hover:bg-(--danger)/10'"
+              :disabled="auth.isManajemen"
               title="Hapus"
-              @click="confirmDelete = item"
+              @click="auth.isManajemen ? null : (confirmDelete = item)"
             >
               <IconTrash class="w-4 h-4" />
             </button>
@@ -226,6 +230,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useScheduleStore } from '../../../../Stores/schedule'
+import { useAuth } from '../../../../composables/useAuth'
 import DataTable from '../../../../Components/Table/DataTable.vue'
 import Pagination from '../../../../Components/Table/Pagination.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
@@ -237,6 +242,7 @@ import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
 import { IconPlus, IconPencil, IconTrash } from '../../../../Components/Icons/index.js'
 
 const store = useScheduleStore()
+const auth = useAuth()
 
 onMounted(() => {
   store.fetchShifts()

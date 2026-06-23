@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 import { useNotificationStore } from '../../../../Stores/notification'
 import BaseModal from '../../../../Components/BaseModal.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
@@ -11,6 +12,8 @@ import PositionHistoryForm from './Form.vue'
 const router = useRouter()
 const { get } = useApi()
 const notification = useNotificationStore()
+const { isManajemen } = useAuth()
+if (isManajemen.value) { router.replace('/admin/employees') }
 
 // State
 const employees = ref([])
