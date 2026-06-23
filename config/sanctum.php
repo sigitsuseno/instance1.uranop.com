@@ -19,10 +19,10 @@ return [
     */
 
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
+        '%s%s%s',
+        'localhost,localhost:3000,localhost:5173,localhost:1420,localhost:8080,127.0.0.1,127.0.0.1:8000,::1,10.0.2.2,10.0.2.2:5173,10.0.2.2:1420,',
         Sanctum::currentApplicationUrlWithPort(),
-        // Sanctum::currentRequestHost(),
+        ',tauri://localhost,https://tauri.localhost,capacitor://localhost'
     ))),
 
     /*
