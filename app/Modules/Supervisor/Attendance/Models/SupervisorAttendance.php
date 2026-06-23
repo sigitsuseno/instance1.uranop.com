@@ -2,6 +2,12 @@
 
 namespace App\Modules\Supervisor\Attendance\Models;
 
+use App\Modules\Auth\Models\User;
+use App\Modules\Employee\Models\Employee;
+use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Organization\Models\Branch;
+use App\Modules\Organization\Models\Company;
+use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -9,7 +15,7 @@ class SupervisorAttendance extends Model
 {
     use SoftDeletes;
 
-    protected $table = 'supervisor_attendances';
+    protected $table = 'attendance_autologs';
 
     protected $fillable = [
         'company_id',
@@ -74,36 +80,36 @@ class SupervisorAttendance extends Model
     // Relationships
     public function company()
     {
-        return $this->belongsTo(\App\Modules\Organization\Models\Company::class);
+        return $this->belongsTo(Company::class);
     }
 
     public function leave()
     {
-        return $this->belongsTo(\App\Modules\Leave\Models\LeaveRequest::class, 'leave_id');
+        return $this->belongsTo(LeaveRequest::class, 'leave_id');
     }
 
     public function branch()
     {
-        return $this->belongsTo(\App\Modules\Organization\Models\Branch::class);
+        return $this->belongsTo(Branch::class);
     }
 
     public function employee()
     {
-        return $this->belongsTo(\App\Modules\Employee\Models\Employee::class);
+        return $this->belongsTo(Employee::class);
     }
 
     public function employeeShiftRoster()
     {
-        return $this->belongsTo(\App\Modules\Schedule\Models\EmployeeShiftRoster::class, 'employee_shift_roster_id');
+        return $this->belongsTo(EmployeeShiftRoster::class, 'employee_shift_roster_id');
     }
 
     public function lastEditedBy()
     {
-        return $this->belongsTo(\App\Modules\Auth\Models\User::class, 'last_edited_by');
+        return $this->belongsTo(User::class, 'last_edited_by');
     }
 
     public function lockedBy()
     {
-        return $this->belongsTo(\App\Modules\Auth\Models\User::class, 'locked_by');
+        return $this->belongsTo(User::class, 'locked_by');
     }
 }

@@ -3,31 +3,31 @@
 namespace App\Modules\Supervisor\Attendance\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Supervisor\Attendance\Actions\ImportAttendanceData;
 use App\Modules\Supervisor\Attendance\Imports\AttendanceDataFixImport;
+use App\Modules\Supervisor\Attendance\Services\AttendanceImportFromPrepares;
 use App\Modules\Supervisor\Attendance\Services\AttendanceOvertimeSyncService;
-use App\Modules\Supervisor\Attendance\Services\AuditorLogService;
-use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\PayPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Inertia\Inertia;
 
 class AttendanceImportController extends Controller
 {
-    protected AuditorLogService $auditorLogService;
-
     protected AttendanceOvertimeSyncService $overtimeSyncService;
 
-    public function __construct(AuditorLogService $auditorLogService, AttendanceOvertimeSyncService $overtimeSyncService)
-    {
-        $this->auditorLogService = $auditorLogService;
+    protected AttendanceImportFromPrepares $importFromPrepares;
+
+    public function __construct(
+        AttendanceOvertimeSyncService $overtimeSyncService,
+        AttendanceImportFromPrepares $importFromPrepares
+    ) {
         $this->overtimeSyncService = $overtimeSyncService;
+        $this->importFromPrepares = $importFromPrepares;
     }
 
     public function create()
     {
-        $periods = PayrollPeriod::select('id', 'name', 'code', 'start_date', 'end_date', 'status')
+        $periods = PayPeriod::select('id', 'name', 'start_date', 'end_date', 'status')
             ->orderBy('start_date', 'desc')
             ->get();
 
@@ -36,24 +36,19 @@ class AttendanceImportController extends Controller
         ]);
     }
 
-    public function store(Request $request, ImportAttendanceData $importer)
+    public function store(Request $request)
     {
-
         $request->validate([
-            'payroll_period_id' => ['required', 'exists:payroll_periods,id'],
+            'payroll_period_id' => ['required', 'exists:pay_periods,id'],
             'attendance_file' => ['required', 'file'],
         ]);
 
         $file = $request->file('attendance_file');
         if ($file->getClientOriginalExtension() !== 'bin' && $file->getClientOriginalExtension() !== 'dat') {
-            return back()->withErrors(['attendance_file' => 'File harus berformat .bin atau .dat']);
+            return response()->json(['errors' => ['attendance_file' => 'File harus berformat .bin atau .dat']], 422);
         }
 
-        // Validate session values
-        if (! session('company_id') || ! session('branch_id')) {
-            return back()->withErrors(['error' => 'Company ID atau Branch ID tidak ditemukan di session. Silakan login kembali.']);
-        }
-
+        // Periode 1-4: file XLSX hardcoded (data REAL input manual sebelum sistem)
         $periodFileMap = [
             1 => 'data_januari.xlsx',
             2 => 'februari.xlsx',
@@ -62,51 +57,77 @@ class AttendanceImportController extends Controller
         ];
 
         try {
+            $periodId = (int) $request->input('payroll_period_id');
+            $period = PayPeriod::findOrFail($periodId);
 
-            if (isset($periodFileMap[$request->input('payroll_period_id')])) {
-                $filePath = $periodFileMap[$request->input('payroll_period_id')];
-                $period = PayrollPeriod::findOrFail($request->input('payroll_period_id'));
+            if (isset($periodFileMap[$periodId])) {
+                // PERIODE 1-4: Import dari XLSX hardcoded
+                $filePath = $periodFileMap[$periodId];
 
                 $result = AttendanceDataFixImport::runImport(
-                    companyId: session('company_id'),
-                    branchId: session('branch_id'),
                     userId: Auth::user()->id,
                     filePath: $filePath
                 );
 
+                Log::info('Import result', [
+                    'inserted' => $result['inserted'] ?? 0,
+                    'updated' => $result['updated'] ?? 0,
+                    'warnings_count' => count($result['warnings'] ?? []),
+                    'errors_count' => count($result['errors'] ?? []),
+                ]);
+
+                if (!empty($result['warnings'])) {
+                    Log::warning('Import warnings', $result['warnings']);
+                }
+                if (!empty($result['errors'])) {
+                    Log::error('Import errors', $result['errors']);
+                }
+
                 $syncResult = $this->overtimeSyncService->sync(
-                    companyId: session('company_id'),
                     startDate: $period->start_date->toDateString(),
                     endDate: $period->end_date->toDateString(),
-                    branchId: session('branch_id')
                 );
 
                 Log::info('Overtime sync result', $syncResult);
-            } elseif (in_array($request->input('payroll_period_id'), ['5', '6'])) {
-                $period = PayrollPeriod::findOrFail($request->input('payroll_period_id'));
-
-                Log::info('Generating Auditor Logs via Service', [
-                    'payroll_period_id' => $period->id,
-                    'start_date' => $period->start_date,
-                    'end_date' => $period->end_date,
-                ]);
-
-                $logResult = $this->auditorLogService->generateLogs(
-                    companyId: session('company_id'),
-                    startDate: $period->start_date,
-                    endDate: $period->end_date,
-                    branchId: session('branch_id')
+            } elseif ($periodId >= 5 && $periodId <= 12) {
+                // PERIODE 5-12: Ambil dari att_prepares (data REAL dari fingerprint sync)
+                $result = $this->importFromPrepares->import(
+                    startDate: $period->start_date->toDateString(),
+                    endDate: $period->end_date->toDateString(),
                 );
 
-                $result = [
-                    'inserted' => $logResult['processed'] ?? 0,
-                    'updated' => 0,
-                ];
+                Log::info('Import from prepares result', $result);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Periode {$periodId} tidak didukung. Hanya periode 1-12 yang tersedia.",
+                ], 422);
             }
 
-            return redirect()->route('attendance.absensi.index')->with('success', "Import completed: {$result['inserted']} records inserted, {$result['updated']} records updated.");
+            // Build message
+            $inserted = $result['inserted'] ?? 0;
+            $updated = $result['updated'] ?? 0;
+            $skipped = $result['skipped'] ?? null;
+
+            $message = "Import completed: {$inserted} records inserted, {$updated} records updated.";
+            if ($skipped !== null) {
+                $message .= " {$skipped} skipped.";
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+            ]);
         } catch (\Exception $e) {
-            return redirect()->route('attendance.absensi.index')->with('error', 'Failed to import attendance data: '.$e->getMessage());
+            Log::error('Attendance import failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to import attendance data: '.$e->getMessage(),
+            ], 500);
         }
     }
 }

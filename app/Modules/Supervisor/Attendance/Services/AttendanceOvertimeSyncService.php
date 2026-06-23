@@ -10,17 +10,15 @@ use Illuminate\Support\Facades\Log;
 class AttendanceOvertimeSyncService
 {
     public function sync(
-        int $companyId,
         string $startDate,
         string $endDate,
         ?int $branchId = null
     ): array {
         $query = AttendanceAutolog::with(['employee', 'employeeShiftRoster'])
-            ->where('company_id', $companyId)
             ->whereBetween('date', [$startDate, $endDate])
             ->whereNotNull('check_in')
-            ->whereHas('employee', function ($q) {
-                $q->where('group_name', 'ALLIN');
+            ->whereHas('employee.groups', function ($q) {
+                $q->where('reference_code', 'GRP-ALLIN');
             });
 
         if ($branchId) {
@@ -30,7 +28,6 @@ class AttendanceOvertimeSyncService
         $autologs = $query->get();
 
         Log::info('Starting overtime sync for ALLIN employees', [
-            'company_id' => $companyId,
             'branch_id' => $branchId,
             'start_date' => $startDate,
             'end_date' => $endDate,

@@ -22,9 +22,9 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 {
     use Importable;
 
-    protected int $companyId;
+    protected ?int $companyId = null;
 
-    protected int $branchId;
+    protected ?int $branchId = null;
 
     protected ?int $userId;
 
@@ -53,8 +53,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
     protected int $statusColumn = 4;
 
     public function __construct(
-        int $companyId,
-        int $branchId,
+        ?int $companyId = null,
+        ?int $branchId = null,
         ?int $userId = null,
         string $filePath = 'sampe_data.xlsx'
     ) {
@@ -173,8 +173,6 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 
             try {
                 $roster = EmployeeShiftRoster::where('employee_id', $employeeId)
-                    ->where('company_id', $this->companyId)
-                    ->where('branch_id', $this->branchId)
                     ->where('date', $date->toDateString())
                     ->with('workPattern', 'shift')
                     ->first();
@@ -295,8 +293,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                 $normalizedStatus = $this->normalizeStatus($status);
 
                 $result['records'][] = [
-                    'company_id' => $this->companyId,
-                    'branch_id' => $this->branchId,
+                    'company_id' => 1,
+                    'branch_id' => null,
                     'employee_id' => $employeeId,
                     'employee_shift_roster_id' => $roster->id ?? null,
                     'date' => $date->toDateString(),
@@ -503,8 +501,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         }
 
         try {
-            $employee = Employee::where('employee_code', $employeeCode)
-                ->where('company_id', $this->companyId)
+            $employee = Employee::where('nip', $employeeCode)
                 ->first();
 
             $this->employeeCache[$employeeCode] = $employee?->id;
@@ -596,8 +593,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
     }
 
     public static function runImport(
-        int $companyId,
-        int $branchId,
+        ?int $companyId = null,
+        ?int $branchId = null,
         ?int $userId = null,
         string $filePath = 'sampe_data.xlsx'
     ): array {

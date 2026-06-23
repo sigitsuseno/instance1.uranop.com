@@ -63,10 +63,8 @@ const supervisorMenus = [
     icon: 'bx bx-calendar-check',
     children: [
       { title: 'Import', icon: 'bx bx-upload', route: '/supervisor/attendance/import' },
-      { title: 'Sync Kehadiran', icon: 'bx bx-sync', route: '/supervisor/attendance/sync' },
       { title: 'Data Absensi', icon: 'bx bx-file', route: '/supervisor/attendance' },
       { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/supervisor/attendance/consecutive' },
-      { title: 'Roster', icon: 'bx bx-calendar', route: '/supervisor/attendance/roster' },
       { title: 'Lembur Staf', icon: 'bx bx-time', route: '/supervisor/attendance/overtime' },
       { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/supervisor/attendance/recap' },
     ],

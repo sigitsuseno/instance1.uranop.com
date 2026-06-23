@@ -13,7 +13,7 @@ use App\Modules\Payroll\Models\PayrollPeriod;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Inertia\Inertia;
+use App\Modules\Payroll\Models\PayPeriod;
 
 class AttendanceSnapshotController extends Controller
 {
@@ -26,9 +26,7 @@ class AttendanceSnapshotController extends Controller
         $payrollPeriods = collect();
 
         if ($userType === 'hr_branch') {
-            $payrollPeriods = PayrollPeriod::where('company_id', $companyId)
-                
-                ->orderBy('start_date', 'desc')
+            $payrollPeriods = PayPeriod::orderBy('start_date', 'desc')
                 ->get();
         }
 
@@ -57,18 +55,19 @@ class AttendanceSnapshotController extends Controller
         $month = Carbon::parse($endDate)->month;
         $year = Carbon::parse($endDate)->year;
 
-        // Build base query
-        $employeesQuery = Employee::where('is_active', 1)
+        // Build base query: employee yang punya roster di periode ini
+        $employeesQuery = Employee::whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
+            $query->whereBetween('date', [$startDate, $endDate]);
+        })
             ->with([
                 'department',
                 'position',
                 'autologs' => function ($query) use ($startDate, $endDate) {
                     $query->whereBetween('date', [$startDate, $endDate])->with('leave.leaveType');
                 },
-                
             ])
-            
-            
+            ->where('company_id', $companyId)
+            ->where('branch_id', $branchId)
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
@@ -208,7 +207,7 @@ class AttendanceSnapshotController extends Controller
         }
 
         $existingSnapshots = AttendanceSnapshot::where('company_id', $companyId)
-            
+            ->where('branch_id', $branchId)
             ->whereBetween('period_start', [$startDate, $endDate])
             ->get()
             ->keyBy('employee_id');
@@ -392,7 +391,7 @@ class AttendanceSnapshotController extends Controller
                 $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
 
                 $existing = AttendanceSnapshot::where('company_id', $companyId)
-                    
+                    ->where('branch_id', $branchId)
                     ->where('employee_id', $employeeId)
                     ->where('period_code', $periodCode)
                     ->first();
