@@ -21,7 +21,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamp('last_login_at')->nullable();
             $table->string('last_login_ip')->nullable();
-            $table->enum('user_type', ['superadmin', 'hrmanager', 'adm_manager', 'hrbranch', 'hr_ast'])
+            $table->enum('user_type', ['superadmin', 'hrmanager', 'adm_manager', 'hrbranch', 'hr_ast', 'manajemen'])
                 ->default('hr_ast');
 
             $table->timestamps();
