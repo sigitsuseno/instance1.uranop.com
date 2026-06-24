@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useApi } from '../../../composables/useApi'
 
@@ -19,6 +19,7 @@ const isDataExists = ref(true)
 
 const isLoading = ref(true)
 const isAdjusting = ref(false)
+const isSyncing = ref(false)
 
 const selectedPeriod = ref('')
 const startDate = ref('')
@@ -40,14 +41,14 @@ async function fetchData(params = {}) {
         
         const response = await get(`/api/v1/supervisor/attendance/absensi?${queryParams.toString()}`)
         
-        employees.value = response.employees.data || response.employees
+        employees.value = response.employees || []
         stats.value = response.stats || {}
         period.value = response.period || {}
         filters.value = response.filters || {}
         departments.value = response.departments || []
         workPatterns.value = response.workPatterns || []
         payrollPeriods.value = response.payrollPeriods || []
-        pagination.value = response.employees || {}
+        pagination.value = response.pagination || {}
         isDataExists.value = response.isDataExists !== false
         
         selectedPeriod.value = period.value.period_id || ''
@@ -140,6 +141,34 @@ async function runAdjustment() {
     }
 }
 
+async function runSync() {
+    if (!selectedPeriod.value || !startDate.value || !endDate.value) {
+        alert('Pilih periode terlebih dahulu');
+        return;
+    }
+    
+    if (!confirm('Sync data dari att_prepares ke attendance_autologs?\n\n' +
+        'Periode 1-4 (2026): hanya karyawan Jakarta\n' +
+        'Periode 5+: semua karyawan')) {
+        return;
+    }
+    
+    isSyncing.value = true;
+    try {
+        const res = await post('/api/v1/supervisor/attendance/absensi/sync', {
+            payroll_period_id: selectedPeriod.value,
+            start_date: startDate.value,
+            end_date: endDate.value,
+        });
+        alert(res.message || 'Sync selesai!');
+        fetchData(route.query);
+    } catch (error) {
+        alert(error.message || 'Terjadi kesalahan saat sync');
+    } finally {
+        isSyncing.value = false;
+    }
+}
+
 function goToPage(urlStr) {
     if (!urlStr) return;
     try {
@@ -148,7 +177,6 @@ function goToPage(urlStr) {
         fetchData(params);
         router.push({ path: route.path, query: params });
     } catch (e) {
-        // Fallback for simple path mapping
         const parts = urlStr.split('?');
         if (parts.length > 1) {
             const params = new URLSearchParams(parts[1]);
@@ -158,12 +186,15 @@ function goToPage(urlStr) {
         }
     }
 }
+
+const hasPrevPage = () => !!pagination.value.links?.prev
+const hasNextPage = () => !!pagination.value.links?.next
 </script>
 
 <template>
-    <div class="p-4 sm:p-6 lg:p-8">
+    <div class="p-4 sm:p-6 lg:p-8 h-full flex flex-col">
         <!-- Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 shrink-0">
             <div>
                 <h1 class="text-2xl font-bold text-(--text-main)">Absensi</h1>
                 <p class="text-sm text-(--text-muted) mt-1">
@@ -176,6 +207,14 @@ function goToPage(urlStr) {
             </div>
             
             <div class="flex gap-2">
+                <button 
+                    @click="runSync"
+                    class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50"
+                    :disabled="!selectedPeriod || isSyncing"
+                >
+                    <i class="bx bx-cloud-upload text-lg" :class="{ 'animate-spin': isSyncing }"></i>
+                    {{ isSyncing ? 'Syncing...' : 'Sync' }}
+                </button>
                 <button 
                     @click="runAdjustment"
                     class="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition disabled:opacity-50"
@@ -201,7 +240,7 @@ function goToPage(urlStr) {
 
         <template v-else>
             <!-- Stats Cards -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+            <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6 shrink-0">
                 <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg p-3 text-center transition hover:shadow-md">
                     <p class="text-2xl font-bold text-(--text-main)">{{ stats.total_employees || 0 }}</p>
                     <p class="text-xs text-(--text-muted)">Karyawan</p>
@@ -233,7 +272,7 @@ function goToPage(urlStr) {
             </div>
             
             <!-- Period Selection -->
-            <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
+            <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6 shrink-0">
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                     <div class="flex flex-col sm:flex-row gap-3 items-center">
                         <div>
@@ -253,7 +292,7 @@ function goToPage(urlStr) {
             </div>
             
             <!-- Filter Bar -->
-            <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
+            <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6 shrink-0">
                 <div class="flex flex-wrap gap-3">
                     <div class="relative">
                         <i class="bx bx-search absolute left-3 top-1/2 -translate-y-1/2 text-(--text-soft)"></i>
@@ -279,74 +318,77 @@ function goToPage(urlStr) {
                         <i class="bx bx-reset text-lg"></i>
                     </button>
                 </div>
-            </div>
-            
-            <!-- Employees Table -->
-            <div class="overflow-x-auto bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-(--border-soft) bg-(--bg-elevated)">
-                            <th class="px-4 py-3 text-left text-xs font-medium text-(--text-muted) uppercase tracking-wider">Karyawan</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Hadir</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Lembur</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Cuti</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Izin</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Sakit</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Absen</th>
-                            <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Aksi</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="emp in employees" :key="emp.id" class="border-b border-(--border-soft) hover:bg-indigo-50/30 transition group">
-                            <td class="px-4 py-3">
-                                <div class="font-medium text-(--text-main) group-hover:text-indigo-600">{{ emp.employee_name }}</div>
-                                <div class="text-xs text-(--text-muted)">{{ emp.employee_code }}</div>
-                                <div class="text-xs text-(--text-soft)">{{ emp.department }} | {{ emp.position }}</div>
-                            </td>
-                            <td class="px-4 py-3 text-center">
-                                <span class="px-2 py-1 rounded-lg bg-green-50 text-green-700 font-bold">{{ emp.hadir }}</span>
-                            </td>
-                            <td class="px-4 py-3 text-center text-orange-600 font-medium">
-                                <i class="bx bx-time-five mr-1"></i>{{ emp.lembur }} jam
-                            </td>
-                            <td class="px-4 py-3 text-center text-blue-600">{{ emp.cuti }}</td>
-                            <td class="px-4 py-3 text-center text-purple-600">{{ emp.izin }}</td>
-                            <td class="px-4 py-3 text-center text-teal-600">{{ emp.sakit }}</td>
-                            <td class="px-4 py-3 text-center">
-                                <span :class="emp.absen > 0 ? 'text-red-600 font-bold' : 'text-gray-400'">{{ emp.absen }}</span>
-                            </td>
-                            <td class="px-4 py-3 text-center">
-                                <router-link :to="`/supervisor/attendance/autolog/${emp.id}?start_date=${startDate}&end_date=${endDate}`" 
-                                    class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-medium transition shadow-sm">
-                                    <i class="bx bx-show"></i> Detail Log
-                                </router-link>
-                            </td>
-                        </tr>
-                        <tr v-if="employees?.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center text-(--text-muted)">
-                                <i class="bx bx-data text-4xl mb-3 block text-gray-300"></i>
-                                Tidak ada data auditor log untuk periode ini
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- Pagination -->
-            <div class="mt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div class="text-sm text-(--text-muted)">
-                    Menampilkan {{ pagination.from || 0 }} - {{ pagination.to || 0 }} dari {{ pagination.total || 0 }} karyawan
+                
+                <!-- Info baris -->
+                <div class="mt-3 text-xs text-(--text-muted)">
+                    Menampilkan {{ pagination.from || 0 }}-{{ pagination.to || 0 }} dari {{ pagination.total || 0 }} karyawan
                 </div>
-                <div class="flex gap-2">
+            </div>
+            
+            <!-- Employees Table — scrollable -->
+            <div class="flex-1 min-h-0 overflow-hidden bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm flex flex-col">
+                <div class="overflow-auto flex-1">
+                    <table class="w-full text-sm">
+                        <thead class="sticky top-0 z-10">
+                            <tr class="border-b border-(--border-soft) bg-(--bg-elevated)">
+                                <th class="px-4 py-3 text-left text-xs font-medium text-(--text-muted) uppercase tracking-wider">Karyawan</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Hadir</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Lembur</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Cuti</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Izin</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Sakit</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Absen</th>
+                                <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-(--border-soft)">
+                            <tr v-for="emp in employees" :key="emp.id" class="hover:bg-indigo-50/30 transition group">
+                                <td class="px-4 py-3">
+                                    <div class="font-medium text-(--text-main) group-hover:text-indigo-600">{{ emp.employee_name }}</div>
+                                    <div class="text-xs text-(--text-muted)">{{ emp.employee_code }}</div>
+                                    <div class="text-xs text-(--text-soft)">{{ emp.department }} | {{ emp.position }}</div>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <span class="px-2 py-1 rounded-lg bg-green-50 text-green-700 font-bold">{{ emp.hadir }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-center text-orange-600 font-medium">
+                                    <i class="bx bx-time-five mr-1"></i>{{ emp.lembur }} jam
+                                </td>
+                                <td class="px-4 py-3 text-center text-blue-600">{{ emp.cuti }}</td>
+                                <td class="px-4 py-3 text-center text-purple-600">{{ emp.izin }}</td>
+                                <td class="px-4 py-3 text-center text-teal-600">{{ emp.sakit }}</td>
+                                <td class="px-4 py-3 text-center">
+                                    <span :class="emp.absen > 0 ? 'text-red-600 font-bold' : 'text-gray-400'">{{ emp.absen }}</span>
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    <router-link :to="`/supervisor/attendance/autolog/${emp.id}?start_date=${startDate}&end_date=${endDate}`" 
+                                        class="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-medium transition shadow-sm">
+                                        <i class="bx bx-show"></i> Detail Log
+                                    </router-link>
+                                </td>
+                            </tr>
+                            <tr v-if="employees?.length === 0">
+                                <td colspan="8" class="px-4 py-12 text-center text-(--text-muted)">
+                                    <i class="bx bx-data text-4xl mb-3 block text-gray-300"></i>
+                                    Tidak ada data auditor log untuk periode ini
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <!-- Pagination — fixed at bottom -->
+                <div v-if="hasPrevPage() || hasNextPage()" class="flex justify-between items-center px-4 py-3 border-t border-(--border-soft) bg-(--bg-elevated) shrink-0">
                     <button 
-                        v-if="pagination.links?.find(l => l.label.includes('Previous'))?.url" 
-                        @click="goToPage(pagination.links.find(l => l.label.includes('Previous')).url)" 
+                        v-if="hasPrevPage()" 
+                        @click="goToPage(pagination.links.prev)" 
                         class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center gap-1 transition cursor-pointer">
                         <i class="bx bx-chevron-left text-lg"></i> Sebelumnya
                     </button>
+                    <span v-else></span>
                     <button 
-                        v-if="pagination.links?.find(l => l.label.includes('Next'))?.url" 
-                        @click="goToPage(pagination.links.find(l => l.label.includes('Next')).url)" 
+                        v-if="hasNextPage()" 
+                        @click="goToPage(pagination.links.next)" 
                         class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-indigo-50 hover:text-indigo-600 inline-flex items-center gap-1 transition cursor-pointer">
                         Selanjutnya <i class="bx bx-chevron-right text-lg"></i>
                     </button>

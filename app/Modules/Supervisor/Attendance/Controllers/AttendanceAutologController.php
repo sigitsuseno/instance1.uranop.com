@@ -5,6 +5,7 @@ namespace App\Modules\Supervisor\Attendance\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorEmployee as Employee;
+use App\Modules\Supervisor\Attendance\Services\SupervisorAttPrepareSync;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Organization\Models\Department;
 use App\Modules\Payroll\Models\PayPeriod;
@@ -609,6 +610,50 @@ class AttendanceAutologController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Terjadi kesalahan: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Sync data dari att_prepares ke attendance_autologs.
+     * Tombol Sync di halaman Data Absensi.
+     */
+    public function sync(Request $request, SupervisorAttPrepareSync $service)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $request->validate([
+            'payroll_period_id' => ['required', 'integer', 'exists:pay_periods,id'],
+            'start_date' => ['required', 'date'],
+            'end_date' => ['required', 'date'],
+        ]);
+
+        $periodId = (int) $request->input('payroll_period_id');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+
+        try {
+            $result = $service->sync(
+                periodId: $periodId,
+                startDate: $startDate,
+                endDate: $endDate,
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => "Sync selesai! {$result['inserted']} inserted, {$result['updated']} updated.",
+                'result' => $result,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AttPrepareSync failed', [
+                'error' => $e->getMessage(),
+                'period_id' => $periodId,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Sync gagal: '.$e->getMessage(),
             ], 500);
         }
     }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Supervisor\Attendance\Imports\AttendanceDataFixImport;
 use App\Modules\Supervisor\Attendance\Services\AttendanceImportFromPrepares;
 use App\Modules\Supervisor\Attendance\Services\AttendanceOvertimeSyncService;
+use App\Modules\Supervisor\Attendance\Services\SupervisorAttPrepareSync;
 use App\Modules\Payroll\Models\PayPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,12 +18,16 @@ class AttendanceImportController extends Controller
 
     protected AttendanceImportFromPrepares $importFromPrepares;
 
+    protected SupervisorAttPrepareSync $attPrepareSync;
+
     public function __construct(
         AttendanceOvertimeSyncService $overtimeSyncService,
-        AttendanceImportFromPrepares $importFromPrepares
+        AttendanceImportFromPrepares $importFromPrepares,
+        SupervisorAttPrepareSync $attPrepareSync
     ) {
         $this->overtimeSyncService = $overtimeSyncService;
         $this->importFromPrepares = $importFromPrepares;
+        $this->attPrepareSync = $attPrepareSync;
     }
 
     public function create()
@@ -104,15 +109,27 @@ class AttendanceImportController extends Controller
                 ], 422);
             }
 
+            // ── Sync dari att_prepares (tambahan: GRP-JKT utk 2026 per 1-4) ──
+            $syncResult = $this->attPrepareSync->sync(
+                periodId: $periodId,
+                startDate: $period->start_date->toDateString(),
+                endDate: $period->end_date->toDateString(),
+            );
+            Log::info('AttPrepareSync result', $syncResult);
+
             // Build message
             $inserted = $result['inserted'] ?? 0;
             $updated = $result['updated'] ?? 0;
             $skipped = $result['skipped'] ?? null;
 
-            $message = "Import completed: {$inserted} records inserted, {$updated} records updated.";
+            $syncInserted = $syncResult['inserted'] ?? 0;
+            $syncUpdated = $syncResult['updated'] ?? 0;
+
+            $message = "Import: {$inserted} inserted, {$updated} updated.";
             if ($skipped !== null) {
                 $message .= " {$skipped} skipped.";
             }
+            $message .= " | Sync: {$syncInserted} inserted, {$syncUpdated} updated.";
 
             return response()->json([
                 'success' => true,
