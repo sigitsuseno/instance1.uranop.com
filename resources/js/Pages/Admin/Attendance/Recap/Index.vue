@@ -26,6 +26,22 @@
         </BaseButton>
         <span v-if="!canRegenerate" class="text-xs text-(--text-muted) italic">(data sudah di-approve)</span>
         <BaseButton
+          variant="secondary"
+          :disabled="!selectedPeriod || auth.isManajemen"
+          :loading="isExporting"
+          @click="auth.isManajemen ? null : handleExport()"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
+          <template #icon-left>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </template>
+          Export Excel
+        </BaseButton>
+        <BaseButton
           :variant="isApproving ? 'primary' : 'secondary'"
           :class="[isApproving ? '!bg-green-600' : '', auth.isManajemen ? 'opacity-50 cursor-not-allowed' : '']"
           @click="auth.isManajemen ? null : toggleApproveMode()"
@@ -207,6 +223,7 @@ const auth = useAuth()
 const isLoading = ref(false)
 const isGenerating = ref(false)
 const isProcessing = ref(false)
+const isExporting = ref(false)
 const payPeriods = ref([])
 const departments = ref([])
 const records = ref([])
@@ -299,6 +316,38 @@ async function handleGenerate() {
     alert('Gagal generate: ' + (e.response?.data?.message || e.message))
   }
   finally { isGenerating.value = false }
+}
+
+// ── Export ──
+async function handleExport() {
+  if (!selectedPeriod.value) return
+
+  isExporting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const params = new URLSearchParams({ period_id: selectedPeriod.value })
+    if (filterSearch.value) params.set('search', filterSearch.value)
+    if (filterDepartment.value) params.set('department_id', filterDepartment.value)
+
+    const response = await fetch(`/api/v1/attendance/recap/export?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+
+    if (!response.ok) throw new Error('Gagal export')
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Resume_Kehadiran.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('Gagal export Excel: ' + e.message)
+  }
+  finally { isExporting.value = false }
 }
 
 // ── Approve Mode ──

@@ -15,6 +15,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Modules\Attendance\Exports\ResumeKehadiranExport;
 
 class AttendanceApiController extends Controller
 {
@@ -830,6 +832,59 @@ class AttendanceApiController extends Controller
     }
 
     /**
+     * GET /api/v1/attendance/recap/export
+     * Export resume kehadiran ke Excel untuk semua records (no pagination).
+     */
+    public function recapExport(Request $request)
+    {
+        $periodId = $request->period_id;
+        $search = $request->search;
+        $departmentId = $request->department_id;
+
+        if (!$periodId) {
+            return response()->json(['message' => 'Silakan pilih periode'], 422);
+        }
+
+        $period = \App\Modules\Payroll\Models\PayPeriod::find($periodId);
+        $periodLabel = $period
+            ? $period->name . ' (' . $period->start_date->format('d/m/Y') . ' s/d ' . $period->end_date->format('d/m/Y') . ')'
+            : 'Periode #' . $periodId;
+
+        $query = \App\Modules\Attendance\Models\AttendanceRecord::with([
+            'employee' => fn($q) => $q->select('id', 'name', 'employee_code', 'department_id'),
+            'employee.department' => fn($q) => $q->select('id', 'name'),
+        ])->where('pay_period_id', $periodId)
+          ->whereNull('segment');
+
+        if ($search) {
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('employee_code', 'like', "%{$search}%");
+            });
+        }
+
+        if ($departmentId) {
+            $query->whereHas('employee', function ($q) use ($departmentId) {
+                $q->where('department_id', $departmentId);
+            });
+        }
+
+        $query->orderBy(
+            \App\Modules\Employee\Models\Employee::select('employee_code')
+                ->whereColumn('employees.id', 'att_records.employee_id')
+        );
+
+        $records = $query->get()->toArray();
+
+        $filename = 'Resume_Kehadiran_' . str_replace(' ', '_', $period->name ?? '') . '.xlsx';
+
+        return Excel::download(
+            new ResumeKehadiranExport($records, $periodLabel),
+            $filename
+        );
+    }
+
+    /**
      * POST /api/v1/attendance/recap/generate
      * Generate resume kehadiran untuk satu periode.
      * Jika is_split=true → 2 att_records per karyawan (seg-A & seg-B).
@@ -891,9 +946,9 @@ class AttendanceApiController extends Controller
                         ->with('leaveType')
                         ->get();
 
-                    $cuti = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'leave')->sum('total_days');
-                    $izin = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'permit')->sum('total_days');
-                    $sakit = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'sick')->sum('total_days');
+                    $cuti = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'leave')->sum('days_requested');
+                    $izin = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'permit')->sum('days_requested');
+                    $sakit = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'sick')->sum('days_requested');
 
                     // 2. Aggregate att_prepares dalam rentang segmen
                     $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)

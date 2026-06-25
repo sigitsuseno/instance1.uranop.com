@@ -80,6 +80,8 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
     Route::prefix('attendance/recap')->group(function () {
         Route::get('/', [AttendanceApiController::class, 'recapList'])
             ->name('attendance.recap.list');
+        Route::get('/export', [AttendanceApiController::class, 'recapExport'])
+            ->name('attendance.recap.export');
         Route::post('/generate', [AttendanceApiController::class, 'recapGenerate'])
             ->name('attendance.recap.generate');
         Route::post('/approve', [AttendanceApiController::class, 'recapApprove'])

@@ -296,21 +296,15 @@ class AttendanceService
                     foreach ($empConsecutives as $cons) {
                         $consStart = Carbon::parse($cons->start_date);
                         $consEnd   = Carbon::parse($cons->end_date);
-                        if ($dateCarbon->between($consStart, $consEnd) && $cons->type === 'worked') {
+                        if ($dateCarbon->between($consStart, $consEnd)) {
                             $hasConsecutiveWorked = true;
                             break;
                         }
                     }
                 }
 
-                // ── CONSECUTIVE WORKED ────────────────────────
-                if ($hasConsecutiveWorked && !$hasAny) {
-                    $update['status']        = AttendancePrepare::STATUS_HADIR;
-                    $update['review_status'] = AttendancePrepare::REVIEW_CSF;
-                    $stats['hadir']++;
-                }
                 // ── HOLIDAY ──────────────────────────────────
-                elseif ($isHoliday) {
+                if ($isHoliday) {
                     if ($hasAny) {
                         if (! $hasCheckIn && $workStart) {
                             $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
@@ -326,8 +320,8 @@ class AttendanceService
                     $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
                     $stats['holiday']++;
                 }
-                // ── SUNDAY ───────────────────────────────────
-                elseif ($isSunday) {
+                // ── SUNDAY (tanpa roster) ───────────────────
+                elseif ($isSunday && !$roster) {
                     if ($hasAny) {
                         if (! $hasCheckIn && $workStart) {
                             $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
@@ -365,6 +359,11 @@ class AttendanceService
                         $update['status']        = $leaveCode ?? 'ct';
                         $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
                         $stats['leave'] = ($stats['leave'] ?? 0) + 1;
+                    } elseif ($roster && !$workStart && !$workEnd && !$hasAny) {
+                        // Roster Libur (no working hours) + no scan → off
+                        $update['status']        = AttendancePrepare::STATUS_OFF;
+                        $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                        $stats['off']++;
                     } elseif ($hasAny) {
                         if (! $hasCheckIn && $workStart) {
                             $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
@@ -382,6 +381,14 @@ class AttendanceService
                             $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
                             $update['status']    = AttendancePrepare::STATUS_HADIR;
                             $stats['hadir']++;
+                        } elseif ($hasConsecutiveWorked) {
+                            // Ada di att_consecutive_days → hadir (libur berbayar)
+                            $update['status']        = AttendancePrepare::STATUS_HADIR;
+                            $update['review_status'] = AttendancePrepare::REVIEW_CSF;
+                            $stats['hadir']++;
+                        } elseif ($p->review_status === AttendancePrepare::REVIEW_CSF) {
+                            // Hormati CSF dari Perbarui Status — jangan timpa
+                            continue;
                         } else {
                             $update['status'] = AttendancePrepare::STATUS_ABSENT;
                             $stats['absent']++;
@@ -608,14 +615,12 @@ class AttendanceService
             $consStart = \Carbon\Carbon::parse($consecutive->start_date)->max(\Carbon\Carbon::parse($startDate));
             $consEnd = \Carbon\Carbon::parse($consecutive->end_date)->min(\Carbon\Carbon::parse($endDate));
 
-            $statusToSet = $consecutive->type === 'worked' 
-                ? AttendancePrepare::STATUS_HADIR 
-                : AttendancePrepare::STATUS_ABSENT;
+            $statusToSet = AttendancePrepare::STATUS_HADIR;
 
+            // Override semua record di range konsekutif → hadir + csf
             $updatedRows = AttendancePrepare::where('employee_id', $consecutive->employee_id)
                 ->whereBetween('date', [$consStart->toDateString(), $consEnd->toDateString()])
                 ->where('is_locked', false)
-                ->where('status', '!=', $statusToSet)
                 ->update([
                     'status' => $statusToSet,
                     'review_status' => AttendancePrepare::REVIEW_CSF
