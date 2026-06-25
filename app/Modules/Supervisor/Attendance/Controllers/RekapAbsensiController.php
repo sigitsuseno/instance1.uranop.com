@@ -107,7 +107,7 @@ class RekapAbsensiController extends Controller
                 $log = $logs->get($dateStr);
                 $row['days'][$dateStr] = [
                     'status' => $this->getStatusText($log),
-                    'lembur' => $log ? (float) ($log->overtime_converted_hours ?? 0) : 0,
+                    'lembur' => $log ? (float) ($log->lembur_calc ?? 0) : 0,
                 ];
             }
 
@@ -259,7 +259,7 @@ class RekapAbsensiController extends Controller
                 $log = $logs->get($dateStr);
                 $row['days'][$dateStr] = [
                     'status' => $this->getStatusText($log),
-                    'lembur' => $log ? (float) ($log->overtime_converted_hours ?? 0) : 0,
+                    'lembur' => $log ? (float) ($log->lembur_calc ?? 0) : 0,
                 ];
             }
 

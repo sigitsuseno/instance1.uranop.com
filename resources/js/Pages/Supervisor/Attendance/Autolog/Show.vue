@@ -243,22 +243,22 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                                 {{ day.check_out || '--:--' }}
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <span v-if="day.overtime_minutes > 0" class="text-orange-600 font-medium">
-                                    <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.overtime_minutes) }}
+                                <span v-if="day.lembur > 0" class="text-orange-600 font-medium">
+                                    <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.lembur) }}
                                 </span>
                                 <span v-else class="text-gray-300">-</span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <div v-if="day.overtime_minutes > 0" class="text-[10px] leading-tight text-(--text-soft) font-mono">
-                                    <p v-for="(detail, index) in getMultiplierDetails(day.overtime_minutes, day.is_fixed, day.is_sat, day.is_holiday)" :key="index">
+                                <div v-if="day.lembur > 0" class="text-[10px] leading-tight text-(--text-soft) font-mono">
+                                    <p v-for="(detail, index) in getMultiplierDetails(day.lembur, day.is_fixed, day.is_sat, day.is_holiday)" :key="index">
                                         {{ detail }}
                                     </p>
                                 </div>
                                 <span v-else class="text-gray-300">-</span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <span v-if="day.overtime_converted_hours > 0" class="text-indigo-600 font-bold">
-                                    {{ formatConvertedHours(day.overtime_converted_hours) }}
+                                <span v-if="day.lembur_calc > 0" class="text-indigo-600 font-bold">
+                                    {{ formatConvertedHours(day.lembur_calc) }}
                                 </span>
                                 <span v-else class="text-gray-300">-</span>
                             </td>

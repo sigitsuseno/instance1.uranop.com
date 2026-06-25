@@ -210,7 +210,7 @@ class AuditorLogService
             }
         }
 
-        $otDuration = ($roster->is_sat || $workPatternType !== 'FLEX-SHIFT') ? 0 : min($prepare?->overtime_duration ?? 0, 180);
+        $otDuration = ($roster->is_sat || $workPatternType !== 'FLEX-SHIFT') ? 0 : min($prepare?->lembur ?? 0, 180);
 
         $this->saveAutolog($roster, $checkIn, $checkOut, $otDuration, $lateDuration);
     }
@@ -336,7 +336,7 @@ class AuditorLogService
                 'status' => $status,
                 'late_duration' => $lateDuration,
                 'early_leave_duration' => 0,
-                'overtime_duration' => $otDuration,
+                'lembur' => $otDuration,
                 'is_half_day' => $roster->is_half_day ?? false,
                 'is_sat' => $roster->is_sat ?? false,
                 'is_sun' => $roster->is_sun ?? false,

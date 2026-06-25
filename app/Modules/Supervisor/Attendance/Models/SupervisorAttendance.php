@@ -31,7 +31,10 @@ class SupervisorAttendance extends Model
         'status',
         'late_duration',
         'early_leave_duration',
-        'overtime_duration',
+        'lembur',
+        'lembur_calc',
+        'lm',
+        'lm_calc',
         'deduct_attendance',
         'actual_in',
         'actual_out',
@@ -54,7 +57,6 @@ class SupervisorAttendance extends Model
         'deduct_day',
         'izin_duration',
         'sakit_duration',
-        'overtime_converted_hours',
     ];
 
     protected $casts = [
@@ -73,7 +75,8 @@ class SupervisorAttendance extends Model
         'scan_count' => 'integer',
         'late_duration' => 'integer',
         'early_leave_duration' => 'integer',
-        'overtime_duration' => 'integer',
+        'lembur' => 'integer',
+        'lm' => 'integer',
         'deduct_attendance' => 'integer',
     ];
 

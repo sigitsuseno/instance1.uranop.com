@@ -306,7 +306,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                     'status' => $normalizedStatus,
                     'late_duration' => ($status === 'telat') ? $randomMinutes : 0,
                     'early_leave_duration' => 0,
-                    'overtime_duration' => $lemburMinutes > 0 ? $lemburMinutes : 0,
+                    'lembur' => $lemburMinutes > 0 ? $lemburMinutes : 0,
                     'deduct_attendance' => 0,
                     'is_half_day' => $roster->is_half_day ?? 0,
                     'is_sun' => $roster->is_sun ?? 0,
@@ -327,7 +327,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                     'deduct_day' => ($leave && $leave->leaveType && $leave->leaveType->is_paid === 1) ? 1 : 0,
                     'izin_duration' => $izin,
                     'sakit_duration' => $sakit,
-                    'overtime_converted_hours' => $lemburHours,
+                    'lembur_calc' => $lemburHours,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

@@ -115,7 +115,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
                     'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
-                    'lembur' => round($logs->sum('overtime_duration') / 60, 1),
+                    'lembur' => round($logs->sum('lembur') / 60, 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('status', 'permit')->count(),
                     'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(), // fallback check
@@ -130,7 +130,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
                     'hadir' => $logs->where('status', 'present')->count(),
-                    'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                    'lembur' => round($logs->sum('lembur_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('izin_duration', 1)->count(),
                     'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -162,7 +162,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
                     'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
-                    'lembur' => round($logs->sum('overtime_duration') / 60, 1),
+                    'lembur' => round($logs->sum('lembur') / 60, 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('status', 'permit')->count(),
                     'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(),
@@ -177,7 +177,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
                     'hadir' => $logs->where('status', 'present')->count(),
-                    'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                    'lembur' => round($logs->sum('lembur_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('izin_duration', 1)->count(),
                     'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -306,7 +306,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name ?? '-',
                     'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
-                    'lembur' => round($logs->sum('overtime_duration') / 60, 1),
+                    'lembur' => round($logs->sum('lembur') / 60, 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('status', 'permit')->count(),
                     'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(),
@@ -320,7 +320,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name ?? '-',
                     'hadir' => $logs->where('status', 'present')->count(),
-                    'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                    'lembur' => round($logs->sum('lembur_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('izin_duration', 1)->count(),
                     'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -427,10 +427,10 @@ class StaffOvertimeController extends Controller
 
             if ($tab === 'jakarta') {
                 $logs = $employee->attendancePrepares;
-                $lembur = round($logs->sum('overtime_duration') / 60, 1);
+                $lembur = round($logs->sum('lembur') / 60, 1);
             } else {
                 $logs = $employee->autologs;
-                $lembur = round($logs->sum('overtime_converted_hours'), 1);
+                $lembur = round($logs->sum('lembur_calc'), 1);
             }
 
             return [
@@ -522,11 +522,11 @@ class StaffOvertimeController extends Controller
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
 
             if ($tab === 'jakarta') {
-                $overtimeConvertedHours = round(($log?->overtime_duration ?? 0) / 60, 1);
+                $overtimeConvertedHours = round(($log?->lembur ?? 0) / 60, 1);
                 $isSat = $currentDate->isSaturday();
                 $isHoliday = $log?->is_holiday_flag ?? false;
             } else {
-                $overtimeConvertedHours = $log?->overtime_converted_hours ?? 0;
+                $overtimeConvertedHours = $log?->lembur_calc ?? 0;
                 $isSat = $log?->is_sat ?? false;
                 $isHoliday = $log?->is_holiday ?? false;
             }
@@ -541,14 +541,14 @@ class StaffOvertimeController extends Controller
                 'is_weekend' => $currentDate->isSunday(),
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
-                'overtime_minutes' => $log?->overtime_duration ?? 0,
-                'overtime_display' => $this->formatOvertime($log?->overtime_duration ?? 0),
+                'lembur' => $log?->lembur ?? 0,
+                'lembur_display' => $this->formatOvertime($log?->lembur ?? 0),
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
                 'status_badge' => $this->getStatusBadge($log?->status ?? 'pending'),
                 'is_locked' => $log?->is_locked ?? false,
                 'notes' => $log?->notes,
-                'overtime_converted_hours' => $overtimeConvertedHours,
+                'lembur_calc' => $overtimeConvertedHours,
                 'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
                 'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i') : null,
                 'is_sat' => $isSat,
@@ -562,8 +562,8 @@ class StaffOvertimeController extends Controller
         if ($tab === 'jakarta') {
             $summary = [
                 'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
-                'lembur_minutes' => $logs->sum('overtime_duration'),
-                'lembur' => round($logs->sum('overtime_duration') / 60, 1),
+                'lembur_minutes' => $logs->sum('lembur'),
+                'lembur' => round($logs->sum('lembur') / 60, 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('status', 'permit')->count(),
                 'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(),
@@ -572,8 +572,8 @@ class StaffOvertimeController extends Controller
         } else {
             $summary = [
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur_minutes' => $logs->sum('overtime_duration'),
-                'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                'lembur_minutes' => $logs->sum('lembur'),
+                'lembur' => round($logs->sum('lembur_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -651,11 +651,11 @@ class StaffOvertimeController extends Controller
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
 
             if ($tab === 'jakarta') {
-                $overtimeConvertedHours = round(($log?->overtime_duration ?? 0) / 60, 1);
+                $overtimeConvertedHours = round(($log?->lembur ?? 0) / 60, 1);
                 $isSat = $currentDate->isSaturday();
                 $isHoliday = $log?->is_holiday_flag ?? false;
             } else {
-                $overtimeConvertedHours = $log?->overtime_converted_hours ?? 0;
+                $overtimeConvertedHours = $log?->lembur_calc ?? 0;
                 $isSat = $log?->is_sat ?? false;
                 $isHoliday = $log?->is_holiday ?? false;
             }
@@ -670,9 +670,9 @@ class StaffOvertimeController extends Controller
                 'is_weekend' => $currentDate->isSunday(),
                 'check_in' => $checkIn,
                 'check_out' => $checkOut,
-                'overtime_minutes' => $log?->overtime_duration ?? 0,
-                'overtime_display' => $this->formatOvertime($log?->overtime_duration ?? 0),
-                'overtime_converted_hours' => $overtimeConvertedHours,
+                'lembur' => $log?->lembur ?? 0,
+                'lembur_display' => $this->formatOvertime($log?->lembur ?? 0),
+                'lembur_calc' => $overtimeConvertedHours,
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
                 'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
@@ -688,8 +688,8 @@ class StaffOvertimeController extends Controller
         if ($tab === 'jakarta') {
             $summary = [
                 'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
-                'lembur_minutes' => $logs->sum('overtime_duration'),
-                'lembur' => round($logs->sum('overtime_duration') / 60, 1),
+                'lembur_minutes' => $logs->sum('lembur'),
+                'lembur' => round($logs->sum('lembur') / 60, 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('status', 'permit')->count(),
                 'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(),
@@ -698,8 +698,8 @@ class StaffOvertimeController extends Controller
         } else {
             $summary = [
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur_minutes' => $logs->sum('overtime_duration'),
-                'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                'lembur_minutes' => $logs->sum('lembur'),
+                'lembur' => round($logs->sum('lembur_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),

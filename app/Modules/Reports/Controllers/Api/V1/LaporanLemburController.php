@@ -966,6 +966,42 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $printingEmployees = $printingEmployees->sortBy('name')->values();
         $spcEmployees      = $spcEmployees->sortBy('name')->values();
 
+        // ── Period complete check: tanggal 22/23/24 ada data? ─────
+        $endMonth = (int) $endDate->format('m');
+        $endYear  = (int) $endDate->format('Y');
+        $checkDates = array_values(array_filter([
+            sprintf('%04d-%02d-22', $endYear, $endMonth),
+            sprintf('%04d-%02d-23', $endYear, $endMonth),
+            sprintf('%04d-%02d-24', $endYear, $endMonth),
+        ], fn($d) => in_array($d, $dates)));
+
+        $isPeriodComplete = !empty($checkDates)
+            && AttendancePrepare::whereIn('date', $checkDates)->exists();
+
+        // ── Recalculate total_hari_kerja (formula mode) ────────────
+        if ($isPeriodComplete) {
+            $recalcFormula = function ($emp) {
+                $absent = 0;
+                $izin   = 0;
+                foreach ($emp['days'] as $day) {
+                    $ha = $day['ha'] ?? '';
+                    if ($ha === 'A') $absent++;
+                    if ($ha === 'I') $izin++;
+                }
+                $hariKerja = max(0, 25 - $absent - $izin);
+                $emp['total_hari_kerja'] = round($emp['upah_per_hari'] * $hariKerja, 2);
+                $emp['total_terima']     = round(
+                    $emp['total_hari_kerja'] + $emp['total_overtime'] + $emp['total_uang_makan'], 2
+                );
+                return $emp;
+            };
+
+            $jakartaEmployees  = $jakartaEmployees->map($recalcFormula);
+            $allInEmployees    = $allInEmployees->map($recalcFormula);
+            $printingEmployees = $printingEmployees->map($recalcFormula);
+            $spcEmployees      = $spcEmployees->map($recalcFormula);
+        }
+
         // ── Assemble sections ──────────────────────────────────────
         $sections = [
             [
@@ -1048,6 +1084,19 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         if (SpcHelper::shouldShow($period?->id)) {
             $sectionMeta['spc'] = ['label' => SpcHelper::getLabel(), 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
         }
+        // ── Period complete check for resume ──────────────────────
+        $lastDate  = Carbon::parse(end($dates));
+        $endMonth  = (int) $lastDate->format('m');
+        $endYear   = (int) $lastDate->format('Y');
+        $checkDates = array_values(array_filter([
+            sprintf('%04d-%02d-22', $endYear, $endMonth),
+            sprintf('%04d-%02d-23', $endYear, $endMonth),
+            sprintf('%04d-%02d-24', $endYear, $endMonth),
+        ], fn($d) => in_array($d, $dates)));
+
+        $isPeriodComplete = !empty($checkDates)
+            && AttendancePrepare::whereIn('date', $checkDates)->exists();
+
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
             $posGroups = $sectionEmps->groupBy('jabatan');
@@ -1077,6 +1126,22 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     $totalHariKerja += $hariKerja;
                     $totalOvertime += $overtime;
                     $totalUangMakan += $uangMakan;
+                }
+
+                // ── Formula override: upah/hari × (25 - absent - izin) ──
+                if ($isPeriodComplete) {
+                    $totalHariKerja = 0;
+                    foreach ($emps as $emp) {
+                        $absent = 0;
+                        $izin   = 0;
+                        foreach ($emp['days'] as $day) {
+                            $ha = $day['ha'] ?? '';
+                            if ($ha === 'A') $absent++;
+                            if ($ha === 'I') $izin++;
+                        }
+                        $hariKerjaEmp = max(0, 25 - $absent - $izin);
+                        $totalHariKerja += ($emp['upah_per_hari'] ?? 0) * $hariKerjaEmp;
+                    }
                 }
 
                 $data[] = [

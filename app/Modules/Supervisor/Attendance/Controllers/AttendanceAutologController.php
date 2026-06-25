@@ -94,7 +94,7 @@ class AttendanceAutologController extends Controller
                 'department' => $employee->department?->name,
                 'position' => $employee->position?->name,
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                'lembur' => round($logs->sum('lembur_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -130,7 +130,7 @@ class AttendanceAutologController extends Controller
                 'department' => $employee->department?->name,
                 'position' => $employee->position?->name,
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                'lembur' => round($logs->sum('lembur_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -232,7 +232,7 @@ class AttendanceAutologController extends Controller
                 'department' => $employee->department?->name ?? '-',
                 'position' => $employee->position?->name ?? '-',
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                'lembur' => round($logs->sum('lembur_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('status', 'izin')->where('deduct_attendance', 1)->count(),
                 'sakit' => $logs->where('status', 'sakit')->where('deduct_attendance', 0)->count(),
@@ -315,14 +315,14 @@ class AttendanceAutologController extends Controller
                 'is_weekend' => $currentDate->isSunday(),
                 'check_in' => $log?->check_in ? $log->check_in->format('H:i') : null,
                 'check_out' => $log?->check_out ? $log->check_out->format('H:i') : null,
-                'overtime_minutes' => $log?->overtime_duration ?? 0,
-                'overtime_display' => $this->formatOvertime($log?->overtime_duration ?? 0),
+                'lembur' => $log?->lembur ?? 0,
+                'lembur_display' => $this->formatOvertime($log?->lembur ?? 0),
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
                 'status_badge' => $this->getStatusBadge($log?->status ?? 'pending'),
                 'is_locked' => $log?->is_locked ?? false,
                 'notes' => $log?->notes,
-                'overtime_converted_hours' => $log?->overtime_converted_hours ?? 0,
+                'lembur_calc' => $log?->lembur_calc ?? 0,
                 'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
                 'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i') : null,
                 'is_sat' => $log?->is_sat ?? false,
@@ -344,8 +344,8 @@ class AttendanceAutologController extends Controller
             'dailyData' => $dailyData,
             'summary' => [
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur_minutes' => $logs->sum('overtime_duration'),
-                'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+                'lembur' => $logs->sum('lembur'),
+                'lembur_calc' => round($logs->sum('lembur_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -439,9 +439,9 @@ class AttendanceAutologController extends Controller
                 'is_weekend' => $currentDate->isSunday(),
                 'check_in' => $log?->check_in ? $log->check_in->format('H:i') : null,
                 'check_out' => $log?->check_out ? $log->check_out->format('H:i') : null,
-                'overtime_minutes' => $log?->overtime_duration ?? 0,
-                'overtime_display' => $this->formatOvertime($log?->overtime_duration ?? 0),
-                'overtime_converted_hours' => $log?->overtime_converted_hours ?? 0,
+                'lembur' => $log?->lembur ?? 0,
+                'lembur_display' => $this->formatOvertime($log?->lembur ?? 0),
+                'lembur_calc' => $log?->lembur_calc ?? 0,
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
                 'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
@@ -456,8 +456,8 @@ class AttendanceAutologController extends Controller
 
         $summary = [
             'hadir' => $logs->where('status', 'present')->count(),
-            'lembur_minutes' => $logs->sum('overtime_duration') / 60,
-            'lembur' => round($logs->sum('overtime_converted_hours'), 1),
+            'lembur' => $logs->sum('lembur') / 60,
+            'lembur_calc' => round($logs->sum('lembur_calc'), 1),
             'cuti' => $logs->where('status', 'leave')->count(),
             'izin' => $logs->where('status', 'permit')->where('deduct_attendance', 1)->count(),
             'sakit' => $logs->where('status', 'permit')->where('deduct_attendance', 0)->count(),
@@ -546,8 +546,8 @@ class AttendanceAutologController extends Controller
                 }
 
                 // --- LEMBUR ---
-                if ($autolog->overtime_duration > 0) {
-                    $overtimeHours = $autolog->overtime_duration / 60;
+                if ($autolog->lembur > 0) {
+                    $overtimeHours = $autolog->lembur / 60;
                     $employeeType = $autolog->employeeShiftRoster?->workPattern?->employee_type;
                     $isShift = $employeeType === 'SHIFT';
                     $isSat = $autolog->is_sat;
@@ -587,9 +587,9 @@ class AttendanceAutologController extends Controller
                         }
                     }
 
-                    $updateData['overtime_converted_hours'] = round($converted, 2);
+                    $updateData['lembur_calc'] = round($converted, 2);
                 } else {
-                    $updateData['overtime_converted_hours'] = null;
+                    $updateData['lembur_calc'] = null;
                 }
 
                 $autolog->update($updateData);
@@ -695,8 +695,8 @@ class AttendanceAutologController extends Controller
                 'nama' => $log->employee?->name ?? '-',
                 'in' => $log->check_in ? $log->check_in->format('H:i') : '-',
                 'out' => $log->check_out ? $log->check_out->format('H:i') : '-',
-                'overtime' => $log->overtime_duration ?? 0,
-                'total_overtime' => $log->overtime_converted_hours ?? 0,
+                'lembur' => $log->lembur ?? 0,
+                'lembur_calc' => $log->lembur_calc ?? 0,
             ];
         });
 
@@ -718,7 +718,7 @@ class AttendanceAutologController extends Controller
 
             public function headings(): array
             {
-                return ['No', 'Nama', 'IN', 'Out', 'Overtime', 'Total Overtime'];
+                return ['No', 'Nama', 'IN', 'Out', 'Lembur', 'Lembur Calc'];
             }
         }, $filename);
     }

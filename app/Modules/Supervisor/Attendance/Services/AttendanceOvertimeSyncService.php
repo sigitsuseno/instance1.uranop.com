@@ -52,20 +52,20 @@ class AttendanceOvertimeSyncService
                     ->where('date', $autolog->date->toDateString())
                     ->first();
 
-                if (! $prepare || ! $prepare->overtime_duration || $prepare->overtime_duration <= 0) {
+                if (! $prepare || ! $prepare->lembur || $prepare->lembur <= 0) {
                     $skipped++;
 
                     continue;
                 }
 
-                $otDuration = min((int) $prepare->overtime_duration, 180);
+                $otDuration = min((int) $prepare->lembur, 180);
 
                 if ($externalCode === 'P') {
                     $autolog->update([
                         'check_out' => $autolog->check_out
                             ? $autolog->check_out->copy()->addMinutes($otDuration)
                             : null,
-                        'overtime_duration' => $otDuration,
+                        'lembur' => $otDuration,
                     ]);
                     $updated++;
                 } elseif ($externalCode === 'S') {
@@ -73,7 +73,7 @@ class AttendanceOvertimeSyncService
                         'check_in' => $autolog->check_in
                             ? $autolog->check_in->copy()->subMinutes($otDuration)
                             : null,
-                        'overtime_duration' => $otDuration,
+                        'lembur' => $otDuration,
                     ]);
                     $updated++;
                 }

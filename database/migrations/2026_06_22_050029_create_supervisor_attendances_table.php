@@ -26,7 +26,10 @@ return new class extends Migration
             $table->string('status')->default('pending');
             $table->integer('late_duration')->default(0);
             $table->integer('early_leave_duration')->default(0);
-            $table->integer('overtime_duration')->default(0);
+            $table->integer('lembur')->default(0); // menit (overtime biasa)
+            $table->decimal('lembur_calc', 8, 2)->nullable();
+            $table->integer('lm')->default(0); // menit (lembur minggu & holiday)
+            $table->decimal('lm_calc', 8, 2)->nullable();
             $table->integer('deduct_attendance')->default(0);
             $table->time('actual_in')->nullable();
             $table->time('actual_out')->nullable();
@@ -49,7 +52,6 @@ return new class extends Migration
             $table->integer('deduct_day')->nullable();
             $table->integer('izin_duration')->default(0);
             $table->integer('sakit_duration')->default(0);
-            $table->decimal('overtime_converted_hours', 8, 2)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

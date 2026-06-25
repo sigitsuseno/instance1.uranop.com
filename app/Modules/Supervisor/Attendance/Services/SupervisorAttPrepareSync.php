@@ -175,7 +175,7 @@ class SupervisorAttPrepareSync
             ? Carbon::parse($prepare->check_out)
             : null;
 
-        // Hitung overtime_duration: overtime + lm (raw, menit)
+        // Hitung lembur: overtime + lm (raw, menit)
         $overtimeRaw = (int) ($prepare->overtime ?? 0);
         $lmRaw = (int) ($prepare->lm ?? 0);
         $overtimeDuration = $overtimeRaw + $lmRaw;
@@ -228,7 +228,7 @@ class SupervisorAttPrepareSync
             'status' => $normalizedStatus,
             'late_duration' => $lateDuration,
             'early_leave_duration' => 0,
-            'overtime_duration' => $overtimeDuration,
+            'lembur' => $overtimeDuration,
             'deduct_attendance' => 0,
             'is_half_day' => $prepare->is_half_day ?? 0,
             'is_sun' => $prepare->is_sun ?? 0,
@@ -254,7 +254,7 @@ class SupervisorAttPrepareSync
             'deduct_day' => $deductDay,
             'izin_duration' => $izinDuration,
             'sakit_duration' => $sakitDuration,
-            'overtime_converted_hours' => $overtimeDuration > 0
+            'lembur_calc' => $overtimeDuration > 0
                 ? round($overtimeDuration / 60, 2)
                 : 0,
             'created_at' => now(),
