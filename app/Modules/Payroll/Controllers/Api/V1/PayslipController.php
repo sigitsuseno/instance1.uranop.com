@@ -7,6 +7,7 @@ use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Settings\Models\SystemSetting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class PayslipController extends Controller
@@ -52,6 +53,34 @@ class PayslipController extends Controller
 
         $records = $query->orderBy('id')->get();
 
+        // Get remaining leave per employee — cari leave period yang mencakup payroll period
+        $leavePeriod = \App\Modules\Leave\Models\LeavePeriod::where('status', 'active')
+            ->where('start_date', '<=', $period->end_date)
+            ->where('end_date', '>=', $period->start_date)
+            ->orderBy('start_date', 'desc')
+            ->first();
+        if (!$leavePeriod) {
+            // Fallback: ambil leave period aktif terbaru
+            $leavePeriod = \App\Modules\Leave\Models\LeavePeriod::where('status', 'active')
+                ->orderBy('start_date', 'desc')
+                ->first();
+        }
+        $employeeIds = $records->pluck('employee_id')->unique()->toArray();
+        $leaveBalances = [];
+        if ($leavePeriod && !empty($employeeIds)) {
+            $rawBalances = \App\Modules\Leave\Models\EmployeeLeave::whereIn('employee_id', $employeeIds)
+                ->where('leave_period_id', $leavePeriod->id)
+                ->select('employee_id',
+                    DB::raw("SUM(CASE WHEN transaction_type='increment' THEN amount ELSE 0 END) as total_in"),
+                    DB::raw("SUM(CASE WHEN transaction_type='decrement' THEN amount ELSE 0 END) as total_out")
+                )
+                ->groupBy('employee_id')
+                ->get();
+            foreach ($rawBalances as $b) {
+                $leaveBalances[$b->employee_id] = (int) ($b->total_in - $b->total_out);
+            }
+        }
+
         // If split, we also need the other segment's data for combined slip
         $otherSegmentRecords = collect();
         if ($period->is_split) {
@@ -64,7 +93,7 @@ class PayslipController extends Controller
                 ->keyBy('employee_id');
         }
 
-        $data = $records->map(function ($record) use ($period, $fixedWorkDay, $otherSegmentRecords) {
+        $data = $records->map(function ($record) use ($period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances) {
             $emp = $record->employee;
             $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
 
@@ -88,7 +117,7 @@ class PayslipController extends Controller
                 'position'        => $emp?->position?->name ?? '-',
                 'gender'          => $emp?->gender ?? '-',
                 'join_year'       => $joinDate ? $joinDate->format('Y') : '-',
-                'remaining_leave' => 0,
+                'remaining_leave' => $leaveBalances[$record->employee_id] ?? 0,
                 'segment'         => $record->segment,
                 // Payslip display fields
                 'gaji_pokok'      => (float) $record->gaji_pokok,

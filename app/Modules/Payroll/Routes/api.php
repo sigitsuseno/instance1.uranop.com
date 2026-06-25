@@ -3,12 +3,17 @@
 use Illuminate\Support\Facades\Route;
 use App\Modules\Payroll\Controllers\Api\V1\PayPeriodApiController;
 use App\Modules\Payroll\Controllers\Api\V1\GajiKaryawanController;
+use App\Modules\Payroll\Controllers\Api\V1\PayrollConfigApiController;
 use App\Modules\Payroll\Controllers\Api\V1\PayslipController;
 
 Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::apiResource('periods', PayPeriodApiController::class);
     Route::get('gaji-karyawan', [GajiKaryawanController::class, 'index']);
     Route::get('gaji-karyawan/export', [GajiKaryawanController::class, 'export']);
+
+    // Konfigurasi Payroll
+    Route::get('configs/{type}', [PayrollConfigApiController::class, 'show']);
+    Route::put('configs/{type}', [PayrollConfigApiController::class, 'update']);
 
     // Slip Gaji
     Route::get('payslips', [PayslipController::class, 'index']);

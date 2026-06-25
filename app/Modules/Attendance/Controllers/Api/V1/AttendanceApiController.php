@@ -1018,8 +1018,6 @@ class AttendanceApiController extends Controller
         $request->validate([
             'ids' => 'required|array',
             'ids.*' => 'exists:att_records,id',
-            'zero_overtime_groups' => 'nullable|array',
-            'zero_overtime_groups.*' => 'string',
         ]);
 
         $records = \App\Modules\Attendance\Models\AttendanceRecord::with(['employee', 'payPeriod'])
@@ -1146,14 +1144,16 @@ class AttendanceApiController extends Controller
                     $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
                     $totalLemburJam = ($lmCount + $lemburCount) / 60;
 
-                    $zeroGroups = $request->input('zero_overtime_groups', []);
-                    $isZeroOvertime = false;
-                    if (!empty($zeroGroups)) {
-                        $isZeroOvertime = $employee->groups()->whereIn('reference_code', $zeroGroups)->exists();
-                    }
+                    // Zero overtime: Section A groups (ALL IN) — baca dari payroll config
+                    $payrollConfig = \App\Modules\Payroll\Models\PayrollConfig::getConfig('gaji_karyawan');
+                    $sectionAGroups = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+                    $isZeroOvertime = $employee->groups()->whereIn('reference_code', $sectionAGroups)->exists();
 
                     if ($isZeroOvertime) {
                         $upahLembur = 0;
+                        $lm = 0;
+                        $lmCount = 0;
+                        $lemburCount = 0;
                     } else {
                         $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100;
                     }

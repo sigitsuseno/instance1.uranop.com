@@ -1,5 +1,3 @@
-1. Api Endpoint:
-2. setup dasar aplikasi :
-3. ada 2 dashboard. /admin dan /supervisor
-4. fase build di /admin berdasarkan menu sidebar. (di desktop nanti setting dan config per modul di dalam halaman menu)
-5. fase build di /supervisor berdasarkan menu sidebar. (di desktop nanti setting dan config per modul di dalam halaman menu)
+gini jo, menu payroll ini aku mau ambil karyawannya dari employee yang masuk
+ke dalam sch_employee_shift_roster dan filter berdasarkan group dengan employ
+ee_group_master = Imported Shift/Group, kemudian ambil data dari pay_record

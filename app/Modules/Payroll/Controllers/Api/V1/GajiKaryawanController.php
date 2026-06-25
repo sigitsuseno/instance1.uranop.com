@@ -20,7 +20,7 @@ class GajiKaryawanController extends Controller
         $period = PayPeriod::findOrFail($validated['period_id']);
         $segment = $validated['segment'] ?? null;
 
-        $query = PayRecord::with(['employee.department', 'employee.position'])
+        $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
             ->where('pay_period_id', $period->id);
 
         if ($period->is_split) {
@@ -43,6 +43,7 @@ class GajiKaryawanController extends Controller
                 'position' => $emp?->position?->name ?? '-',
                 'gender' => $emp?->gender ?? '-',
                 'join_year' => $joinDate ? $joinDate->format('Y') : '-',
+                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
                 // Data masukan
                 'gaji_pokok' => (float) $record->gaji_pokok,
                 'premi' => (float) $record->premi,
@@ -89,13 +90,12 @@ class GajiKaryawanController extends Controller
         $period = PayPeriod::findOrFail($validated['period_id']);
         $segment = $validated['segment'] ?? null;
 
-        $query = PayRecord::with(['employee.department', 'employee.position'])
+        $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
             ->where('pay_period_id', $period->id);
 
         if ($period->is_split) {
-            // Split: harus pilih segment
             if (!$segment) {
-                $segment = 'A'; // default ke seg-1
+                $segment = 'A';
             }
             $query->where('segment', $segment);
         }
@@ -111,6 +111,7 @@ class GajiKaryawanController extends Controller
                 'position' => $emp?->position?->name ?? '-',
                 'gender' => $emp?->gender ?? '-',
                 'join_year' => $joinDate ? $joinDate->format('Y') : '-',
+                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
                 'gaji_pokok' => (float) $record->gaji_pokok,
                 'premi' => (float) $record->premi,
                 'tj_masa_kerja' => (float) $record->tj_masa_kerja,
@@ -133,6 +134,23 @@ class GajiKaryawanController extends Controller
             ];
         });
 
+        // Group by section from payroll config
+        $payrollConfig = \App\Modules\Payroll\Models\PayrollConfig::getConfig('gaji_karyawan');
+        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+
+        $secAData = [];
+        $secBData = [];
+
+        foreach ($records as $r) {
+            $groups = $r['groups'] ?? [];
+            if (array_intersect($groups, $sectionA)) {
+                $secAData[] = $r;
+            } elseif (array_intersect($groups, $sectionB)) {
+                $secBData[] = $r;
+            }
+        }
+
         $periodName = $period->name;
         if ($period->is_split && $segment) {
             $periodName .= " (Segmen {$segment})";
@@ -141,7 +159,7 @@ class GajiKaryawanController extends Controller
         $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodName) . '.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Reports\Exports\GajiKaryawanExport($records, $periodName),
+            new \App\Modules\Reports\Exports\GajiKaryawanExport($secAData, $secBData, $periodName),
             $filename
         );
     }
