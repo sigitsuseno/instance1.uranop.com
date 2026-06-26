@@ -31,8 +31,16 @@ const errors = ref({})
 
 async function fetchEmployees() {
   try {
-    const res = await get('/api/v1/supervisor/employee-data/karyawan?per_page=1000') // fetch active employees
-    employees.value = res.data || []
+    let all = []
+    let page = 1
+    let lastPage = 1
+    do {
+      const res = await get(`/api/v1/supervisor/employee-data/karyawan?per_page=100&page=${page}`)
+      all = [...all, ...(res.data || [])]
+      lastPage = res.meta?.last_page || 1
+      page++
+    } while (page <= lastPage)
+    employees.value = all
   } catch (e) {
     console.error(e)
   }

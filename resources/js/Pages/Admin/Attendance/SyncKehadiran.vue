@@ -714,21 +714,25 @@ async function fetchLeaveTypes() {
 async function fetchPrepareData() {
   const { start, end } = getPeriodDates()
   try {
-    // Use large per_page to fetch all records for the period (~250 employees × 30 days)
-    const res = await get(`/api/v1/attendance/prepare/list?start_date=${start}&end_date=${end}&per_page=10000`)
-
-    // Controller returns { data: <paginator>, meta: {...} }
-    // Paginator serializes as { current_page, data: [...], ... }
-    // So actual records are at res.data.data (paginator's inner data)
     let prepareList = []
-    if (res.data?.data && Array.isArray(res.data.data)) {
-      // res.data is the paginator object, res.data.data is the records array
-      prepareList = res.data.data
-    } else if (Array.isArray(res.data)) {
-      prepareList = res.data
-    } else {
-      prepareList = []
-    }
+    let page = 1
+    let lastPage = 1
+    do {
+      const res = await get(`/api/v1/attendance/prepare/list?start_date=${start}&end_date=${end}&per_page=100&page=${page}`)
+
+      // Controller returns { data: <paginator>, meta: {...} }
+      // Paginator serializes as { current_page, data: [...], ... }
+      // So actual records are at res.data.data (paginator's inner data)
+      let pageRecords = []
+      if (res.data?.data && Array.isArray(res.data.data)) {
+        pageRecords = res.data.data
+      } else if (Array.isArray(res.data)) {
+        pageRecords = res.data
+      }
+      prepareList = [...prepareList, ...pageRecords]
+      lastPage = res.meta?.last_page || 1
+      page++
+    } while (page <= lastPage)
 
     // Build attendance data map: { [employee_id]: { [date]: { ... } } }
     const data = {}

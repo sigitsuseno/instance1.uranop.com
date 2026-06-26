@@ -679,8 +679,16 @@ async function fetchRecapRecords() {
   }
   loadingRecap.value = true
   try {
-    const res = await get(`/api/v1/attendance/recap?period_id=${selectedPeriodId.value}&per_page=1000`)
-    recapRecords.value = res.data || []
+    let all = []
+    let page = 1
+    let lastPage = 1
+    do {
+      const res = await get(`/api/v1/attendance/recap?period_id=${selectedPeriodId.value}&per_page=100&page=${page}`)
+      all = [...all, ...(res.data || [])]
+      lastPage = res.last_page || 1
+      page++
+    } while (page <= lastPage)
+    recapRecords.value = all
   } catch (error) {
     console.error('Error fetching recap records', error)
     recapRecords.value = []

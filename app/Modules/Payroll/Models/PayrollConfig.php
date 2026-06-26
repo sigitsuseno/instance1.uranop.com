@@ -70,7 +70,7 @@ class PayrollConfig extends Model
                 ],
                 'zero_late_shift_codes' => ['S', 'P'],
                 'work_hours' => [
-                    'FIXED' => ['weekday' => 480, 'saturday' => 360],
+                    'FIXED' => ['weekday' => 540, 'saturday' => 360],
                     'FLEX-SHIFT' => ['weekday' => 480, 'saturday' => 360],
                     'SHIFT' => ['weekday' => 480, 'saturday' => 360],
                 ]
