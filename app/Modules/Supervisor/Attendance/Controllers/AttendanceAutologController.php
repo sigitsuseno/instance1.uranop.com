@@ -55,9 +55,13 @@ class AttendanceAutologController extends Controller
             $selectedPeriodId = $latestPeriod->id;
         }
 
-        // Build base query: hanya employee yang punya roster di periode ini
-        $employeesQuery = Employee::whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('date', [$startDate, $endDate]);
+        // Build base query: hanya employee yang punya roster di periode ini atau punya autolog
+        $employeesQuery = Employee::where(function($q) use ($startDate, $endDate) {
+            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            });
         })
             ->with([
                 'department',

@@ -73,12 +73,14 @@ const selectedGroups = ref([])
 const availableGroups = ref([])
 const showSettings = ref(false)
 const spcEmployees = ref([])
+const jktEmployees = ref([])
 const periods = ref([])
 
 const groupCodes = computed(() => availableGroups.value.map(g => g.code))
 const extraData = computed(() => ({
   periods: periods.value,
   spcEmployees: spcEmployees.value,
+  jktEmployees: jktEmployees.value,
 }))
 
 onMounted(async () => {
@@ -110,12 +112,14 @@ onMounted(async () => {
 
   // 3. Load periods + SPC employees (for settings modal)
   try {
-    const [periodsRes, spcRes] = await Promise.all([
+    const [periodsRes, spcRes, jktRes] = await Promise.all([
       get('/api/v1/settings/employee-data/pay-periods'),
       get('/api/v1/settings/employee-data/by-group/KRY-SPC'),
+      get('/api/v1/settings/employee-data/by-group/GRP-JKT'),
     ])
     periods.value = periodsRes.data || []
     spcEmployees.value = spcRes.data || []
+    jktEmployees.value = jktRes.data || []
   } catch (err) {
     console.error('Gagal fetch extra data:', err)
   }

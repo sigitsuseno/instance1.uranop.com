@@ -79,6 +79,45 @@
       💡 <strong>Sabtu/Minggu:</strong> nominal berdasarkan durasi lembur (2j/Full atau 4j/Half-8j/Full).
     </p>
 
+    <!-- JKT Settings -->
+    <hr class="border-(--border-soft) my-5" />
+
+    <div>
+      <h4 class="text-sm font-semibold mb-3 text-(--text-main)">
+        🏢 A. KARYAWAN JAKARTA (GRP-JKT)
+      </h4>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+          Pengecualian Uang Lembur
+        </label>
+        <p class="text-xs text-(--text-muted) mb-2">
+          Pilih karyawan yang <strong>tidak</strong> mendapatkan uang lembur.
+        </p>
+        <div class="border border-(--border-soft) rounded-lg p-3 max-h-48 overflow-y-auto bg-(--bg-soft)">
+          <div v-if="jktEmployees.length === 0" class="text-xs text-(--text-muted) italic">
+            Tidak ada karyawan dengan group GRP-JKT.
+          </div>
+          <div v-else class="space-y-2">
+            <label
+              v-for="emp in jktEmployees"
+              :key="emp.id"
+              class="flex items-center space-x-2 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                :value="emp.id"
+                :checked="(config.jkt_no_overtime_employees || []).includes(emp.id)"
+                @change="toggleJktNoOvertime(emp.id, $event.target.checked)"
+                class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)"
+              />
+              <span class="text-sm text-(--text-main)">{{ emp.name }} <span class="text-xs text-(--text-muted)">({{ emp.nip }})</span></span>
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- SPC Settings -->
     <hr class="border-(--border-soft) my-5" />
 
@@ -177,15 +216,17 @@ const emit = defineEmits(['update:config']);
 // Reactive copy of config excluding SPC-specific keys (they go flat with group rates)
 const localRates = reactive({ ...props.config });
 
-// Remove SPC config keys from rates (they're handled separately)
+// Remove SPC and JKT config keys from rates (they're handled separately)
 delete localRates.spc_start_period_id;
 delete localRates.spc_base_salary;
+delete localRates.jkt_no_overtime_employees;
 
 // Expose only the group rate entries
 const groupRates = computed(() => localRates);
 
 const periods = computed(() => props.extraData?.periods || []);
 const spcEmployees = computed(() => props.extraData?.spcEmployees || []);
+const jktEmployees = computed(() => props.extraData?.jktEmployees || []);
 const sortedPeriods = computed(() =>
   [...periods.value].sort((a, b) => b.start_date.localeCompare(a.start_date))
 );
@@ -196,6 +237,7 @@ watch(() => props.config, (val) => {
   Object.assign(localRates, val || {});
   delete localRates.spc_start_period_id;
   delete localRates.spc_base_salary;
+  delete localRates.jkt_no_overtime_employees;
 }, { deep: true });
 
 function updateRate(groupName, key, event) {
@@ -211,12 +253,28 @@ function updateSpcConfig(key, value) {
   emitConfig({ [key]: value });
 }
 
+function toggleJktNoOvertime(empId, isChecked) {
+  const currentList = Array.isArray(props.config.jkt_no_overtime_employees) 
+    ? [...props.config.jkt_no_overtime_employees] 
+    : [];
+    
+  if (isChecked) {
+    if (!currentList.includes(empId)) currentList.push(empId);
+  } else {
+    const idx = currentList.indexOf(empId);
+    if (idx > -1) currentList.splice(idx, 1);
+  }
+  
+  emitConfig({ jkt_no_overtime_employees: currentList });
+}
+
 function emitConfig(extra = {}) {
   // Merge rates + SPC config + any extra
   const merged = {
     ...localRates,
     spc_start_period_id: props.config.spc_start_period_id ?? null,
     spc_base_salary: props.config.spc_base_salary ?? null,
+    jkt_no_overtime_employees: props.config.jkt_no_overtime_employees ?? [],
     ...extra,
   };
   emit('update:config', { ...merged });

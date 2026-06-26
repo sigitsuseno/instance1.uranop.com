@@ -191,8 +191,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 
                 // Konversi jam kerja ke objek Carbon
 
-                $shiftStart = ($roster && $roster->shift) ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_start) : null;
-                $shiftEnd = ($roster && $roster->shift) ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_end) : null;
+                $shiftStart = ($roster && $roster->shift) ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_start) : Carbon::parse($date->toDateString().' 08:00:00');
+                $shiftEnd = ($roster && $roster->shift) ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_end) : Carbon::parse($date->toDateString().' 17:00:00');
                 $ranran = rand(-10, 10);
                 $ranend = rand(-2, 10);
                 $shiftMulai = $shiftStart->copy()->addMinutes($ranran);
@@ -208,14 +208,16 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                 $arrayCuti = ['CTM', 'CTH', 'CH', 'CTI', 'CTK', 'CKM', 'CM', 'CUTI', 'CT'];
 
                 // Logika Penentuan Status & Waktu
-                if (in_array($roster->workPattern->employee_type, ['FIXED', 'FLEX-SHIFT'])) {
+                $employeeType = $roster && $roster->workPattern ? $roster->workPattern->employee_type : 'FIXED';
+                
+                if (in_array($employeeType, ['FIXED', 'FLEX-SHIFT'])) {
                     if (empty($status)) {
 
-                        if ($roster->external_code === 'M') {
+                        if ($roster && $roster->external_code === 'M') {
                             $checkIn = null;
                             $checkOut = null;
                             $status = 'off';
-                        } elseif ($roster->is_holiday === 1) {
+                        } elseif ($roster && $roster->is_holiday === 1) {
                             $checkIn = null;
                             $checkOut = null;
                             $status = 'holiday';
@@ -244,7 +246,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                             $deduct = 1;
                             $status = 'absent';
                         } elseif ($status === 'T') {
-                            if ($roster->external_code === 'P') {
+                            if ($roster && $roster->external_code === 'P') {
                                 $checkIn = $shiftMulai->format('Y-m-d H:i:s');
                                 $checkOut = $shiftSelesai->copy()->addMinutes($lemburMinutes)->format('Y-m-d H:i:s');
                             } else {
@@ -253,13 +255,15 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                             }
                             $status = 'telat';
                         } elseif ($status === 'H') {
-                            if ($roster->external_code === 'P') {
+                            if ($roster && $roster->external_code === 'P') {
                                 $checkIn = $shiftMulai->format('Y-m-d H:i:s');
                                 $checkOut = $shiftSelesai->copy()->addMinutes($lemburMinutes)->format('Y-m-d H:i:s');
-                            }
-                            if ($roster->external_code === 'S') {
+                            } elseif ($roster && $roster->external_code === 'S') {
                                 $checkIn = $shiftMulai->copy()->subMinutes($lemburMinutes)->format('Y-m-d H:i:s');
                                 $checkOut = $shiftSelesai->format('Y-m-d H:i:s');
+                            } else {
+                                $checkIn = $shiftMulai->format('Y-m-d H:i:s');
+                                $checkOut = $shiftSelesai->copy()->addMinutes($lemburMinutes)->format('Y-m-d H:i:s');
                             }
                             $status = 'present';
                         }
@@ -296,10 +300,12 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                     'company_id' => 1,
                     'branch_id' => null,
                     'employee_id' => $employeeId,
-                    'employee_shift_roster_id' => $roster->id ?? null,
+                    'employee_shift_roster_id' => $roster?->id,
                     'date' => $date->toDateString(),
                     'check_in' => $checkIn,
                     'check_out' => $checkOut,
+                    'actual_in' => $shiftStart->format('Y-m-d H:i:s'),
+                    'actual_out' => $shiftEnd->format('Y-m-d H:i:s'),
                     'check_in_log_id' => null,
                     'check_out_log_id' => null,
                     'import_batch' => $this->importBatch, // Tambahkan batch ID di sini
@@ -308,11 +314,11 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                     'early_leave_duration' => 0,
                     'lembur' => $lemburMinutes > 0 ? $lemburMinutes : 0,
                     'deduct_attendance' => 0,
-                    'is_half_day' => $roster->is_half_day ?? 0,
-                    'is_sun' => $roster->is_sun ?? 0,
-                    'is_sat' => $roster->is_sat ?? 0,
-                    'is_holiday' => $roster->is_holiday ?? 0,
-                    'is_leave' => ($leave !== null) ? 1 : ($roster->is_leave ?? 0),
+                    'is_half_day' => $roster?->is_half_day ?? 0,
+                    'is_sun' => $roster?->is_sun ?? 0,
+                    'is_sat' => $roster?->is_sat ?? 0,
+                    'is_holiday' => $roster?->is_holiday ?? 0,
+                    'is_leave' => ($leave !== null) ? 1 : ($roster?->is_leave ?? 0),
                     'is_manual_edit' => 0,
                     'last_edited_at' => null,
                     'holiday_overtime' => $holidayOvertime,
