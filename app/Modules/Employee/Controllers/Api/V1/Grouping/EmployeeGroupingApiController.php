@@ -26,8 +26,9 @@ class EmployeeGroupingApiController extends Controller
         $startDate = $periodDate->copy()->subMonth()->format('Y-m-25');
         $endDate = $periodDate->copy()->format('Y-m-24');
 
-        $employees = Employee::select('id', 'name', 'employee_code', 'nik', 'photo', 'employment_status', 'join_date', 'end_date', 'is_active')
-            ->orderBy('name')
+        $employees = Employee::select('id', 'name', 'employee_code', 'nik', 'photo', 'no_urut', 'employment_status', 'join_date', 'end_date', 'is_active')
+            ->orderByRaw('no_urut IS NULL, no_urut ASC')
+            ->orderBy('nip')
             ->get();
 
         $employees->transform(function ($emp) use ($startDate, $endDate) {

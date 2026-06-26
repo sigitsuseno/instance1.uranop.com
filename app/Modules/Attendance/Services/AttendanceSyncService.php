@@ -144,22 +144,8 @@ class AttendanceSyncService
             ->get()
             ->groupBy('employee_code');
 
-        // Overnight: juga ambil log besoknya
-        if ($roster->shift && $roster->shift->is_overnight) {
-            $nextDate = Carbon::parse($date)->addDay()->toDateString();
-            $nextLogs = RawLog::whereDate('scan_datetime', $nextDate)
-                ->orderBy('scan_datetime')
-                ->get()
-                ->groupBy('employee_code');
-            // Merge next day logs into main collection
-            foreach ($nextLogs as $code => $items) {
-                if (isset($logs[$code])) {
-                    $logs[$code] = $logs[$code]->merge($items)->sortBy('scan_datetime')->values();
-                } else {
-                    $logs[$code] = $items;
-                }
-            }
-        }
+        // NOTE: overnight merge sekarang di-handle oleh processRoster()
+        //       SETELAH cek isEmpty — biar holiday/Sunday ga kena racun.
 
         return $this->processRoster($roster, $date, $logs);
     }
@@ -205,19 +191,10 @@ class AttendanceSyncService
         $empCode = $employee->nip ?? $employee->employee_code;
         $logs = $allLogs->get($empCode, collect());
 
-        // Overnight shift: perlu juga log dari hari berikutnya
-        if ($shift && $shift->is_overnight) {
-            $nextDateStr = Carbon::parse($dateStr)->addDay()->toDateString();
-            $nextDayLogs = RawLog::whereDate('scan_datetime', $nextDateStr)
-                ->where('employee_code', $empCode)
-                ->orderBy('scan_datetime')
-                ->get();
-            if ($nextDayLogs->isNotEmpty()) {
-                $logs = $logs->merge($nextDayLogs)->sortBy('scan_datetime')->values();
-            }
-        }
-
-        // ── 3. Gak ada log ─────────────────────────────────────
+        // ── 3. Gak ada log (cek DULU sebelum overnight merge) ──
+        //     FIX: overnight merge dipindah ke bawah. Kalau hari ini
+        //     kosong, ga perlu ambil log besok — terutama holiday/
+        //     Sunday biar ga kena "racun" log next-day.
         if ($logs->isEmpty()) {
             // SHIFT (satpam): holiday nggak ngaruh, cuma external_code yang menentukan
             if ($roster->work_pattern_type === 'SHIFT') {
@@ -287,6 +264,19 @@ class AttendanceSyncService
             ]);
         }
 
+        // Overnight shift: merge next-day logs untuk deteksi check-OUT
+        // HANYA dijalankan kalau ada log hari ini (sudah lolos cek isEmpty di atas).
+        if ($shift && $shift->is_overnight) {
+            $nextDateStr = Carbon::parse($dateStr)->addDay()->toDateString();
+            $nextDayLogs = RawLog::whereDate('scan_datetime', $nextDateStr)
+                ->where('employee_code', $empCode)
+                ->orderBy('scan_datetime')
+                ->get();
+            if ($nextDayLogs->isNotEmpty()) {
+                $logs = $logs->merge($nextDayLogs)->sortBy('scan_datetime')->values();
+            }
+        }
+
         // ── 4. Match check_in & check_out ──────────────────────
         $workPatternType = $roster->work_pattern_type ?? 'FIXED';
 
@@ -327,7 +317,7 @@ class AttendanceSyncService
     //        Each detector only handles the matching of fingerprint logs.
 
     /**
-     * FIXED: scan pertama = check_in, scan terakhir = check_out.
+     * FIXED: Menggunakan window time matching.
      */
     protected function detectFixed(
         Collection $logs,
@@ -337,21 +327,7 @@ class AttendanceSyncService
         bool $isSunday,
         EmployeeShiftRoster $roster
     ): array {
-        $checkInLog  = $logs->first();
-        $checkOutLog = $logs->count() > 1 ? $logs->last() : null;
-
-        $checkIn  = $checkInLog ? Carbon::parse($checkInLog->scan_datetime) : null;
-        $checkOut = $checkOutLog ? Carbon::parse($checkOutLog->scan_datetime) : null;
-
-        return [
-            'check_in'    => $checkIn,
-            'check_out'   => $checkOut,
-            'status'      => AttendancePrepare::STATUS_HADIR,
-            'has_in'      => !is_null($checkIn),
-            'has_out'     => !is_null($checkOut),
-            'is_holiday'  => $isHoliday,
-            'is_sunday'   => $isSunday,
-        ];
+        return $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday);
     }
 
     /**

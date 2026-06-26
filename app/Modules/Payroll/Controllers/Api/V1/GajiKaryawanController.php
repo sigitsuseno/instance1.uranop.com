@@ -21,7 +21,11 @@ class GajiKaryawanController extends Controller
         $segment = $validated['segment'] ?? null;
 
         $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
-            ->where('pay_period_id', $period->id);
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*');
 
         if ($period->is_split) {
             // Split: harus pilih segment
@@ -91,7 +95,11 @@ class GajiKaryawanController extends Controller
         $segment = $validated['segment'] ?? null;
 
         $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
-            ->where('pay_period_id', $period->id);
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*');
 
         if ($period->is_split) {
             if (!$segment) {

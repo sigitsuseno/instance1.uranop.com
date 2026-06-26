@@ -132,6 +132,28 @@ class ReportConfigService
                 'spc_start_period_id' => null,
                 'spc_base_salary'     => null,
             ],
+            'attendance_overtime_setting' => [
+                'formulas' => [
+                    'FIXED' => 'rumus_1',
+                    'FLEX_S' => 'rumus_1',
+                    'FLEX_P' => 'rumus_1'
+                ],
+                'special_employees' => [
+                    'ids' => [],
+                    'formula' => 'rumus_1'
+                ],
+                'technician_rule' => [
+                    'employee_ids' => [31, 115, 174],
+                    'start_date' => '2026-06-01',
+                    'max_holiday_minutes' => 1200
+                ],
+                'zero_late_shift_codes' => ['S', 'P'],
+                'work_hours' => [
+                    'FIXED' => ['weekday' => 480, 'saturday' => 360],
+                    'FLEX-SHIFT' => ['weekday' => 480, 'saturday' => 360],
+                    'SHIFT' => ['weekday' => 480, 'saturday' => 360],
+                ]
+            ],
             default => [],
         };
     }

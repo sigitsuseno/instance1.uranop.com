@@ -17,6 +17,15 @@
 
       <!-- Actions -->
       <div class="flex items-center gap-2">
+        <button 
+          @click="openSettings"
+          class="h-10 px-3 text-sm rounded-lg border border-(--border-soft) bg-(--bg-card) hover:bg-(--bg-elevated) flex items-center gap-1.5 transition-colors"
+          title="Pengaturan Lembur"
+        >
+          <i class="bx bx-cog text-lg text-(--text-muted)"></i>
+          <span class="hidden sm:inline">Setting</span>
+        </button>
+
         <BaseButton 
           variant="primary"
           @click="auth.isManajemen ? null : handleCalculate()"
@@ -200,6 +209,121 @@
         </button>
       </div>
     </div>
+
+    <!-- Modal Setting -->
+    <BaseModal :show="showSettings" @close="showSettings = false" title="Pengaturan Kalkulasi Lembur">
+      <div class="space-y-5" v-if="overtimeConfig">
+        
+        <div>
+          <label class="block text-sm font-semibold text-(--text-main) mb-1">Pemilihan Rumus Lembur</label>
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+            <div class="flex flex-col sm:flex-row gap-3">
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">Pola FIXED</label>
+                <select v-model="settingForm.formula_fixed" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                  <option value="rumus_1">Rumus 1 (Scan In - Out)</option>
+                  <option value="rumus_2">Rumus 2 (Schedule Out - Out)</option>
+                </select>
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT (Kode S)</label>
+                <select v-model="settingForm.formula_flex_s" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                  <option value="rumus_1">Rumus 1 (Scan In - Out)</option>
+                  <option value="rumus_2">Rumus 2 (Schedule Out - Out)</option>
+                </select>
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT (Kode P)</label>
+                <select v-model="settingForm.formula_flex_p" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                  <option value="rumus_1">Rumus 1 (Scan In - Out)</option>
+                  <option value="rumus_2">Rumus 2 (Schedule Out - Out)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-(--text-main) mb-1">Karyawan Khusus</label>
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+            <div class="flex flex-col sm:flex-row gap-3">
+              <div class="flex-[2]">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">ID Karyawan</label>
+                <input v-model="settingForm.special_ids" type="text" placeholder="Misal: 102, 105" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">Pilih Rumus</label>
+                <select v-model="settingForm.special_formula" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                  <option value="rumus_1">Rumus 1</option>
+                  <option value="rumus_2">Rumus 2</option>
+                </select>
+              </div>
+            </div>
+            <p class="text-[11px] text-(--text-muted) mt-1">Karyawan dengan ID di atas akan mengabaikan pola kerja dan dipaksa menggunakan rumus yang dipilih.</p>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-(--text-main) mb-1">Aturan Teknisi Khusus (KRY-TKN)</label>
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+            <div>
+              <label class="block text-xs font-medium text-(--text-muted) mb-1">ID Karyawan Teknisi</label>
+              <input v-model="settingForm.technician_ids" type="text" placeholder="Misal: 31, 115, 174" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+            </div>
+            <div class="flex gap-3">
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">Berlaku Sejak</label>
+                <input v-model="settingForm.technician_start_date" type="date" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">Maks Lembur Libur (Menit)</label>
+                <input v-model="settingForm.technician_max_minutes" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-(--text-main) mb-1">Jam Kerja Default (Menit)</label>
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+            <div class="flex gap-3">
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FIXED - Weekday</label>
+                <input v-model="settingForm.hours_fixed_wd" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FIXED - Sabtu</label>
+                <input v-model="settingForm.hours_fixed_sat" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+            </div>
+            <div class="flex gap-3 mt-2">
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - Weekday</label>
+                <input v-model="settingForm.hours_flex_wd" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - Sabtu</label>
+                <input v-model="settingForm.hours_flex_sat" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-(--text-main) mb-1">Kode Shift Tanpa Telat</label>
+          <p class="text-xs text-(--text-muted) mb-2">Kode `external_code` shift yang `late_minutes` diabaikan (selalu 0). Pisahkan koma.</p>
+          <input v-model="settingForm.zero_late_codes" type="text" placeholder="Misal: S, P" class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+        </div>
+
+        <div class="flex justify-end gap-3 mt-6">
+          <BaseButton variant="ghost" @click="showSettings = false">Batal</BaseButton>
+          <BaseButton variant="primary" :loading="savingConfig" @click="saveConfig">Simpan Pengaturan</BaseButton>
+        </div>
+      </div>
+      <div v-else class="py-8 text-center text-sm text-(--text-muted)">
+        Memuat pengaturan...
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -207,13 +331,16 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/Components/BaseButton.vue'
+import BaseModal from '@/Components/BaseModal.vue'
 import { useApi } from '../../../../composables/useApi'
 import { useAuth } from '../../../../composables/useAuth'
+import { useNotificationStore } from '../../../../Stores/notification'
 
-const { get, post } = useApi()
+const { get, post, put } = useApi()
 const auth = useAuth()
 const route = useRoute()
 const router = useRouter()
+const notification = useNotificationStore()
 
 // ── State ──
 const isCalculating = ref(false)
@@ -233,6 +360,26 @@ const pagination = ref({
   to: 0,
   prev: null,
   next: null
+})
+
+// Setting State
+const showSettings = ref(false)
+const savingConfig = ref(false)
+const overtimeConfig = ref(null)
+const settingForm = ref({
+  special_ids: '',
+  special_formula: 'rumus_1',
+  formula_fixed: 'rumus_1',
+  formula_flex_s: 'rumus_1',
+  formula_flex_p: 'rumus_1',
+  technician_ids: '',
+  technician_start_date: '',
+  technician_max_minutes: 1200,
+  zero_late_codes: '',
+  hours_fixed_wd: 480,
+  hours_fixed_sat: 360,
+  hours_flex_wd: 480,
+  hours_flex_sat: 360
 })
 
 // ── Methods ──
@@ -318,6 +465,96 @@ async function handleCalculate() {
     }
   } finally {
     isCalculating.value = false
+  }
+}
+
+// ── Settings Config ──
+async function fetchConfig() {
+  try {
+    const res = await get('/api/v1/payroll/configs/attendance_overtime_setting')
+    const conf = res.config || {}
+    overtimeConfig.value = conf
+    
+    // Parse to form string
+    settingForm.value.special_ids = (conf.special_employees?.ids || []).join(', ')
+    settingForm.value.special_formula = conf.special_employees?.formula || 'rumus_1'
+    settingForm.value.formula_fixed = conf.formulas?.FIXED || 'rumus_1'
+    settingForm.value.formula_flex_s = conf.formulas?.FLEX_S || 'rumus_1'
+    settingForm.value.formula_flex_p = conf.formulas?.FLEX_P || 'rumus_1'
+    settingForm.value.technician_ids = (conf.technician_rule?.employee_ids || []).join(', ')
+    settingForm.value.technician_start_date = conf.technician_rule?.start_date || '2026-06-01'
+    settingForm.value.technician_max_minutes = conf.technician_rule?.max_holiday_minutes || 1200
+    settingForm.value.zero_late_codes = (conf.zero_late_shift_codes || []).join(', ')
+
+    settingForm.value.hours_fixed_wd = conf.work_hours?.FIXED?.weekday ?? 480
+    settingForm.value.hours_fixed_sat = conf.work_hours?.FIXED?.saturday ?? 360
+    settingForm.value.hours_flex_wd = conf.work_hours?.['FLEX-SHIFT']?.weekday ?? 480
+    settingForm.value.hours_flex_sat = conf.work_hours?.['FLEX-SHIFT']?.saturday ?? 360
+  } catch (error) {
+    console.error('Error fetching config', error)
+  }
+}
+
+function openSettings() {
+  showSettings.value = true
+  fetchConfig()
+}
+
+async function saveConfig() {
+  savingConfig.value = true
+  try {
+    const parseIds = (str) => str.split(',').map(s => s.trim()).filter(s => s).map(s => isNaN(s) ? s : Number(s))
+    const parseStrList = (str) => str.split(',').map(s => s.trim()).filter(s => s)
+
+    const payload = {
+      formulas: {
+        'FIXED': settingForm.value.formula_fixed,
+        'FLEX_S': settingForm.value.formula_flex_s,
+        'FLEX_P': settingForm.value.formula_flex_p
+      },
+      special_employees: {
+        ids: parseIds(settingForm.value.special_ids),
+        formula: settingForm.value.special_formula
+      },
+      technician_rule: {
+        employee_ids: parseIds(settingForm.value.technician_ids),
+        start_date: settingForm.value.technician_start_date,
+        max_holiday_minutes: Number(settingForm.value.technician_max_minutes)
+      },
+      zero_late_shift_codes: parseStrList(settingForm.value.zero_late_codes),
+      work_hours: {
+        'FIXED': {
+          weekday: Number(settingForm.value.hours_fixed_wd),
+          saturday: Number(settingForm.value.hours_fixed_sat)
+        },
+        'FLEX-SHIFT': {
+          weekday: Number(settingForm.value.hours_flex_wd),
+          saturday: Number(settingForm.value.hours_flex_sat)
+        },
+        'SHIFT': {
+          weekday: 480, // Default for SHIFT, can be exposed later if needed
+          saturday: 360
+        }
+      }
+    }
+
+    await put('/api/v1/payroll/configs/attendance_overtime_setting', { config: payload })
+    notification.success('Pengaturan berhasil disimpan.')
+    showSettings.value = false
+    
+    // Trigger recalculation notice
+    setTimeout(() => {
+      calculateResult.value = {
+        success: true,
+        message: 'Pengaturan berhasil diperbarui. Silakan lakukan Calculate Overtime ulang untuk menerapkan efek perubahannya.'
+      }
+    }, 500)
+    
+  } catch (error) {
+    console.error('Error saving config', error)
+    notification.error('Gagal menyimpan pengaturan.')
+  } finally {
+    savingConfig.value = false
   }
 }
 

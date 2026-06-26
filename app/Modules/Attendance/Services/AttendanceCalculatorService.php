@@ -33,14 +33,17 @@ class AttendanceCalculatorService
     ): array {
         // Load config
         $config = OvertimeCalculatorConfig::forPattern($workPatternId);
+        
+        // Load dynamic setting (dari tabel payroll_configs)
+        $settingConfig = \App\Modules\Payroll\Models\PayrollConfig::getConfig('attendance_overtime_setting');
 
         // ── Late Minutes ──────────────────────────────────────
-        $lateMinutes = $this->calculateLate($prepare, $shift);
+        $lateMinutes = $this->calculateLate($prepare, $shift, $settingConfig);
 
         // ── Overtime ──────────────────────────────────────────
         $rawOvertime = $manualOvertime !== null
             ? $manualOvertime
-            : $this->calculateRawOvertime($prepare, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config);
+            : $this->calculateRawOvertime($prepare, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config, $shift, $settingConfig);
 
         // ── LM vs Regular Overtime ────────────────────────────
         $isOffDay = $isHoliday || $isSunday;
@@ -71,14 +74,16 @@ class AttendanceCalculatorService
      *
      * FLEX-SHIFT S (external_code='S'): late_minutes SELALU 0 (hardcoded).
      */
-    protected function calculateLate(AttendancePrepare $prepare, ?Shift $shift): int
+    protected function calculateLate(AttendancePrepare $prepare, ?Shift $shift, array $settingConfig = []): int
     {
         if (!$shift || !$shift->work_hour_start || !$prepare->check_in) {
             return 0;
         }
 
-        // FLEX-SHIFT S: late_minutes = 0 (hardcoded)
-        if ($shift->external_code === 'S') {
+        $zeroLateCodes = $settingConfig['zero_late_shift_codes'] ?? ['S'];
+
+        // Cek dari konfigurasi dinamis (default: 'S')
+        if (in_array($shift->external_code, $zeroLateCodes)) {
             return 0;
         }
 
@@ -107,6 +112,8 @@ class AttendanceCalculatorService
         ?string $workPatternType = null,
         bool $isSaturday = false,
         ?OvertimeCalculatorConfig $config = null,
+        ?Shift $shift = null,
+        array $settingConfig = []
     ): int {
         if (!$prepare->check_in || !$prepare->check_out) {
             return 0;
@@ -128,36 +135,97 @@ class AttendanceCalculatorService
         // ═══════════════════════════════════════════════════════
         // SHIFT Pattern
         // ═══════════════════════════════════════════════════════
+        $workHoursConfig = $settingConfig['work_hours'] ?? [
+            'FIXED' => ['weekday' => 480, 'saturday' => 360],
+            'FLEX-SHIFT' => ['weekday' => 480, 'saturday' => 360],
+            'SHIFT' => ['weekday' => 480, 'saturday' => 360],
+        ];
+
         if ($workPatternType === 'SHIFT') {
             if ($isHoliday) {
                 return $this->roundUp(min($totalMinutes, $config->holiday_max_minutes ?? 480), $config);
             }
             if ($isSaturday) {
-                return $config->shift_saturday_flat ?? 120;
+                // Sabtu: jarak check_in→check_out dikurangi jam sabtu
+                $shiftSat = $workHoursConfig['SHIFT']['saturday'] ?? 360;
+                $overtime = max(0, $totalMinutes - $shiftSat);
+                return $overtime > 0 ? $this->roundUp($overtime, $config) : 0;
             }
-            return 0;
+            // Weekday: jarak check_in→check_out dikurangi jam weekday
+            $shiftWd = $workHoursConfig['SHIFT']['weekday'] ?? 480;
+            $overtime = max(0, $totalMinutes - $shiftWd);
+            return $overtime > 0 ? $this->roundUp($overtime, $config) : 0;
         }
 
         // ═══════════════════════════════════════════════════════
         // Holiday / Minggu (FIXED & FLEX-SHIFT): full, max capped
         // ═══════════════════════════════════════════════════════
         if ($isHoliday || $isSunday) {
-            // KRY-TKN: mulai Juni 2026, teknisi maksimal 20 jam lembur holiday
-            $isTkn = $prepare->date >= '2026-06-01'
-                && in_array($prepare->employee_id, [31, 115, 174]);
-            $maxMinutes = $isTkn ? 1200 : ($config->holiday_max_minutes ?? 480);
+            $tknRule = $settingConfig['technician_rule'] ?? [
+                'employee_ids' => [31, 115, 174],
+                'start_date' => '2026-06-01',
+                'max_holiday_minutes' => 1200
+            ];
+            
+            $isTkn = $prepare->date >= $tknRule['start_date']
+                && in_array($prepare->employee_id, $tknRule['employee_ids'] ?? []);
+                
+            $maxMinutes = $isTkn ? ($tknRule['max_holiday_minutes'] ?? 1200) : ($config->holiday_max_minutes ?? 480);
 
             return $this->roundUp(min($totalMinutes, $maxMinutes), $config);
         }
 
         // ═══════════════════════════════════════════════════════
         // Hari kerja biasa (FIXED & FLEX-SHIFT):
-        // OT = jarak check_in → check_out dikurangi jam normal
         // ═══════════════════════════════════════════════════════
-        $deduction = $isSaturday
-            ? ($config->saturday_work_minutes ?? 360)
-            : ($config->normal_work_minutes ?? 480);
+        
+        $patternKey = $workPatternType ?? 'FIXED';
+        $patternHours = $workHoursConfig[$patternKey] ?? $workHoursConfig['FIXED'];
 
+        $deduction = $isSaturday
+            ? ($patternHours['saturday'] ?? ($config->saturday_work_minutes ?? 360))
+            : ($patternHours['weekday'] ?? ($config->normal_work_minutes ?? 480));
+
+        // Tentukan Rumus (Strategy)
+        $formulaToUse = 'rumus_1';
+        $specialEmployees = $settingConfig['special_employees'] ?? [];
+        $formulas = $settingConfig['formulas'] ?? [];
+
+        if (in_array($prepare->employee_id, $specialEmployees['ids'] ?? [])) {
+            $formulaToUse = $specialEmployees['formula'] ?? 'rumus_1';
+        } else {
+            if ($workPatternType === 'FIXED') {
+                $formulaToUse = $formulas['FIXED'] ?? 'rumus_1';
+            } elseif ($workPatternType === 'FLEX-SHIFT') {
+                if ($shift && $shift->external_code === 'S') {
+                    $formulaToUse = $formulas['FLEX_S'] ?? 'rumus_1';
+                } elseif ($shift && $shift->external_code === 'P') {
+                    $formulaToUse = $formulas['FLEX_P'] ?? 'rumus_1';
+                }
+            }
+        }
+
+        // Eksekusi Rumus
+        if ($formulaToUse === 'rumus_2' && $shift && $shift->work_hour_end) {
+            $scheduleOut = Carbon::parse($prepare->date->toDateString() . ' ' . $shift->work_hour_end)->startOfMinute();
+            
+            // Handle overnight shift schedule_out
+            if ($shift->work_hour_start) {
+                $scheduleIn = Carbon::parse($prepare->date->toDateString() . ' ' . $shift->work_hour_start)->startOfMinute();
+                if ($scheduleOut < $scheduleIn) {
+                    $scheduleOut->addDay();
+                }
+            }
+
+            if ($checkOut > $scheduleOut) {
+                $overtimeMinutes = $scheduleOut->diffInMinutes($checkOut, true);
+                return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config) : 0;
+            } else {
+                return 0;
+            }
+        }
+
+        // Default to rumus_1 (Scan In - Scan Out dikurangi deduction jam kerja)
         $overtimeMinutes = max(0, $totalMinutes - $deduction);
         return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config) : 0;
     }

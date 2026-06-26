@@ -359,10 +359,19 @@
           </div>
         </div>
 
-        <div>
-          <label class="block text-sm font-medium text-(--text-main) mb-1">Lembur (menit)</label>
-          <input :value="editForm.overtimeTotal" readonly type="text"
-            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm opacity-60" />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Lembur (menit)</label>
+            <input v-model.number="editForm.overtime" type="number" min="0" step="1"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              :disabled="editForm.isLocked" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">LM (menit)</label>
+            <input v-model.number="editForm.lm" type="number" min="0" step="1"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              :disabled="editForm.isLocked" />
+          </div>
         </div>
       </div>
 
@@ -526,7 +535,8 @@ const editForm = ref({
   status: '',
   reviewStatus: '',
   lateMinutes: 0,
-  overtimeTotal: 0,
+  overtime: 0,
+  lm: 0,
   notes: '',
   isLocked: false,
 })
@@ -1001,7 +1011,6 @@ function reviewBadgeClass(status) {
 
 function openEdit(emp, dateObj) {
   const dayData = getDayData(emp, dateObj.date)
-  const totalOT = (dayData.overtimeRaw || 0) + (dayData.lmRaw || 0)
 
   editingCell.value = { employee: emp, date: dateObj }
   editForm.value = {
@@ -1013,7 +1022,8 @@ function openEdit(emp, dateObj) {
     status: dayData.status || 'absent',
     reviewStatus: dayData.reviewStatus || 'cek',
     lateMinutes: dayData.lateMinutes || 0,
-    overtimeTotal: totalOT,
+    overtime: dayData.overtimeRaw || 0,
+    lm: dayData.lmRaw || 0,
     notes: dayData.notes || '',
     isLocked: dayData.isLocked || false,
   }
@@ -1034,6 +1044,8 @@ async function handleSaveEdit() {
       check_out: editForm.value.checkOut || null,
       status: editForm.value.status,
       notes: editForm.value.notes,
+      overtime: editForm.value.overtime,
+      lm: editForm.value.lm,
     }
 
     // Kalau record baru (belum ada id), kirim employee_id + date
@@ -1051,6 +1063,16 @@ async function handleSaveEdit() {
       const empId = editingCell.value.employee.id
       const dateStr = editingCell.value.date.date
       if (!attendanceData.value[empId]) attendanceData.value[empId] = {}
+
+      // Recalculate overtime display string
+      const totalOT = (editForm.value.overtime || 0) + (editForm.value.lm || 0)
+      let overtimeStr = null
+      if (totalOT > 0) {
+        overtimeStr = totalOT >= 60
+          ? `${Math.floor(totalOT / 60)}j ${totalOT % 60}m`
+          : `${totalOT}m`
+      }
+
       attendanceData.value[empId][dateStr] = {
         ...attendanceData.value[empId][dateStr],
         checkIn: editForm.value.checkIn,
@@ -1059,6 +1081,9 @@ async function handleSaveEdit() {
         statusLabel: editForm.value.statusLabel || statusLabel(editForm.value.status),
         reviewStatus: 'lengkap',
         reviewStatusLabel: 'Lengkap',
+        overtime: overtimeStr,
+        overtimeRaw: editForm.value.overtime || 0,
+        lmRaw: editForm.value.lm || 0,
         notes: editForm.value.notes,
       }
       closeEdit()

@@ -62,6 +62,13 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::post('/import', [\App\Modules\Employee\Controllers\Api\V1\Grouping\EmployeeGroupingApiController::class, 'processImport'])->name('employees.grouping.import');
         });
 
+        // Employee Ordering
+        Route::prefix('ordering')->group(function () {
+            Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Ordering\EmployeeOrderingApiController::class, 'index'])->name('employees.ordering.index');
+            Route::post('/reorder', [\App\Modules\Employee\Controllers\Api\V1\Ordering\EmployeeOrderingApiController::class, 'reorder'])->name('employees.ordering.reorder');
+            Route::post('/auto-number', [\App\Modules\Employee\Controllers\Api\V1\Ordering\EmployeeOrderingApiController::class, 'autoNumber'])->name('employees.ordering.auto-number');
+        });
+
         // Submodules
         require __DIR__ . '/../Submodules/Import/Routes/api.php';
 
