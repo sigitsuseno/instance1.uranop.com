@@ -46,7 +46,7 @@ class GajiKaryawanController extends Controller
                 'department' => $emp?->department?->name ?? '-',
                 'position' => $emp?->position?->name ?? '-',
                 'gender' => $emp?->gender ?? '-',
-                'join_year' => $joinDate ? $joinDate->format('Y') : '-',
+                'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
                 'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
                 // Data masukan
                 'gaji_pokok' => (float) $record->gaji_pokok,
@@ -118,7 +118,7 @@ class GajiKaryawanController extends Controller
                 'department' => $emp?->department?->name ?? '-',
                 'position' => $emp?->position?->name ?? '-',
                 'gender' => $emp?->gender ?? '-',
-                'join_year' => $joinDate ? $joinDate->format('Y') : '-',
+                'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
                 'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
                 'gaji_pokok' => (float) $record->gaji_pokok,
                 'premi' => (float) $record->premi,

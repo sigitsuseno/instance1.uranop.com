@@ -1133,7 +1133,9 @@ class AttendanceApiController extends Controller
                     }
 
                     // ── DATA MASUKAN ──
-                    $segmentMonth = \Carbon\Carbon::parse($segStart)->format('Y-m');
+                    $segmentMonth = $segment !== null
+                        ? \Carbon\Carbon::parse($segStart)->format('Y-m')
+                        : $period->period_year . '-' . str_pad($period->period_month, 2, '0', STR_PAD_LEFT);
                     $gajiPokok = $employee->gaji_pokok($segmentMonth);
                     $premi = $employee->premi($segmentMonth);
                     $tjMasaKerja = $employee->tunjangan_masa_kerja($segmentMonth);

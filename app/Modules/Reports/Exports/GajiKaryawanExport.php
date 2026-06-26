@@ -42,7 +42,7 @@ class GajiKaryawanExport implements WithHeadings, WithStyles, WithColumnWidths, 
     {
         return [
             'A' => 5,  'B' => 10, 'C' => 25, 'D' => 5,  'E' => 15, 'F' => 15,
-            'G' => 10, 'H' => 12, 'I' => 12, 'J' => 12, 'K' => 5,  'L' => 5,
+            'G' => 14, 'H' => 12, 'I' => 12, 'J' => 12, 'K' => 5,  'L' => 5,
             'M' => 8,  'N' => 12, 'O' => 12, 'P' => 12, 'Q' => 12, 'R' => 12,
             'S' => 10, 'T' => 15, 'U' => 12, 'V' => 12, 'W' => 12, 'X' => 12,
             'Y' => 12, 'Z' => 15,
