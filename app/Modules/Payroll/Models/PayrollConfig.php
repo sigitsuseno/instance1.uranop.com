@@ -75,6 +75,15 @@ class PayrollConfig extends Model
                     'SHIFT' => ['weekday' => 480, 'saturday' => 360],
                 ]
             ],
+            'kasbon' => [
+                'limit_type' => 'salary_multiplier',
+                'limit_value' => 3,
+                'max_tenor' => 12,
+                'interest_rate' => 0,
+                'allow_multi' => false,
+                'auto_deduct' => true,
+                'approval_roles' => ['superadmin', 'hrmanager'],
+            ],
             default => [],
         };
     }

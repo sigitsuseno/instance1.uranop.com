@@ -72,6 +72,17 @@ const allMenus = [
     ],
   },
   {
+    title: 'Pengelolaan Kasbon',
+    icon: 'bx bx-wallet',
+    visible: isSuperadmin.value || isHrmanager.value || isAdmManager.value,
+    children: [
+      { title: 'Pengajuan Kasbon', icon: 'bx bx-edit', route: '/admin/kasbon/requests' },
+      { title: 'Persetujuan Kasbon', icon: 'bx bx-check-circle', route: '/admin/kasbon/approvals' },
+      { title: 'Pelunasan Kasbon', icon: 'bx bx-credit-card', route: '/admin/kasbon/repayments' },
+      { title: 'Riwayat Kasbon', icon: 'bx bx-history', route: '/admin/kasbon/history' },
+    ],
+  },
+  {
     title: 'Pengelolaan Cuti',
     icon: 'bx bx-calendar-check',
     children: [

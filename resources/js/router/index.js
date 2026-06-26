@@ -63,6 +63,10 @@ const ScheduleRoster = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const RosterGenerate = () => import('../Pages/Admin/Schedule/Roster/Generate.vue')
 const RosterImport = () => import('../Pages/Admin/Schedule/Roster/Import.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
+const KasbonRequests = () => import('../Pages/Admin/Kasbon/Requests.vue')
+const KasbonApprovals = () => import('../Pages/Admin/Kasbon/Approvals.vue')
+const KasbonRepayments = () => import('../Pages/Admin/Kasbon/Repayments.vue')
+const KasbonHistory = () => import('../Pages/Admin/Kasbon/History.vue')
 const UangMakanReport = () => import('../Pages/Admin/Reports/UangMakan/Index.vue')
 const LaporanLemburIndex = () => import('../Pages/Admin/Reports/Lembur/Index.vue')
 const LaporanLemburUangMakan = () => import('../Pages/Admin/Reports/LemburUangMakan/Index.vue')
@@ -166,6 +170,10 @@ const routes = [
       { path: 'leave/cancellations', name: 'leave.cancellations', component: LeaveCancellations, meta: { title: 'Pembatalan Cuti' } },
       { path: 'leave/balances', name: 'leave.balances', component: LeaveBalances, meta: { title: 'Saldo Cuti' } },
       { path: 'leave/recap', name: 'leave.recap', component: LeaveRecap, meta: { title: 'Rekap Cuti' } },
+      { path: 'kasbon/requests', name: 'kasbon.requests', component: KasbonRequests, meta: { title: 'Pengajuan Kasbon' } },
+      { path: 'kasbon/approvals', name: 'kasbon.approvals', component: KasbonApprovals, meta: { title: 'Persetujuan Kasbon' } },
+      { path: 'kasbon/repayments', name: 'kasbon.repayments', component: KasbonRepayments, meta: { title: 'Pelunasan Kasbon' } },
+      { path: 'kasbon/history', name: 'kasbon.history', component: KasbonHistory, meta: { title: 'Riwayat Kasbon' } },
       { path: 'payroll/periods', name: 'payroll.periods', component: PayrollPeriodsIndex, meta: { title: 'Gaji Karyawan (Legacy)' } },
       { path: 'payroll/periods/crud', name: 'payroll.periods.crud', component: PayrollPeriodsCrud, meta: { title: 'Penggajian' } },
       { path: 'payroll/gaji-karyawan', name: 'payroll.gaji-karyawan', component: PayrollGajiKaryawan, meta: { title: 'Gaji Karyawan' } },
