@@ -1147,7 +1147,7 @@ class AttendanceApiController extends Controller
                     $totalLemburJam = ($lmCount + $lemburCount) / 60;
 
                     // Zero overtime: Section A groups (ALL IN) — baca dari payroll config
-                    // GRP-SPR adalah pengecualian: tetap dapat LM + lembur
+                    // GRP-SPR: LM tetap, LBR JAM = 0, upah lembur dari LM saja
                     $payrollConfig = \App\Modules\Payroll\Models\PayrollConfig::getConfig('gaji_karyawan');
                     $sectionAGroups = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
                     $isZeroOvertime = $employee->groups()->whereIn('reference_code', $sectionAGroups)
@@ -1160,6 +1160,12 @@ class AttendanceApiController extends Controller
                         $lmCount = 0;
                         $lemburCount = 0;
                     } else {
+                        // GRP-SPR: LBR JAM = 0, upah lembur hanya dari LM
+                        $isSpr = $employee->groups()->where('reference_code', 'GRP-SPR')->exists();
+                        if ($isSpr) {
+                            $lemburCount = 0;
+                            $totalLemburJam = $lmCount / 60;
+                        }
                         $upahLembur = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100;
                     }
                     
