@@ -302,6 +302,34 @@ class AttendanceAutologController extends Controller
             ->orderBy('date')
             ->get();
 
+        // Fallback: load roster langsung untuk hari2 yang autolog-nya tidak punya employee_shift_roster_id
+        // (terjadi pada data import XLSX manual, misal periode 1-4 tahun 2026)
+        $datesWithoutRoster = $logs
+            ->filter(fn ($l) => ! $l->employee_shift_roster_id)
+            ->pluck('date')
+            ->map(fn ($d) => $d->toDateString())
+            ->toArray();
+
+        $rosterFallback = [];
+        if (! empty($datesWithoutRoster)) {
+            $rosters = \App\Modules\Schedule\Models\EmployeeShiftRoster::with('shift')
+                ->where('employee_id', $employeeId)
+                ->whereIn('date', $datesWithoutRoster)
+                ->get()
+                ->keyBy(fn ($r) => $r->date->toDateString());
+
+            foreach ($rosters as $dateStr => $roster) {
+                $rosterFallback[$dateStr] = [
+                    'shift_start' => $roster->shift?->work_hour_start
+                        ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
+                        : null,
+                    'shift_end' => $roster->shift?->work_hour_end
+                        ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
+                        : null,
+                ];
+            }
+        }
+
         $isFixed = $logs->contains(fn ($log) => $log->employeeShiftRoster?->workPattern?->employee_type === 'SHIFT');
 
         $dailyData = [];
@@ -311,6 +339,15 @@ class AttendanceAutologController extends Controller
         while ($currentDate <= $lastDate) {
             $dateStr = $currentDate->toDateString();
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
+
+            // Priority: 1) dari relasi roster di autolog, 2) dari fallback roster lookup
+            $shiftStart = $log?->employeeShiftRoster?->shift?->work_hour_start
+                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
+                : ($rosterFallback[$dateStr]['shift_start'] ?? null);
+
+            $shiftEnd = $log?->employeeShiftRoster?->shift?->work_hour_end
+                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
+                : ($rosterFallback[$dateStr]['shift_end'] ?? null);
 
             $dailyData[] = [
                 'date' => $dateStr,
@@ -327,8 +364,8 @@ class AttendanceAutologController extends Controller
                 'is_locked' => $log?->is_locked ?? false,
                 'notes' => $log?->notes,
                 'lembur_calc' => $log?->lembur_calc ?? 0,
-                'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
-                'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i') : null,
+                'shift_start' => $shiftStart,
+                'shift_end' => $shiftEnd,
                 'is_sat' => $log?->is_sat ?? false,
                 'is_holiday' => $log?->is_holiday ?? false,
                 'is_fixed' => $isFixed,
@@ -426,6 +463,33 @@ class AttendanceAutologController extends Controller
             ->orderBy('date')
             ->get();
 
+        // Fallback: load roster langsung untuk hari2 yang autolog-nya tidak punya employee_shift_roster_id
+        $datesWithoutRoster = $logs
+            ->filter(fn ($l) => ! $l->employee_shift_roster_id)
+            ->pluck('date')
+            ->map(fn ($d) => $d->toDateString())
+            ->toArray();
+
+        $rosterFallback = [];
+        if (! empty($datesWithoutRoster)) {
+            $rosters = \App\Modules\Schedule\Models\EmployeeShiftRoster::with('shift')
+                ->where('employee_id', $employeeId)
+                ->whereIn('date', $datesWithoutRoster)
+                ->get()
+                ->keyBy(fn ($r) => $r->date->toDateString());
+
+            foreach ($rosters as $dateStr => $roster) {
+                $rosterFallback[$dateStr] = [
+                    'shift_start' => $roster->shift?->work_hour_start
+                        ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
+                        : null,
+                    'shift_end' => $roster->shift?->work_hour_end
+                        ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
+                        : null,
+                ];
+            }
+        }
+
         $isFixed = $logs->contains(fn ($log) => $log->employeeShiftRoster?->workPattern?->employee_type === 'SHIFT');
 
         $dailyData = [];
@@ -435,6 +499,15 @@ class AttendanceAutologController extends Controller
         while ($currentDate <= $lastDate) {
             $dateStr = $currentDate->toDateString();
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
+
+            // Priority: 1) dari relasi roster di autolog, 2) dari fallback roster lookup
+            $shiftStart = $log?->employeeShiftRoster?->shift?->work_hour_start
+                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
+                : ($rosterFallback[$dateStr]['shift_start'] ?? null);
+
+            $shiftEnd = $log?->employeeShiftRoster?->shift?->work_hour_end
+                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
+                : ($rosterFallback[$dateStr]['shift_end'] ?? null);
 
             $dailyData[] = [
                 'date' => $dateStr,
@@ -448,8 +521,8 @@ class AttendanceAutologController extends Controller
                 'lembur_calc' => $log?->lembur_calc ?? 0,
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
-                'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
-                'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i') : null,
+                'shift_start' => $shiftStart,
+                'shift_end' => $shiftEnd,
                 'is_sat' => $log?->is_sat ?? false,
                 'is_holiday' => $log?->is_holiday ?? false,
                 'is_fixed' => $isFixed,

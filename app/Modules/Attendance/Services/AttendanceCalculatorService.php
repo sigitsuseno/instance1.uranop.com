@@ -132,29 +132,33 @@ class AttendanceCalculatorService
 
         $totalMinutes = $checkIn->diffInMinutes($checkOut, true);
 
+        // Dynamic rounding overrides from PayrollConfig (modal Setting)
+        $roundingThreshold = $settingConfig['rounding_threshold'] ?? null;
+        $roundingInterval  = $settingConfig['rounding_interval'] ?? null;
+
         // ═══════════════════════════════════════════════════════
         // SHIFT Pattern
         // ═══════════════════════════════════════════════════════
         $workHoursConfig = $settingConfig['work_hours'] ?? [
-            'FIXED' => ['weekday' => 480, 'saturday' => 360],
+            'FIXED' => ['weekday' => 540, 'saturday' => 360],
             'FLEX-SHIFT' => ['weekday' => 480, 'saturday' => 360],
             'SHIFT' => ['weekday' => 480, 'saturday' => 360],
         ];
 
         if ($workPatternType === 'SHIFT') {
             if ($isHoliday) {
-                return $this->roundUp(min($totalMinutes, $config->holiday_max_minutes ?? 480), $config);
+                return $this->roundUp(min($totalMinutes, $config->holiday_max_minutes ?? 480), $config, $roundingThreshold, $roundingInterval);
             }
             if ($isSaturday) {
                 // Sabtu: jarak check_in→check_out dikurangi jam sabtu
-                $shiftSat = $workHoursConfig['SHIFT']['saturday'] ?? 360;
+                $shiftSat = $workHoursConfig['SHIFT']['saturday'] ?? ($config->saturday_work_minutes ?? 360);
                 $overtime = max(0, $totalMinutes - $shiftSat);
-                return $overtime > 0 ? $this->roundUp($overtime, $config) : 0;
+                return $overtime > 0 ? $this->roundUp($overtime, $config, $roundingThreshold, $roundingInterval) : 0;
             }
             // Weekday: jarak check_in→check_out dikurangi jam weekday
-            $shiftWd = $workHoursConfig['SHIFT']['weekday'] ?? 480;
+            $shiftWd = $workHoursConfig['SHIFT']['weekday'] ?? ($config->normal_work_minutes ?? 480);
             $overtime = max(0, $totalMinutes - $shiftWd);
-            return $overtime > 0 ? $this->roundUp($overtime, $config) : 0;
+            return $overtime > 0 ? $this->roundUp($overtime, $config, $roundingThreshold, $roundingInterval) : 0;
         }
 
         // ═══════════════════════════════════════════════════════
@@ -172,7 +176,7 @@ class AttendanceCalculatorService
                 
             $maxMinutes = $isTkn ? ($tknRule['max_holiday_minutes'] ?? 1200) : ($config->holiday_max_minutes ?? 480);
 
-            return $this->roundUp(min($totalMinutes, $maxMinutes), $config);
+            return $this->roundUp(min($totalMinutes, $maxMinutes), $config, $roundingThreshold, $roundingInterval);
         }
 
         // ═══════════════════════════════════════════════════════
@@ -219,7 +223,7 @@ class AttendanceCalculatorService
 
             if ($checkOut > $scheduleOut) {
                 $overtimeMinutes = $scheduleOut->diffInMinutes($checkOut, true);
-                return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config) : 0;
+                return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config, $roundingThreshold, $roundingInterval) : 0;
             } else {
                 return 0;
             }
@@ -227,7 +231,7 @@ class AttendanceCalculatorService
 
         // Default to rumus_1 (Scan In - Scan Out dikurangi deduction jam kerja)
         $overtimeMinutes = max(0, $totalMinutes - $deduction);
-        return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config) : 0;
+        return $overtimeMinutes > 0 ? $this->roundUp($overtimeMinutes, $config, $roundingThreshold, $roundingInterval) : 0;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -356,11 +360,11 @@ class AttendanceCalculatorService
      * 0-(t-1) → 0, t-(i+t-1) → i, dst.
      * Default: i=30, t=5 → 0-24→0, 25-54→30, 55-84→60
      */
-    public function roundUp(int $minutes, ?OvertimeCalculatorConfig $config = null): int
+    public function roundUp(int $minutes, ?OvertimeCalculatorConfig $config = null, ?int $thresholdOverride = null, ?int $intervalOverride = null): int
     {
-        $config   = $config ?? new OvertimeCalculatorConfig();
-        $interval = $config->rounding_interval ?? 30;
-        $threshold = $config->rounding_threshold ?? 5;
+        $config    = $config ?? new OvertimeCalculatorConfig();
+        $interval  = $intervalOverride ?? $config->rounding_interval ?? 30;
+        $threshold = $thresholdOverride ?? $config->rounding_threshold ?? 5;
 
         if ($interval <= 0) {
             return $minutes;

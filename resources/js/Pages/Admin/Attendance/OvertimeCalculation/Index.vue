@@ -315,6 +315,21 @@
           <input v-model="settingForm.zero_late_codes" type="text" placeholder="Misal: S, P" class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
         </div>
 
+        <div>
+          <label class="block text-sm font-semibold text-(--text-main) mb-1">Pembulatan Lembur</label>
+          <p class="text-xs text-(--text-muted) mb-2">Interval pembulatan dan toleransi. Default: interval 30 menit, toleransi 5 menit. Contoh: interval=30, toleransi=10 → 0-19→0, 20-49→30, 50-79→60.</p>
+          <div class="flex gap-3">
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-(--text-muted) mb-1">Interval (menit)</label>
+              <input v-model.number="settingForm.rounding_interval" type="number" min="1" max="60" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+            </div>
+            <div class="flex-1">
+              <label class="block text-xs font-medium text-(--text-muted) mb-1">Toleransi (menit)</label>
+              <input v-model.number="settingForm.rounding_threshold" type="number" min="0" max="30" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+            </div>
+          </div>
+        </div>
+
         <div class="flex justify-end gap-3 mt-6">
           <BaseButton variant="ghost" @click="showSettings = false">Batal</BaseButton>
           <BaseButton variant="primary" :loading="savingConfig" @click="saveConfig">Simpan Pengaturan</BaseButton>
@@ -376,10 +391,12 @@ const settingForm = ref({
   technician_start_date: '',
   technician_max_minutes: 1200,
   zero_late_codes: '',
-  hours_fixed_wd: 480,
+  hours_fixed_wd: 540,
   hours_fixed_sat: 360,
   hours_flex_wd: 480,
-  hours_flex_sat: 360
+  hours_flex_sat: 360,
+  rounding_threshold: 10,
+  rounding_interval: 30
 })
 
 // ── Methods ──
@@ -486,10 +503,13 @@ async function fetchConfig() {
     settingForm.value.technician_max_minutes = conf.technician_rule?.max_holiday_minutes || 1200
     settingForm.value.zero_late_codes = (conf.zero_late_shift_codes || []).join(', ')
 
-    settingForm.value.hours_fixed_wd = conf.work_hours?.FIXED?.weekday ?? 480
+    settingForm.value.hours_fixed_wd = conf.work_hours?.FIXED?.weekday ?? 540
     settingForm.value.hours_fixed_sat = conf.work_hours?.FIXED?.saturday ?? 360
     settingForm.value.hours_flex_wd = conf.work_hours?.['FLEX-SHIFT']?.weekday ?? 480
     settingForm.value.hours_flex_sat = conf.work_hours?.['FLEX-SHIFT']?.saturday ?? 360
+    
+    settingForm.value.rounding_threshold = conf.rounding_threshold ?? 10
+    settingForm.value.rounding_interval = conf.rounding_interval ?? 30
   } catch (error) {
     console.error('Error fetching config', error)
   }
@@ -507,6 +527,8 @@ async function saveConfig() {
     const parseStrList = (str) => str.split(',').map(s => s.trim()).filter(s => s)
 
     const payload = {
+      rounding_threshold: Number(settingForm.value.rounding_threshold),
+      rounding_interval: Number(settingForm.value.rounding_interval),
       formulas: {
         'FIXED': settingForm.value.formula_fixed,
         'FLEX_S': settingForm.value.formula_flex_s,
