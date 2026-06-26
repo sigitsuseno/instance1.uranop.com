@@ -1147,10 +1147,7 @@ class AttendanceApiController extends Controller
                     // Zero overtime: Section A groups (ALL IN) — baca dari payroll config
                     $payrollConfig = \App\Modules\Payroll\Models\PayrollConfig::getConfig('gaji_karyawan');
                     $sectionAGroups = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
-                    // Section A (ALL IN) = zero overtime + zero LM, KECUALI GRP-SS
-                    $isZeroOvertime = $employee->groups()->whereIn('reference_code', $sectionAGroups)
-                        ->where('reference_code', '!=', 'GRP-SS')
-                        ->exists();
+                    $isZeroOvertime = $employee->groups()->whereIn('reference_code', $sectionAGroups)->exists();
 
                     if ($isZeroOvertime) {
                         $upahLembur = 0;
