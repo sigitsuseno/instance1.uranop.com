@@ -35,7 +35,7 @@ class EmployeeApiController extends Controller
             'contract_status'   => 'nullable|string',
             'period_start'      => 'nullable|date',
             'period_end'        => 'nullable|date|after_or_equal:period_start',
-            'per_page'          => 'nullable|integer|min:5|max:100',
+            'per_page'          => 'nullable|integer|min:5|max:5000',
             'exclude_expired_contracts' => 'nullable|boolean',
         ]);
 

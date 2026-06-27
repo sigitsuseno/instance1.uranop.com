@@ -39,6 +39,16 @@
           </template>
           Calculate Overtime
         </BaseButton>
+
+        <button 
+          @click="handleExport"
+          :disabled="isExporting"
+          class="h-10 px-4 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+        >
+          <i class="bx bx-file text-lg" v-if="!isExporting"></i>
+          <i class="bx bx-loader-alt bx-spin text-lg" v-else></i>
+          <span class="hidden sm:inline">Export Excel</span>
+        </button>
       </div>
     </div>
 
@@ -360,6 +370,7 @@ const notification = useNotificationStore()
 // ── State ──
 const isCalculating = ref(false)
 const isLoading = ref(true)
+const isExporting = ref(false)
 const calculateResult = ref(null)
 
 const startDate = ref(route.query.start_date || new Date().toISOString().split('T')[0].slice(0, 8) + '01')
@@ -482,6 +493,38 @@ async function handleCalculate() {
     }
   } finally {
     isCalculating.value = false
+  }
+}
+
+async function handleExport() {
+  isExporting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const params = new URLSearchParams({ 
+      start_date: startDate.value,
+      end_date: endDate.value
+    })
+    if (searchQuery.value) params.set('search', searchQuery.value)
+
+    const response = await fetch(`/api/v1/attendance/prepare/overtime-summary/export?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+
+    if (!response.ok) throw new Error('Gagal export data')
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Rekap_Hitung_Lembur_${startDate.value}_${endDate.value}.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('Gagal export Excel: ' + e.message)
+  } finally {
+    isExporting.value = false
   }
 }
 

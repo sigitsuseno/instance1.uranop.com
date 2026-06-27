@@ -606,6 +606,105 @@ class AttendanceApiController extends Controller
         ]);
     }
 
+    /**
+     * GET /api/v1/attendance/prepare/overtime-summary/export
+     * Export overtime summary to Excel
+     */
+    public function prepareOvertimeSummaryExport(Request $request)
+    {
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate   = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+        $search    = $request->input('search');
+
+        $employees = \App\Modules\Employee\Models\Employee::with([
+            'department',
+            'position',
+            'attendancePrepares' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            },
+        ])
+            ->where('is_active', true)
+            ->where(function ($q) use ($startDate) {
+                $q->whereNull('resign_date')
+                    ->orWhere('resign_date', '>=', $startDate);
+            })
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('employee_code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('employee_code')
+            ->get();
+
+        $data = [];
+        foreach ($employees as $employee) {
+            $totalHadir = 0;
+            $lm = 0;
+            $totalLm = 0;
+            $lemburHb = 0;
+            $totalLhb = 0;
+
+            foreach ($employee->attendancePrepares as $attendance) {
+                if ($attendance->status === 'hadir') {
+                    $totalHadir++;
+                }
+
+                $lemburHb += $attendance->overtime ?? 0;
+                $totalLhb += $attendance->overtime_count ?? 0;
+                $lm += $attendance->lm ?? 0;
+                $totalLm += $attendance->lm_count ?? 0;
+            }
+
+            $data[] = [
+                'employee_code' => $employee->employee_code,
+                'employee_name' => $employee->name,
+                'department' => $employee->department?->name,
+                'total_hadir' => $totalHadir,
+                'lm' => $lm,
+                'total_lm' => $totalLm,
+                'lembur_hb' => $lemburHb,
+                'total_lhb' => $totalLhb,
+                'total_lembur' => $totalLm + $totalLhb,
+            ];
+        }
+
+        $periodLabel = Carbon::parse($startDate)->format('d M Y') . ' - ' . Carbon::parse($endDate)->format('d M Y');
+        $filename = 'Rekap_Hitung_Lembur_' . Carbon::parse($startDate)->format('Ymd') . '_' . Carbon::parse($endDate)->format('Ymd') . '.xlsx';
+
+        return Excel::download(new \App\Modules\Attendance\Exports\OvertimeSummaryExport($data, $periodLabel), $filename);
+    }
+
+    /**
+     * GET /api/v1/attendance/prepare/overtime-detail/export
+     * Export overtime detail for an employee to Excel
+     */
+    public function prepareOvertimeDetailExport(Request $request)
+    {
+        $employeeId = $request->input('employee_id');
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate   = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+
+        if (!$employeeId) {
+            return response()->json(['message' => 'Employee ID required'], 422);
+        }
+
+        $employee = \App\Modules\Employee\Models\Employee::find($employeeId);
+        if (!$employee) {
+            return response()->json(['message' => 'Employee not found'], 404);
+        }
+
+        $days = AttendancePrepare::where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->get();
+
+        $periodLabel = Carbon::parse($startDate)->format('d M Y') . ' - ' . Carbon::parse($endDate)->format('d M Y');
+        $filename = 'Detail_Lembur_' . preg_replace('/[^a-zA-Z0-9]/', '_', $employee->name) . '_' . Carbon::parse($startDate)->format('Ymd') . '_' . Carbon::parse($endDate)->format('Ymd') . '.xlsx';
+
+        return Excel::download(new \App\Modules\Attendance\Exports\OvertimeDetailExport($days, $employee->name, $periodLabel), $filename);
+    }
+
     // =================================================================
     // CONSECUTIVE DAYS — CRUD (mirip leave_request)
     // =================================================================

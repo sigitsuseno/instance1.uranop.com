@@ -40,6 +40,16 @@
           <div v-else class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) flex items-center gap-2 shadow-sm text-sm opacity-50 cursor-not-allowed">
               Selanjutnya <i class="bx bx-chevron-right"></i>
           </div>
+
+          <button 
+              @click="handleExport"
+              :disabled="isExporting"
+              class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 shadow-sm text-sm font-medium ml-2 disabled:opacity-50"
+          >
+              <i class="bx bx-file" v-if="!isExporting"></i>
+              <i class="bx bx-loader-alt bx-spin" v-else></i>
+              Export
+          </button>
       </div>
     </div>
 
@@ -133,6 +143,7 @@ const { get } = useApi()
 const route = useRoute()
 
 const isLoading = ref(true)
+const isExporting = ref(false)
 const employee = ref(null)
 const days = ref([])
 const navigation = ref({ prev_id: null, next_id: null })
@@ -255,6 +266,38 @@ async function fetchData() {
     console.error('Failed to fetch detail:', error)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function handleExport() {
+  isExporting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const params = new URLSearchParams({ 
+      employee_id: employeeId.value,
+      start_date: startDate.value,
+      end_date: endDate.value
+    })
+
+    const response = await fetch(`/api/v1/attendance/prepare/overtime-detail/export?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+
+    if (!response.ok) throw new Error('Gagal export data')
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Detail_Lembur_${employee.value?.name || 'Karyawan'}_${startDate.value}_${endDate.value}.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('Gagal export Excel: ' + e.message)
+  } finally {
+    isExporting.value = false
   }
 }
 

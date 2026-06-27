@@ -102,7 +102,7 @@ const serverErrors = computed(() => {
 
 async function fetchEmployees() {
   try {
-    const res = await api.get('/api/v1/employees?per_page=100')
+    const res = await api.get('/api/v1/employees?per_page=5000')
     employees.value = res.data || []
   } catch (e) { console.error(e) }
 }
