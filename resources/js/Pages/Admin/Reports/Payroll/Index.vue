@@ -3,7 +3,7 @@
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-xl font-semibold text-(--text-main)">Laporan Payroll</h1>
-        <p class="text-sm text-(--text-muted) mt-1">Laporan Payroll Karyawan beserta Summary/Resume</p>
+        <p class="text-sm text-(--text-muted) mt-1">Laporan Payroll Karyawan beserta Summary/Resume dan Daftar Transfer Bank</p>
       </div>
     </div>
 
@@ -32,12 +32,36 @@
         >
           Resume
         </button>
+        <button
+          :class="[
+            'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
+            activeTab === 'kirim-all-in'
+              ? 'text-(--primary) border-(--primary)'
+              : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
+          ]"
+          @click="activeTab = 'kirim-all-in'"
+        >
+          Kirim All In
+        </button>
+        <button
+          :class="[
+            'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
+            activeTab === 'kirim-print'
+              ? 'text-(--primary) border-(--primary)'
+              : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
+          ]"
+          @click="activeTab = 'kirim-print'"
+        >
+          Kirim Print
+        </button>
       </nav>
     </div>
 
     <!-- Tab Content -->
     <TabPayroll v-if="activeTab === 'payroll'" />
     <TabResume v-if="activeTab === 'resume'" />
+    <TabKirimBank v-if="activeTab === 'kirim-all-in'" group="all-in" />
+    <TabKirimBank v-if="activeTab === 'kirim-print'" group="print" />
   </div>
 </template>
 
@@ -45,6 +69,7 @@
 import { ref } from 'vue'
 import TabPayroll from './TabPayroll.vue'
 import TabResume from './TabResume.vue'
+import TabKirimBank from './TabKirimBank.vue'
 
 const activeTab = ref('payroll')
 </script>
