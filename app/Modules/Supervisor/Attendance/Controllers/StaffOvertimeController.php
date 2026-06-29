@@ -133,7 +133,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
                     'hadir' => $logs->where('status', 'present')->count(),
-                    'lembur' => round($logs->sum('lembur_calc'), 1),
+                    'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('izin_duration', 1)->count(),
                     'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -180,7 +180,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
                     'hadir' => $logs->where('status', 'present')->count(),
-                    'lembur' => round($logs->sum('lembur_calc'), 1),
+                    'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('izin_duration', 1)->count(),
                     'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -326,7 +326,7 @@ class StaffOvertimeController extends Controller
                     'department' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
                     'position' => $periodSnapshot?->position?->name ?? $employee->position?->name ?? '-',
                     'hadir' => $logs->where('status', 'present')->count(),
-                    'lembur' => round($logs->sum('lembur_calc'), 1),
+                    'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('izin_duration', 1)->count(),
                     'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -439,7 +439,7 @@ class StaffOvertimeController extends Controller
                 $lembur = round($logs->sum('lembur') / 60, 1);
             } else {
                 $logs = $employee->autologs;
-                $lembur = round($logs->sum('lembur_calc'), 1);
+                $lembur = round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1);
             }
 
             return [
@@ -582,7 +582,7 @@ class StaffOvertimeController extends Controller
             $summary = [
                 'hadir' => $logs->where('status', 'present')->count(),
                 'lembur_minutes' => $logs->sum('lembur'),
-                'lembur' => round($logs->sum('lembur_calc'), 1),
+                'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -708,7 +708,7 @@ class StaffOvertimeController extends Controller
             $summary = [
                 'hadir' => $logs->where('status', 'present')->count(),
                 'lembur_minutes' => $logs->sum('lembur'),
-                'lembur' => round($logs->sum('lembur_calc'), 1),
+                'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),

@@ -103,7 +103,7 @@ class AttendanceAutologController extends Controller
                 'department' => $employee->department?->name,
                 'position' => $employee->position?->name,
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => round($logs->sum('lembur_calc'), 1),
+                'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -139,7 +139,7 @@ class AttendanceAutologController extends Controller
                 'department' => $employee->department?->name,
                 'position' => $employee->position?->name,
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => round($logs->sum('lembur_calc'), 1),
+                'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -241,7 +241,7 @@ class AttendanceAutologController extends Controller
                 'department' => $employee->department?->name ?? '-',
                 'position' => $employee->position?->name ?? '-',
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => round($logs->sum('lembur_calc'), 1),
+                'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('status', 'izin')->where('deduct_attendance', 1)->count(),
                 'sakit' => $logs->where('status', 'sakit')->where('deduct_attendance', 0)->count(),
@@ -371,7 +371,7 @@ class AttendanceAutologController extends Controller
                 'lembur_calc' => $log?->lembur_calc ?? 0,
                 'lm' => $log?->lm ?? 0,
                 'lm_calc' => $log?->lm_calc ?? 0,
-                'lembur_total_calc' => round(($log?->lembur_calc ?? 0) + ($log?->lm_calc ?? 0) / 60, 1),
+                'lembur_total_calc' => round(($log?->lembur_calc ?? 0) + ($log?->lm_calc ?? 0), 1),
                 'shift_start' => $shiftStart,
                 'shift_end' => $shiftEnd,
                 'is_sat' => $log?->is_sat ?? false,
@@ -394,7 +394,7 @@ class AttendanceAutologController extends Controller
             'summary' => [
                 'hadir' => $logs->where('status', 'present')->count(),
                 'lembur' => $logs->sum('lembur'),
-                'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc') / 60, 1),
+                'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -542,7 +542,7 @@ class AttendanceAutologController extends Controller
         $summary = [
             'hadir' => $logs->where('status', 'present')->count(),
             'lembur' => $logs->sum('lembur') / 60,
-            'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc') / 60, 1),
+            'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
             'cuti' => $logs->where('status', 'leave')->count(),
             'izin' => $logs->where('status', 'permit')->where('deduct_attendance', 1)->count(),
             'sakit' => $logs->where('status', 'permit')->where('deduct_attendance', 0)->count(),
@@ -651,7 +651,7 @@ class AttendanceAutologController extends Controller
                     // lembur_calc disimpan dalam format jam (float)
                     $updateData['lembur_calc'] = round($calc['overtime_count'] / 60, 2);
                     $updateData['lm']          = $calc['lm'];
-                    $updateData['lm_calc']     = $calc['lm_count'];
+                    $updateData['lm_calc']     = round($calc['lm_count'] / 60, 2);
                 } else {
                     $updateData['lembur_calc'] = null;
                     $updateData['lm']          = 0;

@@ -107,7 +107,7 @@ class AttendanceSnapshotController extends Controller
             $totalOvertimeMinutes = $logs->sum('lembur');
 
             $overtimeHours = $totalOvertimeMinutes / 60;
-            $calculatedOvertime = $logs->sum('lembur_calc');
+            $calculatedOvertime = $logs->sum('lembur_calc') + $logs->sum('lm_calc');
 
             $totalActualOvertime += $overtimeHours;
             $totalCalculatedOvertime += $calculatedOvertime;
@@ -180,7 +180,7 @@ class AttendanceSnapshotController extends Controller
             $totalOvertimeMinutes = $logs->sum('lembur');
 
             $overtimeHours = $totalOvertimeMinutes / 60;
-            $calculatedOvertime = $logs->sum('lembur_calc');
+            $calculatedOvertime = $logs->sum('lembur_calc') + $logs->sum('lm_calc');
 
             $summaryData[] = [
                 'id' => $employee->id,
@@ -301,7 +301,7 @@ class AttendanceSnapshotController extends Controller
                 'total_late_days' => $logs->where('late_duration', '>', 0)->count(),
                 'total_late_minutes' => $logs->sum('late_duration'),
                 'total_early_leave_minutes' => $logs->sum('early_leave_duration'),
-                'total_overtime_minutes' => $logs->sum('lembur_calc') * 60,
+                'total_overtime_minutes' => ($logs->sum('lembur_calc') + $logs->sum('lm_calc')) * 60,
                 'total_holiday_overtime' => $logs->sum('holiday_overtime'),
                 'total_leave_days' => $leaveDays,
                 'total_sick_days' => $sickDays,
@@ -309,7 +309,7 @@ class AttendanceSnapshotController extends Controller
                 'snapshot' => [
                     'off_days' => $offDays,
                     'holiday_days' => $holidayDays,
-                    'calculated_overtime' => $logs->sum('lembur_calc'),
+                    'calculated_overtime' => $logs->sum('lembur_calc') + $logs->sum('lm_calc'),
                     'created_at' => now()->toIso8601String(),
                     'created_by' => Auth::id(),
                 ],
@@ -416,7 +416,7 @@ class AttendanceSnapshotController extends Controller
                         'total_late_days' => $logs->where('late_duration', '>', 0)->count(),
                         'total_late_minutes' => $logs->sum('late_duration'),
                         'total_early_leave_minutes' => $logs->sum('early_leave_duration'),
-                        'total_overtime_minutes' => $logs->sum('lembur_calc') * 60,
+                        'total_overtime_minutes' => ($logs->sum('lembur_calc') + $logs->sum('lm_calc')) * 60,
                         'total_holiday_overtime' => $logs->sum('holiday_overtime'),
                         'total_leave_days' => $leaveDays,
                         'total_unpaid_days' => $notPaidDays,
@@ -425,7 +425,7 @@ class AttendanceSnapshotController extends Controller
                         'snapshot' => [
                             'off_days' => $offDays,
                             'holiday_days' => $holidayDays,
-                            'calculated_overtime' => $logs->sum('lembur_calc'),
+                            'calculated_overtime' => $logs->sum('lembur_calc') + $logs->sum('lm_calc'),
                             'created_at' => now()->toIso8601String(),
                             'created_by' => Auth::id(),
                         ],
@@ -520,7 +520,7 @@ class AttendanceSnapshotController extends Controller
             $totalOvertimeMinutes = $logs->sum('lembur');
 
             $overtimeHours = $totalOvertimeMinutes / 60;
-            $calculatedOvertime = $logs->sum('lembur_calc');
+            $calculatedOvertime = $logs->sum('lembur_calc') + $logs->sum('lm_calc');
 
             $totalActualOvertime += $overtimeHours;
             $totalCalculatedOvertime += $calculatedOvertime;
