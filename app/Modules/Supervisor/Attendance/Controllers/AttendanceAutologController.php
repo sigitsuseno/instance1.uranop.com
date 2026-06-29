@@ -3,6 +3,7 @@
 namespace App\Modules\Supervisor\Attendance\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Attendance\Services\AttendanceCalculatorService;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorEmployee as Employee;
 use App\Modules\Supervisor\Attendance\Services\SupervisorAttPrepareSync;
@@ -56,6 +57,7 @@ class AttendanceAutologController extends Controller
         }
 
         // Build base query: hanya employee yang punya roster di periode ini atau punya autolog
+        // dan exclude GRP-JKT (karena sudah ada service khusus)
         $employeesQuery = Employee::where(function($q) use ($startDate, $endDate) {
             $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
@@ -63,6 +65,9 @@ class AttendanceAutologController extends Controller
                 $query->whereBetween('date', [$startDate, $endDate]);
             });
         })
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
             ->with([
                 'department',
                 'position',
@@ -364,6 +369,9 @@ class AttendanceAutologController extends Controller
                 'is_locked' => $log?->is_locked ?? false,
                 'notes' => $log?->notes,
                 'lembur_calc' => $log?->lembur_calc ?? 0,
+                'lm' => $log?->lm ?? 0,
+                'lm_calc' => $log?->lm_calc ?? 0,
+                'lembur_total_calc' => round(($log?->lembur_calc ?? 0) + ($log?->lm_calc ?? 0) / 60, 1),
                 'shift_start' => $shiftStart,
                 'shift_end' => $shiftEnd,
                 'is_sat' => $log?->is_sat ?? false,
@@ -386,7 +394,7 @@ class AttendanceAutologController extends Controller
             'summary' => [
                 'hadir' => $logs->where('status', 'present')->count(),
                 'lembur' => $logs->sum('lembur'),
-                'lembur_calc' => round($logs->sum('lembur_calc'), 1),
+                'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc') / 60, 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -534,7 +542,7 @@ class AttendanceAutologController extends Controller
         $summary = [
             'hadir' => $logs->where('status', 'present')->count(),
             'lembur' => $logs->sum('lembur') / 60,
-            'lembur_calc' => round($logs->sum('lembur_calc'), 1),
+            'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc') / 60, 1),
             'cuti' => $logs->where('status', 'leave')->count(),
             'izin' => $logs->where('status', 'permit')->where('deduct_attendance', 1)->count(),
             'sakit' => $logs->where('status', 'permit')->where('deduct_attendance', 0)->count(),
@@ -561,7 +569,7 @@ class AttendanceAutologController extends Controller
     /**
      * Adjustment: update leave data and overtime converted hours
      */
-    public function adjustment(Request $request)
+    public function adjustment(Request $request, AttendanceCalculatorService $calculator)
     {
         set_time_limit(300);
         ini_set('memory_limit', '512M');
@@ -623,50 +631,31 @@ class AttendanceAutologController extends Controller
                 }
 
                 // --- LEMBUR ---
+                // Hitung lembur_calc & lm pake AttendanceCalculatorService
+                // (multiplier dari OvertimeRule per work_pattern_id, fallback ke hardcoded)
                 if ($autolog->lembur > 0) {
-                    $overtimeHours = $autolog->lembur / 60;
-                    $employeeType = $autolog->employeeShiftRoster?->workPattern?->employee_type;
-                    $isShift = $employeeType === 'SHIFT';
-                    $isSat = $autolog->is_sat;
-                    $isHoliday = $autolog->is_holiday;
+                    $roster = $autolog->employeeShiftRoster;
+                    $workPatternId = $roster?->work_pattern_id;
+                    $workPatternType = $roster?->workPattern?->employee_type;
 
-                    if ($isShift && $isHoliday) {
-                        $remainingHours = max(0, $overtimeHours - 1);
-                        $converted = 0;
+                    $calc = $calculator->calculateManual(
+                        manualOvertimeMinutes: $autolog->lembur,
+                        workPatternId: $workPatternId,
+                        isHoliday: (bool) $autolog->is_holiday,
+                        isSunday: (bool) $autolog->is_sun,
+                        isSaturday: (bool) $autolog->is_sat,
+                        workPatternType: $workPatternType,
+                    );
 
-                        if ($isSat) {
-                            for ($i = 1; $i <= ceil($remainingHours); $i++) {
-                                $seg = min(1, max(0, $remainingHours - ($i - 1)));
-                                if ($i <= 5) {
-                                    $converted += $seg * 2;
-                                } elseif ($i === 6) {
-                                    $converted += $seg * 3;
-                                } else {
-                                    $converted += $seg * 4;
-                                }
-                            }
-                        } else {
-                            $converted = $remainingHours * 2;
-                        }
-                    } else {
-                        $converted = 0;
-
-                        if ($overtimeHours <= 0.5) {
-                            $converted = $overtimeHours * 1;
-                        } else {
-                            $firstHour = min($overtimeHours, 1);
-                            $converted += $firstHour * 1.5;
-
-                            if ($overtimeHours > 1) {
-                                $overtimeRemaining = $overtimeHours - 1;
-                                $converted += $overtimeRemaining * 2;
-                            }
-                        }
-                    }
-
-                    $updateData['lembur_calc'] = round($converted, 2);
+                    // overtime_count = menit terkonversi (pake multiplier)
+                    // lembur_calc disimpan dalam format jam (float)
+                    $updateData['lembur_calc'] = round($calc['overtime_count'] / 60, 2);
+                    $updateData['lm']          = $calc['lm'];
+                    $updateData['lm_calc']     = $calc['lm_count'];
                 } else {
                     $updateData['lembur_calc'] = null;
+                    $updateData['lm']          = 0;
+                    $updateData['lm_calc']     = null;
                 }
 
                 $autolog->update($updateData);

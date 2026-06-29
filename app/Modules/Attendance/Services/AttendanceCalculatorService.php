@@ -372,4 +372,79 @@ class AttendanceCalculatorService
 
         return (int) floor(($minutes + $threshold) / $interval) * $interval;
     }
+
+    // ═══════════════════════════════════════════════════════════
+    //  MANUAL CALC — tanpa AttendancePrepare (buat Supervisor)
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Hitung overtime/LM multiplier tanpa perlu AttendancePrepare.
+     *
+     * Dipanggil dari Supervisor adjustment (Perhitungan Lembur).
+     * ManualOvertime = raw menit lembur dari tabel supervisor.
+     * Multiplier dari OvertimeRule (per work_pattern_id).
+     * Fallback ke hardcoded jika rule tidak ditemukan.
+     *
+     * Untuk SHIFT (satpam), aturan khusus:
+     * - Holiday (non-Sabtu): (jam-1) × 2
+     * - Holiday + Sabtu: progressive jam1-5×2, jam6×3, jam7+×4
+     */
+    public function calculateManual(
+        int $manualOvertimeMinutes,
+        ?int $workPatternId = null,
+        bool $isHoliday = false,
+        bool $isSunday = false,
+        bool $isSaturday = false,
+        ?string $workPatternType = null,
+    ): array {
+        $isOffDay = $isHoliday || $isSunday;
+
+        if ($isOffDay && $workPatternType === 'SHIFT') {
+            // ── SHIFT khusus: holiday / libur ──
+            $overtimeHours = $manualOvertimeMinutes / 60;
+            $remainingHours = max(0, $overtimeHours - 1);
+            $lmCount = 0;
+
+            if ($isSaturday) {
+                // Progressive: jam1-5 x2, jam6 x3, jam7+ x4
+                for ($i = 1; $i <= ceil($remainingHours); $i++) {
+                    $seg = min(1, max(0, $remainingHours - ($i - 1)));
+                    $mult = match (true) { $i <= 5 => 2, $i === 6 => 3, default => 4 };
+                    $lmCount += $seg * $mult;
+                }
+                $lmCount = (int) round($lmCount * 60);
+            } else {
+                // Flat: (jam-1) x 2
+                $lmCount = (int) round($remainingHours * 2 * 60);
+            }
+
+            return [
+                'late_minutes'   => 0,
+                'lm'             => $manualOvertimeMinutes,
+                'lm_count'       => $lmCount,
+                'overtime'       => 0,
+                'overtime_count' => 0,
+            ];
+        }
+
+        if ($isOffDay) {
+            // ── Non-SHIFT off-day: pake OvertimeRule / fallback ──
+            return [
+                'late_minutes'   => 0,
+                'lm'             => $manualOvertimeMinutes,
+                'lm_count'       => $this->calculateLmMultiplier($manualOvertimeMinutes, $workPatternId, $isSaturday),
+                'overtime'       => 0,
+                'overtime_count' => 0,
+            ];
+        }
+
+        // ── Workday (semua tipe) ──
+        return [
+            'late_minutes'   => 0,
+            'lm'             => 0,
+            'lm_count'       => 0,
+            'overtime'       => $manualOvertimeMinutes,
+            'overtime_count' => $this->calculateOvertimeMultiplier($manualOvertimeMinutes, $workPatternId),
+        ];
+    }
 }

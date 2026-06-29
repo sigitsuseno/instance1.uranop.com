@@ -168,14 +168,18 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 flex-1 max-w-2xl">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 flex-1 max-w-2xl">
                         <div class="bg-(--bg-elevated) p-3 rounded-xl text-center border border-(--border-soft)">
                             <p class="text-lg font-bold text-green-600">{{ summary.hadir || 0 }}</p>
                             <p class="text-[10px] text-(--text-muted) uppercase font-medium">Hadir</p>
                         </div>
                         <div class="bg-(--bg-elevated) p-3 rounded-xl text-center border border-(--border-soft)">
-                            <p class="text-lg font-bold text-orange-600">{{ summary.lembur || 0 }}</p>
-                            <p class="text-[10px] text-(--text-muted) uppercase font-medium">Lembur</p>
+                            <p class="text-lg font-bold text-orange-600">{{ (summary.lembur / 60).toFixed(1).replace('.', ',') }} jam</p>
+                            <p class="text-[10px] text-(--text-muted) uppercase font-medium">Lembur Mentah</p>
+                        </div>
+                        <div class="bg-(--bg-elevated) p-3 rounded-xl text-center border border-(--border-soft)">
+                            <p class="text-lg font-bold text-indigo-600">{{ (summary.lembur_calc || 0).toFixed(1).replace('.', ',') }} jam</p>
+                            <p class="text-[10px] text-(--text-muted) uppercase font-medium">Lembur Terhitung</p>
                         </div>
                         <div class="bg-(--bg-elevated) p-3 rounded-xl text-center border border-(--border-soft)">
                             <p class="text-lg font-bold text-blue-600">{{ summary.cuti || 0 }}</p>
@@ -257,8 +261,8 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                                 <span v-else class="text-gray-300">-</span>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <span v-if="day.lembur_calc > 0" class="text-indigo-600 font-bold">
-                                    {{ formatConvertedHours(day.lembur_calc) }}
+                                <span v-if="day.lembur_total_calc > 0" class="text-indigo-600 font-bold">
+                                    {{ formatConvertedHours(day.lembur_total_calc) }}
                                 </span>
                                 <span v-else class="text-gray-300">-</span>
                             </td>

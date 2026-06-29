@@ -5,6 +5,7 @@ namespace App\Modules\Supervisor\Attendance\Imports;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
+use App\Modules\Settings\Models\EmployeeGroup;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -41,6 +42,10 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
     protected array $warnings = [];
 
     protected array $employeeCache = [];
+
+    protected array $employeeTypeCache = [];
+
+    protected array $employeeGroupCache = [];
 
     protected int $employeeCodeColumn = 0;
 
@@ -85,7 +90,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         $headerRow = $allRows[0] ?? [];
         $dates = [];
 
-        // Ambil tanggal dari header (lompat 2 kolom)
+        // Ambil tanggal dari header (mulai kolom index 2, lompat 2)
         for ($i = 2; $i < count($headerRow); $i += 2) {
             $dateValue = $headerRow[$i];
             if (is_numeric($dateValue) || preg_match('/^\d{4}-\d{2}-\d{2}$/', $dateValue)) {
@@ -113,7 +118,13 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 
             if (! $employeeId) {
                 $this->warnings[] = "Baris {$rowNumber}: Karyawan PIN {$pin} tidak ditemukan";
+                continue;
+            }
 
+            // ─── Pengecekan Group ───────────────────────────────────
+            // GRP-JKT di-skip karena sudah ada service khusus
+            $employeeGroup = $this->getEmployeeGroup($employeeId);
+            if ($employeeGroup === 'GRP-JKT') {
                 continue;
             }
 
@@ -156,9 +167,10 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         return 2;
     }
 
-    /**
-     * Memproses satu baris data karyawan (Horizontal/Matriks)
-     */
+    // ═══════════════════════════════════════════════════════════════
+    //  PROSES UTAMA — dispatch ke pattern sesuai employee_type
+    // ═══════════════════════════════════════════════════════════════
+
     protected function processRow(array $rowValues, int $rowNumber, int $employeeId, array $dates): array
     {
         $result = [
@@ -169,7 +181,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 
         foreach ($dates as $colIndex => $date) {
             $status = trim($rowValues[$colIndex] ?? '');
-            $lemburRaw = trim($rowValues[$colIndex + 1] ?? ''); // Ambil lembur dari kolom sebelahnya
+            $lemburRaw = trim($rowValues[$colIndex + 1] ?? '');
 
             try {
                 $roster = EmployeeShiftRoster::where('employee_id', $employeeId)
@@ -183,160 +195,20 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
                     ->with('leaveType')
                     ->first();
 
-                $checkIn = null;
-                $checkOut = null;
-                $sakit = 0;
-                $izin = 0;
-                $cuti = 0;
+                // Tentukan employee type
+                $employeeType = $this->resolveEmployeeType($employeeId, $roster);
 
-                // Konversi jam kerja ke objek Carbon
+                $record = match ($employeeType) {
+                    'FIXED'      => $this->processFixedPattern($employeeId, $date, $status, $lemburRaw, $roster, $leave, $rowNumber),
+                    'FLEX-SHIFT' => $this->processFlexShiftPattern($employeeId, $date, $status, $lemburRaw, $roster, $leave, $rowNumber),
+                    'SHIFT'      => $this->processShiftPattern($employeeId, $date, $status, $lemburRaw, $roster, $leave, $rowNumber),
+                    default      => null,
+                };
 
-                $shiftStart = ($roster && $roster->shift) ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_start) : Carbon::parse($date->toDateString().' 08:00:00');
-                $shiftEnd = ($roster && $roster->shift) ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_end) : Carbon::parse($date->toDateString().' 17:00:00');
-                $ranran = rand(-10, 10);
-                $ranend = rand(-2, 10);
-                $shiftMulai = $shiftStart->copy()->addMinutes($ranran);
-                $shiftSelesai = $shiftEnd->copy()->addMinutes($ranend);
-                $deduct = 0;
-
-                // Konversi lembur (hours) ke menit. Misal 1.5 jam -> 90 menit
-                $lemburHours = is_numeric($lemburRaw) ? (float) $lemburRaw : 0;
-                $lemburMinutes = (int) ($lemburHours * 60);
-                $holidayOvertime = 0;
-                $randomMinutes = rand(10, 20);
-                // dd($randomMinutes);
-                $arrayCuti = ['CTM', 'CTH', 'CH', 'CTI', 'CTK', 'CKM', 'CM', 'CUTI', 'CT'];
-
-                // Logika Penentuan Status & Waktu
-                $employeeType = $roster && $roster->workPattern ? $roster->workPattern->employee_type : 'FIXED';
-                
-                if (in_array($employeeType, ['FIXED', 'FLEX-SHIFT'])) {
-                    if (empty($status)) {
-
-                        if ($roster && $roster->external_code === 'M') {
-                            $checkIn = null;
-                            $checkOut = null;
-                            $status = 'off';
-                        } elseif ($roster && $roster->is_holiday === 1) {
-                            $checkIn = null;
-                            $checkOut = null;
-                            $status = 'holiday';
-                        } else {
-                            $status = 'off';
-                        }
-
-                    } else {
-                        if ($status === 'OUT') {
-                            $deduct = 1;
-                            $status = 'absent';
-                        } elseif ($status === '-') {
-                            $deduct = 1;
-                            $status = 'absent';
-                        } elseif ($status === 'OFF') {
-                            $status = 'off';
-                        } elseif ($status === 'SAKIT') {
-                            $sakit = 1;
-                            $status = 'sakit';
-                        } elseif ($status === 'IZIN') {
-                            $izin = 1;
-                            $status = 'izin';
-                        } elseif (in_array($status, $arrayCuti)) {
-                            $cuti = 1;
-                        } elseif ($status === 'ALFA') {
-                            $deduct = 1;
-                            $status = 'absent';
-                        } elseif ($status === 'T') {
-                            if ($roster && $roster->external_code === 'P') {
-                                $checkIn = $shiftMulai->format('Y-m-d H:i:s');
-                                $checkOut = $shiftSelesai->copy()->addMinutes($lemburMinutes)->format('Y-m-d H:i:s');
-                            } else {
-                                $checkIn = $shiftMulai->copy()->subMinutes($lemburMinutes)->format('Y-m-d H:i:s');
-                                $checkOut = $shiftSelesai->copy()->format('Y-m-d H:i:s');
-                            }
-                            $status = 'telat';
-                        } elseif ($status === 'H') {
-                            if ($roster && $roster->external_code === 'P') {
-                                $checkIn = $shiftMulai->format('Y-m-d H:i:s');
-                                $checkOut = $shiftSelesai->copy()->addMinutes($lemburMinutes)->format('Y-m-d H:i:s');
-                            } elseif ($roster && $roster->external_code === 'S') {
-                                $checkIn = $shiftMulai->copy()->subMinutes($lemburMinutes)->format('Y-m-d H:i:s');
-                                $checkOut = $shiftSelesai->format('Y-m-d H:i:s');
-                            } else {
-                                $checkIn = $shiftMulai->format('Y-m-d H:i:s');
-                                $checkOut = $shiftSelesai->copy()->addMinutes($lemburMinutes)->format('Y-m-d H:i:s');
-                            }
-                            $status = 'present';
-                        }
-                    }
-
-                } else {
-                    if (empty($status)) {
-                        $checkIn = null;
-                        $checkOut = null;
-                        $status = 'off';
-                    } else {
-                        if ($status === 'L') {
-                            $checkIn = $shiftMulai->copy()->format('Y-m-d H:i:s');
-                            $checkOut = $shiftSelesai->copy()->format('Y-m-d H:i:s');
-                            $holidayOvertime = 1;
-                            $status = 'present';
-                        } elseif ($status === 'H') {
-                            $checkIn = $shiftMulai->copy()->format('Y-m-d H:i:s');
-                            $checkOut = $shiftSelesai->copy()->format('Y-m-d H:i:s');
-                            $status = 'present';
-                        } elseif ($status === 'OFF') {
-                            $status = 'off';
-                        } else {
-                            $checkIn = $shiftMulai->copy()->format('Y-m-d H:i:s');
-                            $checkOut = $shiftSelesai->copy()->format('Y-m-d H:i:s');
-                            $status = 'present';
-                        }
-                    }
+                if ($record) {
+                    $result['records'][] = $record;
                 }
 
-                $normalizedStatus = $this->normalizeStatus($status);
-
-                $result['records'][] = [
-                    'company_id' => 1,
-                    'branch_id' => null,
-                    'employee_id' => $employeeId,
-                    'employee_shift_roster_id' => $roster?->id,
-                    'date' => $date->toDateString(),
-                    'check_in' => $checkIn,
-                    'check_out' => $checkOut,
-                    'actual_in' => $shiftStart->format('Y-m-d H:i:s'),
-                    'actual_out' => $shiftEnd->format('Y-m-d H:i:s'),
-                    'check_in_log_id' => null,
-                    'check_out_log_id' => null,
-                    'import_batch' => $this->importBatch, // Tambahkan batch ID di sini
-                    'status' => $normalizedStatus,
-                    'late_duration' => ($status === 'telat') ? $randomMinutes : 0,
-                    'early_leave_duration' => 0,
-                    'lembur' => $lemburMinutes > 0 ? $lemburMinutes : 0,
-                    'deduct_attendance' => 0,
-                    'is_half_day' => $roster?->is_half_day ?? 0,
-                    'is_sun' => $roster?->is_sun ?? 0,
-                    'is_sat' => $roster?->is_sat ?? 0,
-                    'is_holiday' => $roster?->is_holiday ?? 0,
-                    'is_leave' => ($leave !== null) ? 1 : ($roster?->is_leave ?? 0),
-                    'is_manual_edit' => 0,
-                    'last_edited_at' => null,
-                    'holiday_overtime' => $holidayOvertime,
-                    'last_edited_by' => null,
-                    'is_locked' => 0,
-                    'locked_at' => null,
-                    'locked_by' => null,
-                    'notes' => null,
-                    'metadata' => null,
-                    'scan_count' => ($checkIn ? 1 : 0) + ($checkOut ? 1 : 0),
-                    'leave_id' => $leave?->id,
-                    'deduct_day' => ($leave && $leave->leaveType && $leave->leaveType->is_paid === 1) ? 1 : 0,
-                    'izin_duration' => $izin,
-                    'sakit_duration' => $sakit,
-                    'lembur_calc' => $lemburHours,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
             } catch (Throwable $e) {
                 $result['errors'][] = "Baris {$rowNumber} Tgl {$date->toDateString()}: Gagal memproses data - ".$e->getMessage();
             }
@@ -344,6 +216,397 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 
         return $result;
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  PATTERN A — FIXED
+    // ═══════════════════════════════════════════════════════════════
+
+    protected function processFixedPattern(
+        int $employeeId,
+        Carbon $date,
+        string $status,
+        string $lemburRaw,
+        ?EmployeeShiftRoster $roster,
+        ?LeaveRequest $leave,
+        int $rowNumber
+    ): ?array {
+        $lemburHours = is_numeric($lemburRaw) ? (float) $lemburRaw : 0;
+        $lemburMinutes = (int) ($lemburHours * 60);
+        $holidayOvertime = 0;
+
+        // Jadwal shift
+        $shiftStart = ($roster && $roster->shift && $roster->shift->work_hour_start)
+            ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_start)
+            : Carbon::parse($date->toDateString().' 08:00:00');
+
+        $shiftEnd = ($roster && $roster->shift && $roster->shift->work_hour_end)
+            ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_end)
+            : Carbon::parse($date->toDateString().' 17:00:00');
+
+        $actualIn = $shiftStart->copy();
+        $actualOut = $shiftEnd->copy();
+
+        // ── a.1 Minggu → off ──
+        if ($roster && $roster->is_sun) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
+        }
+
+        // ── a.2 Holiday → off ──
+        if ($roster && $roster->is_holiday) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'holiday', 0, 0, 0, 0, 0, 0);
+        }
+
+        // ── a.5 Cuti / Sakit / Izin ──
+        //    check_in & check_out = null (karyawan tidak masuk),
+        //    actual_in & actual_out tetap dari jadwal
+        $arrayCuti = ['CTM', 'CTH', 'CH', 'CTI', 'CTK', 'CKM', 'CM', 'CUTI', 'CT'];
+
+        if (in_array($status, $arrayCuti)) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'leave', 0, 0, 0, 0, 0, 0);
+        }
+
+        if ($status === 'SAKIT') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'sakit', 0, 1, 0, 0, 0, 0);
+        }
+
+        if ($status === 'IZIN') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'izin', 0, 0, 1, 0, 0, 0);
+        }
+
+        if ($status === 'OFF') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
+        }
+
+        if (in_array($status, ['OUT', '-', 'ALFA'])) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'absent', 1, 0, 0, 0, 0, 0);
+        }
+
+        // ── a.3 Work day (Senin-Jumat) & a.4 Sabtu ──
+        //    Ambil lembur, actual_in & actual_out (jadwal),
+        //    check_out selalu + lembur setelah actual_out
+        $checkIn = $actualIn->copy();
+        $checkOut = $actualOut->copy();
+
+        if ($lemburMinutes > 0) {
+            $checkOut = $checkOut->addMinutes($lemburMinutes);
+        }
+
+        return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, $lemburMinutes, $lemburHours, 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  PATTERN B — FLEX-SHIFT
+    // ═══════════════════════════════════════════════════════════════
+
+    protected function processFlexShiftPattern(
+        int $employeeId,
+        Carbon $date,
+        string $status,
+        string $lemburRaw,
+        ?EmployeeShiftRoster $roster,
+        ?LeaveRequest $leave,
+        int $rowNumber
+    ): ?array {
+        $lemburHours = is_numeric($lemburRaw) ? (float) $lemburRaw : 0;
+        $lemburMinutes = (int) ($lemburHours * 60);
+        $holidayOvertime = 0;
+
+        // Jadwal shift
+        $shiftStart = ($roster && $roster->shift && $roster->shift->work_hour_start)
+            ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_start)
+            : Carbon::parse($date->toDateString().' 08:00:00');
+
+        $shiftEnd = ($roster && $roster->shift && $roster->shift->work_hour_end)
+            ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_end)
+            : Carbon::parse($date->toDateString().' 17:00:00');
+
+        $actualIn = $shiftStart->copy();
+        $actualOut = $shiftEnd->copy();
+
+        $shiftCode = $roster && $roster->shift ? $roster->shift->code : null;
+
+        // ── b.1 Minggu → off ──
+        if ($roster && $roster->is_sun) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
+        }
+
+        // ── b.2 Holiday → off ──
+        if ($roster && $roster->is_holiday) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'holiday', 0, 0, 0, 0, 0, 0);
+        }
+
+        // ── b.5 Cuti / Sakit / Izin ──
+        //    check_in & check_out = null (karyawan tidak masuk),
+        //    actual_in & actual_out tetap dari jadwal
+        $arrayCuti = ['CTM', 'CTH', 'CH', 'CTI', 'CTK', 'CKM', 'CM', 'CUTI', 'CT'];
+
+        if (in_array($status, $arrayCuti)) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'leave', 0, 0, 0, 0, 0, 0);
+        }
+
+        if ($status === 'SAKIT') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'sakit', 0, 1, 0, 0, 0, 0);
+        }
+
+        if ($status === 'IZIN') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'izin', 0, 0, 1, 0, 0, 0);
+        }
+
+        if ($status === 'OFF') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
+        }
+
+        if (in_array($status, ['OUT', '-', 'ALFA'])) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'absent', 1, 0, 0, 0, 0, 0);
+        }
+
+        // ── b.4 Sabtu → lembur setelah actual_out ──
+        if ($roster && $roster->is_sat) {
+            $checkIn = $actualIn->copy();
+            $checkOut = $actualOut->copy();
+
+            if ($lemburMinutes > 0) {
+                $checkOut = $checkOut->addMinutes($lemburMinutes);
+            }
+
+            return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, $lemburMinutes, $lemburHours, 0);
+        }
+
+        // ── b.3 Work day (Senin-Jumat) ──
+        $checkIn = $actualIn->copy();
+        $checkOut = $actualOut->copy();
+
+        if ($lemburMinutes > 0) {
+            if ($shiftCode === 'P') {
+                // Shift Pagi: check_out + lembur
+                $checkOut = $checkOut->addMinutes($lemburMinutes);
+            } elseif ($shiftCode === 'S') {
+                // Shift Siang (jadwal 15.00-23.00): check_in - lembur
+                $checkIn = $checkIn->subMinutes($lemburMinutes);
+            } else {
+                // Fallback: check_out + lembur
+                $checkOut = $checkOut->addMinutes($lemburMinutes);
+            }
+        }
+
+        return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, $lemburMinutes, $lemburHours, 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  PATTERN C — SHIFT (Satpam)
+    // ═══════════════════════════════════════════════════════════════
+
+    protected function processShiftPattern(
+        int $employeeId,
+        Carbon $date,
+        string $status,
+        string $lemburRaw,
+        ?EmployeeShiftRoster $roster,
+        ?LeaveRequest $leave,
+        int $rowNumber
+    ): ?array {
+        $lemburHours = is_numeric($lemburRaw) ? (float) $lemburRaw : 0;
+        $lemburMinutes = (int) ($lemburHours * 60);
+        $holidayOvertime = 0;
+
+        // Jadwal shift
+        $shiftStart = ($roster && $roster->shift && $roster->shift->work_hour_start)
+            ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_start)
+            : Carbon::parse($date->toDateString().' 08:00:00');
+
+        $shiftEnd = ($roster && $roster->shift && $roster->shift->work_hour_end)
+            ? Carbon::parse($date->toDateString().' '.$roster->shift->work_hour_end)
+            : Carbon::parse($date->toDateString().' 17:00:00');
+
+        $actualIn = $shiftStart->copy();
+        $actualOut = $shiftEnd->copy();
+
+        // Shift code utk penentuan lembur === 4
+        $shiftCode = $roster && $roster->shift ? strtoupper(trim($roster->shift->code ?? '')) : '';
+
+        // ── c.3 Status OFF → off ──
+        if ($status === 'OFF') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
+        }
+
+        // ── Sakit / Izin / Cuti ──
+        //    check_in & check_out = null (karyawan tidak masuk),
+        //    actual_in & actual_out tetap dari jadwal
+        $arrayCuti = ['CTM', 'CTH', 'CH', 'CTI', 'CTK', 'CKM', 'CM', 'CUTI', 'CT'];
+
+        if (in_array($status, $arrayCuti)) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'leave', 0, 0, 0, 0, 0, 0);
+        }
+
+        if ($status === 'SAKIT') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'sakit', 0, 1, 0, 0, 0, 0);
+        }
+
+        if ($status === 'IZIN') {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'izin', 0, 0, 1, 0, 0, 0);
+        }
+
+        if (in_array($status, ['OUT', '-', 'ALFA'])) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'absent', 1, 0, 0, 0, 0, 0);
+        }
+
+        if (empty($status)) {
+            return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
+        }
+
+        // ── c.2 Status L → Lembur hari libur ──
+        //    Lembur tidak mempengaruhi check_in/check_out, kecuali jika === 4 jam
+        if ($status === 'L') {
+            $checkIn = $actualIn->copy();
+            $checkOut = $actualOut->copy();
+            $holidayOvertime = 1;
+
+            if ($lemburHours == 4) {
+                if ($shiftCode === 'ML') {
+                    $checkIn = $checkIn->subMinutes($lemburMinutes);
+                } else {
+                    $checkOut = $checkOut->addMinutes($lemburMinutes);
+                }
+            }
+
+            return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, $lemburMinutes, $lemburHours, $holidayOvertime);
+        }
+
+        // ── c.1 Status H → Hadir ──
+        //    Lembur tidak mempengaruhi check_in/check_out, kecuali jika === 4 jam
+        if ($status === 'H') {
+            $checkIn = $actualIn->copy();
+            $checkOut = $actualOut->copy();
+
+            if ($lemburHours == 4) {
+                if ($shiftCode === 'ML') {
+                    $checkIn = $checkIn->subMinutes($lemburMinutes);
+                } else {
+                    $checkOut = $checkOut->addMinutes($lemburMinutes);
+                }
+            }
+
+            return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, $lemburMinutes, $lemburHours, 0);
+        }
+
+        // ── Fallback: status lain → present biasa ──
+        $checkIn = $actualIn->copy();
+        $checkOut = $actualOut->copy();
+
+        return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, 0, 0, 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  BUILD RECORD — helper bikin array record attendance
+    // ═══════════════════════════════════════════════════════════════
+
+    protected function buildRecord(
+        int $employeeId,
+        Carbon $date,
+        ?Carbon $checkIn,
+        ?Carbon $checkOut,
+        Carbon $actualIn,
+        Carbon $actualOut,
+        ?EmployeeShiftRoster $roster,
+        ?LeaveRequest $leave,
+        string $status,
+        int $deduct,
+        int $sakit,
+        int $izin,
+        int $lemburMinutes,
+        float $lemburHours,
+        int $holidayOvertime
+    ): array {
+        $normalizedStatus = $this->normalizeStatus($status);
+
+        return [
+            'company_id' => 1,
+            'branch_id' => null,
+            'employee_id' => $employeeId,
+            'employee_shift_roster_id' => $roster?->id,
+            'date' => $date->toDateString(),
+            'check_in' => $checkIn?->format('Y-m-d H:i:s'),
+            'check_out' => $checkOut?->format('Y-m-d H:i:s'),
+            'actual_in' => $actualIn->format('Y-m-d H:i:s'),
+            'actual_out' => $actualOut->format('Y-m-d H:i:s'),
+            'check_in_log_id' => null,
+            'check_out_log_id' => null,
+            'import_batch' => $this->importBatch,
+            'status' => $normalizedStatus,
+            'late_duration' => 0,
+            'early_leave_duration' => 0,
+            'lembur' => $lemburMinutes,
+            'deduct_attendance' => $deduct,
+            'is_half_day' => $roster?->is_half_day ?? 0,
+            'is_sun' => $roster?->is_sun ?? 0,
+            'is_sat' => $roster?->is_sat ?? 0,
+            'is_holiday' => $roster?->is_holiday ?? 0,
+            'is_leave' => ($leave !== null) ? 1 : ($roster?->is_leave ?? 0),
+            'is_manual_edit' => 0,
+            'last_edited_at' => null,
+            'holiday_overtime' => $holidayOvertime,
+            'last_edited_by' => null,
+            'is_locked' => 0,
+            'locked_at' => null,
+            'locked_by' => null,
+            'notes' => null,
+            'metadata' => null,
+            'scan_count' => ($checkIn ? 1 : 0) + ($checkOut ? 1 : 0),
+            'leave_id' => $leave?->id,
+            'deduct_day' => ($leave && $leave->leaveType && $leave->leaveType->is_paid === 1) ? 1 : 0,
+            'izin_duration' => $izin,
+            'sakit_duration' => $sakit,
+            'lembur_calc' => $lemburHours,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RESOLVE EMPLOYEE TYPE
+    // ═══════════════════════════════════════════════════════════════
+
+    protected function resolveEmployeeType(int $employeeId, ?EmployeeShiftRoster $roster): string
+    {
+        if ($roster && $roster->workPattern) {
+            $employeeType = $roster->workPattern->employee_type;
+            $this->employeeTypeCache[$employeeId] = $employeeType;
+        } else {
+            if (isset($this->employeeTypeCache[$employeeId])) {
+                $employeeType = $this->employeeTypeCache[$employeeId];
+            } else {
+                $otherRoster = EmployeeShiftRoster::where('employee_id', $employeeId)
+                    ->whereNotNull('work_pattern_id')
+                    ->with('workPattern')
+                    ->orderBy('date', 'desc')
+                    ->first();
+                $employeeType = $otherRoster && $otherRoster->workPattern ? $otherRoster->workPattern->employee_type : 'SHIFT';
+                $this->employeeTypeCache[$employeeId] = $employeeType;
+            }
+        }
+
+        return $employeeType;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  GROUP — cari reference_code grup karyawan
+    // ═══════════════════════════════════════════════════════════════
+
+    protected function getEmployeeGroup(int $employeeId): ?string
+    {
+        if (isset($this->employeeGroupCache[$employeeId])) {
+            return $this->employeeGroupCache[$employeeId];
+        }
+
+        $group = EmployeeGroup::where('employee_id', $employeeId)->first();
+        $this->employeeGroupCache[$employeeId] = $group?->reference_code;
+
+        return $this->employeeGroupCache[$employeeId];
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  HELPERS — parsing, konversi, normalisasi
+    // ═══════════════════════════════════════════════════════════════
 
     protected function getColumnValue($rowValues, int $index)
     {
@@ -479,6 +742,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
             'present' => 'present',
             'cuti' => 'leave',
             'leave' => 'leave',
+            'ct' => 'leave',
             'terlambat' => 'late',
             'telat' => 'late',
             'late' => 'late',

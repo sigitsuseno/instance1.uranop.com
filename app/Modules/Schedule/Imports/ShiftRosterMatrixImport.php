@@ -119,6 +119,20 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
                 $shift = $this->resolveShift($externalCode, $workPattern, $dayOfWeek);
 
                 if ($shift) {
+                    // Debug: log untuk satpam di holiday
+                    if ($workPattern && $workPattern->employee_type === 'SHIFT' && in_array($fullDate, $this->holidays)) {
+                        Log::info('SATDUBug', [
+                            'nip' => $nip,
+                            'wp' => $wpCode,
+                            'wp_id' => $workPattern->id,
+                            'date' => $fullDate,
+                            'day_num' => $dayNum,
+                            'external_from_excel' => $externalCode,
+                            'resolved_shift_id' => $shift->id,
+                            'resolved_shift_code' => $shift->code,
+                            'resolved_shift_ext' => $shift->external_code,
+                        ]);
+                    }
                     $this->saveRoster($employee, $workPattern, $shift, $fullDate, $externalCode);
                 } else {
                     $this->errors[] = 'Baris '.($index + 3).": Kode '{$externalCode}' tidak ditemukan untuk WP {$wpCode} pada tanggal {$dayNum}.";
@@ -188,8 +202,21 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
         $isHalfDay = $workPattern && $isSaturday && $workPattern->sat_type == 'half';
         $isHoliday = $shift->is_dayoff || in_array($date, $this->holidays);
 
+        // Fallback: kalo WP dari Excel kosong, cari dari roster existing
+        if (! $workPattern) {
+            $existingRoster = EmployeeShiftRoster::where('employee_id', $employee->id)
+                ->whereNotNull('work_pattern_id')
+                ->with('workPattern')
+                ->orderBy('date', 'desc')
+                ->first();
+            $workPattern = $existingRoster?->workPattern;
+        }
+
         // WP "SC" tidak dioverride — tetap pakai kode asli
-        $shouldOverride = $isHoliday && !($workPattern && $workPattern->code === 'SC');
+        // Khusus SHIFT (satpam) juga tidak dioverride & status tetap 'scheduled'
+        $isShiftSatpam = $workPattern && $workPattern->employee_type === 'SHIFT';
+
+        $shouldOverride = $isHoliday && !($workPattern && $workPattern->code === 'SC') && !$isShiftSatpam;
 
         $data = [
             'uuid' => Str::uuid()->toString(),
@@ -202,7 +229,7 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
             'is_sat' => $isSaturday,
             'is_sun' => $carbonDate->dayOfWeek == 0,
             'is_half_day' => $isHalfDay,
-            'status' => $isHoliday ? 'holiday' : 'scheduled',
+            'status' => ($isHoliday && !$isShiftSatpam) ? 'holiday' : 'scheduled',
             'source' => 'import',
             'created_by' => Auth::id(),
             'synced_at' => now(),
@@ -215,11 +242,54 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
             unset($data['uuid']);
             $roster->update($data);
             $this->updated++;
+            
+            // Debug
+            if (isset($isShiftSatpam) && $isShiftSatpam && $isHoliday) {
+                Log::info('SATDUSave', [
+                    'date' => $date,
+                    'employee_id' => $employee->id,
+                    'shift_id' => $data['shift_id'] ?? null,
+                    'external_code' => $data['external_code'] ?? null,
+                    'shift_code' => $data['shift_code'] ?? null,
+                    'work_pattern_id' => $data['work_pattern_id'] ?? null,
+                    'should_override' => $shouldOverride ?? false,
+                    'is_shift_satpam' => $isShiftSatpam ?? false,
+                ]);
+            }
         } else {
             $data['employee_id'] = $employee->id;
             $data['date'] = $date;
             EmployeeShiftRoster::create($data);
             $this->inserted++;
+            
+            // Debug
+            if (isset($isShiftSatpam) && $isShiftSatpam && $isHoliday) {
+                Log::info('SATDUSave', [
+                    'date' => $date,
+                    'employee_id' => $employee->id,
+                    'shift_id' => $data['shift_id'] ?? null,
+                    'external_code' => $data['external_code'] ?? null,
+                    'shift_code' => $data['shift_code'] ?? null,
+                    'work_pattern_id' => $data['work_pattern_id'] ?? null,
+                    'should_override' => $shouldOverride ?? false,
+                    'is_shift_satpam' => $isShiftSatpam ?? false,
+                ]);
+            }
+        }
+
+        // Verify: baca balik dari DB setelah save (hanya untuk satpam di holiday)
+        if (isset($isShiftSatpam) && $isShiftSatpam && $isHoliday) {
+            $verify = EmployeeShiftRoster::where('employee_id', $employee->id)
+                ->where('date', $date)
+                ->first(['id', 'external_code', 'shift_code', 'shift_id', 'updated_at']);
+            Log::info('SATDUVerify', [
+                'date' => $date,
+                'employee_id' => $employee->id,
+                'from_db_external_code' => $verify?->external_code,
+                'from_db_shift_code' => $verify?->shift_code,
+                'from_db_shift_id' => $verify?->shift_id,
+                'from_db_updated_at' => $verify?->updated_at?->format('Y-m-d H:i:s'),
+            ]);
         }
     }
 
