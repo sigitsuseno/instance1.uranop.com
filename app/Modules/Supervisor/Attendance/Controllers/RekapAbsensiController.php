@@ -38,7 +38,7 @@ class RekapAbsensiController extends Controller
         $selectedPeriodId = null;
 
         if ($userType === 'hr_branch') {
-            $payrollPeriods = PayrollPeriod::where('company_id', $companyId)
+            $payrollPeriods = PayrollPeriod::query()
                 
                 ->orderBy('start_date', 'desc')
                 ->get();
@@ -132,8 +132,8 @@ class RekapAbsensiController extends Controller
                 'department_id' => $request->department_id,
                 'work_pattern_id' => $request->work_pattern_id,
             ],
-            'departments' => Department::where('company_id', $companyId)->get(['id', 'name']),
-            'workPatterns' => WorkPattern::where('company_id', $companyId)->get(['id', 'name']),
+            'departments' => Department::all(['id', 'name']),
+            'workPatterns' => WorkPattern::all(['id', 'name']),
             'payrollPeriods' => collect($payrollPeriods)->map(function ($p) {
                 return [
                     'id' => $p->id,

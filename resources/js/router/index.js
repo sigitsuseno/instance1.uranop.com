@@ -87,6 +87,7 @@ const SupervisorAttendanceSync = () => import('../Pages/Supervisor/Attendance/Sy
 const SupervisorAttendanceConsecutive = () => import('../Pages/Supervisor/Attendance/Consecutive.vue')
 const SupervisorAttendanceOvertime = () => import('../Pages/Supervisor/Attendance/Overtime/Index.vue')
 const SupervisorAttendanceRecap = () => import('../Pages/Supervisor/Attendance/Recap.vue')
+const SupervisorAttendanceSnapshot = () => import('../Pages/Supervisor/Attendance/Snapshot.vue')
 const SupervisorRoster = () => import('../Pages/Supervisor/Attendance/Roster/Index.vue')
 const SupervisorPayroll = () => import('../Pages/Supervisor/Payroll/Index.vue')
 const SupervisorPayrollSlip = () => import('../Pages/Supervisor/Payroll/Slip.vue')
@@ -223,6 +224,7 @@ const routes = [
       { path: 'attendance/consecutive', name: 'supervisor.attendance.consecutive', component: SupervisorAttendanceConsecutive, meta: { title: 'Consecutive Day' } },
       { path: 'attendance/overtime', name: 'supervisor.attendance.overtime', component: SupervisorAttendanceOvertime, meta: { title: 'Lembur Staf' } },
       { path: 'attendance/recap', name: 'supervisor.attendance.recap', component: SupervisorAttendanceRecap, meta: { title: 'Rekap Absensi' } },
+      { path: 'attendance/snapshot', name: 'supervisor.attendance.snapshot', component: SupervisorAttendanceSnapshot, meta: { title: 'Snapshot Absensi' } },
       { path: 'attendance/roster', name: 'supervisor.attendance.roster', component: SupervisorRoster, meta: { title: 'Roster' } },
       { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll, meta: { title: 'Gaji Karyawan' } },
       { path: 'payroll/slip', name: 'supervisor.payroll.slip', component: SupervisorPayrollSlip, meta: { title: 'Slip Gaji' } },

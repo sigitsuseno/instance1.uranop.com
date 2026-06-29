@@ -40,7 +40,7 @@ class StaffOvertimeController extends Controller
         }
 
         if ($userType === 'hr_branch') {
-            $payrollPeriods = PayrollPeriod::where('company_id', $companyId)
+            $payrollPeriods = PayrollPeriod::query()
                 
                 ->orderBy('start_date', 'desc')
                 ->get();
@@ -85,14 +85,17 @@ class StaffOvertimeController extends Controller
             });
 
         if ($tab === 'jakarta') {
-            $employeesQuery->where('employee_group_id', 1);
+            $employeesQuery->whereHas('groups', function($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            });
             $employeesQuery->with(['attendancePrepares' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }]);
         } else {
             $employeesQuery->where('is_active', 1);
-            $employeesQuery->where('employee_group_id', 2)
-                ->where('group_name', 'ALLIN');
+            $employeesQuery->whereHas('groups', function($q) {
+                $q->whereIn('reference_code', ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR']);
+            });
             $employeesQuery->with(['autologs' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }]);
@@ -200,8 +203,8 @@ class StaffOvertimeController extends Controller
                 'work_pattern_id' => $request->work_pattern_id,
                 'tab' => $tab,
             ],
-            'departments' => Department::where('company_id', $companyId)->get(['id', 'name']),
-            'workPatterns' => WorkPattern::where('company_id', $companyId)->get(['id', 'name']),
+            'departments' => Department::all(['id', 'name']),
+            'workPatterns' => WorkPattern::all(['id', 'name']),
             'payrollPeriods' => collect($payrollPeriods)->map(function ($p) {
                 return [
                     'id' => $p->id,
@@ -279,14 +282,17 @@ class StaffOvertimeController extends Controller
             });
 
         if ($tab === 'jakarta') {
-            $employeesQuery->where('employee_group_id', 1);
+            $employeesQuery->whereHas('groups', function($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            });
             $employeesQuery->with(['attendancePrepares' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }]);
         } else {
             $employeesQuery->where('is_active', 1);
-            $employeesQuery->where('employee_group_id', 2)
-                ->where('group_name', 'ALLIN');
+            $employeesQuery->whereHas('groups', function($q) {
+                $q->whereIn('reference_code', ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR']);
+            });
             $employeesQuery->with(['autologs' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }]);
@@ -404,14 +410,17 @@ class StaffOvertimeController extends Controller
             });
 
         if ($tab === 'jakarta') {
-            $employeesQuery->where('employee_group_id', 1);
+            $employeesQuery->whereHas('groups', function($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            });
             $employeesQuery->with(['attendancePrepares' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }]);
         } else {
             $employeesQuery->where('is_active', 1);
-            $employeesQuery->where('employee_group_id', 2)
-                ->where('group_name', 'ALLIN');
+            $employeesQuery->whereHas('groups', function($q) {
+                $q->whereIn('reference_code', ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR']);
+            });
             $employeesQuery->with(['autologs' => function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             }]);

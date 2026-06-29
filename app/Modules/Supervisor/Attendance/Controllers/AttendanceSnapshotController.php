@@ -47,7 +47,7 @@ class AttendanceSnapshotController extends Controller
             $selectedPeriodId = $latestPeriod->id;
         }
 
-        $leaveTypeIds = LeaveType::where('company_id', $companyId)->get();
+        $leaveTypeIds = LeaveType::all();
         $cutiTypeIds = $leaveTypeIds->filter(fn ($t) => str_starts_with($t->code, 'CT'))->pluck('id');
         $izinTypeIds = $leaveTypeIds->filter(fn ($t) => in_array($t->code, ['ITM', 'IMT', 'IPA']))->pluck('id');
         $sakitTypeId = $leaveTypeIds->firstWhere('code', 'SKT')?->id;
@@ -66,8 +66,6 @@ class AttendanceSnapshotController extends Controller
                     $query->whereBetween('date', [$startDate, $endDate])->with('leave.leaveType');
                 },
             ])
-            ->where('company_id', $companyId)
-            ->where('branch_id', $branchId)
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
@@ -461,7 +459,7 @@ class AttendanceSnapshotController extends Controller
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
 
-        $leaveTypeIds = LeaveType::where('company_id', $companyId)->get();
+        $leaveTypeIds = LeaveType::all();
         $cutiTypeIds = $leaveTypeIds->filter(fn ($t) => str_starts_with($t->code, 'CT'))->pluck('id');
         $izinTypeIds = $leaveTypeIds->filter(fn ($t) => in_array($t->code, ['ITM', 'IMT', 'IPA']))->pluck('id');
         $sakitTypeId = $leaveTypeIds->firstWhere('code', 'SKT')?->id;
@@ -589,7 +587,7 @@ class AttendanceSnapshotController extends Controller
 
     private function getLeaveDataFromRequests($employeeId, $startDate, $endDate, $companyId)
     {
-        $leaveTypeIds = LeaveType::where('company_id', $companyId)->get();
+        $leaveTypeIds = LeaveType::all();
         $cutiTypeIds = $leaveTypeIds->filter(fn ($t) => str_starts_with($t->code, 'CT'))->pluck('id');
         $izinTypeIds = $leaveTypeIds->filter(fn ($t) => in_array($t->code, ['ITM', 'IMT', 'IPA']))->pluck('id');
         $sakitTypeId = $leaveTypeIds->firstWhere('code', 'SKT')?->id;

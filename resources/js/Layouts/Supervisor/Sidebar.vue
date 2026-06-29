@@ -67,6 +67,7 @@ const supervisorMenus = [
       { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/supervisor/attendance/consecutive' },
       { title: 'Lembur Staf', icon: 'bx bx-time', route: '/supervisor/attendance/overtime' },
       { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/supervisor/attendance/recap' },
+      { title: 'Snapshot', icon: 'bx bx-camera', route: '/supervisor/attendance/snapshot' },
     ],
   },
   {
