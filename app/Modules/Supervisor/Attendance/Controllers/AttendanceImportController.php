@@ -59,6 +59,7 @@ class AttendanceImportController extends Controller
             2 => 'februari.xlsx',
             3 => 'sampe_data.xlsx',
             4 => 'april.xlsx',
+            5 => 'mei.xlsx',
         ];
 
         try {
