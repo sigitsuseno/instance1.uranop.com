@@ -95,8 +95,8 @@ class AttendanceImportController extends Controller
                 );
 
                 Log::info('Overtime sync result', $syncResult);
-            } elseif ($periodId >= 5 && $periodId <= 12) {
-                // PERIODE 5-12: Ambil dari att_prepares (data REAL dari fingerprint sync)
+            } elseif ($periodId >= 6 && $periodId <= 12) {
+                // PERIODE 6-12: Ambil dari att_prepares (data REAL dari fingerprint sync)
                 $result = $this->importFromPrepares->import(
                     startDate: $period->start_date->toDateString(),
                     endDate: $period->end_date->toDateString(),
