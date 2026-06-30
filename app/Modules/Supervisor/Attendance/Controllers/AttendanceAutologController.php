@@ -724,6 +724,184 @@ class AttendanceAutologController extends Controller
         }
     }
 
+    /**
+     * Roster cross-table view untuk autolog data.
+     * GET /api/v1/supervisor/attendance/roster
+     */
+    public function roster(Request $request)
+    {
+        $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
+        $endDate   = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
+        $groupCodes = $request->input('group_codes', []);
+
+        // --- Available groups (untuk checkbox) ---
+        $availableGroups = \App\Modules\Settings\Models\EmployeeGroupMaster::where('group_label', 'Imported Shift/Group')
+            ->where('is_active', true)
+            ->get()
+            ->map(fn($g) => ['code' => $g->code, 'name' => $g->name])
+            ->values();
+
+        // Default: semua groups kalo ga dipilih
+        if (empty($groupCodes)) {
+            $groupCodes = $availableGroups->pluck('code')->toArray();
+        }
+
+        // --- Employees: sama kayak index() — yang punya autolog ATAU roster di periode ini ---
+        $employeesQuery = Employee::where(function ($q) use ($startDate, $endDate) {
+            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            });
+        })
+            // Kalau ada group codes terpilih, filter by group
+            ->when(!empty($groupCodes), function ($query) use ($groupCodes) {
+                $query->whereHas('groups', function ($q) use ($groupCodes) {
+                    $q->whereIn('reference_code', $groupCodes);
+                });
+            })
+            ->with(['department', 'position'])
+            ->orderBy('employee_code');
+
+        $search = $request->input('search');
+        if ($search) {
+            $employeesQuery->where(function ($q) use ($search) {
+                $q->where('employee_code', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
+        $employees = $employeesQuery->get();
+
+        // --- Autolog data ---
+        $autologs = AttendanceAutolog::whereIn('employee_id', $employees->pluck('id'))
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->groupBy('employee_id');
+
+        // --- Roster (shift) data untuk header shift_start/shift_end ---
+        $rosters = \App\Modules\Schedule\Models\EmployeeShiftRoster::with('shift')
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->groupBy('employee_id');
+
+        // --- Generate semua tanggal dalam range ---
+        $dates = [];
+        $current = Carbon::parse($startDate);
+        $last = Carbon::parse($endDate);
+        $dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+        while ($current <= $last) {
+            $d = $current->copy();
+            $dates[] = [
+                'date'      => $d->toDateString(),
+                'day'       => $d->day,
+                'dayName'   => $dayNames[$d->dayOfWeek],
+                'isWeekend' => $d->isSunday(),
+            ];
+            $current->addDay();
+        }
+
+        // --- Build employee list ---
+        $employeeList = $employees->map(function ($emp) {
+            return [
+                'id'         => $emp->id,
+                'name'       => $emp->name,
+                'nip'        => $emp->employee_code,
+                'department' => $emp->department?->name ?? '-',
+                'position'   => $emp->position?->name ?? '-',
+            ];
+        })->values();
+
+        // --- Build autolog data map ---
+        $autologData = [];
+        foreach ($autologs as $empId => $logs) {
+            $empRosters = $rosters->get($empId, collect());
+            foreach ($logs as $log) {
+                $dateStr = $log->date->toDateString();
+                $roster = $empRosters->first(fn($r) => $r->date->toDateString() === $dateStr);
+                $autologData[$empId][$dateStr] = [
+                    'id'          => $log->id,
+                    'check_in'    => $log->check_in ? $log->check_in->format('H:i') : null,
+                    'check_out'   => $log->check_out ? $log->check_out->format('H:i') : null,
+                    'lembur'      => (int) $log->lembur,
+                    'lm'          => (int) $log->lm,
+                    'status'      => $log->status,
+                    'shift_start' => $roster?->shift?->work_hour_start
+                        ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
+                        : null,
+                    'shift_end'   => $roster?->shift?->work_hour_end
+                        ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
+                        : null,
+                    'is_locked'   => (bool) $log->is_locked,
+                    'is_holiday'  => (bool) $log->is_holiday,
+                    'is_sat'      => (bool) $log->is_sat,
+                    'is_sun'      => (bool) $log->is_sun,
+                ];
+            }
+        }
+
+        return response()->json([
+            'employees'   => $employeeList,
+            'dates'       => $dates,
+            'autologData' => $autologData,
+            'groups'      => $availableGroups,
+            'period'      => [
+                'start' => $startDate,
+                'end'   => $endDate,
+            ],
+        ]);
+    }
+
+    /**
+     * Update individual autolog cell (check_in, check_out, lembur, lm).
+     * POST /api/v1/supervisor/attendance/roster/update
+     */
+    public function updateRoster(Request $request)
+    {
+        $validated = $request->validate([
+            'id'        => ['required', 'integer', 'exists:attendance_autologs,id'],
+            'check_in'  => ['nullable', 'date_format:H:i'],
+            'check_out' => ['nullable', 'date_format:H:i'],
+            'lembur'    => ['nullable', 'integer', 'min:0'],
+            'lm'        => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $autolog = AttendanceAutolog::findOrFail($validated['id']);
+
+        if ($autolog->is_locked) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Record ini terkunci. Tidak dapat diedit.',
+            ], 422);
+        }
+
+        $autolog->update([
+            'check_in'        => $validated['check_in'] ?? $autolog->check_in,
+            'check_out'       => $validated['check_out'] ?? $autolog->check_out,
+            'lembur'          => $validated['lembur'] ?? $autolog->lembur,
+            'lm'              => $validated['lm'] ?? $autolog->lm,
+            'is_manual_edit'  => true,
+            'last_edited_at'  => now(),
+            'last_edited_by'  => Auth::id(),
+        ]);
+
+        // Refresh buat dapetin format datetime yang udah di-cast
+        $autolog->refresh();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data berhasil disimpan.',
+            'data'    => [
+                'id'        => $autolog->id,
+                'check_in'  => $autolog->check_in ? $autolog->check_in->format('H:i') : null,
+                'check_out' => $autolog->check_out ? $autolog->check_out->format('H:i') : null,
+                'lembur'    => (int) $autolog->lembur,
+                'lm'        => (int) $autolog->lm,
+            ],
+        ]);
+    }
+
     public function export(Request $request)
     {
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();

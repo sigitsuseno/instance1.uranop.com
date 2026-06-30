@@ -13,7 +13,7 @@ const route = useRoute()
 
 const { isSuperadmin, isHrmanager, isAdmManager } = useAuth()
 
-const supervisorMenus = [
+const supervisorMenus = computed(() => [
   {
     title: 'Dashboard',
     icon: 'bx bx-home',
@@ -64,6 +64,7 @@ const supervisorMenus = [
     children: [
       { title: 'Import', icon: 'bx bx-upload', route: '/supervisor/attendance/import' },
       { title: 'Data Absensi', icon: 'bx bx-file', route: '/supervisor/attendance' },
+      { title: 'Roster Autolog', icon: 'bx bx-grid-alt', route: '/supervisor/attendance/roster', visible: isSuperadmin.value },
       { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/supervisor/attendance/consecutive' },
       { title: 'Lembur Staf', icon: 'bx bx-time', route: '/supervisor/attendance/overtime' },
       { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/supervisor/attendance/recap' },
@@ -84,10 +85,10 @@ const supervisorMenus = [
     icon: 'bx bxs-report',
     route: '/supervisor/reports',
   },
-]
+])
 
 const menuItems = computed(() => {
-  return supervisorMenus
+  return supervisorMenus.value
     .filter(parent => parent.visible !== false)
     .map(parent => {
       if (parent.children) {

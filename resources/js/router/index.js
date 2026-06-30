@@ -225,7 +225,7 @@ const routes = [
       { path: 'attendance/overtime', name: 'supervisor.attendance.overtime', component: SupervisorAttendanceOvertime, meta: { title: 'Lembur Staf' } },
       { path: 'attendance/recap', name: 'supervisor.attendance.recap', component: SupervisorAttendanceRecap, meta: { title: 'Rekap Absensi' } },
       { path: 'attendance/snapshot', name: 'supervisor.attendance.snapshot', component: SupervisorAttendanceSnapshot, meta: { title: 'Snapshot Absensi' } },
-      { path: 'attendance/roster', name: 'supervisor.attendance.roster', component: SupervisorRoster, meta: { title: 'Roster' } },
+      { path: 'attendance/roster', name: 'supervisor.attendance.roster', component: SupervisorRoster, meta: { title: 'Roster Autolog', requiresSuperadmin: true } },
       { path: 'payroll', name: 'supervisor.payroll', component: SupervisorPayroll, meta: { title: 'Gaji Karyawan' } },
       { path: 'payroll/slip', name: 'supervisor.payroll.slip', component: SupervisorPayrollSlip, meta: { title: 'Slip Gaji' } },
       { path: 'payroll/thr', name: 'supervisor.payroll.thr', component: SupervisorThr, meta: { title: 'Perhitungan THR' } },
@@ -314,6 +314,10 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresSupervisor && auth.isAuthenticated && !auth.canAccessSupervisor) {
     return '/admin'
+  }
+
+  if (to.meta.requiresSuperadmin && auth.isAuthenticated && !auth.isSuperadmin) {
+    return '/supervisor'
   }
 
   return true
