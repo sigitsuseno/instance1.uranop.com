@@ -65,7 +65,6 @@ const supervisorMenus = computed(() => [
       { title: 'Import', icon: 'bx bx-upload', route: '/supervisor/attendance/import' },
       { title: 'Data Absensi', icon: 'bx bx-file', route: '/supervisor/attendance' },
       { title: 'Roster Autolog', icon: 'bx bx-grid-alt', route: '/supervisor/attendance/roster', visible: isSuperadmin.value },
-      { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/supervisor/attendance/consecutive' },
       { title: 'Lembur Staf', icon: 'bx bx-time', route: '/supervisor/attendance/overtime' },
       { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/supervisor/attendance/recap' },
       { title: 'Snapshot', icon: 'bx bx-camera', route: '/supervisor/attendance/snapshot' },

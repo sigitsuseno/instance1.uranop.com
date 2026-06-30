@@ -114,7 +114,65 @@ function openPrintPage() {
     if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
     if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
     if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
-    window.open(url, '_blank');
+    openPrintWindow(url);
+}
+
+async function fetchWithAuth(url, acceptHeader = 'application/json') {
+    const token = localStorage.getItem('token');
+    const headers = { 'Accept': acceptHeader };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Request gagal');
+    }
+    return response;
+}
+
+async function openPrintWindow(url) {
+    try {
+        const response = await fetchWithAuth(url, 'text/html');
+        const html = await response.text();
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function downloadExcel(url) {
+    try {
+        const response = await fetchWithAuth(url, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        const blob = await response.blob();
+        
+        // Ambil filename dari Content-Disposition header
+        let filename = 'export.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+        
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+function openExportPage() {
+    let url = `/api/v1/supervisor/attendance/absensi/export?start_date=${startDate.value}&end_date=${endDate.value}`;
+    if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
+    if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
+    if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
+    downloadExcel(url);
 }
 
 async function runAdjustment() {
@@ -222,6 +280,14 @@ const hasNextPage = () => !!pagination.value.links?.next
                 >
                     <i class="bx bx-sync text-lg" :class="{ 'animate-spin': isAdjusting }"></i>
                     {{ isAdjusting ? 'Processing...' : 'Perhitungan Lembur' }}
+                </button>
+                <button 
+                    @click="openExportPage"
+                    class="flex items-center gap-2 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition disabled:opacity-50"
+                    :disabled="!startDate || !endDate"
+                >
+                    <i class="bx bx-spreadsheet text-lg"></i>
+                    Excel
                 </button>
                 <button 
                     @click="openPrintPage"

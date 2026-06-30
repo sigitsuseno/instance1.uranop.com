@@ -84,7 +84,6 @@ const SupervisorAttendance = () => import('../Pages/Supervisor/Attendance/Index.
 const SupervisorAttendanceImport = () => import('../Pages/Supervisor/Attendance/Import.vue')
 const SupervisorAttendanceAutologShow = () => import('../Pages/Supervisor/Attendance/Autolog/Show.vue')
 const SupervisorAttendanceSync = () => import('../Pages/Supervisor/Attendance/SyncKehadiran.vue')
-const SupervisorAttendanceConsecutive = () => import('../Pages/Supervisor/Attendance/Consecutive.vue')
 const SupervisorAttendanceOvertime = () => import('../Pages/Supervisor/Attendance/Overtime/Index.vue')
 const SupervisorAttendanceRecap = () => import('../Pages/Supervisor/Attendance/Recap.vue')
 const SupervisorAttendanceSnapshot = () => import('../Pages/Supervisor/Attendance/Snapshot.vue')
@@ -221,7 +220,6 @@ const routes = [
       { path: 'attendance/autolog/:id', name: 'supervisor.attendance.autolog', component: SupervisorAttendanceAutologShow, meta: { title: 'Detail Autolog Absensi' } },
       { path: 'attendance/import', name: 'supervisor.attendance.import', component: SupervisorAttendanceImport, meta: { title: 'Import Kehadiran' } },
       { path: 'attendance/sync', name: 'supervisor.attendance.sync', component: SupervisorAttendanceSync, meta: { title: 'Sync Kehadiran' } },
-      { path: 'attendance/consecutive', name: 'supervisor.attendance.consecutive', component: SupervisorAttendanceConsecutive, meta: { title: 'Consecutive Day' } },
       { path: 'attendance/overtime', name: 'supervisor.attendance.overtime', component: SupervisorAttendanceOvertime, meta: { title: 'Lembur Staf' } },
       { path: 'attendance/recap', name: 'supervisor.attendance.recap', component: SupervisorAttendanceRecap, meta: { title: 'Rekap Absensi' } },
       { path: 'attendance/snapshot', name: 'supervisor.attendance.snapshot', component: SupervisorAttendanceSnapshot, meta: { title: 'Snapshot Absensi' } },

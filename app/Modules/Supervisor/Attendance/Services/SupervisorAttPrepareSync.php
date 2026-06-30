@@ -27,8 +27,8 @@ class SupervisorAttPrepareSync
     /**
      * Sync data dari att_prepares ke attendance_autologs.
      *
-     * - 2026, periode 1-4: hanya karyawan GRP-JKT (non-JKT sudah dari XLSX manual)
-     * - 2026, periode 5-12: semua karyawan
+     * - 2026, periode 1-6: hanya karyawan GRP-JKT (non-JKT sudah dari XLSX manual)
+     * - 2026, periode 7-12: semua karyawan
      * - 2027+, semua periode: semua karyawan
      */
     public function sync(
@@ -80,13 +80,13 @@ class SupervisorAttPrepareSync
             })
             ->whereBetween('ap.date', [$startDate, $endDate]);
 
-        // ── Filter GRP-JKT untuk 2026 periode 1-4 ──
-        if ($this->year === 2026 && $periodId >= 1 && $periodId <= 4) {
+        // ── Filter GRP-JKT untuk 2026 periode 1-6 ──
+        if ($this->year === 2026 && $periodId >= 1 && $periodId <= 6) {
             $jktEmployeeIds = Employee::whereHas('groups', function ($q) {
                 $q->where('reference_code', 'GRP-JKT');
             })->pluck('id');
 
-            Log::info('Sync: 2026 period 1-4 — GRP-JKT only', [
+            Log::info('Sync: 2026 period 1-6 — GRP-JKT only', [
                 'jkt_employee_count' => $jktEmployeeIds->count(),
             ]);
 

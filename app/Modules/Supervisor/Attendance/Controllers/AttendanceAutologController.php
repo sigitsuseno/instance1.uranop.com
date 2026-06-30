@@ -16,8 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Maatwebsite\Excel\Concerns\FromCollection;
-use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Facades\Excel;
 
 class AttendanceAutologController extends Controller
@@ -450,7 +448,8 @@ class AttendanceAutologController extends Controller
     }
 
     /**
-     * Print detail report for individual employee using blade view
+     * Generate PDF detail report for individual employee.
+     * Output: downloadable PDF file (via dompdf).
      */
     public function printDetail($employeeId, Request $request)
     {
@@ -527,6 +526,9 @@ class AttendanceAutologController extends Controller
                 'lembur' => $log?->lembur ?? 0,
                 'lembur_display' => $this->formatOvertime($log?->lembur ?? 0),
                 'lembur_calc' => $log?->lembur_calc ?? 0,
+                'lm' => $log?->lm ?? 0,
+                'lm_calc' => $log?->lm_calc ?? 0,
+                'lembur_total_calc' => round(($log?->lembur_calc ?? 0) + ($log?->lm_calc ?? 0), 1),
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
                 'shift_start' => $shiftStart,
@@ -549,7 +551,8 @@ class AttendanceAutologController extends Controller
             'absen' => $logs->where('status', 'absent')->count(),
         ];
 
-        return view('supervisor.attendance.autolog-detail-print', [
+        // Generate PDF via dompdf
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('supervisor.attendance.autolog-detail-pdf', [
             'employee' => [
                 'id' => $employee->id,
                 'code' => $employee->employee_code,
@@ -564,6 +567,16 @@ class AttendanceAutologController extends Controller
                 'end' => $endDate,
             ],
         ]);
+
+        $pdf->setPaper('A4', 'portrait');
+
+        $safeName = preg_replace('/[^a-zA-Z0-9]/', '_', $employee->name);
+        $safeName = preg_replace('/_+/', '_', $safeName);
+        $safeName = trim($safeName, '_');
+        $periodLabel = Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Absensi_' . $safeName . '_' . $periodLabel . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     /**
@@ -911,59 +924,142 @@ class AttendanceAutologController extends Controller
         $workPatternId = $request->input('work_pattern_id');
         $search = $request->input('search');
 
-        $autologs = AttendanceAutolog::with('employee')
-            ->whereBetween('date', [$startDate, $endDate])
+        // Query sama persis dengan index() — all employees, no pagination
+        $employees = Employee::where(function ($q) use ($startDate, $endDate) {
+            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            });
+        })
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
+            ->with([
+                'department',
+                'position',
+                'autologs' => function ($query) use ($startDate, $endDate) {
+                    $query->whereBetween('date', [$startDate, $endDate]);
+                },
+            ])
             ->when($search, function ($query, $search) {
-                $query->whereHas('employee', function ($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
             ->when($departmentId, function ($query, $deptId) {
-                $query->whereHas('employee', function ($q) use ($deptId) {
-                    $q->where('department_id', $deptId);
-                });
+                $query->where('department_id', $deptId);
             })
             ->when($workPatternId, function ($query, $wpId) {
-                $query->whereHas('employee', function ($q) use ($wpId) {
-                    $q->where('work_pattern_id', $wpId);
-                });
+                $query->where('work_pattern_id', $wpId);
             })
-            ->orderBy('date')
-            ->orderBy('employee_id')
+            ->orderBy('employee_code')
             ->get();
 
-        $data = $autologs->map(function ($log) {
-            return [
-                'no' => $log->employee?->employee_code ?? '-',
-                'nama' => $log->employee?->name ?? '-',
-                'in' => $log->check_in ? $log->check_in->format('H:i') : '-',
-                'out' => $log->check_out ? $log->check_out->format('H:i') : '-',
-                'lembur' => $log->lembur ?? 0,
-                'lembur_calc' => $log->lembur_calc ?? 0,
+        $rows = [];
+        $no = 1;
+        foreach ($employees as $employee) {
+            $logs = $employee->autologs;
+            $rows[] = [
+                'no' => $no++,
+                'employee_code' => $employee->employee_code,
+                'employee_name' => $employee->name,
+                'department' => $employee->department?->name ?? '-',
+                'position' => $employee->position?->name ?? '-',
+                'hadir' => $logs->where('status', 'present')->count(),
+                'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
+                'cuti' => $logs->where('status', 'leave')->count(),
+                'izin' => $logs->where('izin_duration', 1)->count(),
+                'sakit' => $logs->where('sakit_duration', 1)->count(),
+                'absen' => $logs->where('status', 'absent')->count(),
             ];
-        });
+        }
 
-        $filename = 'autolog_'.Carbon::now()->format('Ymd_His').'.xlsx';
+        $periodLabel = \Carbon\Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Absensi_' . $periodLabel . '.xlsx';
 
-        return Excel::download(new class($data) implements FromCollection, WithHeadings
-        {
-            private $data;
+        $departmentName = 'Semua Departemen';
+        if ($departmentId) {
+            $dept = Department::find($departmentId);
+            $departmentName = $dept?->name ?? 'Semua Departemen';
+        }
 
-            public function __construct($data)
-            {
-                $this->data = $data;
-            }
+        return Excel::download(
+            new \App\Modules\Supervisor\Attendance\Exports\AttendanceSummaryExport(
+                data: $rows,
+                periodStart: \Carbon\Carbon::parse($startDate)->format('d M Y'),
+                periodEnd: \Carbon\Carbon::parse($endDate)->format('d M Y'),
+                departmentName: $departmentName,
+            ),
+            $filename
+        );
+    }
 
-            public function collection()
-            {
-                return collect($this->data);
-            }
+    /**
+     * Export detail autolog harian per employee ke Excel.
+     */
+    public function exportDetail($employeeId, Request $request)
+    {
+        $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
+        $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
 
-            public function headings(): array
-            {
-                return ['No', 'Nama', 'IN', 'Out', 'Lembur', 'Lembur Calc'];
-            }
-        }, $filename);
+        $employee = Employee::with(['department', 'position'])
+            ->where('id', $employeeId)
+            ->firstOrFail();
+
+        $logs = AttendanceAutolog::with('employeeShiftRoster.workPattern')
+            ->where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->get();
+
+        $rows = [];
+        $currentDate = Carbon::parse($startDate);
+        $lastDate = Carbon::parse($endDate);
+        $totalOvertimeRaw = 0;
+        while ($currentDate <= $lastDate) {
+            $dateStr = $currentDate->toDateString();
+            $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
+
+            $lemburMin = $log?->lembur ?? 0;
+            $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
+            $totalOvertimeRaw += $lemburMin;
+
+            $rows[] = [
+                $employee->employee_code,
+                $employee->name,
+                $currentDate->translatedFormat('D, d M Y'),
+                $log?->check_in ? $log->check_in->format('H:i') : '--:--',
+                $log?->check_out ? $log->check_out->format('H:i') : '--:--',
+                $lemburDisplay,
+            ];
+
+            $currentDate->addDay();
+        }
+
+        $totalOvertimeHours = round($totalOvertimeRaw / 60, 1);
+
+        $safeName = preg_replace('/[^a-zA-Z0-9]/', '_', $employee->name);
+        $safeName = preg_replace('/_+/', '_', $safeName);
+        $safeName = trim($safeName, '_');
+        $periodLabel = \Carbon\Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = $safeName . '_' . $periodLabel . '.xlsx';
+
+        return Excel::download(
+            new \App\Modules\Supervisor\Attendance\Exports\AttendanceDetailExport(
+                data: $rows,
+                employee: [
+                    'name' => $employee->name,
+                    'code' => $employee->employee_code,
+                    'department' => $employee->department?->name ?? '-',
+                    'position' => $employee->position?->name ?? '-',
+                ],
+                periodStart: \Carbon\Carbon::parse($startDate)->format('d F Y'),
+                periodEnd: \Carbon\Carbon::parse($endDate)->format('d F Y'),
+                totalOvertime: $totalOvertimeHours,
+            ),
+            $filename
+        );
     }
 }

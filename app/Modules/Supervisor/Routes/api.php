@@ -42,6 +42,7 @@ Route::prefix('v1/supervisor')
             Route::get('absensi/print', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'print']);
             Route::get('absensi/{id}', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'show']);
             Route::get('absensi/{id}/print', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'printDetail']);
+            Route::get('absensi/{id}/export', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'exportDetail']);
 
             Route::get('snapshoot', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceSnapshotController::class, 'index'])->name('supervisor.attendance.snapshot');
             Route::post('snapshoot', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceSnapshotController::class, 'store']);

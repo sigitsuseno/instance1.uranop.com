@@ -53,13 +53,14 @@ class AttendanceImportController extends Controller
             return response()->json(['errors' => ['attendance_file' => 'File harus berformat .bin atau .dat']], 422);
         }
 
-        // Periode 1-4: file XLSX hardcoded (data REAL input manual sebelum sistem)
+        // Periode 1-6: file XLSX hardcoded (data REAL input manual sebelum sistem)
         $periodFileMap = [
             1 => 'data_januari.xlsx',
             2 => 'februari.xlsx',
             3 => 'sampe_data.xlsx',
             4 => 'april.xlsx',
             5 => 'mei.xlsx',
+            6 => 'juni.xlsx',
         ];
 
         try {
@@ -95,8 +96,8 @@ class AttendanceImportController extends Controller
                 );
 
                 Log::info('Overtime sync result', $syncResult);
-            } elseif ($periodId >= 6 && $periodId <= 12) {
-                // PERIODE 6-12: Ambil dari att_prepares (data REAL dari fingerprint sync)
+            } elseif ($periodId >= 7 && $periodId <= 12) {
+                // PERIODE 7-12: Ambil dari att_prepares (data REAL dari fingerprint sync)
                 $result = $this->importFromPrepares->import(
                     startDate: $period->start_date->toDateString(),
                     endDate: $period->end_date->toDateString(),
@@ -110,7 +111,7 @@ class AttendanceImportController extends Controller
                 ], 422);
             }
 
-            // ── Sync dari att_prepares (tambahan: GRP-JKT utk 2026 per 1-4) ──
+            // ── Sync dari att_prepares (GRP-JKT only utk 2026 per 1-6) ──
             $syncResult = $this->attPrepareSync->sync(
                 periodId: $periodId,
                 startDate: $period->start_date->toDateString(),

@@ -74,15 +74,74 @@ function formatOvertime(minutes) {
     return `${hours} jam ${mins} mnt`;
 }
 
-function handlePrint() {
-    let baseUrl = `/api/v1/supervisor/attendance/absensi`;
-    if (route.query.tab) {
-        // If there's a logic based on tab, you can append it here
+async function handlePrint() {
+    const url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/print?start_date=${period.value.start}&end_date=${period.value.end}`;
+    try {
+        const token = localStorage.getItem('token');
+        const headers = { 'Accept': 'application/pdf' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Gagal generate PDF');
+        }
+        const blob = await response.blob();
+        
+        // Ambil filename dari Content-Disposition header
+        let filename = 'absensi.pdf';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+        
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
     }
-    const tab = route.query.tab || 'jakarta';
-    
-    const url = `${baseUrl}/${employee.value.id}/print?start_date=${period.value.start}&end_date=${period.value.end}&tab=${tab}`;
-    window.open(url, '_blank');
+}
+
+async function handleExport() {
+    const url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/export?start_date=${period.value.start}&end_date=${period.value.end}`;
+    try {
+        const token = localStorage.getItem('token');
+        const headers = { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Download gagal');
+        }
+        const blob = await response.blob();
+        
+        // Ambil filename dari Content-Disposition header
+        let filename = 'export.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+        
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
 function formatDecimal(num) {
@@ -277,6 +336,10 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
             </div>
 
             <div class="mt-8 flex justify-end gap-3 no-print">
+                <button @click="handleExport" class="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition flex items-center gap-2">
+                    <i class="bx bx-spreadsheet text-lg"></i>
+                    Export Excel
+                </button>
                 <button @click="handlePrint" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition flex items-center gap-2">
                     <i class="bx bx-printer text-lg"></i>
                     Cetak Laporan
