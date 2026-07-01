@@ -5,27 +5,20 @@ namespace App\Modules\Supervisor\Attendance\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Supervisor\Attendance\Exports\RekapAbsensiExport;
 use App\Modules\Supervisor\Attendance\Models\SupervisorEmployee as Employee;
+use App\Modules\Organization\Models\Company;
 use App\Modules\Organization\Models\Department;
-use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\WorkPattern;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
-use Inertia\Inertia;
 use Maatwebsite\Excel\Facades\Excel;
 
 class RekapAbsensiController extends Controller
 {
     public function index(Request $request)
     {
-        Log::info('RekapAbsensiController index hit!');
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
-        $userType = Auth::user()->user_type;
-
-        $payrollPeriods = collect();
-
+        // Get period
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date)->toDateString();
             $endDate = Carbon::parse($request->end_date)->toDateString();
@@ -35,36 +28,28 @@ class RekapAbsensiController extends Controller
             $endDate = $period['end'];
         }
 
+        // Fetch payroll periods
+        $payrollPeriods = PayPeriod::orderBy('start_date', 'desc')->get();
+
         $selectedPeriodId = null;
-
-        if ($userType === 'hr_branch') {
-            $payrollPeriods = PayrollPeriod::query()
-                
-                ->orderBy('start_date', 'desc')
-                ->get();
-
-            if (! $request->has('start_date') && ! $request->has('end_date') && $payrollPeriods->isNotEmpty()) {
-                $latestPeriod = $payrollPeriods->first();
-                $startDate = $latestPeriod->start_date->toDateString();
-                $endDate = $latestPeriod->end_date->toDateString();
-                $selectedPeriodId = $latestPeriod->id;
-            }
+        if (! $request->has('start_date') && ! $request->has('end_date') && $payrollPeriods->isNotEmpty()) {
+            $latestPeriod = $payrollPeriods->first();
+            $startDate = $latestPeriod->start_date->toDateString();
+            $endDate = $latestPeriod->end_date->toDateString();
+            $selectedPeriodId = $latestPeriod->id;
         }
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
         $employees = Employee::where('is_active', 1)
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
             ->with([
                 'department',
                 'position',
                 'autologs' => function ($query) use ($startDate, $endDate) {
                     $query->whereBetween('date', [$startDate, $endDate]);
                 },
-                
             ])
-            
-            
             ->whereHas('autologs', function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             })
@@ -74,13 +59,16 @@ class RekapAbsensiController extends Controller
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
-            ->when($request->department_id, function ($query, $deptId) { $query->where('department_id', $deptId); })
+            ->when($request->department_id, function ($query, $deptId) {
+                $query->where('department_id', $deptId);
+            })
             ->when($request->work_pattern_id, function ($query, $wpId) {
                 $query->where('work_pattern_id', $wpId);
             })
             ->orderBy('employee_code')
             ->get();
 
+        // Build date range
         $dates = [];
         $current = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
@@ -91,15 +79,14 @@ class RekapAbsensiController extends Controller
 
         $data = [];
         foreach ($employees as $i => $employee) {
-            $periodSnapshot = null;
             $logs = $employee->autologs->keyBy(fn ($l) => $l->date->toDateString());
 
             $row = [
                 'no' => $i + 1,
                 'employee_id' => $employee->id,
-                'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
-                'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
+                'department' => $employee->department?->name,
             ];
 
             foreach ($dates as $date) {
@@ -107,12 +94,15 @@ class RekapAbsensiController extends Controller
                 $log = $logs->get($dateStr);
                 $row['days'][$dateStr] = [
                     'status' => $this->getStatusText($log),
-                    'lembur' => $log ? (float) ($log->lembur_calc ?? 0) : 0,
+                    'lembur' => $log ? round((($log->lembur ?? 0) + ($log->lm ?? 0)) / 60, 1) : 0,
                 ];
             }
 
             $data[] = $row;
         }
+
+        // Get company name
+        $company = Company::first();
 
         return response()->json([
             'employees' => $data,
@@ -132,7 +122,7 @@ class RekapAbsensiController extends Controller
                 'department_id' => $request->department_id,
                 'work_pattern_id' => $request->work_pattern_id,
             ],
-            'departments' => Department::all(['id', 'name']),
+            'departments' => Department::orderBy('name')->get(['id', 'name']),
             'workPatterns' => WorkPattern::all(['id', 'name']),
             'payrollPeriods' => collect($payrollPeriods)->map(function ($p) {
                 return [
@@ -142,16 +132,12 @@ class RekapAbsensiController extends Controller
                     'end_date' => Carbon::parse($p->end_date)->toDateString(),
                 ];
             }),
-            'companyName' => Auth::user()->company->name ?? 'ALL IN KARANGJATI',
+            'companyName' => $company?->name ?? 'ALL IN KARANGJATI',
         ]);
     }
 
     public function export(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
-        $userType = Auth::user()->user_type;
-
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date)->toDateString();
             $endDate = Carbon::parse($request->end_date)->toDateString();
@@ -161,18 +147,17 @@ class RekapAbsensiController extends Controller
             $endDate = $period['end'];
         }
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
         $employees = Employee::where('is_active', 1)
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
             ->with([
+                'department',
+                'position',
                 'autologs' => function ($query) use ($startDate, $endDate) {
                     $query->whereBetween('date', [$startDate, $endDate]);
                 },
-                'employeePeriode',
             ])
-            
-            
             ->whereHas('autologs', function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             })
@@ -182,12 +167,15 @@ class RekapAbsensiController extends Controller
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
-            ->when($request->department_id, function ($query, $deptId) { $query->where('department_id', $deptId); })
+            ->when($request->department_id, function ($query, $deptId) {
+                $query->where('department_id', $deptId);
+            })
             ->orderBy('employee_code')
             ->get();
 
-        $companyName = Auth::user()->company->name ?? 'ALL IN KARANGJATI';
-        $filename = 'rekap_absensi_'.Carbon::now()->format('Ymd_His').'.xlsx';
+        $company = Company::first();
+        $companyName = $company?->name ?? 'ALL IN KARANGJATI';
+        $filename = 'rekap_absensi_' . Carbon::now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(
             new RekapAbsensiExport($employees, $startDate, $endDate, $companyName),
@@ -197,8 +185,9 @@ class RekapAbsensiController extends Controller
 
     public function print(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
+        // Boost limits for large PDF generation
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
 
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date)->toDateString();
@@ -209,18 +198,17 @@ class RekapAbsensiController extends Controller
             $endDate = $period['end'];
         }
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
         $employees = Employee::where('is_active', 1)
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
             ->with([
+                'department',
+                'position',
                 'autologs' => function ($query) use ($startDate, $endDate) {
                     $query->whereBetween('date', [$startDate, $endDate]);
                 },
-                
             ])
-            
-            
             ->whereHas('autologs', function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('date', [$startDate, $endDate]);
             })
@@ -230,10 +218,13 @@ class RekapAbsensiController extends Controller
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
-            ->when($request->department_id, function ($query, $deptId) { $query->where('department_id', $deptId); })
+            ->when($request->department_id, function ($query, $deptId) {
+                $query->where('department_id', $deptId);
+            })
             ->orderBy('employee_code')
             ->get();
 
+        // Build date range
         $dates = [];
         $current = Carbon::parse($startDate);
         $end = Carbon::parse($endDate);
@@ -244,14 +235,13 @@ class RekapAbsensiController extends Controller
 
         $data = [];
         foreach ($employees as $i => $employee) {
-            $periodSnapshot = null;
             $logs = $employee->autologs->keyBy(fn ($l) => $l->date->toDateString());
 
             $row = [
                 'no' => $i + 1,
-                'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
-                'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
+                'department' => $employee->department?->name,
             ];
 
             foreach ($dates as $date) {
@@ -259,7 +249,7 @@ class RekapAbsensiController extends Controller
                 $log = $logs->get($dateStr);
                 $row['days'][$dateStr] = [
                     'status' => $this->getStatusText($log),
-                    'lembur' => $log ? (float) ($log->lembur_calc ?? 0) : 0,
+                    'lembur' => $log ? round((($log->lembur ?? 0) + ($log->lm ?? 0)) / 60, 1) : 0,
                 ];
             }
 
@@ -272,7 +262,10 @@ class RekapAbsensiController extends Controller
             $departmentName = $dept?->name ?? 'Semua Departemen';
         }
 
-        return view('supervisor.attendance.rekap-absensi-print', [
+        $company = Company::first();
+
+        $pdf = Pdf::loadView('supervisor.attendance.rekap-absensi-print-pdf', [
+            'company' => $company,
             'employees' => $data,
             'dates' => $dates,
             'period' => [
@@ -285,6 +278,13 @@ class RekapAbsensiController extends Controller
                 'department_id' => $request->department_id,
             ],
         ]);
+
+        $pdf->setPaper('A4', 'landscape');
+
+        $periodLabel = Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Rekap_Absensi_' . $periodLabel . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     protected function getStatusText($log): string
@@ -294,7 +294,7 @@ class RekapAbsensiController extends Controller
         }
 
         if ($log->sakit_duration > 0) {
-            return 'SAKIT';
+            return 'S';
         }
 
         if ($log->izin_duration > 0) {
@@ -303,10 +303,10 @@ class RekapAbsensiController extends Controller
 
         return match ($log->status) {
             'present' => 'H',
-            'leave' => 'CUTI',
+            'leave' => 'C',
             'absent' => '-',
-            'holiday' => 'LIBUR',
-            'off' => 'OFF',
+            'holiday' => 'L',
+            'off' => 'O',
             default => '-',
         };
     }

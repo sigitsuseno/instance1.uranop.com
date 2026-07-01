@@ -55,9 +55,9 @@ Route::prefix('v1/supervisor')
 
             Route::get('lembur-staf', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'index'])->name('supervisor.attendance.lembur');
             Route::get('lembur-staf/print', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'print']);
+            Route::get('lembur-staf/export', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'export']);
             Route::get('lembur-staf/{employee_id}', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'show']);
             Route::get('lembur-staf/{employee_id}/print', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'printDetail']);
-            Route::post('lembur-staf/adjustment', [\App\Modules\Supervisor\Attendance\Controllers\StaffOvertimeController::class, 'adjustment']);
         });
 
         Route::prefix('master')->group(function () {

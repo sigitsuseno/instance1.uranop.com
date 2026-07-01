@@ -151,8 +151,47 @@ function goToPage(page) {
 
 function openPrintPage() {
     let url = `/api/v1/supervisor/attendance/snapshoot/print?start_date=${startDate.value}&end_date=${endDate.value}`;
-    if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
-    window.open(url, '_blank');
+    if (searchForm.value.search) {
+        url += `&search=${encodeURIComponent(searchForm.value.search)}`;
+    }
+    downloadPdf(url);
+}
+
+async function fetchWithAuth(url, acceptHeader = 'application/json') {
+    const token = localStorage.getItem('token');
+    const headers = { 'Accept': acceptHeader };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Request gagal');
+    }
+    return response;
+}
+
+async function downloadPdf(url) {
+    try {
+        const response = await fetchWithAuth(url, 'application/pdf');
+        const blob = await response.blob();
+
+        let filename = 'snapshot_absensi.pdf';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 </script>
 
@@ -177,8 +216,8 @@ function openPrintPage() {
                     @click="openPrintPage"
                     class="px-4 py-2 bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) rounded-lg hover:bg-(--border-soft) transition-colors flex items-center gap-2"
                 >
-                    <i class="bx bx-printer"></i>
-                    Print
+                    <i class="bx bx-download"></i>
+                    Download PDF
                 </button>
                 <button
                     @click="saveAllSnapshot"
@@ -294,26 +333,36 @@ function openPrintPage() {
                             <th class="px-4 py-3 text-left text-sm font-medium text-(--text-muted)">Karyawan</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Hadir</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Absent</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Off</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Holiday</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Cuti</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Izin</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Sakit</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Terlambat</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Plg Cepat</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur (Aktual)</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur (Hitung)</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Aksi</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-(--border-soft)">
                         <tr v-for="employee in employees" :key="employee.id" class="hover:bg-(--bg-elevated)">
                             <td class="px-4 py-3">
                                 <div class="font-medium text-(--text-main)">{{ employee.employee_name }}</div>
-                                <div class="text-sm text-(--text-muted)">{{ employee.employment_status === 'contract' ? 'PKWT' : 'PKWTT' }}</div>
+                                <div class="text-xs text-(--text-muted)">{{ employee.employee_code }}</div>
+                                <div class="text-xs text-(--text-soft)">{{ employee.employment_status === 'contract' ? 'PKWT' : 'PKWTT' }}</div>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="text-green-600 font-medium">{{ employee.present_days }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="text-red-600 font-medium">{{ employee.absent_days }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="text-gray-500 font-medium">{{ employee.off_days }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="text-teal-600 font-medium">{{ employee.holiday_days }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="text-blue-600 font-medium">{{ employee.leave_days }}</span>
@@ -329,19 +378,25 @@ function openPrintPage() {
                                 <div class="text-xs text-(--text-soft)">{{ formatMinutes(employee.total_late_minutes) }}</div>
                             </td>
                             <td class="px-4 py-3 text-center">
+                                <span class="text-rose-600 font-medium">{{ formatMinutes(employee.total_early_leave_minutes) }}</span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
                                 <span class="text-purple-600 font-medium">{{ employee.overtime_hours || 0 }}j</span>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span class="text-indigo-600 font-bold">{{ employee.calculated_overtime || 0 }}j</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span v-if="employee.has_snapshot" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 text-sm rounded-lg">
+                                <span v-if="employee.has_snapshot" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 text-xs rounded-lg">
                                     <i class="bx bx-check"></i> Tersimpan
+                                </span>
+                                <span v-else class="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-500 text-xs rounded-lg">
+                                    <i class="bx bx-minus"></i> Draft
                                 </span>
                             </td>
                         </tr>
                         <tr v-if="employees.length === 0">
-                            <td colspan="10" class="px-4 py-8 text-center text-(--text-muted)">
+                            <td colspan="13" class="px-4 py-8 text-center text-(--text-muted)">
                                 Tidak ada data karyawan
                             </td>
                         </tr>

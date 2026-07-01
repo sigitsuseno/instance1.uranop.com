@@ -38,14 +38,14 @@ async function fetchData(params = {}) {
         
         const response = await get(`/api/v1/supervisor/attendance/lembur-staf?${queryParams.toString()}`);
         
-        employees.value = response.employees?.data || response.employees || [];
+        employees.value = response.employees || [];
         stats.value = response.stats || {};
         period.value = response.period || {};
         filters.value = response.filters || {};
         departments.value = response.departments || [];
         workPatterns.value = response.workPatterns || [];
         payrollPeriods.value = response.payrollPeriods || [];
-        pagination.value = response.employees || {};
+        pagination.value = response.pagination || {};
         
         selectedPeriod.value = period.value.period_id || '';
         startDate.value = period.value.start || '';
@@ -116,11 +116,77 @@ function openPrintPage() {
     if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
     if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
     if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
-    window.open(url, '_blank');
+    downloadPdf(url);
+}
+
+async function fetchWithAuth(url, acceptHeader = 'application/json') {
+    const token = localStorage.getItem('token');
+    const headers = { 'Accept': acceptHeader };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Request gagal');
+    }
+    return response;
+}
+
+async function downloadPdf(url) {
+    try {
+        const response = await fetchWithAuth(url, 'application/pdf');
+        const blob = await response.blob();
+
+        let filename = 'lembur_staf.pdf';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
 function exportExcel() {
-    // There is no export in API yet, but leaving button structure just in case
+    let url = `/api/v1/supervisor/attendance/lembur-staf/export?start_date=${startDate.value}&end_date=${endDate.value}&tab=${activeTab.value}`;
+    if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
+    if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
+    if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
+    downloadExcel(url);
+}
+
+async function downloadExcel(url) {
+    try {
+        const response = await fetchWithAuth(url, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        const blob = await response.blob();
+
+        let filename = 'lembur_staf.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
 function goToPage(urlStr) {
@@ -164,7 +230,15 @@ function goToPage(urlStr) {
                     :disabled="!startDate || !endDate"
                 >
                     <i class="bx bx-printer text-lg"></i>
-                    Print
+                    Download PDF
+                </button>
+                <button 
+                    @click="exportExcel"
+                    class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50"
+                    :disabled="!startDate || !endDate"
+                >
+                    <i class="bx bx-download text-lg"></i>
+                    Export Excel
                 </button>
             </div>
         </div>

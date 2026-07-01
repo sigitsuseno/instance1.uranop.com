@@ -14,7 +14,7 @@ const form = ref({
     attendance_file: null,
     payroll_period_id: '',
     processing: false,
-    errors: {}
+    error: null,
 });
 
 async function fetchPeriods() {
@@ -33,7 +33,7 @@ onMounted(() => {
 });
 
 const handleFileChange = (e) => {
-    form.value.errors.attendance_file = null;
+    form.value.error = null;
     form.value.attendance_file = e.target.files[0];
 };
 
@@ -43,28 +43,19 @@ const removeFile = () => {
 };
 
 const submit = async () => {
-    if (!form.value.attendance_file || !form.value.payroll_period_id) return;
+    if (!form.value.payroll_period_id) return;
 
     form.value.processing = true;
-    form.value.errors = {};
-
-    const formData = new FormData();
-    formData.append('attendance_file', form.value.attendance_file);
-    formData.append('payroll_period_id', form.value.payroll_period_id);
+    form.value.error = null;
 
     try {
-        await post('/api/v1/supervisor/attendance/import', formData);
-        removeFile();
-        form.value.payroll_period_id = '';
+        const res = await post('/api/v1/supervisor/attendance/import', {
+            payroll_period_id: form.value.payroll_period_id,
+        });
+        alert(res.message || 'Import selesai!');
         router.push('/supervisor/attendance');
     } catch (error) {
-        console.error('Import failed:', error);
-
-        if (error.response?.data?.errors) {
-            form.value.errors = error.response.data.errors;
-        } else {
-            form.value.errors.attendance_file = error.message || 'Terjadi kesalahan saat mengunggah file';
-        }
+        form.value.error = error.response?.data?.message || error.message || 'Terjadi kesalahan saat import';
     } finally {
         form.value.processing = false;
     }
@@ -90,16 +81,18 @@ const submit = async () => {
         </div>
 
         <div v-else class="space-y-6">
+
+
             <div class="bg-(--bg-card) border border-(--border-soft) overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 sm:p-10">
                     <div
-                        v-if="form.errors.attendance_file"
+                        v-if="form.error"
                         class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-3"
                     >
                         <i class="bx bx-error-circle text-xl text-red-500 mt-0.5"></i>
                         <div>
-                            <p class="font-medium text-red-700">Error Upload File</p>
-                            <p class="text-sm text-red-600 mt-1">{{ form.errors.attendance_file }}</p>
+                            <p class="font-medium text-red-700">Import Gagal</p>
+                            <p class="text-sm text-red-600 mt-1">{{ form.error }}</p>
                         </div>
                     </div>
 
@@ -115,9 +108,6 @@ const submit = async () => {
                                     {{ period.name }}
                                 </option>
                             </select>
-                            <div v-if="form.errors.payroll_period_id" class="mt-2 text-sm text-red-500">
-                                {{ form.errors.payroll_period_id }}
-                            </div>
                         </div>
 
                         <div>
@@ -172,9 +162,6 @@ const submit = async () => {
                                     </button>
                                 </div>
                             </div>
-                            <div v-if="form.errors.attendance_file" class="mt-2 text-sm text-red-500">
-                                {{ form.errors.attendance_file }}
-                            </div>
                         </div>
 
                         <div class="flex items-center justify-end border-t border-(--border-soft) pt-6 space-x-3">
@@ -186,11 +173,11 @@ const submit = async () => {
                             </router-link>
                             <button
                                 type="submit"
-                                :disabled="form.processing || !form.attendance_file || !form.payroll_period_id"
-                                class="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-(--primary) hover:brightness-110 focus:outline-[none] focus:ring-2 focus:ring-offset-2 focus:ring-(--primary) disabled:opacity-50 transition-all cursor-pointer"
+                                :disabled="form.processing || !form.payroll_period_id"
+                                class="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-[none] focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all cursor-pointer"
                             >
                                 <i v-if="form.processing" class="bx bx-loader-alt animate-spin mr-2"></i>
-                                <i v-else class="bx bx-save mr-2"></i>
+                                <i v-else class="bx bx-cloud-download mr-2"></i>
                                 {{ form.processing ? 'Memproses...' : 'Mulai Import' }}
                             </button>
                         </div>

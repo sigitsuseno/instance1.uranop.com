@@ -6,13 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Supervisor\Attendance\Models\SupervisorEmployee as Employee;
+use App\Modules\Organization\Models\Company;
 use App\Modules\Organization\Models\Department;
-use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\WorkPattern;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Inertia\Inertia;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Facades\Excel;
@@ -21,15 +22,9 @@ class StaffOvertimeController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
         $userType = Auth::user()->user_type;
 
-        $payrollPeriods = collect();
-        $startDate = null;
-        $endDate = null;
-        $selectedPeriodId = null;
-
+        // Get period
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date)->toDateString();
             $endDate = Carbon::parse($request->end_date)->toDateString();
@@ -39,53 +34,36 @@ class StaffOvertimeController extends Controller
             $endDate = $period['end'];
         }
 
-        if ($userType === 'hr_branch') {
-            $payrollPeriods = PayrollPeriod::query()
-                
-                ->orderBy('start_date', 'desc')
-                ->get();
+        // Fetch payroll periods
+        $payrollPeriods = PayPeriod::orderBy('start_date', 'desc')->get();
 
-            if (! $request->has('start_date') && ! $request->has('end_date') && $payrollPeriods->isNotEmpty()) {
-                $latestPeriod = $payrollPeriods->first();
-                $startDate = $latestPeriod->start_date->toDateString();
-                $endDate = $latestPeriod->end_date->toDateString();
-                $selectedPeriodId = $latestPeriod->id;
-            }
+        $selectedPeriodId = null;
+        if (! $request->has('start_date') && ! $request->has('end_date') && $payrollPeriods->isNotEmpty()) {
+            $latestPeriod = $payrollPeriods->first();
+            $startDate = $latestPeriod->start_date->toDateString();
+            $endDate = $latestPeriod->end_date->toDateString();
+            $selectedPeriodId = $latestPeriod->id;
         }
-
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
 
         $tab = $request->input('tab', 'jakarta');
 
-        $employeesQuery = Employee::with([
-            'department',
-            'position',
-            
-        ])
-            
-            
+        // Build employee query based on tab
+        $employeesQuery = Employee::with(['department', 'position'])
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
-            ->when($request->department_id, function ($query, $deptId) use ($month, $year, $tab) {
-                if ($tab === 'jakarta') {
-                    $query->where('department_id', $deptId);
-                } else {
-                    $query->whereHas('employeePeriode', function ($q) use ($deptId, $month, $year) {
-                        $q->where('month', $month)->where('year', $year)->where('department_id', $deptId);
-                    });
-                }
+            ->when($request->department_id, function ($query, $deptId) {
+                $query->where('department_id', $deptId);
             })
             ->when($request->work_pattern_id, function ($query, $wpId) {
                 $query->where('work_pattern_id', $wpId);
             });
 
         if ($tab === 'jakarta') {
-            $employeesQuery->whereHas('groups', function($q) {
+            $employeesQuery->whereHas('groups', function ($q) {
                 $q->where('reference_code', 'GRP-JKT');
             });
             $employeesQuery->with(['attendancePrepares' => function ($query) use ($startDate, $endDate) {
@@ -93,7 +71,7 @@ class StaffOvertimeController extends Controller
             }]);
         } else {
             $employeesQuery->where('is_active', 1);
-            $employeesQuery->whereHas('groups', function($q) {
+            $employeesQuery->whereHas('groups', function ($q) {
                 $q->whereIn('reference_code', ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR']);
             });
             $employeesQuery->with(['autologs' => function ($query) use ($startDate, $endDate) {
@@ -103,35 +81,34 @@ class StaffOvertimeController extends Controller
 
         $employeesQuery->orderBy('employee_code');
 
+        // All employees for stats
         $allEmployees = (clone $employeesQuery)->get();
 
         $allSummaryData = [];
         foreach ($allEmployees as $employee) {
-            $periodSnapshot = null;
-
             if ($tab === 'jakarta') {
                 $logs = $employee->attendancePrepares;
                 $allSummaryData[] = [
                     'id' => $employee->id,
-                    'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                    'employee_code' => $employee->employee_code,
                     'employee_name' => $employee->name,
-                    'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
-                    'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                    'department' => $employee->department?->name,
+                    'position' => $employee->position?->name,
                     'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
                     'lembur' => round($logs->sum('lembur') / 60, 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
                     'izin' => $logs->where('status', 'permit')->count(),
-                    'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(), // fallback check
+                    'sakit' => $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count(),
                     'absen' => $logs->where('status', 'absent')->count(),
                 ];
             } else {
                 $logs = $employee->autologs;
                 $allSummaryData[] = [
                     'id' => $employee->id,
-                    'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                    'employee_code' => $employee->employee_code,
                     'employee_name' => $employee->name,
-                    'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
-                    'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                    'department' => $employee->department?->name,
+                    'position' => $employee->position?->name,
                     'hadir' => $logs->where('status', 'present')->count(),
                     'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
@@ -152,18 +129,18 @@ class StaffOvertimeController extends Controller
             'absent' => collect($allSummaryData)->sum('absen'),
         ];
 
+        // Paginated
         $employees = $employeesQuery->paginate(20)->withQueryString();
         $summaryData = [];
         foreach ($employees as $employee) {
-            $periodSnapshot = null;
             if ($tab === 'jakarta') {
                 $logs = $employee->attendancePrepares;
                 $summaryData[] = [
                     'id' => $employee->id,
-                    'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                    'employee_code' => $employee->employee_code,
                     'employee_name' => $employee->name,
-                    'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
-                    'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                    'department' => $employee->department?->name,
+                    'position' => $employee->position?->name,
                     'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
                     'lembur' => round($logs->sum('lembur') / 60, 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
@@ -175,10 +152,10 @@ class StaffOvertimeController extends Controller
                 $logs = $employee->autologs;
                 $summaryData[] = [
                     'id' => $employee->id,
-                    'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                    'employee_code' => $employee->employee_code,
                     'employee_name' => $employee->name,
-                    'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
-                    'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                    'department' => $employee->department?->name,
+                    'position' => $employee->position?->name,
                     'hadir' => $logs->where('status', 'present')->count(),
                     'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
@@ -203,7 +180,7 @@ class StaffOvertimeController extends Controller
                 'work_pattern_id' => $request->work_pattern_id,
                 'tab' => $tab,
             ],
-            'departments' => Department::all(['id', 'name']),
+            'departments' => Department::orderBy('name')->get(['id', 'name']),
             'workPatterns' => WorkPattern::all(['id', 'name']),
             'payrollPeriods' => collect($payrollPeriods)->map(function ($p) {
                 return [
@@ -214,20 +191,19 @@ class StaffOvertimeController extends Controller
                 ];
             }),
             'pagination' => [
+                'current_page' => $employees->currentPage(),
+                'last_page' => $employees->lastPage(),
+                'per_page' => $employees->perPage(),
                 'total' => $employees->total(),
                 'from' => $employees->firstItem(),
                 'to' => $employees->lastItem(),
-                'links' => [
-                    'prev' => $employees->previousPageUrl(),
-                    'next' => $employees->nextPageUrl(),
-                ],
             ],
         ]);
     }
 
     protected function getPeriod($period = null)
     {
-        $date = $period ? Carbon::parse($period.'-01') : Carbon::now();
+        $date = $period ? Carbon::parse($period . '-01') : Carbon::now();
         if ($date->day >= 25) {
             $start = $date->copy()->day(25);
             $end = $date->copy()->addMonth()->day(24);
@@ -241,8 +217,8 @@ class StaffOvertimeController extends Controller
 
     public function print(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
 
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
@@ -252,37 +228,22 @@ class StaffOvertimeController extends Controller
         $search = $request->input('search');
         $tab = $request->input('tab', 'jakarta');
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
-        $employeesQuery = Employee::with([
-            'department',
-            'position',
-            
-        ])
-            
-            
+        $employeesQuery = Employee::with(['department', 'position'])
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
-            ->when($departmentId, function ($query, $deptId) use ($month, $year, $tab) {
-                if ($tab === 'jakarta') {
-                    $query->where('department_id', $deptId);
-                } else {
-                    $query->whereHas('employeePeriode', function ($q) use ($deptId, $month, $year) {
-                        $q->where('month', $month)->where('year', $year)->where('department_id', $deptId);
-                    });
-                }
+            ->when($departmentId, function ($query, $deptId) {
+                $query->where('department_id', $deptId);
             })
             ->when($workPatternId, function ($query, $wpId) {
                 $query->where('work_pattern_id', $wpId);
             });
 
         if ($tab === 'jakarta') {
-            $employeesQuery->whereHas('groups', function($q) {
+            $employeesQuery->whereHas('groups', function ($q) {
                 $q->where('reference_code', 'GRP-JKT');
             });
             $employeesQuery->with(['attendancePrepares' => function ($query) use ($startDate, $endDate) {
@@ -290,7 +251,7 @@ class StaffOvertimeController extends Controller
             }]);
         } else {
             $employeesQuery->where('is_active', 1);
-            $employeesQuery->whereHas('groups', function($q) {
+            $employeesQuery->whereHas('groups', function ($q) {
                 $q->whereIn('reference_code', ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR']);
             });
             $employeesQuery->with(['autologs' => function ($query) use ($startDate, $endDate) {
@@ -303,14 +264,13 @@ class StaffOvertimeController extends Controller
 
         $summaryData = [];
         foreach ($employees as $employee) {
-            $periodSnapshot = null;
             if ($tab === 'jakarta') {
                 $logs = $employee->attendancePrepares;
                 $summaryData[] = [
-                    'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                    'employee_code' => $employee->employee_code,
                     'employee_name' => $employee->name,
-                    'department' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
-                    'position' => $periodSnapshot?->position?->name ?? $employee->position?->name ?? '-',
+                    'department' => $employee->department?->name ?? '-',
+                    'position' => $employee->position?->name ?? '-',
                     'hadir' => $logs->whereIn('status', ['present', 'late'])->count(),
                     'lembur' => round($logs->sum('lembur') / 60, 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
@@ -321,10 +281,10 @@ class StaffOvertimeController extends Controller
             } else {
                 $logs = $employee->autologs;
                 $summaryData[] = [
-                    'employee_code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                    'employee_code' => $employee->employee_code,
                     'employee_name' => $employee->name,
-                    'department' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
-                    'position' => $periodSnapshot?->position?->name ?? $employee->position?->name ?? '-',
+                    'department' => $employee->department?->name ?? '-',
+                    'position' => $employee->position?->name ?? '-',
                     'hadir' => $logs->where('status', 'present')->count(),
                     'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
                     'cuti' => $logs->where('status', 'leave')->count(),
@@ -351,7 +311,11 @@ class StaffOvertimeController extends Controller
             $departmentName = $dept?->name ?? 'Semua Departemen';
         }
 
-        return view('supervisor.attendance.autolog-print', [
+        $company = Company::first();
+        $tabLabel = $tab === 'jakarta' ? 'Jakarta' : 'Ungaran';
+
+        $pdf = Pdf::loadView('supervisor.attendance.lembur-print-pdf', [
+            'company' => $company,
             'employees' => $summaryData,
             'stats' => $stats,
             'period' => [
@@ -359,19 +323,24 @@ class StaffOvertimeController extends Controller
                 'end' => $endDate,
             ],
             'departmentName' => $departmentName,
+            'tabLabel' => $tabLabel,
             'filters' => [
                 'search' => $search,
                 'department_id' => $departmentId,
                 'work_pattern_id' => $workPatternId,
             ],
         ]);
+
+        $pdf->setPaper('A4', 'portrait');
+
+        $periodLabel = Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Lembur_Staf_' . $tabLabel . '_' . $periodLabel . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     public function export(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
-
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
 
@@ -380,37 +349,22 @@ class StaffOvertimeController extends Controller
         $search = $request->input('search');
         $tab = $request->input('tab', 'jakarta');
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
-        $employeesQuery = Employee::with([
-            'department',
-            'position',
-            
-        ])
-            
-            
+        $employeesQuery = Employee::with(['department', 'position'])
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
                         ->orWhere('name', 'like', "%{$search}%");
                 });
             })
-            ->when($departmentId, function ($query, $deptId) use ($month, $year, $tab) {
-                if ($tab === 'jakarta') {
-                    $query->where('department_id', $deptId);
-                } else {
-                    $query->whereHas('employeePeriode', function ($q) use ($deptId, $month, $year) {
-                        $q->where('month', $month)->where('year', $year)->where('department_id', $deptId);
-                    });
-                }
+            ->when($departmentId, function ($query, $deptId) {
+                $query->where('department_id', $deptId);
             })
             ->when($workPatternId, function ($query, $wpId) {
                 $query->where('work_pattern_id', $wpId);
             });
 
         if ($tab === 'jakarta') {
-            $employeesQuery->whereHas('groups', function($q) {
+            $employeesQuery->whereHas('groups', function ($q) {
                 $q->where('reference_code', 'GRP-JKT');
             });
             $employeesQuery->with(['attendancePrepares' => function ($query) use ($startDate, $endDate) {
@@ -418,7 +372,7 @@ class StaffOvertimeController extends Controller
             }]);
         } else {
             $employeesQuery->where('is_active', 1);
-            $employeesQuery->whereHas('groups', function($q) {
+            $employeesQuery->whereHas('groups', function ($q) {
                 $q->whereIn('reference_code', ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR']);
             });
             $employeesQuery->with(['autologs' => function ($query) use ($startDate, $endDate) {
@@ -430,32 +384,38 @@ class StaffOvertimeController extends Controller
         $employees = $employeesQuery->get();
 
         $data = $employees->map(function ($employee) use ($tab) {
-            $periodSnapshot = null;
-            $code = $periodSnapshot->employee_code ?? $employee->employee_code ?? '-';
-            $name = $employee->name ?? '-';
-
             if ($tab === 'jakarta') {
                 $logs = $employee->attendancePrepares;
                 $lembur = round($logs->sum('lembur') / 60, 1);
+                $hadir = $logs->whereIn('status', ['present', 'late'])->count();
+                $cuti = $logs->where('status', 'leave')->count();
+                $izin = $logs->where('status', 'permit')->count();
+                $sakit = $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count();
+                $absen = $logs->where('status', 'absent')->count();
             } else {
                 $logs = $employee->autologs;
                 $lembur = round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1);
+                $hadir = $logs->where('status', 'present')->count();
+                $cuti = $logs->where('status', 'leave')->count();
+                $izin = $logs->where('izin_duration', 1)->count();
+                $sakit = $logs->where('sakit_duration', 1)->count();
+                $absen = $logs->where('status', 'absent')->count();
             }
 
             return [
-                'no' => $code,
-                'nama' => $name,
-                'departemen' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
-                'hadir' => $tab === 'jakarta' ? $logs->whereIn('status', ['present', 'late'])->count() : $logs->where('status', 'present')->count(),
+                'no' => $employee->employee_code,
+                'nama' => $employee->name,
+                'departemen' => $employee->department?->name ?? '-',
+                'hadir' => $hadir,
                 'lembur' => $lembur,
-                'cuti' => $logs->where('status', 'leave')->count(),
-                'izin' => $tab === 'jakarta' ? $logs->where('status', 'permit')->count() : $logs->where('izin_duration', 1)->count(),
-                'sakit' => $tab === 'jakarta' ? $logs->where('is_permit_flag', 1)->where('deduct_attendance', 0)->count() : $logs->where('sakit_duration', 1)->count(),
-                'absen' => $logs->where('status', 'absent')->count(),
+                'cuti' => $cuti,
+                'izin' => $izin,
+                'sakit' => $sakit,
+                'absen' => $absen,
             ];
         });
 
-        $filename = 'lembur_staf_'.$tab.'_'.Carbon::now()->format('Ymd_His').'.xlsx';
+        $filename = 'lembur_staf_' . $tab . '_' . Carbon::now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new class($data) implements FromCollection, WithHeadings
         {
@@ -480,23 +440,11 @@ class StaffOvertimeController extends Controller
 
     public function show($employeeId, Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
-
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
         $tab = $request->input('tab', 'jakarta');
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
-        $employeeQuery = Employee::with([
-            'department',
-            'position',
-            
-        ])
-            
-            
+        $employeeQuery = Employee::with(['department', 'position'])
             ->where('id', $employeeId);
 
         if ($tab !== 'jakarta') {
@@ -504,7 +452,6 @@ class StaffOvertimeController extends Controller
         }
 
         $employee = $employeeQuery->firstOrFail();
-        $periodSnapshot = null;
 
         if ($tab === 'jakarta') {
             $logs = AttendancePrepare::with('employeeShiftRoster.workPattern')
@@ -558,8 +505,12 @@ class StaffOvertimeController extends Controller
                 'is_locked' => $log?->is_locked ?? false,
                 'notes' => $log?->notes,
                 'lembur_calc' => $overtimeConvertedHours,
-                'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
-                'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i') : null,
+                'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start
+                    ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
+                    : null,
+                'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end
+                    ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
+                    : null,
                 'is_sat' => $isSat,
                 'is_holiday' => $isHoliday,
                 'is_fixed' => $isFixed,
@@ -593,10 +544,10 @@ class StaffOvertimeController extends Controller
         return response()->json([
             'employee' => [
                 'id' => $employee->id,
-                'code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                'code' => $employee->employee_code,
                 'name' => $employee->name,
-                'department' => $periodSnapshot?->department?->name ?? $employee->department?->name,
-                'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                'department' => $employee->department?->name,
+                'position' => $employee->position?->name,
             ],
             'dailyData' => $dailyData,
             'summary' => $summary,
@@ -609,23 +560,11 @@ class StaffOvertimeController extends Controller
 
     public function printDetail($employeeId, Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
-
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
         $tab = $request->input('tab', 'jakarta');
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
-        $employeeQuery = Employee::with([
-            'department',
-            'position',
-            
-        ])
-            
-            
+        $employeeQuery = Employee::with(['department', 'position'])
             ->where('id', $employeeId);
 
         if ($tab !== 'jakarta') {
@@ -633,7 +572,6 @@ class StaffOvertimeController extends Controller
         }
 
         $employee = $employeeQuery->firstOrFail();
-        $periodSnapshot = null;
 
         if ($tab === 'jakarta') {
             $logs = AttendancePrepare::with('employeeShiftRoster.workPattern')
@@ -684,8 +622,12 @@ class StaffOvertimeController extends Controller
                 'lembur_calc' => $overtimeConvertedHours,
                 'status' => $log?->status ?? 'pending',
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
-                'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i') : null,
-                'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i') : null,
+                'shift_start' => $log?->employeeShiftRoster?->shift?->work_hour_start
+                    ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
+                    : null,
+                'shift_end' => $log?->employeeShiftRoster?->shift?->work_hour_end
+                    ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
+                    : null,
                 'is_sat' => $isSat,
                 'is_holiday' => $isHoliday,
                 'is_fixed' => $isFixed,
@@ -716,13 +658,16 @@ class StaffOvertimeController extends Controller
             ];
         }
 
-        return view('supervisor.attendance.autolog-detail-print', [
+        $company = Company::first();
+
+        $pdf = Pdf::loadView('supervisor.attendance.lembur-detail-print-pdf', [
+            'company' => $company,
             'employee' => [
                 'id' => $employee->id,
-                'code' => $periodSnapshot->employee_code ?? $employee->employee_code,
+                'code' => $employee->employee_code,
                 'name' => $employee->name,
-                'department' => $periodSnapshot?->department?->name ?? $employee->department?->name ?? '-',
-                'position' => $periodSnapshot?->position?->name ?? $employee->position?->name ?? '-',
+                'department' => $employee->department?->name ?? '-',
+                'position' => $employee->position?->name ?? '-',
             ],
             'dailyData' => $dailyData,
             'summary' => $summary,
@@ -730,7 +675,18 @@ class StaffOvertimeController extends Controller
                 'start' => $startDate,
                 'end' => $endDate,
             ],
+            'tab' => $tab,
         ]);
+
+        $pdf->setPaper('A4', 'portrait');
+
+        $safeName = preg_replace('/[^a-zA-Z0-9]/', '_', $employee->name);
+        $safeName = preg_replace('/_+/', '_', $safeName);
+        $safeName = trim($safeName, '_');
+        $periodLabel = Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Lembur_' . $safeName . '_' . $periodLabel . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     protected function formatOvertime($minutes)
@@ -744,19 +700,28 @@ class StaffOvertimeController extends Controller
             return "{$hours} jam";
         }
 
-        return round($minutes / 60, 1).' jam';
+        return round($minutes / 60, 1) . ' jam';
     }
 
     protected function getStatusLabel($status)
     {
-        $labels = ['present' => 'Hadir', 'late' => 'Terlambat', 'absent' => 'Absen', 'leave' => 'Cuti', 'permit' => 'Izin', 'holiday' => 'Libur', 'off' => 'Off', 'pending' => 'Menunggu'];
+        $labels = [
+            'present' => 'Hadir', 'late' => 'Terlambat', 'absent' => 'Absen',
+            'leave' => 'Cuti', 'permit' => 'Izin', 'holiday' => 'Libur',
+            'off' => 'Off', 'pending' => 'Menunggu',
+        ];
 
         return $labels[$status] ?? $status;
     }
 
     protected function getStatusBadge($status)
     {
-        $badges = ['present' => 'bg-green-100 text-green-800', 'late' => 'bg-yellow-100 text-yellow-800', 'absent' => 'bg-red-100 text-red-800', 'leave' => 'bg-blue-100 text-blue-800', 'permit' => 'bg-purple-100 text-purple-800', 'holiday' => 'bg-gray-100 text-gray-800', 'off' => 'bg-orange-100 text-orange-800', 'pending' => 'bg-yellow-100 text-yellow-800'];
+        $badges = [
+            'present' => 'bg-green-100 text-green-800', 'late' => 'bg-yellow-100 text-yellow-800',
+            'absent' => 'bg-red-100 text-red-800', 'leave' => 'bg-blue-100 text-blue-800',
+            'permit' => 'bg-purple-100 text-purple-800', 'holiday' => 'bg-gray-100 text-gray-800',
+            'off' => 'bg-orange-100 text-orange-800', 'pending' => 'bg-yellow-100 text-yellow-800',
+        ];
 
         return $badges[$status] ?? 'bg-gray-100 text-gray-800';
     }

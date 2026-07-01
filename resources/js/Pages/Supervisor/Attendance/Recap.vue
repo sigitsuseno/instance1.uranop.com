@@ -108,7 +108,7 @@ function exportExcel() {
     if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
     if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
     if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
-    window.location.href = url;
+    downloadExcel(url);
 }
 
 function openPrintPage() {
@@ -116,17 +116,75 @@ function openPrintPage() {
     if (searchForm.value.search) url += `&search=${encodeURIComponent(searchForm.value.search)}`;
     if (searchForm.value.department_id) url += `&department_id=${searchForm.value.department_id}`;
     if (searchForm.value.work_pattern_id) url += `&work_pattern_id=${searchForm.value.work_pattern_id}`;
-    window.open(url, '_blank');
+    downloadPdf(url);
+}
+
+async function fetchWithAuth(url, acceptHeader = 'application/json') {
+    const token = localStorage.getItem('token');
+    const headers = { 'Accept': acceptHeader };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.message || 'Request gagal');
+    }
+    return response;
+}
+
+async function downloadPdf(url) {
+    try {
+        const response = await fetchWithAuth(url, 'application/pdf');
+        const blob = await response.blob();
+        let filename = 'rekap_absensi.pdf';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function downloadExcel(url) {
+    try {
+        const response = await fetchWithAuth(url, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        const blob = await response.blob();
+        let filename = 'rekap_absensi.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
 function getStatusClass(status) {
     if (!status || status === '-') return 'text-gray-300';
     if (status === 'H') return 'text-green-600 font-bold';
-    if (status === 'SAKIT') return 'text-yellow-600';
+    if (status === 'S') return 'text-yellow-600';
     if (status === 'I') return 'text-purple-600';
-    if (status === 'CUTI') return 'text-blue-600';
-    if (status === 'LIBUR') return 'text-orange-600';
-    if (status === 'OFF') return 'text-gray-400';
+    if (status === 'C') return 'text-blue-600';
+    if (status === 'L') return 'text-orange-600';
+    if (status === 'O') return 'text-gray-400';
     return 'text-red-600';
 }
 
@@ -251,7 +309,7 @@ function getDayAbbrev(dayName) {
                                 {{ emp.days[d.date]?.status || '' }}
                             </td>
                             <td :class="['px-1 py-1.5 text-center border-r border-(--border-soft) text-xs', getDayClass(d.day_name), emp.days[d.date]?.lembur > 0 ? 'text-orange-600 font-medium' : 'text-gray-300']">
-                                {{ emp.days[d.date]?.lembur > 0 ? emp.days[d.date].lembur : '-' }}
+                                {{ emp.days[d.date]?.lembur > 0 ? String(emp.days[d.date].lembur).replace('.', ',') : '-' }}
                             </td>
                         </template>
                     </tr>

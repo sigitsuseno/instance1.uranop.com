@@ -9,38 +9,35 @@ use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot as Att
 use App\Modules\Supervisor\Attendance\Models\SupervisorEmployee as Employee;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
-use App\Modules\Payroll\Models\PayrollPeriod;
+use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Organization\Models\Company;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use App\Modules\Payroll\Models\PayPeriod;
 
 class AttendanceSnapshotController extends Controller
 {
     public function index(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
         $userType = Auth::user()->user_type;
 
-        $payrollPeriods = collect();
-
-        if ($userType === 'hr_branch') {
-            $payrollPeriods = PayPeriod::orderBy('start_date', 'desc')
-                ->get();
-        }
-
-        $period = $this->getPeriod($request->input('period'));
-        $startDate = $period['start'];
-        $endDate = $period['end'];
-
+        // Get period
         if ($request->has('start_date') && $request->has('end_date')) {
             $startDate = Carbon::parse($request->start_date)->toDateString();
             $endDate = Carbon::parse($request->end_date)->toDateString();
+        } else {
+            $period = $this->getPeriod($request->input('period'));
+            $startDate = $period['start'];
+            $endDate = $period['end'];
         }
 
+        // Fetch payroll periods for period selector (no company/branch filter)
+        $payrollPeriods = PayPeriod::orderBy('start_date', 'desc')->get();
+
+        // Default to latest payroll period if no dates specified
         $selectedPeriodId = null;
-        if ($userType === 'hr_branch' && $payrollPeriods->isNotEmpty() && ! $request->filled('start_date')) {
+        if (! $request->has('start_date') && ! $request->has('end_date') && $payrollPeriods->isNotEmpty()) {
             $latestPeriod = $payrollPeriods->first();
             $startDate = $latestPeriod->start_date->toDateString();
             $endDate = $latestPeriod->end_date->toDateString();
@@ -55,10 +52,17 @@ class AttendanceSnapshotController extends Controller
         $month = Carbon::parse($endDate)->month;
         $year = Carbon::parse($endDate)->year;
 
-        // Build base query: employee yang punya roster di periode ini
-        $employeesQuery = Employee::whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('date', [$startDate, $endDate]);
+        // Build base query: employee yang punya roster ATAU autolog di periode ini, exclude GRP-JKT
+        $employeesQuery = Employee::where(function ($q) use ($startDate, $endDate) {
+            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            });
         })
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
             ->with([
                 'department',
                 'position',
@@ -89,7 +93,6 @@ class AttendanceSnapshotController extends Controller
         $totalActualOvertime = 0;
         $totalCalculatedOvertime = 0;
         foreach ($allEmployees as $employee) {
-            $periodSnapshot = null;
             $logs = $employee->autologs;
             $employeeLeaves = $allLeaveRequests[$employee->id] ?? collect();
             $presentDays = $logs->where('status', 'present')->count();
@@ -114,10 +117,10 @@ class AttendanceSnapshotController extends Controller
 
             $allSummaryData[] = [
                 'id' => $employee->id,
-                'employee_code' => $periodSnapshot?->employee_code ?? $employee->employee_code,
+                'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
                 'employment_status' => $employee->employment_status,
-                'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                'position' => $employee->position?->name,
                 'present_days' => $presentDays,
                 'absent_days' => $absentDays,
                 'leave_days' => $leaveDays,
@@ -161,7 +164,6 @@ class AttendanceSnapshotController extends Controller
 
         $summaryData = [];
         foreach ($employees as $employee) {
-            $periodSnapshot = null;
             $logs = $employee->autologs;
             $employeeLeaves = $paginatedLeaveRequests[$employee->id] ?? collect();
 
@@ -184,10 +186,10 @@ class AttendanceSnapshotController extends Controller
 
             $summaryData[] = [
                 'id' => $employee->id,
-                'employee_code' => $periodSnapshot?->employee_code ?? $employee->employee_code,
+                'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
                 'employment_status' => $employee->employment_status,
-                'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                'position' => $employee->position?->name,
                 'present_days' => $presentDays,
                 'absent_days' => $absentDays,
                 'leave_days' => $leaveDays,
@@ -204,8 +206,9 @@ class AttendanceSnapshotController extends Controller
             ];
         }
 
-        $existingSnapshots = AttendanceSnapshot::where('company_id', $companyId)
-            ->where('branch_id', $branchId)
+        // Check existing snapshots
+        $existingSnapshots = AttendanceSnapshot::where('company_id', 1)
+            ->where('branch_id', 1)
             ->whereBetween('period_start', [$startDate, $endDate])
             ->get()
             ->keyBy('employee_id');
@@ -249,17 +252,10 @@ class AttendanceSnapshotController extends Controller
             'period_end' => 'required|date',
         ]);
 
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
-
         $startDate = Carbon::parse($request->period_start)->toDateString();
         $endDate = Carbon::parse($request->period_end)->toDateString();
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
 
         $employee = Employee::where('is_active', 1)
-            
-            
             ->findOrFail($request->employee_id);
 
         $logs = AttendanceAutolog::where('employee_id', $request->employee_id)
@@ -275,23 +271,25 @@ class AttendanceSnapshotController extends Controller
         $holidayDays = $logs->where('status', 'holiday')->count();
         $holiday_overtime = $logs->sum('holiday_overtime');
 
-        $leaveData = $this->getLeaveDataFromRequests($request->employee_id, $startDate, $endDate, $companyId);
+        $leaveData = $this->getLeaveDataFromRequests($request->employee_id, $startDate, $endDate);
         $leaveDays = $leaveData['leave_days'];
         $permitDays = $leaveData['permit_days'];
         $sickDays = $leaveData['sick_days'];
 
         $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
 
-        $periodCode = $startDate.'_'.$endDate;
+        $periodCode = $startDate . '_' . $endDate;
 
         $snapshot = AttendanceSnapshot::updateOrCreate(
             [
-                'company_id' => $companyId,
-                'branch_id' => $branchId,
+                'company_id' => 1,
+                'branch_id' => 1,
                 'employee_id' => $request->employee_id,
                 'period_code' => $periodCode,
             ],
             [
+                'company_id' => 1,
+                'branch_id' => 1,
                 'period_start' => $startDate,
                 'period_end' => $endDate,
                 'total_working_days' => $workingDays,
@@ -337,23 +335,19 @@ class AttendanceSnapshotController extends Controller
                 'period_end' => 'required|date',
             ]);
 
-            $branchId = session('branch_id');
-            $companyId = Auth::user()->company_id;
-
             $startDate = Carbon::parse($request->period_start)->toDateString();
             $endDate = Carbon::parse($request->period_end)->toDateString();
-            $periodCode = $startDate.'_'.$endDate;
+            $periodCode = $startDate . '_' . $endDate;
 
             $created = 0;
             $updated = 0;
 
-            $month = Carbon::parse($endDate)->month;
-            $year = Carbon::parse($endDate)->year;
-
             if ($request->save_all) {
+                // All active employees, exclude GRP-JKT
                 $employeeIds = Employee::where('is_active', 1)
-                    
-                    
+                    ->whereDoesntHave('groups', function ($q) {
+                        $q->where('reference_code', 'GRP-JKT');
+                    })
                     ->pluck('id')
                     ->toArray();
             } else {
@@ -362,8 +356,6 @@ class AttendanceSnapshotController extends Controller
 
             foreach ($employeeIds as $employeeId) {
                 $employee = Employee::with(['department', 'position'])
-                    
-                    
                     ->find($employeeId);
 
                 if (! $employee) {
@@ -381,15 +373,15 @@ class AttendanceSnapshotController extends Controller
                 $offDays = $logs->where('status', 'off')->count();
                 $holidayDays = $logs->where('status', 'holiday')->count();
 
-                $leaveData = $this->getLeaveDataFromRequests($employeeId, $startDate, $endDate, $companyId);
+                $leaveData = $this->getLeaveDataFromRequests($employeeId, $startDate, $endDate);
                 $leaveDays = $leaveData['leave_days'];
                 $permitDays = $leaveData['permit_days'];
                 $sickDays = $leaveData['sick_days'];
 
                 $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
 
-                $existing = AttendanceSnapshot::where('company_id', $companyId)
-                    ->where('branch_id', $branchId)
+                $existing = AttendanceSnapshot::where('company_id', 1)
+                    ->where('branch_id', 1)
                     ->where('employee_id', $employeeId)
                     ->where('period_code', $periodCode)
                     ->first();
@@ -402,12 +394,14 @@ class AttendanceSnapshotController extends Controller
 
                 AttendanceSnapshot::updateOrCreate(
                     [
-                        'company_id' => $companyId,
-                        'branch_id' => $branchId,
+                        'company_id' => 1,
+                        'branch_id' => 1,
                         'employee_id' => $employeeId,
                         'period_code' => $periodCode,
                     ],
                     [
+                        'company_id' => 1,
+                        'branch_id' => 1,
                         'period_start' => $startDate,
                         'period_end' => $endDate,
                         'total_working_days' => $workingDays,
@@ -442,19 +436,19 @@ class AttendanceSnapshotController extends Controller
                 'message' => "Snapshot berhasil disimpan: {$created} baru, {$updated} diperbarui",
             ]);
         } catch (\Exception $e) {
-            \Log::error('storeBulk error: '.$e->getMessage());
+            \Log::error('storeBulk error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
-                'message' => 'Error: '.$e->getMessage(),
+                'message' => 'Error: ' . $e->getMessage(),
             ], 500);
         }
     }
 
     public function print(Request $request)
     {
-        $branchId = session('branch_id');
-        $companyId = Auth::user()->company_id;
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
 
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
@@ -464,20 +458,17 @@ class AttendanceSnapshotController extends Controller
         $izinTypeIds = $leaveTypeIds->filter(fn ($t) => in_array($t->code, ['ITM', 'IMT', 'IPA']))->pluck('id');
         $sakitTypeId = $leaveTypeIds->firstWhere('code', 'SKT')?->id;
 
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
         $employees = Employee::where('is_active', 1)
+            ->whereDoesntHave('groups', function ($q) {
+                $q->where('reference_code', 'GRP-JKT');
+            })
             ->with([
                 'department',
                 'position',
                 'autologs' => function ($query) use ($startDate, $endDate) {
                     $query->whereBetween('date', [$startDate, $endDate]);
                 },
-                
             ])
-            
-            
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('employee_code', 'like', "%{$search}%")
@@ -500,11 +491,11 @@ class AttendanceSnapshotController extends Controller
         $totalCalculatedOvertime = 0;
 
         foreach ($employees as $employee) {
-            $periodSnapshot = null;
             $logs = $employee->autologs;
             $employeeLeaves = $leaveRequests[$employee->id] ?? collect();
 
             $presentDays = $logs->where('status', 'present')->count();
+            $absentDays = $logs->where('status', 'absent')->count();
             $dedDays = $logs->where('deduct_attendance', 1)->count();
             $notPaidDays = $logs->sum('deduct_day') + $dedDays;
             $offDays = $logs->where('status', 'off')->count();
@@ -526,12 +517,12 @@ class AttendanceSnapshotController extends Controller
             $totalCalculatedOvertime += $calculatedOvertime;
 
             $summaryData[] = [
-                'employee_code' => $periodSnapshot?->employee_code ?? $employee->employee_code,
+                'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
                 'employment_status' => $employee->employment_status,
-                'position' => $periodSnapshot?->position?->name ?? $employee->position?->name,
+                'position' => $employee->position?->name,
                 'present_days' => $presentDays,
-                'absent_days' => $absentDays ?? 0,
+                'absent_days' => $absentDays,
                 'leave_days' => $leaveDays,
                 'permit_days' => $permitDays,
                 'sick_days' => $sickDays,
@@ -560,7 +551,12 @@ class AttendanceSnapshotController extends Controller
             'total_calculated_overtime' => round($totalCalculatedOvertime, 2),
         ];
 
-        return view('supervisor.attendance.snapshot-print', [
+        // Get company info
+        $company = Company::first();
+
+        // Generate PDF via dompdf
+        $pdf = Pdf::loadView('supervisor.attendance.snapshot-print-pdf', [
+            'company' => $company,
             'employees' => $summaryData,
             'stats' => $stats,
             'period' => [
@@ -571,6 +567,13 @@ class AttendanceSnapshotController extends Controller
                 'search' => $request->search,
             ],
         ]);
+
+        $pdf->setPaper('A4', 'portrait');
+
+        $periodLabel = Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Snapshot_Absensi_' . $periodLabel . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     private function calculateOvertime($hours)
@@ -585,7 +588,7 @@ class AttendanceSnapshotController extends Controller
         return 1 * 1.5 + ($hours - 1) * 2;
     }
 
-    private function getLeaveDataFromRequests($employeeId, $startDate, $endDate, $companyId)
+    private function getLeaveDataFromRequests($employeeId, $startDate, $endDate)
     {
         $leaveTypeIds = LeaveType::all();
         $cutiTypeIds = $leaveTypeIds->filter(fn ($t) => str_starts_with($t->code, 'CT'))->pluck('id');
