@@ -11,6 +11,7 @@ const dailyData = ref([]);
 const summary = ref({});
 const period = ref({});
 const isLoading = ref(true);
+const exportScope = ref('single'); // 'single' | 'all'
 
 async function fetchData() {
     isLoading.value = true;
@@ -110,7 +111,12 @@ async function handlePrint() {
 }
 
 async function handleExport() {
-    const url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/export?start_date=${period.value.start}&end_date=${period.value.end}`;
+    let url;
+    if (exportScope.value === 'all') {
+        url = `/api/v1/supervisor/attendance/absensi/export?start_date=${period.value.start}&end_date=${period.value.end}`;
+    } else {
+        url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/export?start_date=${period.value.start}&end_date=${period.value.end}`;
+    }
     try {
         const token = localStorage.getItem('token');
         const headers = { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
@@ -336,10 +342,18 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
             </div>
 
             <div class="mt-8 flex justify-end gap-3 no-print">
-                <button @click="handleExport" class="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl transition flex items-center gap-2">
-                    <i class="bx bx-spreadsheet text-lg"></i>
-                    Export Excel
-                </button>
+                <!-- Export dengan pilihan scope -->
+                <div class="relative flex rounded-xl overflow-hidden">
+                    <button @click="handleExport" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white transition flex items-center gap-2" :title="exportScope === 'single' ? 'Export detail karyawan ini' : 'Export semua karyawan'">
+                        <i class="bx bx-spreadsheet text-lg"></i>
+                        <span class="text-sm font-medium">{{ exportScope === 'single' ? 'Export Karyawan Ini' : 'Export Semua' }}</span>
+                    </button>
+                    <div class="relative">
+                        <button @click="exportScope = (exportScope === 'single' ? 'all' : 'single')" class="px-2 py-2 bg-teal-700 hover:bg-teal-800 text-white border-l border-teal-500 transition h-full" title="Ganti scope export">
+                            <i class="bx bx-chevron-down text-sm"></i>
+                        </button>
+                    </div>
+                </div>
                 <button @click="handlePrint" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-xl transition flex items-center gap-2">
                     <i class="bx bx-printer text-lg"></i>
                     Cetak Laporan

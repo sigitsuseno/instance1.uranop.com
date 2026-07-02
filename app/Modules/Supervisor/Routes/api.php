@@ -95,6 +95,13 @@ Route::prefix('v1/supervisor')
             });
         });
 
+        // Payroll
+        Route::prefix('payroll')->group(function () {
+            Route::get('gaji-karyawan', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorGajiKaryawanController::class, 'index']);
+            Route::get('gaji-karyawan/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorGajiKaryawanController::class, 'export']);
+            Route::get('payslips', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorPayslipController::class, 'index']);
+        });
+
         // Employee Data
         Route::prefix('employee-data')->group(function () {
             // Karyawan
