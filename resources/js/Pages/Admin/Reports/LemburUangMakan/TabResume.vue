@@ -73,7 +73,7 @@
                 <th
                   v-for="dateStr in dates"
                   :key="'dh-' + section.key + '-' + dateStr"
-                  colspan="3"
+                  :colspan="section.key === 'jakarta' ? 2 : 3"
                   class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft)"
                 >
                   {{ formatDateHeader(dateStr) }}
@@ -87,7 +87,7 @@
                 <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[10px]">L</th>
                 <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[10px]">P</th>
                 <template v-for="dateStr in dates" :key="'sh-' + section.key + '-' + dateStr">
-                  <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[10px]">Hari Kerja</th>
+                  <th v-if="section.key !== 'jakarta'" class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[10px]">Hari Kerja</th>
                   <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[10px]">Overtime</th>
                   <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[10px]">U.Makan</th>
                 </template>
@@ -106,7 +106,7 @@
                 <td class="px-2 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.p || '-' }}</td>
 
                 <template v-for="dateStr in dates" :key="'dc-' + section.key + '-' + index + '-' + dateStr">
-                  <td class="px-2 py-3 text-right text-xs border-r border-(--border-soft)" :class="item.days[dateStr]?.hari_kerja > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300'">
+                  <td v-if="section.key !== 'jakarta'" class="px-2 py-3 text-right text-xs border-r border-(--border-soft)" :class="item.days[dateStr]?.hari_kerja > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300'">
                     {{ item.days[dateStr]?.hari_kerja > 0 ? formatNumber(item.days[dateStr].hari_kerja) : '-' }}
                   </td>
                   <td class="px-2 py-3 text-right text-xs border-r border-(--border-soft)" :class="item.days[dateStr]?.overtime > 0 ? 'text-orange-600 font-medium' : 'text-gray-300'">

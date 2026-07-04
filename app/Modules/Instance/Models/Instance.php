@@ -16,6 +16,7 @@ class Instance extends Model
         'uuid',
         'code',
         'name',
+        'branch_name',
         'slug',
         'domain',
         'database_name',
@@ -23,12 +24,18 @@ class Instance extends Model
         'address',
         'phone',
         'email',
+        'password',
         'settings',
+    ];
+
+    protected $hidden = [
+        'password',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'settings' => 'array',
+        'password' => 'hashed',
     ];
 
     protected static function boot()

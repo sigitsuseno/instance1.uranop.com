@@ -93,7 +93,7 @@
                 <th
                   v-for="dateStr in dates"
                   :key="'dh-' + section.key + '-' + dateStr"
-                  :colspan="section.type === 'uang_makan' ? 6 : 6"
+                  :colspan="section.key === 'jakarta' ? 5 : 6"
                   class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft) text-[9px]"
                 >
                   {{ formatDateHeader(dateStr) }}
@@ -111,7 +111,7 @@
                   <template v-for="dateStr in dates" :key="'sh-' + section.key + '-' + dateStr">
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">H/A</th>
-                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
+                    <th v-if="section.key !== 'jakarta'" class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">L/M</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Lembur</th>
                     <th class="px-2 py-2 text-right font-bold text-(--text-muted) uppercase text-[9px]">Nominal</th>
@@ -157,7 +157,7 @@
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.ha || '-' }}
                     </td>
-                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
+                    <td v-if="section.key !== 'jakarta'" :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
                     </td>
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm ? 'text-purple-600 font-medium' : 'text-gray-300']">
@@ -209,7 +209,7 @@
                   TOTAL {{ section.label }}
                 </td>
                 <template v-for="dateStr in dates" :key="'st-' + section.key + '-' + dateStr">
-                  <td :colspan="6" class="px-2 py-2"></td>
+                  <td :colspan="section.key === 'jakarta' ? 5 : 6" class="px-2 py-2"></td>
                 </template>
                 <td class="px-3 py-2 text-right text-xs text-emerald-700 border-r">{{ formatNumber(section.totals.total_hari_kerja) }}</td>
                 <td class="px-3 py-2 text-right text-xs text-green-700 border-r">{{ formatNumber(section.totals.total_overtime) }}</td>
