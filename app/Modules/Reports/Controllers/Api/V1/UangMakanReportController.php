@@ -12,6 +12,7 @@ use App\Modules\Settings\Services\ReportConfigService;
 use App\Modules\Reports\Exports\UangMakanHarianExport;
 use App\Modules\Reports\Exports\UangMakanBulananExport;
 use App\Modules\Reports\Exports\UangMakanResumeExport;
+use App\Modules\Reports\Exports\UangMakanRekabExport;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
@@ -102,6 +103,177 @@ class UangMakanReportController extends Controller
         $period = PayPeriod::find($periodId);
         $label = $period ? $period->name : 'Resume';
         $html = $this->renderResumePrintHtml($result, $label);
+        return response($html);
+    }
+
+    // ─── Rekab (Rekapitulasi per Karyawan per Bulan) ──────────────
+
+    public function rekab(Request $request)
+    {
+        $result = $this->buildBulananData($request);
+
+        $employees = $result['data']->map(function ($item) {
+            $counts = ['DUA' => 0, 'FULL' => 0, 'HALF' => 0, 'L' => 0];
+            $nominals = [
+                'uang_makan'     => 0,
+                'lembur_sabtu'   => 0,
+                'lembur_minggu'  => 0,
+                'insentif'       => 0,
+                'pblt'           => 0,
+                'revisi'         => 0,
+            ];
+
+            $days = $item['days'] ?? [];
+
+            foreach ($days as $dateStr => $day) {
+                $lemburVal = $day['lembur'] ?? '';
+                $lmVal     = $day['lm'] ?? '';
+                $nominal   = (float)($day['nominal'] ?? 0);
+
+                if ($lemburVal === 'DUA') {
+                    $counts['DUA']++;
+                    $nominals['lembur_sabtu'] += $nominal;
+                } elseif ($lemburVal === 'FULL') {
+                    $counts['FULL']++;
+                    $nominals['lembur_sabtu'] += $nominal;
+                } elseif ($lemburVal === 'UM') {
+                    $nominals['uang_makan'] += $nominal;
+                }
+
+                if ($lmVal === 'HALF') {
+                    $counts['HALF']++;
+                    $nominals['lembur_minggu'] += $nominal;
+                } elseif ($lmVal === 'FULL') {
+                    $counts['L']++;
+                    $nominals['lembur_minggu'] += $nominal;
+                }
+            }
+
+            $total = $nominals['uang_makan'] + $nominals['lembur_sabtu']
+                   + $nominals['lembur_minggu'] + $nominals['insentif']
+                   + $nominals['pblt'] + $nominals['revisi'];
+
+            $gender = $item['gender'] === 'male' ? 'L'
+                : ($item['gender'] === 'female' ? 'P' : ($item['gender'] ?? ''));
+
+            return [
+                'id'             => $item['id'],
+                'name'           => $item['name'],
+                'jabatan'        => $item['jabatan'],
+                'gender'         => $gender,
+                'group_name'     => $item['group_name'] ?? '-',
+                'counts'         => $counts,
+                'nominals'       => $nominals,
+                'total'          => round($total, 2),
+            ];
+        })->values();
+
+        // Sort by group name then by employee name
+        $employees = $employees->sortBy([
+            ['group_name', 'asc'],
+            ['name', 'asc'],
+        ])->values();
+
+        return response()->json([
+            'data'         => $employees,
+            'month_label'  => $result['month_label'] ?? '',
+            'dates'        => $result['dates'] ?? [],
+        ]);
+    }
+
+    public function exportRekab(Request $request)
+    {
+        $response = $this->rekab($request);
+        $payload  = json_decode($response->getContent(), true);
+        $label    = $payload['month_label'] ?? 'Rekab';
+
+        $filename = 'Rekab_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
+        return Excel::download(
+            new UangMakanRekabExport($payload['data'] ?? [], $label),
+            $filename
+        );
+    }
+
+    public function printRekab(Request $request)
+    {
+        $response = $this->rekab($request);
+        $payload  = json_decode($response->getContent(), true);
+        $label    = $payload['month_label'] ?? 'Rekab Uang Makan';
+        $data     = $payload['data'] ?? [];
+
+        $html = $this->renderRekabPrintHtml($data, $label);
+        return response($html);
+    }
+
+    // ─── Rekab Resume (per Bagian) ────────────────────────────────
+
+    public function rekabResume(Request $request)
+    {
+        $response = $this->rekab($request);
+        $payload  = json_decode($response->getContent(), true);
+        $employees = $payload['data'] ?? [];
+
+        $grouped = [];
+        foreach ($employees as $emp) {
+            $bagian = $emp['jabatan'] ?? '-';
+            if (!isset($grouped[$bagian])) {
+                $grouped[$bagian] = [
+                    'bagian'        => $bagian,
+                    'uang_makan'    => 0,
+                    'lembur_sabtu'  => 0,
+                    'lembur_minggu' => 0,
+                    'insentif'      => 0,
+                    'pblt'          => 0,
+                    'revisi'        => 0,
+                    'total'         => 0,
+                ];
+            }
+            $n = $emp['nominals'] ?? [];
+            $grouped[$bagian]['uang_makan']    += $n['uang_makan'] ?? 0;
+            $grouped[$bagian]['lembur_sabtu']  += $n['lembur_sabtu'] ?? 0;
+            $grouped[$bagian]['lembur_minggu'] += $n['lembur_minggu'] ?? 0;
+            $grouped[$bagian]['insentif']      += $n['insentif'] ?? 0;
+            $grouped[$bagian]['pblt']          += $n['pblt'] ?? 0;
+            $grouped[$bagian]['revisi']        += $n['revisi'] ?? 0;
+            $grouped[$bagian]['total']         += $emp['total'] ?? 0;
+        }
+
+        $result = array_values($grouped);
+        usort($result, fn($a, $b) => strcmp($a['bagian'], $b['bagian']));
+
+        foreach ($result as &$r) {
+            foreach (['uang_makan','lembur_sabtu','lembur_minggu','insentif','pblt','revisi','total'] as $k) {
+                $r[$k] = round($r[$k], 2);
+            }
+        }
+
+        return response()->json([
+            'data'         => $result,
+            'month_label'  => $payload['month_label'] ?? '',
+        ]);
+    }
+
+    public function exportRekabResume(Request $request)
+    {
+        $response = $this->rekabResume($request);
+        $payload  = json_decode($response->getContent(), true);
+        $label    = $payload['month_label'] ?? 'Resume';
+
+        $filename = 'Resume_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
+        return Excel::download(
+            new \App\Modules\Reports\Exports\UangMakanRekabResumeExport($payload['data'] ?? [], $label),
+            $filename
+        );
+    }
+
+    public function printRekabResume(Request $request)
+    {
+        $response = $this->rekabResume($request);
+        $payload  = json_decode($response->getContent(), true);
+        $label    = $payload['month_label'] ?? 'Resume Uang Makan';
+        $data     = $payload['data'] ?? [];
+
+        $html = $this->renderRekabResumePrintHtml($data, $label);
         return response($html);
     }
 
@@ -802,6 +974,208 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 ' . $subHeaders . '
 </tr>
 </thead><tbody>' . $rows . '</tbody></table>
+</div>
+<div style="text-align:center;margin-top:8px"><button onclick="window.print()" style="padding:6px 16px;font-size:12px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨 Print</button></div>
+</body></html>';
+    }
+
+    private function renderRekabPrintHtml($data, $label)
+    {
+        $rows = '';
+        $i = 0;
+        $totalDua = $totalFull = $totalHalf = $totalL = 0;
+        $totalUm = $totalLbrSabtu = $totalLbrMinggu = 0;
+        $totalInsentif = $totalPblt = $totalRevisi = 0;
+        $grandTotal = 0;
+
+        foreach ($data as $item) {
+            $i++;
+            $c = $item['counts'] ?? [];
+            $n = $item['nominals'] ?? [];
+            $t = $item['total'] ?? 0;
+
+            $totalDua   += $c['DUA'] ?? 0;
+            $totalFull  += $c['FULL'] ?? 0;
+            $totalHalf  += $c['HALF'] ?? 0;
+            $totalL     += $c['L'] ?? 0;
+            $totalUm    += $n['uang_makan'] ?? 0;
+            $totalLbrSabtu  += $n['lembur_sabtu'] ?? 0;
+            $totalLbrMinggu += $n['lembur_minggu'] ?? 0;
+            $totalInsentif   += $n['insentif'] ?? 0;
+            $totalPblt       += $n['pblt'] ?? 0;
+            $totalRevisi     += $n['revisi'] ?? 0;
+            $grandTotal      += $t;
+
+            $dua   = ($c['DUA'] ?? 0) ?: '-';
+            $full  = ($c['FULL'] ?? 0) ?: '-';
+            $half  = ($c['HALF'] ?? 0) ?: '-';
+            $l     = ($c['L'] ?? 0) ?: '-';
+            $um    = ($n['uang_makan'] ?? 0) ? number_format($n['uang_makan'], 0, ',', '.') : '-';
+            $ls    = ($n['lembur_sabtu'] ?? 0) ? number_format($n['lembur_sabtu'], 0, ',', '.') : '-';
+            $lm    = ($n['lembur_minggu'] ?? 0) ? number_format($n['lembur_minggu'], 0, ',', '.') : '-';
+            $ins   = ($n['insentif'] ?? 0) ? number_format($n['insentif'], 0, ',', '.') : '-';
+            $pblt  = ($n['pblt'] ?? 0) ? number_format($n['pblt'], 0, ',', '.') : '-';
+            $rev   = ($n['revisi'] ?? 0) ? number_format($n['revisi'], 0, ',', '.') : '-';
+            $tot   = $t ? number_format($t, 0, ',', '.') : '-';
+
+            $rows .= "<tr>
+                <td>{$i}</td>
+                <td>{$item['name']}</td>
+                <td class='text-center'>" . ($item['group_name'] ?? '-') . "</td>
+                <td>" . ($item['jabatan'] ?? '-') . "</td>
+                <td class='text-center'>{$dua}</td>
+                <td class='text-center'>{$full}</td>
+                <td class='text-center'>{$half}</td>
+                <td class='text-center'>{$l}</td>
+                <td class='text-right'>{$um}</td>
+                <td class='text-right'>{$ls}</td>
+                <td class='text-right'>{$lm}</td>
+                <td class='text-right'>{$ins}</td>
+                <td class='text-right'>{$pblt}</td>
+                <td class='text-right'>{$rev}</td>
+                <td class='text-right'><strong>{$tot}</strong></td>
+            </tr>";
+        }
+
+        $gtFmt = $grandTotal ? number_format($grandTotal, 0, ',', '.') : '-';
+
+        $totalRow = "<tr style='background:#f3f4f6;font-weight:bold;border-top:2px solid #6366f1'>
+            <td colspan='4' class='text-right'>TOTAL</td>
+            <td class='text-center'>{$totalDua}</td>
+            <td class='text-center'>{$totalFull}</td>
+            <td class='text-center'>{$totalHalf}</td>
+            <td class='text-center'>{$totalL}</td>
+            <td class='text-right'>" . number_format($totalUm, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalLbrSabtu, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalLbrMinggu, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalInsentif, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalPblt, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalRevisi, 0, ',', '.') . "</td>
+            <td class='text-right' style='font-size:14px;color:#4f46e5'><strong>{$gtFmt}</strong></td>
+        </tr>";
+
+        return '<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><title>Rekab Uang Makan</title>
+<style>
+@page{size:A4 landscape;margin:8mm}
+body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:9px;color:#1f2937}
+h1{font-size:14px;text-align:center;margin-bottom:2px}
+table{width:100%;border-collapse:collapse}
+th{background:#e8eaed;font-weight:600;padding:4px 6px;border:1px solid #d1d5db;font-size:8px;text-align:center}
+td{padding:3px 6px;border:1px solid #e5e7eb}
+tr:nth-child(even){background:#f9fafb}
+.text-right{text-align:right}.text-center{text-align:center}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<h1>REKAB UANG MAKAN — ' . strtoupper($label) . '</h1>
+<div style="overflow-x:auto">
+<table>
+<thead>
+<tr>
+<th rowspan="2">No</th><th rowspan="2">Nama</th><th rowspan="2">Group</th><th rowspan="2">Jabatan</th>
+<th colspan="4" style="background:#fef3c7">LEMBUR SABTU</th>
+<th rowspan="2" style="background:#dcfce7">Uang Makan</th>
+<th rowspan="2" style="background:#dbeafe">Lembur<br>Sabtu</th>
+<th rowspan="2" style="background:#fee2e2">Lembur<br>Minggu</th>
+<th rowspan="2">Insentif</th><th rowspan="2">PBLT</th><th rowspan="2">Revisi</th>
+<th rowspan="2" style="background:#e0e7ff">TOTAL</th>
+</tr>
+<tr>
+<th style="background:#fef3c7">DUA</th><th style="background:#fef3c7">FULL</th>
+<th style="background:#fef3c7">1/2 HK</th><th style="background:#fef3c7">L</th>
+</tr>
+</thead>
+<tbody>' . $rows . $totalRow . '</tbody>
+</table>
+</div>
+<div style="text-align:center;margin-top:8px"><button onclick="window.print()" style="padding:6px 16px;font-size:12px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨 Print</button></div>
+</body></html>';
+    }
+
+    private function renderRekabResumePrintHtml($data, $label)
+    {
+        $rows = '';
+        $i = 0;
+        $totalUm = $totalSabtu = $totalMinggu = $totalInsentif = $totalPblt = $totalRevisi = $grandTotal = 0;
+
+        foreach ($data as $item) {
+            $i++;
+            $um    = $item['uang_makan'] ?? 0;
+            $sabtu = $item['lembur_sabtu'] ?? 0;
+            $minggu = $item['lembur_minggu'] ?? 0;
+            $ins   = $item['insentif'] ?? 0;
+            $pblt  = $item['pblt'] ?? 0;
+            $rev   = $item['revisi'] ?? 0;
+            $tot   = $item['total'] ?? 0;
+
+            $totalUm    += $um;
+            $totalSabtu += $sabtu;
+            $totalMinggu += $minggu;
+            $totalInsentif += $ins;
+            $totalPblt   += $pblt;
+            $totalRevisi += $rev;
+            $grandTotal  += $tot;
+
+            $umF    = $um ? number_format($um, 0, ',', '.') : '-';
+            $sabtuF = $sabtu ? number_format($sabtu, 0, ',', '.') : '-';
+            $mingguF = $minggu ? number_format($minggu, 0, ',', '.') : '-';
+            $insF   = $ins ? number_format($ins, 0, ',', '.') : '-';
+            $pbltF  = $pblt ? number_format($pblt, 0, ',', '.') : '-';
+            $revF   = $rev ? number_format($rev, 0, ',', '.') : '-';
+            $totF   = $tot ? number_format($tot, 0, ',', '.') : '-';
+
+            $rows .= "<tr>
+                <td>{$i}</td>
+                <td>{$item['bagian']}</td>
+                <td class='text-right'>{$umF}</td>
+                <td class='text-right'>{$sabtuF}</td>
+                <td class='text-right'>{$mingguF}</td>
+                <td class='text-right'>{$insF}</td>
+                <td class='text-right'>{$pbltF}</td>
+                <td class='text-right'>{$revF}</td>
+                <td class='text-right'><strong>{$totF}</strong></td>
+            </tr>";
+        }
+
+        $gtFmt = $grandTotal ? number_format($grandTotal, 0, ',', '.') : '-';
+
+        $totalRow = "<tr style='background:#f3f4f6;font-weight:bold;border-top:2px solid #6366f1'>
+            <td colspan='2' class='text-right' style='padding-right:12px'>TOTAL</td>
+            <td class='text-right'>" . number_format($totalUm, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalSabtu, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalMinggu, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalInsentif, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalPblt, 0, ',', '.') . "</td>
+            <td class='text-right'>" . number_format($totalRevisi, 0, ',', '.') . "</td>
+            <td class='text-right' style='font-size:14px;color:#4f46e5'><strong>{$gtFmt}</strong></td>
+        </tr>";
+
+        return '<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><title>Resume Uang Makan</title>
+<style>
+@page{size:A4 landscape;margin:8mm}
+body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:10px;color:#1f2937}
+h1{font-size:14px;text-align:center;margin-bottom:4px}
+table{width:100%;border-collapse:collapse}
+th{background:#e8eaed;font-weight:600;padding:5px 8px;border:1px solid #d1d5db;font-size:9px;text-align:center}
+td{padding:4px 8px;border:1px solid #e5e7eb}
+tr:nth-child(even){background:#f9fafb}
+.text-right{text-align:right}.text-center{text-align:center}
+@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style></head><body>
+<h1>RESUME UANG MAKAN &amp; LEMBUR — ' . strtoupper($label) . '</h1>
+<div style="overflow-x:auto">
+<table><thead>
+<tr>
+<th>No</th><th>BAGIAN</th>
+<th style="background:#dcfce7">UANG MAKAN</th>
+<th style="background:#dbeafe">LEMBUR<br>SABTU</th>
+<th style="background:#fee2e2">LEMBUR<br>MINGGU</th>
+<th>INSENTIF</th><th>PBLT</th><th>REVISI</th>
+<th style="background:#e0e7ff">TOTAL</th>
+</tr>
+</thead><tbody>' . $rows . $totalRow . '</tbody>
+</table>
 </div>
 <div style="text-align:center;margin-top:8px"><button onclick="window.print()" style="padding:6px 16px;font-size:12px;cursor:pointer;background:#4f46e5;color:white;border:none;border-radius:6px">🖨 Print</button></div>
 </body></html>';

@@ -39,6 +39,12 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
         Route::get('/resume', [UangMakanReportController::class, 'resume']);
         Route::get('/resume/export', [UangMakanReportController::class, 'exportResume']);
         Route::get('/resume/print', [UangMakanReportController::class, 'printResume']);
+        Route::get('/rekab', [UangMakanReportController::class, 'rekab']);
+        Route::get('/rekab/export', [UangMakanReportController::class, 'exportRekab']);
+        Route::get('/rekab/print', [UangMakanReportController::class, 'printRekab']);
+        Route::get('/rekab-resume', [UangMakanReportController::class, 'rekabResume']);
+        Route::get('/rekab-resume/export', [UangMakanReportController::class, 'exportRekabResume']);
+        Route::get('/rekab-resume/print', [UangMakanReportController::class, 'printRekabResume']);
     });
 
     // --- PPh 21 ---
