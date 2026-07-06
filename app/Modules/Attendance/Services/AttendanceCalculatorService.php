@@ -43,7 +43,7 @@ class AttendanceCalculatorService
         // ── Overtime ──────────────────────────────────────────
         $rawOvertime = $manualOvertime !== null
             ? $manualOvertime
-            : $this->calculateRawOvertime($prepare, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config, $shift, $settingConfig);
+            : $this->calculateRawOvertime($prepare, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config, $shift, $settingConfig, $workPatternId);
 
         // ── LM vs Regular Overtime ────────────────────────────
         $isOffDay = $isHoliday || $isSunday;
@@ -113,7 +113,8 @@ class AttendanceCalculatorService
         bool $isSaturday = false,
         ?OvertimeCalculatorConfig $config = null,
         ?Shift $shift = null,
-        array $settingConfig = []
+        array $settingConfig = [],
+        ?int $workPatternId = null,
     ): int {
         if (!$prepare->check_in || !$prepare->check_out) {
             return 0;
@@ -143,6 +144,8 @@ class AttendanceCalculatorService
             'FIXED' => ['weekday' => 540, 'saturday' => 360],
             'FLEX-SHIFT' => ['weekday' => 480, 'saturday' => 360],
             'SHIFT' => ['weekday' => 480, 'saturday' => 360],
+            'PL' => ['weekday' => 480, 'saturday' => 360],
+            'PL2' => ['weekday' => 540, 'saturday' => 360],
         ];
 
         if ($workPatternType === 'SHIFT') {
@@ -183,8 +186,20 @@ class AttendanceCalculatorService
         // Hari kerja biasa (FIXED & FLEX-SHIFT):
         // ═══════════════════════════════════════════════════════
         
+        // Lookup work pattern code untuk jam kerja spesifik (contoh: PL, PL2)
+        $workPatternCode = null;
+        if ($workPatternId) {
+            $workPatternCode = \App\Modules\Schedule\Models\WorkPattern::find($workPatternId)?->code;
+        }
+
         $patternKey = $workPatternType ?? 'FIXED';
-        $patternHours = $workHoursConfig[$patternKey] ?? $workHoursConfig['FIXED'];
+
+        // Prioritaskan lookup by work pattern code, baru fallback ke type
+        if ($workPatternCode && isset($workHoursConfig[$workPatternCode])) {
+            $patternHours = $workHoursConfig[$workPatternCode];
+        } else {
+            $patternHours = $workHoursConfig[$patternKey] ?? $workHoursConfig['FIXED'];
+        }
 
         $deduction = $isSaturday
             ? ($patternHours['saturday'] ?? ($config->saturday_work_minutes ?? 360))

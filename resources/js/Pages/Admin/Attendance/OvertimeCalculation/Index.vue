@@ -316,6 +316,16 @@
                 <input v-model="settingForm.hours_flex_sat" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
             </div>
+            <div class="flex gap-3 mt-2">
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - PL (8 Jam)</label>
+                <input v-model="settingForm.hours_flex_pl" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+              <div class="flex-1">
+                <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - PL2 (9 Jam)</label>
+                <input v-model="settingForm.hours_flex_pl2" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              </div>
+            </div>
           </div>
         </div>
 
@@ -406,6 +416,8 @@ const settingForm = ref({
   hours_fixed_sat: 360,
   hours_flex_wd: 480,
   hours_flex_sat: 360,
+  hours_flex_pl: 480,
+  hours_flex_pl2: 540,
   rounding_threshold: 10,
   rounding_interval: 30
 })
@@ -550,6 +562,8 @@ async function fetchConfig() {
     settingForm.value.hours_fixed_sat = conf.work_hours?.FIXED?.saturday ?? 360
     settingForm.value.hours_flex_wd = conf.work_hours?.['FLEX-SHIFT']?.weekday ?? 480
     settingForm.value.hours_flex_sat = conf.work_hours?.['FLEX-SHIFT']?.saturday ?? 360
+    settingForm.value.hours_flex_pl = conf.work_hours?.PL?.weekday ?? 480
+    settingForm.value.hours_flex_pl2 = conf.work_hours?.PL2?.weekday ?? 540
     
     settingForm.value.rounding_threshold = conf.rounding_threshold ?? 10
     settingForm.value.rounding_interval = conf.rounding_interval ?? 30
@@ -597,7 +611,15 @@ async function saveConfig() {
           saturday: Number(settingForm.value.hours_flex_sat)
         },
         'SHIFT': {
-          weekday: 480, // Default for SHIFT, can be exposed later if needed
+          weekday: 480,
+          saturday: 360
+        },
+        'PL': {
+          weekday: Number(settingForm.value.hours_flex_pl),
+          saturday: 360
+        },
+        'PL2': {
+          weekday: Number(settingForm.value.hours_flex_pl2),
           saturday: 360
         }
       }
