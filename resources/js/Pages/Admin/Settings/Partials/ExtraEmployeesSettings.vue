@@ -19,6 +19,8 @@ const form = reactive({
   id: null,
   nama: '',
   kode: '',
+  nik: '',
+  nik_tku: '',
   komponen_gaji: {
     gaji_pokok: 0,
     premi: 0,
@@ -35,6 +37,8 @@ const form = reactive({
 const tableHeaders = [
   { key: 'nama', label: 'Nama' },
   { key: 'kode', label: 'Kode' },
+  { key: 'nik', label: 'NIK' },
+  { key: 'nik_tku', label: 'NIK TKU' },
   { key: 'total_gaji', label: 'Total Gaji' },
   { key: 'total_terima', label: 'Total Terima' },
   { key: 'actions', label: 'Aksi', sortable: false, width: '100px' },
@@ -63,6 +67,8 @@ function editRecord(item) {
   form.id = item.id
   form.nama = item.nama
   form.kode = item.kode || ''
+  form.nik = item.nik || ''
+  form.nik_tku = item.nik_tku || ''
   if (item.komponen_gaji) {
     form.komponen_gaji = { ...form.komponen_gaji, ...item.komponen_gaji }
   }
@@ -73,6 +79,8 @@ function resetForm() {
   form.id = null
   form.nama = ''
   form.kode = ''
+  form.nik = ''
+  form.nik_tku = ''
   form.komponen_gaji = {
     gaji_pokok: 0,
     premi: 0,
@@ -95,6 +103,8 @@ async function saveRecord() {
   const payload = {
     nama: form.nama,
     kode: form.kode || null,
+    nik: form.nik || null,
+    nik_tku: form.nik_tku || null,
     komponen_gaji: form.komponen_gaji,
   }
 
@@ -146,6 +156,18 @@ async function deleteRecord(id) {
             v-model="form.kode"
             label="Kode (Opsional)"
             placeholder="Kode unik (boleh kosong)"
+          />
+
+          <TextInput
+            v-model="form.nik"
+            label="NIK"
+            placeholder="Nomor Induk Kependudukan"
+          />
+
+          <TextInput
+            v-model="form.nik_tku"
+            label="NIK TKU"
+            placeholder="NIK TKU"
           />
 
           <!-- Komponen Gaji -->
@@ -237,6 +259,18 @@ async function deleteRecord(id) {
         </template>
 
         <DataTable :headers="tableHeaders" :items="records" class="mt-4">
+          <template #item.nik="{ item }">
+            <span class="text-sm font-mono text-(--text-muted)">
+              {{ item.nik || '-' }}
+            </span>
+          </template>
+
+          <template #item.nik_tku="{ item }">
+            <span class="text-sm font-mono text-(--text-muted)">
+              {{ item.nik_tku || '-' }}
+            </span>
+          </template>
+
           <template #item.total_gaji="{ item }">
             <span class="text-sm font-medium text-(--text-main)">
               {{ formatRupiah(item.komponen_gaji?.total_gaji) }}

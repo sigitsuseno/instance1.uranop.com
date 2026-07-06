@@ -21,6 +21,8 @@ class ExtraEmployeeController extends Controller
         $validated = $request->validate([
             'nama'           => 'required|string|max:200',
             'kode'           => 'nullable|string|max:50|unique:extra_employees,kode',
+            'nik'            => 'nullable|string|max:30',
+            'nik_tku'        => 'nullable|string|max:50',
             'komponen_gaji'  => 'nullable|array',
         ]);
 
@@ -52,6 +54,8 @@ class ExtraEmployeeController extends Controller
         $validated = $request->validate([
             'nama'           => 'required|string|max:200',
             'kode'           => 'nullable|string|max:50|unique:extra_employees,kode,' . $record->id,
+            'nik'            => 'nullable|string|max:30',
+            'nik_tku'        => 'nullable|string|max:50',
             'komponen_gaji'  => 'nullable|array',
         ]);
 

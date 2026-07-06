@@ -9,6 +9,7 @@ use App\Modules\Employee\Models\EmployeeSalaryComponent;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
+use App\Models\ExtraEmployee;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -192,8 +193,31 @@ class RekapPphKompensasiController extends Controller
             ];
         });
 
+        // ─── Extra Employees (karyawan titipan) untuk Section A ───
+        $extraEmployees = ExtraEmployee::orderBy('nama')->get();
+
+        $extraPphData = $extraEmployees->map(function ($extra) {
+            $komponen = $extra->komponen_gaji ?? [];
+            $nik     = $extra->nik ?? '-';
+            $nikTku  = $extra->nik_tku ?? ($nik !== '-' ? $nik . '000000' : '-');
+
+            return [
+                'id'           => 'extra_' . $extra->id,
+                'name'         => $extra->nama,
+                'nik'          => $nik,
+                'nik_tku'      => $nikTku,
+                'gender'       => '-',
+                'status_label' => '-',
+                'total_gaji'   => (float) ($komponen['total_gaji'] ?? 0),
+                'bpjs_tk'      => (float) ($komponen['ttl_bpjs'] ?? 0),
+                'bpjs_ks'      => 0,
+                'pph'          => (float) ($komponen['ttl_pph'] ?? 0),
+                'source'       => 'extra',
+            ];
+        });
+
         return [
-            'pph'         => $pphData->values(),
+            'pph'         => $pphData->merge($extraPphData)->values(),
             'kompensasi'  => $kompensasiData->values(),
             'period_name' => $period->name,
             'date_start'  => $startDate,

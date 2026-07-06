@@ -117,10 +117,18 @@
                     v-for="(row, i) in pphData"
                     :key="row.id"
                     class="transition-colors"
-                    :class="i % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40'"
+                    :class="[
+                      i % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40',
+                      row.source === 'extra' ? 'bg-purple-50' : ''
+                    ]"
                   >
-                    <td class="px-2.5 py-2 text-center text-(--text-muted) border-r border-(--border-soft)">{{ i + 1 }}</td>
-                    <td class="px-3 py-2 font-medium text-(--text-main) border-r border-(--border-soft)">{{ row.name }}</td>
+                    <td class="px-2.5 py-2 text-center text-(--text-muted) border-r border-(--border-soft)">
+                      {{ i + 1 }}
+                      <span v-if="row.source === 'extra'" class="text-red-500 font-bold">*</span>
+                    </td>
+                    <td class="px-3 py-2 font-medium text-(--text-main) border-r border-(--border-soft)">
+                      {{ row.name }}
+                    </td>
                     <td class="px-3 py-2 text-(--text-main) border-r border-(--border-soft)">{{ row.name }}</td>
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik }}</td>
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik_tku }}</td>
@@ -358,7 +366,7 @@ function exportPph() {
   exportToCsv(pphData.value, [
     'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU', 'L/P', 'STATUS', 'TOTAL GAJI', 'BPJS TK (JKK,JKM)', 'BPJS KESEHATAN', 'PPH'
   ], (row, i) => [
-    i + 1, row.name, row.name, row.nik, row.nik_tku, row.gender, row.status_label, row.total_gaji, row.bpjs_tk, row.bpjs_ks, row.pph
+    i + 1, row.source === 'extra' ? `${row.name} (TT)` : row.name, row.name, row.nik, row.nik_tku, row.gender, row.status_label, row.total_gaji, row.bpjs_tk, row.bpjs_ks, row.pph
   ], `Rekap_PPH_${safe}.csv`)
   exporting.value = false
 }

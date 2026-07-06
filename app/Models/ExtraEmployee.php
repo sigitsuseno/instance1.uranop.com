@@ -13,6 +13,8 @@ class ExtraEmployee extends Model
         'uuid',
         'nama',
         'kode',
+        'nik',
+        'nik_tku',
         'komponen_gaji',
         'created_by',
         'updated_by',
