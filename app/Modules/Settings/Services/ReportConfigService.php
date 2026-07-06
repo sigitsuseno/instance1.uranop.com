@@ -129,8 +129,9 @@ class ReportConfigService
                     'minggu_half'  => 100000,
                     'minggu_full'  => 200000,
                 ],
-                'spc_start_period_id' => null,
-                'spc_base_salary'     => null,
+                'spc_start_period_id'        => null,
+                'spc_base_salary'            => null,
+                'jkt_no_overtime_employees'  => [],
             ],
             'attendance_overtime_setting' => [
                 'formulas' => [
