@@ -93,7 +93,7 @@
                 <th
                   v-for="dateStr in dates"
                   :key="'dh-' + section.key + '-' + dateStr"
-                  :colspan="section.key === 'jakarta' ? 5 : 6"
+                  :colspan="(section.key === 'jakarta' || section.key === 'spc_jakarta') ? 5 : 6"
                   class="px-2 py-2 text-center font-bold text-(--text-main) bg-blue-50/30 uppercase border-b border-(--border-soft) text-[9px]"
                 >
                   {{ formatDateHeader(dateStr) }}
@@ -118,11 +118,11 @@
                   </template>
                 </template>
                 <template v-else>
-                  <!-- PRINTING: Lembur columns -->
+                  <!-- PRINTING / SPC: Lembur columns -->
                   <template v-for="dateStr in dates" :key="'sh-' + section.key + '-' + dateStr">
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Kode</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">H/A</th>
-                    <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
+                    <th v-if="section.key !== 'spc_jakarta'" class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Upah/Hari</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">L/M</th>
                     <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Lbr</th>
                     <th class="px-1 py-2 text-center font-bold text-(--text-muted) uppercase text-[9px]">Nominal</th>
@@ -172,7 +172,7 @@
                   </template>
                 </template>
 
-                <!-- Daily cells — PRINTING (lembur) -->
+                <!-- Daily cells — PRINTING / SPC (lembur) -->
                 <template v-else>
                   <template v-for="dateStr in dates" :key="'dc-' + item.id + '-' + dateStr">
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.kode ? 'text-blue-600 font-medium' : 'text-gray-300']">
@@ -181,7 +181,7 @@
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.ha && item.days[dateStr]?.ha !== '-' ? 'font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.ha || '-' }}
                     </td>
-                    <td :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
+                    <td v-if="section.key !== 'spc_jakarta'" :class="['px-2 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.upah_per_hari > 0 ? 'text-emerald-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
                     </td>
                     <td :class="['px-1 py-3 text-right border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm > 0 ? 'text-purple-600 font-medium' : 'text-gray-300']">

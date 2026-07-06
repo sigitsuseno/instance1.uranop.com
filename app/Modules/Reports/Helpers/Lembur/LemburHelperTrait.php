@@ -144,7 +144,7 @@ trait LemburHelperTrait
                     $lemburStr = '2';
                 }
             } else {
-                if ($lemburTotal >= 3) {
+                if ($lemburTotal >= 2) {
                     $nominal = $umRates['weekday'] ?? 15000;
                     $lemburStr = 'UM';
                 }

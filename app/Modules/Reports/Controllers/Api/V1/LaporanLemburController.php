@@ -897,6 +897,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $allInEmployees    = collect();
         $printingEmployees = collect();
         $spcEmployees      = collect();
+        $spcJakartaEmployees  = collect();
+        $spcUngaranEmployees  = collect();
 
         foreach ($employees as $employee) {
             $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
@@ -948,6 +950,13 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 }
                 $item = $spcHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $spcEmployees->push($item);
+
+                // Split: SPC Jakarta (punya GRP-JKT) vs SPC Ungaran
+                if (JakartaHelper::matches($employee)) {
+                    $spcJakartaEmployees->push($item);
+                } else {
+                    $spcUngaranEmployees->push($item);
+                }
             } elseif (JakartaHelper::matches($employee)) {
                 $item = $jakartaHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $jakartaEmployees->push($item);
@@ -965,6 +974,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $allInEmployees    = $allInEmployees->sortBy('name')->values();
         $printingEmployees = $printingEmployees->sortBy('name')->values();
         $spcEmployees      = $spcEmployees->sortBy('name')->values();
+        $spcJakartaEmployees = $spcJakartaEmployees->sortBy('name')->values();
+        $spcUngaranEmployees = $spcUngaranEmployees->sortBy('name')->values();
 
         // ── Period complete check: tanggal 22/23/24 ada data? ─────
         $endMonth = (int) $endDate->format('m');
@@ -1000,6 +1011,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $allInEmployees    = $allInEmployees->map($recalcFormula);
             $printingEmployees = $printingEmployees->map($recalcFormula);
             $spcEmployees      = $spcEmployees->map($recalcFormula);
+            $spcJakartaEmployees = $spcJakartaEmployees->map($recalcFormula);
+            $spcUngaranEmployees = $spcUngaranEmployees->map($recalcFormula);
         }
 
         // ── Assemble sections ──────────────────────────────────────
@@ -1027,20 +1040,27 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             ],
         ];
 
-        // Section D: conditional (berdasarkan spc_start_period_id)
+        // Section D & E: SPC Jakarta & Ungaran (conditional)
         if (SpcHelper::shouldShow($period?->id)) {
             $sections[] = [
-                'label'  => SpcHelper::getLabel(),
-                'key'    => SpcHelper::getKey(),
-                'type'   => SpcHelper::getType(),
-                'data'   => $spcEmployees,
-                'totals' => LemburHelperTrait::calculateSectionTotals($spcEmployees),
+                'label'  => 'D. KARYAWAN SPESIFIK JAKARTA',
+                'key'    => 'spc_jakarta',
+                'type'   => 'lembur',
+                'data'   => $spcJakartaEmployees,
+                'totals' => LemburHelperTrait::calculateSectionTotals($spcJakartaEmployees),
+            ];
+            $sections[] = [
+                'label'  => 'E. KARYAWAN SPESIFIK UNGARAN',
+                'key'    => 'spc_ungaran',
+                'type'   => 'lembur',
+                'data'   => $spcUngaranEmployees,
+                'totals' => LemburHelperTrait::calculateSectionTotals($spcUngaranEmployees),
             ];
         }
 
         $allData = $jakartaEmployees->concat($allInEmployees)->concat($printingEmployees);
         if (SpcHelper::shouldShow($period?->id)) {
-            $allData = $allData->concat($spcEmployees);
+            $allData = $allData->concat($spcJakartaEmployees)->concat($spcUngaranEmployees);
         }
         $grandTotals = LemburHelperTrait::calculateSectionTotals($allData);
 
@@ -1082,7 +1102,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $period = PayPeriod::find($periodId);
         }
         if (SpcHelper::shouldShow($period?->id)) {
-            $sectionMeta['spc'] = ['label' => SpcHelper::getLabel(), 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
+            $sectionMeta['spc_jakarta'] = ['label' => 'D. KARYAWAN SPESIFIK JAKARTA', 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
+            $sectionMeta['spc_ungaran'] = ['label' => 'E. KARYAWAN SPESIFIK UNGARAN', 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
         }
         // ── Period complete check for resume ──────────────────────
         $lastDate  = Carbon::parse(end($dates));
