@@ -5,10 +5,12 @@ import EmployeeSettings from './Partials/EmployeeSettings.vue'
 import AttendanceSettings from './Partials/AttendanceSettings.vue'
 import PayrollSettings from './Partials/PayrollSettings.vue'
 import WorkPatternSettings from './Partials/WorkPatternSettings.vue'
+import ExtraEmployeesSettings from './Partials/ExtraEmployeesSettings.vue'
 
 const tabs = [
   { id: 'general', name: 'Umum', icon: 'bx-cog', component: GeneralSettings },
   { id: 'employee', name: 'Karyawan', icon: 'bx-group', component: EmployeeSettings },
+  { id: 'extra_emp', name: 'EXTRA EMP', icon: 'bx-user-plus', component: ExtraEmployeesSettings },
   { id: 'work_pattern', name: 'Pola Kerja', icon: 'bx-calendar-star', component: WorkPatternSettings },
   { id: 'attendance', name: 'Absensi & Lembur', icon: 'bx-time', component: AttendanceSettings },
   { id: 'payroll', name: 'Penggajian & Pajak', icon: 'bx-money', component: PayrollSettings },

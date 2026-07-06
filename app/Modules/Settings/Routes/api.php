@@ -7,8 +7,11 @@ use App\Modules\Settings\Controllers\Api\V1\EmployeeDataApiController;
 use App\Modules\Settings\Controllers\Api\V1\PayrollConfigApiController;
 use App\Modules\Settings\Controllers\Api\V1\BpjsConfigController;
 use App\Modules\Settings\Controllers\Api\V1\ReportConfigApiController;
+use App\Modules\Settings\Controllers\Api\V1\ExtraEmployeeController;
 
 Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
+    // Extra Employees (Karyawan Titipan)
+    Route::apiResource('extra-employees', ExtraEmployeeController::class);
     Route::get('/general', [SettingsApiController::class, 'getSystemSettings']);
     Route::post('/general', [SettingsApiController::class, 'updateSystemSettings']);
     
