@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeBpjs;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Reports\Exports\RekapGajiExport;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
 
 class RekapGajiController extends Controller
 {
@@ -20,6 +22,72 @@ class RekapGajiController extends Controller
      * di bulan/periode terpilih, difilter berdasarkan group "Imported Shift/Group".
      */
     public function index(Request $request)
+    {
+        $result = $this->buildRekapGajiData($request);
+        if ($result instanceof \Illuminate\Http\JsonResponse) {
+            return $result; // error response
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * GET /api/v1/reports/rekap-gaji/export
+     *
+     * Export Excel — data sama dengan index + uang makan.
+     */
+    public function export(Request $request)
+    {
+        $result = $this->buildRekapGajiData($request);
+        if ($result instanceof \Illuminate\Http\JsonResponse) {
+            return $result; // error response
+        }
+
+        // Merge uang makan dari rekab endpoint
+        $result = $this->mergeUangMakan($result, $request);
+
+        $rows    = $result['data'] instanceof \Illuminate\Support\Collection
+            ? $result['data']->toArray()
+            : (array) $result['data'];
+        $periodName = $result['period_name'] ?? 'Rekap_Gaji';
+        $dateStart  = $result['date_start'] ?? '';
+
+        $safePeriod = preg_replace('/[^a-zA-Z0-9\s]/', '', $periodName);
+        $safePeriod = str_replace(' ', '_', trim($safePeriod));
+        $filename   = "Rekap_Gaji_{$safePeriod}.xlsx";
+
+        return Excel::download(
+            new RekapGajiExport($rows, $periodName, $dateStart),
+            $filename
+        );
+    }
+
+    /**
+     * GET /api/v1/reports/rekap-gaji/groups
+     *
+     * Ambil daftar group dengan group_label = 'Imported Shift/Group'
+     * untuk ditampilkan di checkboxes setting.
+     */
+    public function groups()
+    {
+        $groups = EmployeeGroupMaster::where('group_label', 'Imported Shift/Group')
+            ->where('is_active', true)
+            ->orderBy('code')
+            ->get()
+            ->map(fn($g) => [
+                'code' => $g->code,
+                'name' => $g->name,
+            ]);
+
+        return response()->json(['data' => $groups]);
+    }
+
+    // ─── Private helpers ──────────────────────────────────────────
+
+    /**
+     * Build rekap gaji data — shared between index() and export().
+     */
+    private function buildRekapGajiData(Request $request)
     {
         $periodId = $request->input('period_id');
         $groupCodes = $request->input('groups', '');
@@ -42,7 +110,7 @@ class RekapGajiController extends Controller
             $selectedGroups = array_filter(array_map('trim', explode(',', $groupCodes)));
         }
 
-        // 1️⃣ Dapatkan employee_id yang punya roster di range tanggal
+        // Dapatkan employee_id yang punya roster di range tanggal
         $rosteredEmployeeIds = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
             ->distinct('employee_id')
             ->pluck('employee_id');
@@ -51,12 +119,11 @@ class RekapGajiController extends Controller
             return response()->json(['data' => [], 'message' => 'No roster data for this period']);
         }
 
-        // 2️⃣ Query employees
+        // Query employees
         $query = Employee::whereIn('id', $rosteredEmployeeIds)
             ->where('is_active', true)
             ->with(['position', 'groups', 'groups.master']);
 
-        // Filter by selected groups (via employee_groups.reference_code)
         if (!empty($selectedGroups)) {
             $query->whereHas('groups', function ($q) use ($selectedGroups) {
                 $q->whereIn('reference_code', $selectedGroups);
@@ -65,7 +132,6 @@ class RekapGajiController extends Controller
 
         $employees = $query->orderBy('name')->get();
 
-        // 3️⃣ Ambil data gaji aktif per periode
         $periodMonth = $period->start_date->format('Y-m');
 
         // Preload BPJS untuk periode ini
@@ -74,12 +140,11 @@ class RekapGajiController extends Controller
             ->get()
             ->keyBy('employee_id');
 
-        // 4️⃣ Build response
+        // Build response
         $data = $employees->map(function ($emp) use ($periodMonth, $bpjsData) {
             $salary = $emp->activeSalary($periodMonth);
             $bpjs   = $bpjsData->get($emp->id);
 
-            // Determine groups untuk section mapping
             $groupCodes = $emp->groups->pluck('reference_code')->toArray();
 
             // Status label
@@ -102,12 +167,9 @@ class RekapGajiController extends Controller
                 $bpjsKs = (float)($bpjs->employee_kesehatan ?? 0);
             }
 
-            // Gaji dari activeSalary
             $baseSalary = $salary ? (float)$salary->base_salary : (float)($emp->base_salary ?? 0);
             $premi      = $salary ? (float)$salary->premi : (float)($emp->premi ?? 0);
             $tunjangan  = $salary ? (float)$salary->tunjangan : (float)($emp->tunjangan ?? 0);
-
-            // Total gaji = gaji pokok + tunjangan + premi
             $totalGaji = $baseSalary + $tunjangan + $premi;
 
             return [
@@ -120,38 +182,73 @@ class RekapGajiController extends Controller
                 'total_gaji'   => $totalGaji,
                 'bpjs_tk'      => $bpjsTk,
                 'bpjs_ks'      => $bpjsKs,
-                'uang_makan'   => 0, // diisi dari endpoint terpisah (opsi 1)
+                'uang_makan'   => 0,
                 'groups'       => $groupCodes,
                 'department'   => $emp->department?->name ?? '-',
                 'position'     => $emp->position?->name ?? '-',
             ];
         });
 
-        return response()->json([
+        return [
             'data'        => $data->values(),
             'period_name' => $period->name,
             'date_start'  => $startDate,
             'date_end'    => $endDate,
-        ]);
+        ];
     }
 
     /**
-     * GET /api/v1/reports/rekap-gaji/groups
-     *
-     * Ambil daftar group dengan group_label = 'Imported Shift/Group'
-     * untuk ditampilkan di checkboxes setting.
+     * Merge uang_makan data from rekab endpoint into rekap gaji rows.
      */
-    public function groups()
+    private function mergeUangMakan(array $result, Request $request): array
     {
-        $groups = EmployeeGroupMaster::where('group_label', 'Imported Shift/Group')
-            ->where('is_active', true)
-            ->orderBy('code')
-            ->get()
-            ->map(fn($g) => [
-                'code' => $g->code,
-                'name' => $g->name,
-            ]);
+        try {
+            $periodId  = $request->input('period_id');
+            $period    = PayPeriod::find($periodId);
+            $startDate = $period ? $period->start_date : null;
 
-        return response()->json(['data' => $groups]);
+            if (!$startDate) {
+                return $result;
+            }
+
+            $month = $startDate->format('m');
+            $year  = $startDate->format('Y');
+
+            // Call UangMakanReportController's rekab internally
+            $uangMakanCtrl = app(UangMakanReportController::class);
+            $rekabRequest  = Request::create(
+                "/api/v1/reports/uang-makan/rekab?month={$month}&year={$year}",
+                'GET'
+            );
+            $rekabResponse = $uangMakanCtrl->rekab($rekabRequest);
+            $rekabData     = json_decode($rekabResponse->getContent(), true);
+            $umItems       = $rekabData['data'] ?? [];
+
+            // Build map: employee_id => total uang_makan
+            $umMap = [];
+            foreach ($umItems as $item) {
+                $nominals = $item['nominals'] ?? [];
+                $total = (float)($nominals['uang_makan'] ?? 0)
+                       + (float)($nominals['lembur_sabtu'] ?? 0)
+                       + (float)($nominals['lembur_minggu'] ?? 0);
+                $umMap[$item['id']] = $total;
+            }
+
+            // Merge into data
+            $data = $result['data'];
+            if ($data instanceof \Illuminate\Support\Collection) {
+                $data = $data->map(function ($row) use ($umMap) {
+                    if (isset($umMap[$row['id']])) {
+                        $row['uang_makan'] = $umMap[$row['id']];
+                    }
+                    return $row;
+                });
+                $result['data'] = $data;
+            }
+        } catch (\Throwable $e) {
+            // Uang makan not critical — skip silently
+        }
+
+        return $result;
     }
 }

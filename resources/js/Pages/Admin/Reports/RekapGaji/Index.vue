@@ -318,103 +318,42 @@ async function exportExcel() {
 
   exporting.value = true
   try {
-    const XLSX = await import('xlsx')
+    const groupParam = selectedGroups.value.length > 0
+      ? `&groups=${selectedGroups.value.join(',')}`
+      : ''
 
-    const wb = XLSX.utils.book_new()
-    const rows = []
+    const token = localStorage.getItem('token')
+    const url = `/api/v1/reports/rekap-gaji/export?period_id=${payPeriodId.value}${groupParam}`
 
-    // ─── Title ───
-    rows.push(['REKAPAN GAJI PT KEMILAU UNGARAN SUKSES'])
-    rows.push(['KARANGJATI-PRODUKSI'])
-    rows.push([`TAHUN ${new Date(selectedPeriod.value?.date_start).getFullYear() || ''}`])
-    rows.push([])
-
-    // ─── Column Headers Row 1 ───
-    rows.push([
-      'No', 'NAMA', 'ACCOUNT NO', 'STATUS', 'L/P',
-      periodLabel.value, '', '', '', '',
-    ])
-
-    // ─── Column Headers Row 2 ───
-    rows.push([
-      '', '', '', '', '',
-      `GAJI ${subPeriodLabel.value}`, 'TOTAL GAJI', 'BPJS TK (JHT,JKK,JKM)', 'BPJS KESEHATAN', 'UM',
-    ])
-
-    // ─── Data Rows ───
-    allRecords.value.forEach((row, i) => {
-      rows.push([
-        i + 1,
-        row.name,
-        row.account_no || '-',
-        row.status_label || '-',
-        row.gender || '-',
-        row.gaji || 0,
-        row.total_gaji || 0,
-        row.bpjs_tk || 0,
-        row.bpjs_ks || 0,
-        row.uang_makan || 0,
-      ])
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      },
     })
 
-    // ─── Total Row ───
-    rows.push([])
-    rows.push([
-      'TOTAL', '', '', '', '',
-      totals.value.gaji,
-      totals.value.total_gaji,
-      totals.value.bpjs_tk,
-      totals.value.bpjs_ks,
-      totals.value.uang_makan,
-    ])
-
-    // ─── Build Sheet ───
-    const ws = XLSX.utils.aoa_to_sheet(rows)
-
-    // Column widths
-    ws['!cols'] = [
-      { wch: 5 },  // No
-      { wch: 25 }, // NAMA
-      { wch: 15 }, // ACCOUNT NO
-      { wch: 8 },  // STATUS
-      { wch: 5 },  // L/P
-      { wch: 16 }, // GAJI
-      { wch: 16 }, // TOTAL GAJI
-      { wch: 22 }, // BPJS TK
-      { wch: 16 }, // BPJS KESEHATAN
-      { wch: 14 }, // UM
-    ]
-
-    // ─── Apply Borders ───
-    const range = XLSX.utils.decode_range(ws['!ref'])
-    const BORDER_STYLE = {
-      top: { style: 'thin' },
-      bottom: { style: 'thin' },
-      left: { style: 'thin' },
-      right: { style: 'thin' },
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Export gagal')
     }
 
-    for (let R = range.s.r; R <= range.e.r; R++) {
-      for (let C = range.s.c; C <= range.e.c; C++) {
-        const addr = XLSX.utils.encode_cell({ r: R, c: C })
-        if (!ws[addr]) continue
-        ws[addr].s = ws[addr].s || {}
-        ws[addr].s.border = BORDER_STYLE
-      }
+    const blob = await response.blob()
+
+    // Ambil filename dari Content-Disposition
+    let filename = 'Rekap_Gaji.xlsx'
+    const disposition = response.headers.get('Content-Disposition')
+    if (disposition) {
+      const match = disposition.match(/filename\*?=(?:UTF-8'')?([^;]+)/)
+      if (match) filename = decodeURIComponent(match[1].replace(/"/g, ''))
     }
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Rekap Gaji')
-
-    const buf = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
-    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-    const blobUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = `Rekap_Gaji_${selectedPeriod.value?.name || 'export'}.xlsx`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(blobUrl)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(a.href)
   } catch (e) {
     console.error('Gagal export:', e)
     alert('Gagal export Excel: ' + (e.message || 'Unknown error'))
