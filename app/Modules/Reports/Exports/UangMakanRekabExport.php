@@ -20,7 +20,7 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
     protected $label;
     protected $rowNumber = 0;
 
-    // Fixed 14 columns: No, Nama, Group, Jabatan, DUA, FULL, HALF, L, UM, Lbr Sabtu, Lbr Minggu, Insentif, PBLT, Revisi, TOTAL
+    // Fixed 14 columns: No, Nama, Group, Jabatan, 2, FULL, HALF, L, UM, Lbr Sabtu, Lbr Minggu, Insentif, PBLT, Revisi, TOTAL
     protected const COL_COUNT = 15;
     protected const LAST_COL = 'O';
 
@@ -46,7 +46,7 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
             $row['name'] ?? '',
             $row['group_name'] ?? '-',
             $row['jabatan'] ?? '-',
-            $c['DUA'] ?? 0,
+            $c['2'] ?? 0,
             $c['FULL'] ?? 0,
             $c['HALF'] ?? 0,
             $c['L'] ?? 0,
@@ -74,7 +74,7 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
 
         $row4 = [
             '', '', '', '',
-            'DUA', 'FULL', '1/2 HK', 'L',
+            '2', 'FULL', '1/2 HK', 'L',
             '', '', '', '', '', '', '',
         ];
 
@@ -88,7 +88,7 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
             'B' => 30,  // Nama
             'C' => 14,  // Group
             'D' => 22,  // Jabatan
-            'E' => 8,   // DUA
+            'E' => 8,   // 2
             'F' => 8,   // FULL
             'G' => 8,   // 1/2 HK
             'H' => 8,   // L

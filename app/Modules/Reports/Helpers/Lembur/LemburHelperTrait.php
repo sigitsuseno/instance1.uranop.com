@@ -141,7 +141,7 @@ trait LemburHelperTrait
                     $lemburStr = 'FULL';
                 } elseif ($lemburTotal >= 2) {
                     $nominal = $umRates['sabtu_dua'] ?? 0;
-                    $lemburStr = 'DUA';
+                    $lemburStr = '2';
                 }
             } else {
                 if ($lemburTotal >= 3) {

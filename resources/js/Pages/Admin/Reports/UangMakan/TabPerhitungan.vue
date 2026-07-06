@@ -41,7 +41,7 @@ const formatRupiah = (value) => {
                         <th rowspan="2" class="px-4 py-3 text-center align-middle font-semibold">TOTAL</th>
                     </tr>
                     <tr>
-                        <th class="px-3 py-2 border-r border-(--border-soft) text-center font-semibold bg-gray-50 dark:bg-gray-800">DUA</th>
+                        <th class="px-3 py-2 border-r border-(--border-soft) text-center font-semibold bg-gray-50 dark:bg-gray-800">2</th>
                         <th class="px-3 py-2 border-r border-(--border-soft) text-center font-semibold bg-gray-50 dark:bg-gray-800">FULL</th>
                         <th class="px-3 py-2 border-r border-(--border-soft) text-center font-semibold bg-gray-50 dark:bg-gray-800">1/2 HK</th>
                         <th class="px-3 py-2 border-r border-(--border-soft) text-center font-semibold bg-gray-50 dark:bg-gray-800">L</th>

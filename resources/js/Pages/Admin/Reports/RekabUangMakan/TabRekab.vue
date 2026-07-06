@@ -31,7 +31,7 @@
             <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-main) uppercase border-r border-(--border-soft) bg-(--primary)/10">TOTAL</th>
           </tr>
           <tr>
-            <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px] bg-amber-50/50">DUA</th>
+            <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px] bg-amber-50/50">2</th>
             <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px] bg-amber-50/50">FULL</th>
             <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px] bg-amber-50/50">1/2 HK</th>
             <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) text-[10px] bg-amber-50/50">L</th>
@@ -48,7 +48,7 @@
             <td class="px-4 py-3 font-bold text-(--text-main) border-r border-(--border-soft) sticky left-[40px] bg-(--bg-card) group-hover:bg-(--bg-elevated) z-10 truncate">{{ item.name }}</td>
             <td class="px-3 py-3 text-center font-medium text-(--text-main) border-r border-(--border-soft)">{{ item.group_name || '-' }}</td>
             <td class="px-4 py-3 text-(--text-main) border-r border-(--border-soft)">{{ item.jabatan || '-' }}</td>
-            <td class="px-2 py-3 text-center font-mono font-medium border-r border-(--border-soft)" :class="item.counts.DUA > 0 ? 'text-amber-700' : 'text-(--text-muted)'">{{ item.counts.DUA || '-' }}</td>
+            <td class="px-2 py-3 text-center font-mono font-medium border-r border-(--border-soft)" :class="item.counts['2'] > 0 ? 'text-amber-700' : 'text-(--text-muted)'">{{ item.counts['2'] || '-' }}</td>
             <td class="px-2 py-3 text-center font-mono font-medium border-r border-(--border-soft)" :class="item.counts.FULL > 0 ? 'text-amber-700' : 'text-(--text-muted)'">{{ item.counts.FULL || '-' }}</td>
             <td class="px-2 py-3 text-center font-mono font-medium border-r border-(--border-soft)" :class="item.counts.HALF > 0 ? 'text-purple-700' : 'text-(--text-muted)'">{{ item.counts.HALF || '-' }}</td>
             <td class="px-2 py-3 text-center font-mono font-medium border-r border-(--border-soft)" :class="item.counts.L > 0 ? 'text-purple-700' : 'text-(--text-muted)'">{{ item.counts.L || '-' }}</td>
@@ -64,7 +64,7 @@
           <!-- Grand Total Row -->
           <tr class="bg-(--bg-elevated) font-bold border-t-2 border-(--primary)/30">
             <td colspan="4" class="px-4 py-3 text-right text-(--text-main) border-r border-(--border-soft)">TOTAL</td>
-            <td class="px-2 py-3 text-center font-mono text-(--text-main) border-r border-(--border-soft)">{{ totalCounts.DUA }}</td>
+            <td class="px-2 py-3 text-center font-mono text-(--text-main) border-r border-(--border-soft)">{{ totalCounts['2'] }}</td>
             <td class="px-2 py-3 text-center font-mono text-(--text-main) border-r border-(--border-soft)">{{ totalCounts.FULL }}</td>
             <td class="px-2 py-3 text-center font-mono text-(--text-main) border-r border-(--border-soft)">{{ totalCounts.HALF }}</td>
             <td class="px-2 py-3 text-center font-mono text-(--text-main) border-r border-(--border-soft)">{{ totalCounts.L }}</td>
@@ -104,12 +104,12 @@ const loading = ref(false)
 
 const totalCounts = computed(() => {
   return data.value.reduce((acc, item) => {
-    acc.DUA  += item.counts.DUA  || 0
+    acc['2']  += item.counts['2']  || 0
     acc.FULL += item.counts.FULL || 0
     acc.HALF += item.counts.HALF || 0
     acc.L    += item.counts.L    || 0
     return acc
-  }, { DUA: 0, FULL: 0, HALF: 0, L: 0 })
+  }, { '2': 0, FULL: 0, HALF: 0, L: 0 })
 })
 
 const totalNominals = computed(() => {

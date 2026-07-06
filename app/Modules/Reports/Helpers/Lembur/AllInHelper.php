@@ -84,6 +84,17 @@ class AllInHelper
 
         [$umGroupName, $umRates] = $this->resolveUangMakanGroup($employee);
 
+        // ── Pengecualian Uang Lembur Sabtu/Minggu/Holiday ──────────
+        // Karyawan yang dicentang di pengaturan → tidak dapat uang lembur
+        // di hari Sabtu, Minggu, dan Holiday (weekday tetap dapat).
+        $excludedIds = $config['allin_no_overtime_employees'] ?? [];
+        if (in_array($employee->id, $excludedIds)) {
+            $umRates['sabtu_dua']   = 0;
+            $umRates['sabtu_full']  = 0;
+            $umRates['minggu_half'] = 0;
+            $umRates['minggu_full'] = 0;
+        }
+
         $days = [];
         $totalOvertime = 0;
         $totalUangMakan = 0;

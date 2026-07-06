@@ -113,7 +113,7 @@ class UangMakanReportController extends Controller
         $result = $this->buildBulananData($request);
 
         $employees = $result['data']->map(function ($item) {
-            $counts = ['DUA' => 0, 'FULL' => 0, 'HALF' => 0, 'L' => 0];
+            $counts = ['2' => 0, 'FULL' => 0, 'HALF' => 0, 'L' => 0];
             $nominals = [
                 'uang_makan'     => 0,
                 'lembur_sabtu'   => 0,
@@ -130,8 +130,8 @@ class UangMakanReportController extends Controller
                 $lmVal     = $day['lm'] ?? '';
                 $nominal   = (float)($day['nominal'] ?? 0);
 
-                if ($lemburVal === 'DUA') {
-                    $counts['DUA']++;
+                if ($lemburVal === '2') {
+                    $counts['2']++;
                     $nominals['lembur_sabtu'] += $nominal;
                 } elseif ($lemburVal === 'FULL') {
                     $counts['FULL']++;
@@ -706,8 +706,8 @@ class UangMakanReportController extends Controller
      *   kode   — 'L' if lembur>0 else ''
      *   ha     — status code (H/A/C/S/I/OFF)
      *   upah_per_hari — (gaji+tmk)/25, kosong utk I/A/OFF & Minggu/Holiday
-     *   lm     — 'DUA'/'FULL'/'HALF' for Minggu/Libur, '' otherwise
-     *   lembur — 'UM'/'DUA'/'FULL' for Weekday/Sabtu, '' otherwise
+     *   lm     — '2'/'FULL'/'HALF' for Minggu/Libur, '' otherwise
+     *   lembur — 'UM'/'2'/'FULL' for Weekday/Sabtu, '' otherwise
      *   nominal — dari config weekday / rate sabtu / rate minggu
      */
     private function buildDayInfo(float $lembur, int $dayOfWeek, bool $isHoliday, array $rates, string $statusRaw, $prepare, float $upahPerHari): array
@@ -756,7 +756,7 @@ class UangMakanReportController extends Controller
                     $lemburStr = 'FULL';
                 } elseif ($lembur >= 2) {
                     $nominal = $rates['sabtu_dua'];
-                    $lemburStr = 'DUA';
+                    $lemburStr = '2';
                 }
             } else {
                 // Weekday: >= 2 jam → UM, nominal dari config
@@ -994,7 +994,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $n = $item['nominals'] ?? [];
             $t = $item['total'] ?? 0;
 
-            $totalDua   += $c['DUA'] ?? 0;
+            $totalDua   += $c['2'] ?? 0;
             $totalFull  += $c['FULL'] ?? 0;
             $totalHalf  += $c['HALF'] ?? 0;
             $totalL     += $c['L'] ?? 0;
@@ -1006,7 +1006,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $totalRevisi     += $n['revisi'] ?? 0;
             $grandTotal      += $t;
 
-            $dua   = ($c['DUA'] ?? 0) ?: '-';
+            $dua   = ($c['2'] ?? 0) ?: '-';
             $full  = ($c['FULL'] ?? 0) ?: '-';
             $half  = ($c['HALF'] ?? 0) ?: '-';
             $l     = ($c['L'] ?? 0) ?: '-';
