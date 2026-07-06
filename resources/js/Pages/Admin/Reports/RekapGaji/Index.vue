@@ -105,9 +105,15 @@
                   v-for="(row, i) in allRecords"
                   :key="row.id"
                   class="transition-colors"
-                  :class="i % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40'"
+                  :class="[
+                    i % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40',
+                    row.source === 'extra' ? 'bg-purple-50' : ''
+                  ]"
                 >
-                  <td class="px-2.5 py-2 text-center text-(--text-muted) border-r border-(--border-soft)">{{ i + 1 }}</td>
+                  <td class="px-2.5 py-2 text-center text-(--text-muted) border-r border-(--border-soft)">
+                    {{ i + 1 }}
+                    <span v-if="row.source === 'extra'" class="text-red-500 font-bold">*</span>
+                  </td>
                   <td class="px-3 py-2 font-medium text-(--text-main) border-r border-(--border-soft)">{{ row.name }}</td>
                   <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.account_no || '-' }}</td>
                   <td class="px-2.5 py-2 text-center text-(--text-muted) border-r border-(--border-soft)">{{ row.status_label || '-' }}</td>
@@ -304,6 +310,7 @@ function mapRecord(r) {
     bpjs_tk: parseFloat(r.bpjs_tk) || 0,
     bpjs_ks: parseFloat(r.bpjs_ks) || 0,
     uang_makan: parseFloat(r.uang_makan) || 0,
+    source: r.source || null,
   }
 }
 

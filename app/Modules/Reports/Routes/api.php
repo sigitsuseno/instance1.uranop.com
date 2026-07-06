@@ -6,6 +6,7 @@ use App\Modules\Reports\Controllers\Api\V1\LaporanLemburController;
 use App\Modules\Reports\Controllers\Api\V1\UangMakanReportController;
 use App\Modules\Reports\Controllers\Api\V1\PphReportController;
 use App\Modules\Reports\Controllers\Api\V1\RekapGajiController;
+use App\Modules\Reports\Controllers\Api\V1\RekapKerjaController;
 use App\Modules\Reports\Controllers\Api\V1\RekapPphKompensasiController;
 
 // Note: Laravel already prefixes with /api, so NO prefix needed here
@@ -56,6 +57,10 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
     Route::get('/rekap-gaji', [RekapGajiController::class, 'index'])->name('rekap-gaji');
     Route::get('/rekap-gaji/export', [RekapGajiController::class, 'export'])->name('rekap-gaji.export');
     Route::get('/rekap-gaji/groups', [RekapGajiController::class, 'groups'])->name('rekap-gaji.groups');
+
+    // --- Rekap Kerja ---
+    Route::get('/rekap-kerja', [RekapKerjaController::class, 'index'])->name('rekap-kerja');
+    Route::get('/rekap-kerja/groups', [RekapKerjaController::class, 'groups'])->name('rekap-kerja.groups');
 
     // --- Rekap PPH & Kompensasi ---
     Route::get('/rekap-pph-kompensasi', [RekapPphKompensasiController::class, 'index'])->name('rekap-pph-kompensasi');

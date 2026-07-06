@@ -21,6 +21,9 @@ const form = reactive({
   kode: '',
   nik: '',
   nik_tku: '',
+  account: '',
+  status_ptkp: '',
+  gender: '',
   komponen_gaji: {
     gaji_pokok: 0,
     premi: 0,
@@ -39,6 +42,9 @@ const tableHeaders = [
   { key: 'kode', label: 'Kode' },
   { key: 'nik', label: 'NIK' },
   { key: 'nik_tku', label: 'NIK TKU' },
+  { key: 'account', label: 'Account' },
+  { key: 'status_ptkp', label: 'PTKP' },
+  { key: 'gender', label: 'L/P' },
   { key: 'total_gaji', label: 'Total Gaji' },
   { key: 'total_terima', label: 'Total Terima' },
   { key: 'actions', label: 'Aksi', sortable: false, width: '100px' },
@@ -69,6 +75,9 @@ function editRecord(item) {
   form.kode = item.kode || ''
   form.nik = item.nik || ''
   form.nik_tku = item.nik_tku || ''
+  form.account = item.account || ''
+  form.status_ptkp = item.status_ptkp || ''
+  form.gender = item.gender || ''
   if (item.komponen_gaji) {
     form.komponen_gaji = { ...form.komponen_gaji, ...item.komponen_gaji }
   }
@@ -81,6 +90,9 @@ function resetForm() {
   form.kode = ''
   form.nik = ''
   form.nik_tku = ''
+  form.account = ''
+  form.status_ptkp = ''
+  form.gender = ''
   form.komponen_gaji = {
     gaji_pokok: 0,
     premi: 0,
@@ -105,6 +117,9 @@ async function saveRecord() {
     kode: form.kode || null,
     nik: form.nik || null,
     nik_tku: form.nik_tku || null,
+    account: form.account || null,
+    status_ptkp: form.status_ptkp || null,
+    gender: form.gender || null,
     komponen_gaji: form.komponen_gaji,
   }
 
@@ -158,17 +173,43 @@ async function deleteRecord(id) {
             placeholder="Kode unik (boleh kosong)"
           />
 
-          <TextInput
-            v-model="form.nik"
-            label="NIK"
-            placeholder="Nomor Induk Kependudukan"
-          />
+          <div class="grid grid-cols-2 gap-3">
+            <TextInput
+              v-model="form.nik"
+              label="NIK"
+              placeholder="Nomor Induk Kependudukan"
+            />
+            <TextInput
+              v-model="form.nik_tku"
+              label="NIK TKU"
+              placeholder="NIK TKU"
+            />
+          </div>
 
-          <TextInput
-            v-model="form.nik_tku"
-            label="NIK TKU"
-            placeholder="NIK TKU"
-          />
+          <div class="grid grid-cols-2 gap-3">
+            <TextInput
+              v-model="form.account"
+              label="Account"
+              placeholder="No. rekening"
+            />
+            <TextInput
+              v-model="form.status_ptkp"
+              label="Status PTKP"
+              placeholder="TK/0, K/1, ..."
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Gender</label>
+            <select
+              v-model="form.gender"
+              class="w-full h-10 px-3 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-(--primary) focus:border-transparent outline-none transition-all cursor-pointer"
+            >
+              <option value="">-</option>
+              <option value="L">Laki-laki (L)</option>
+              <option value="P">Perempuan (P)</option>
+            </select>
+          </div>
 
           <!-- Komponen Gaji -->
           <div class="border-t border-(--border-soft) pt-3">
@@ -268,6 +309,24 @@ async function deleteRecord(id) {
           <template #item.nik_tku="{ item }">
             <span class="text-sm font-mono text-(--text-muted)">
               {{ item.nik_tku || '-' }}
+            </span>
+          </template>
+
+          <template #item.account="{ item }">
+            <span class="text-sm text-(--text-muted)">
+              {{ item.account || '-' }}
+            </span>
+          </template>
+
+          <template #item.status_ptkp="{ item }">
+            <span class="text-sm text-(--text-muted)">
+              {{ item.status_ptkp || '-' }}
+            </span>
+          </template>
+
+          <template #item.gender="{ item }">
+            <span class="text-sm text-(--text-muted)">
+              {{ item.gender || '-' }}
             </span>
           </template>
 

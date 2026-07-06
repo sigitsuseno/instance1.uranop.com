@@ -200,14 +200,16 @@ class RekapPphKompensasiController extends Controller
             $komponen = $extra->komponen_gaji ?? [];
             $nik     = $extra->nik ?? '-';
             $nikTku  = $extra->nik_tku ?? ($nik !== '-' ? $nik . '000000' : '-');
+            $gender  = $extra->gender ?: '-';
+            $statusLabel = $extra->status_ptkp ?: '-';
 
             return [
                 'id'           => 'extra_' . $extra->id,
                 'name'         => $extra->nama,
                 'nik'          => $nik,
                 'nik_tku'      => $nikTku,
-                'gender'       => '-',
-                'status_label' => '-',
+                'gender'       => in_array($gender, ['L', 'P']) ? $gender : '-',
+                'status_label' => $statusLabel,
                 'total_gaji'   => (float) ($komponen['total_gaji'] ?? 0),
                 'bpjs_tk'      => (float) ($komponen['ttl_bpjs'] ?? 0),
                 'bpjs_ks'      => 0,

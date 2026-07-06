@@ -23,6 +23,9 @@ class ExtraEmployeeController extends Controller
             'kode'           => 'nullable|string|max:50|unique:extra_employees,kode',
             'nik'            => 'nullable|string|max:30',
             'nik_tku'        => 'nullable|string|max:50',
+            'account'        => 'nullable|string|max:50',
+            'status_ptkp'    => 'nullable|string|max:15',
+            'gender'         => 'nullable|string|max:1|in:L,P',
             'komponen_gaji'  => 'nullable|array',
         ]);
 
@@ -56,6 +59,9 @@ class ExtraEmployeeController extends Controller
             'kode'           => 'nullable|string|max:50|unique:extra_employees,kode,' . $record->id,
             'nik'            => 'nullable|string|max:30',
             'nik_tku'        => 'nullable|string|max:50',
+            'account'        => 'nullable|string|max:50',
+            'status_ptkp'    => 'nullable|string|max:15',
+            'gender'         => 'nullable|string|max:1|in:L,P',
             'komponen_gaji'  => 'nullable|array',
         ]);
 

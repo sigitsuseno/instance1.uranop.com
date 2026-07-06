@@ -9,6 +9,7 @@ use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Reports\Exports\RekapGajiExport;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
+use App\Models\ExtraEmployee;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
@@ -188,6 +189,34 @@ class RekapGajiController extends Controller
                 'position'     => $emp->position?->name ?? '-',
             ];
         });
+
+        // ─── Extra Employees (karyawan titipan) ───
+        $extraEmployees = ExtraEmployee::orderBy('nama')->get();
+
+        $extraData = $extraEmployees->map(function ($extra) {
+            $komponen = $extra->komponen_gaji ?? [];
+            $gender   = $extra->gender ?: '-';
+            $statusLabel = $extra->status_ptkp ?: '-';
+
+            return [
+                'id'           => 'extra_' . $extra->id,
+                'name'         => $extra->nama,
+                'account_no'   => $extra->account ?: '-',
+                'status_label' => $statusLabel,
+                'gender'       => in_array($gender, ['L', 'P']) ? $gender : '-',
+                'gaji'         => (float) ($komponen['gaji_pokok'] ?? 0),
+                'total_gaji'   => (float) ($komponen['total_gaji'] ?? 0),
+                'bpjs_tk'      => (float) ($komponen['ttl_bpjs'] ?? 0),
+                'bpjs_ks'      => 0,
+                'uang_makan'   => 0,
+                'groups'       => [],
+                'department'   => '-',
+                'position'     => '-',
+                'source'       => 'extra',
+            ];
+        });
+
+        $data = $data->merge($extraData);
 
         return [
             'data'        => $data->values(),
