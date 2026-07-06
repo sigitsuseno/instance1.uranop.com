@@ -75,6 +75,7 @@ const LaporanPayrollIndex = () => import('../Pages/Admin/Reports/Payroll/Index.v
 const LaporanBpjsIndex = () => import('../Pages/Admin/Reports/Bpjs/Index.vue')
 const LaporanPphIndex = () => import('../Pages/Admin/Reports/Pph/Index.vue')
 const RekabUangMakanIndex = () => import('../Pages/Admin/Reports/RekabUangMakan/Index.vue')
+const RekapGajiIndex = () => import('../Pages/Admin/Reports/RekapGaji/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
 const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
 const PphConfigIndex = () => import('../Pages/Admin/Payroll/Pph/Index.vue')
@@ -205,6 +206,7 @@ const routes = [
       { path: 'reports/bpjs', name: 'reports.bpjs', component: LaporanBpjsIndex, meta: { title: 'Laporan BPJS' } },
       { path: 'reports/pph', name: 'reports.pph', component: LaporanPphIndex, meta: { title: 'Rekap PPh 21' } },
       { path: 'reports/rekab-uang-makan', name: 'reports.rekab-uang-makan', component: RekabUangMakanIndex, meta: { title: 'Rekab Uang Makan' } },
+      { path: 'reports/rekap-gaji', name: 'reports.rekap-gaji', component: RekapGajiIndex, meta: { title: 'Rekap Gaji' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],

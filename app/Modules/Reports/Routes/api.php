@@ -5,6 +5,7 @@ use App\Modules\Reports\Controllers\Api\V1\AttendanceReportController;
 use App\Modules\Reports\Controllers\Api\V1\LaporanLemburController;
 use App\Modules\Reports\Controllers\Api\V1\UangMakanReportController;
 use App\Modules\Reports\Controllers\Api\V1\PphReportController;
+use App\Modules\Reports\Controllers\Api\V1\RekapGajiController;
 
 // Note: Laravel already prefixes with /api, so NO prefix needed here
 Route::prefix('v1/reports')->name('api.reports.')->group(function () {
@@ -49,6 +50,10 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
 
     // --- PPh 21 ---
     Route::get('/pph', [PphReportController::class, 'index'])->name('pph');
+
+    // --- Rekap Gaji ---
+    Route::get('/rekap-gaji', [RekapGajiController::class, 'index'])->name('rekap-gaji');
+    Route::get('/rekap-gaji/groups', [RekapGajiController::class, 'groups'])->name('rekap-gaji.groups');
 
 });
 

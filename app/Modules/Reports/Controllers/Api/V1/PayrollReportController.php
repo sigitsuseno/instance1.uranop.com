@@ -97,8 +97,8 @@ class PayrollReportController extends Controller
                 'bagian' => $emp->position->name ?? '-',
                 'gender' => $emp->gender === 'male' ? 'L' : ($emp->gender === 'female' ? 'P' : '-'),
                 'join_date' => $emp->join_date ? Carbon::parse($emp->join_date)->format('d/m/Y') : '-',
-                'masa_kerja' => $record->hari_kerja, // Assuming hari_kerja is used for HK
-                'status' => $emp->marital_status === 'single' ? 'TK' : 'K', // simplified
+                'masa_kerja' => $record->hari_kerja,
+                'status' => $emp->marital_status === 'single' ? 'TK' : 'K',
                 'jml_anak' => $emp->number_of_children ?? 0,
                 'account_no' => $emp->bank_account_number ?? '-',
                 'premi' => (float)$record->premi,
@@ -113,13 +113,15 @@ class PayrollReportController extends Controller
                 'tunjangan' => (float)$record->tunjangan,
                 'premi_hadir' => (float)$record->premi_hadir,
                 'pblt' => (float)$record->pblt,
-                'total' => (float)$record->gaji_kotor, // Assuming total is gaji kotor
+                'total' => (float)$record->gaji_kotor,
+                'total_gaji' => (float)$record->gaji_kotor,
                 'bpjs_tk' => (float)$record->bpjs_tk,
                 'bpjs_ks' => (float)$record->bpjs_ks,
                 'bpjs_pen' => (float)$record->bpjs_pen,
                 'cashbon' => (float)$record->cashbon,
                 'pph' => (float)$record->pph,
                 'total_terima' => (float)$record->gaji_bersih,
+                'uang_makan' => 0, // dihitung terpisah dari laporan uang makan
             ];
         });
 

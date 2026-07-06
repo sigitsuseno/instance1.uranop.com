@@ -147,6 +147,7 @@ const allMenus = [
       { title: 'Laporan Pajak', icon: 'bx bx-receipt', route: '/admin/reports/pph' },
       { title: 'Laporan BPJS', icon: 'bx bx-shield-quarter', route: '/admin/reports/bpjs' },
       { title: 'Rekab Uang Makan', icon: 'bx bx-food-menu', route: '/admin/reports/rekab-uang-makan' },
+      { title: 'Rekap Gaji', icon: 'bx bx-money', route: '/admin/reports/rekap-gaji' },
     ],
   },
   {
