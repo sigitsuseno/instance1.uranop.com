@@ -95,6 +95,13 @@ class AllInHelper
             $umRates['minggu_full'] = 0;
         }
 
+        // ── Uang Lembur Manual Driver ──────────────────────────────
+        // Driver dapat tambahan uang lembur manual dari config.
+        $driverOvertimeMap = $config['allin_driver_overtime'] ?? [];
+        $manualDriverOvertime = isset($driverOvertimeMap[$employee->id])
+            ? (int) $driverOvertimeMap[$employee->id]
+            : 0;
+
         $days = [];
         $totalOvertime = 0;
         $totalUangMakan = 0;
@@ -119,6 +126,9 @@ class AllInHelper
 
             $days[$dateStr] = $dayResult;
         }
+
+        // Tambahkan uang lembur manual driver
+        $totalUangMakan += $manualDriverOvertime;
 
         return $this->buildEmployeeItem(
             $employee, $days, $upahPerHari, $hourlyRate,

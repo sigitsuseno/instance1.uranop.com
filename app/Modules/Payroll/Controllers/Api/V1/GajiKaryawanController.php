@@ -58,6 +58,7 @@ class GajiKaryawanController extends Controller
                 'tunjangan' => (float) $record->tunjangan,
                 'hari_kerja' => (int) $record->hari_kerja,
                 'lm' => (int) $record->lm,
+                'lm_count' => (int) $record->lm_count,
                 'lembur_count' => (int) $record->lembur_count,
                 // Hasil hitungan
                 'gaji' => (float) $record->gaji,
@@ -83,6 +84,97 @@ class GajiKaryawanController extends Controller
                 'name' => $period->name,
                 'is_split' => $period->is_split,
                 'segment' => $segment,
+            ],
+        ]);
+    }
+
+    /**
+     * Update lembur fields + recalculate upah_lembur, gaji_kotor & gaji_bersih.
+     * PUT /api/v1/payroll/gaji-karyawan/{id}/upah-lembur
+     */
+    public function updateUpahLembur(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'lm'           => 'nullable|integer|min:0',
+            'lm_count'     => 'nullable|integer|min:0',
+            'lembur_count' => 'nullable|integer|min:0',
+        ]);
+
+        $record = PayRecord::with('employee.groups')->findOrFail($id);
+
+        // Update field yang dikirim, sisanya pakai nilai existing
+        if (array_key_exists('lm', $validated)) {
+            $record->lm = $validated['lm'];
+        }
+        if (array_key_exists('lm_count', $validated)) {
+            $record->lm_count = $validated['lm_count'];
+        }
+        if (array_key_exists('lembur_count', $validated)) {
+            $record->lembur_count = $validated['lembur_count'];
+        }
+
+        // ── Kalkulasi ulang upah_lembur ──
+        $gajiPokok   = (float) $record->gaji_pokok;
+        $tjMasaKerja = (float) $record->tj_masa_kerja;
+        $tunjangan   = (float) $record->tunjangan;
+        $lmCount     = (int) $record->lm_count;
+        $lemburCount = (int) $record->lembur_count;
+
+        // Cek GRP-SPR: hanya dari lm_count
+        $employee = $record->employee;
+        $isSpr = $employee && $employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPR');
+
+        if ($isSpr) {
+            $lemburCount = 0;
+        }
+
+        $totalLemburJam = ($lmCount + $lemburCount) / 60;
+        $hourlyBase = $gajiPokok + $tjMasaKerja + $tunjangan;
+
+        if ($hourlyBase > 0 && $totalLemburJam > 0) {
+            $upahLembur = ceil(($hourlyBase / 173) * $totalLemburJam / 100) * 100;
+        } else {
+            $upahLembur = 0;
+        }
+
+        $record->upah_lembur = $upahLembur;
+
+        // ── Recalculate gaji_kotor ──
+        $record->gaji_kotor = round(
+            (float) $record->gaji
+            + (float) $record->tj_masa_kerja
+            + (float) $record->upah_lembur
+            + (float) $record->revisi
+            + (float) $record->premi_hadir
+            + (float) $record->tunjangan,
+            2
+        );
+
+        // ── Recalculate gaji_bersih ──
+        $beforeRounding = (float) $record->gaji_kotor
+            - (float) $record->bpjs_tk
+            - (float) $record->bpjs_ks
+            - (float) $record->bpjs_pen
+            - (float) $record->cashbon
+            - (float) $record->pph;
+
+        $rounded = ceil($beforeRounding / 100) * 100;
+        $record->pblt = round($rounded - $beforeRounding, 2);
+        $record->gaji_bersih = $rounded;
+
+        $record->save();
+
+        return response()->json([
+            'message' => 'Data lembur berhasil diupdate.',
+            'data' => [
+                'id'           => $record->id,
+                'lm'           => (int) $record->lm,
+                'lm_count'     => (int) $record->lm_count,
+                'lembur_count' => (int) $record->lembur_count,
+                'upah_lembur'  => (float) $record->upah_lembur,
+                'pblt'         => (float) $record->pblt,
+                'total'        => (float) $record->gaji_kotor,
+                'gaji_bersih'  => (float) $record->gaji_bersih,
             ],
         ]);
     }

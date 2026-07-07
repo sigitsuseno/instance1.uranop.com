@@ -133,6 +133,7 @@ class ReportConfigService
                 'spc_base_salary'            => null,
                 'jkt_no_overtime_employees'  => [],
                 'allin_no_overtime_employees' => [],
+                'allin_driver_overtime'       => [],
             ],
             'attendance_overtime_setting' => [
                 'formulas' => [

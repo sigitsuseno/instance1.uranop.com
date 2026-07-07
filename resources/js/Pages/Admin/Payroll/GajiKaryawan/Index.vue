@@ -258,9 +258,9 @@
           </div>
 
           <!-- Table -->
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto max-h-[calc(100vh-380px)] overflow-y-auto rounded-b-md">
             <table class="w-full text-xs">
-              <thead>
+              <thead class="sticky top-0 z-30">
                 <tr class="bg-(--bg-elevated) text-(--text-main)">
                   <th rowspan="2" class="sticky-col z-20 border border-(--border-soft) px-2.5 py-3 text-center font-semibold" style="left:0; width:36px; min-width:36px;">No</th>
                   <th rowspan="2" class="sticky-col z-20 border border-(--border-soft) px-2.5 py-3 text-center font-semibold" style="left:36px; width:72px; min-width:72px;">ID No</th>
@@ -286,6 +286,7 @@
                   <th rowspan="2" class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold text-(--danger) whitespace-nowrap min-w-[90px]">CASH BON</th>
                   <th rowspan="2" class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold text-(--danger) whitespace-nowrap min-w-[90px]">PPH</th>
                   <th rowspan="2" class="border border-(--border-soft) px-2.5 py-3 text-right font-extrabold text-(--primary) bg-(--primary)/5 whitespace-nowrap min-w-[120px]">TRIMA</th>
+                  <th rowspan="2" class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold whitespace-nowrap w-[60px]">AKSI</th>
                 </tr>
                 <tr class="bg-(--bg-elevated) text-(--text-main)">
                   <th class="border border-(--border-soft) px-2 py-1.5 text-center font-semibold whitespace-nowrap">HK</th>
@@ -297,7 +298,7 @@
               </thead>
               <tbody>
                 <tr v-if="section.data.length === 0">
-                  <td :colspan="26" class="px-4 py-8 text-center text-(--text-muted) text-sm bg-(--bg-card)">
+                  <td :colspan="27" class="px-4 py-8 text-center text-(--text-muted) text-sm bg-(--bg-card)">
                     Tidak ada data di section ini
                   </td>
                 </tr>
@@ -333,6 +334,18 @@
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--danger)/80">{{ formatCurrency(record.cashbon) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--danger)/80">{{ formatCurrency(record.pph) }}</td>
                   <td class="border border-(--border-soft) px-2.5 py-2 text-right font-mono font-extrabold text-(--primary) bg-(--primary)/5">{{ formatCurrency(record.gaji_bersih) }}</td>
+                  <td class="border border-(--border-soft) px-2 py-2 text-center">
+                    <button
+                      @click="openEditModal(record)"
+                      class="text-(--primary) hover:text-(--primary-hover) transition-colors p-1 rounded hover:bg-(--primary)/10"
+                      title="Edit Upah Lembur"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
               </tbody>
               <!-- Section Total -->
@@ -358,6 +371,7 @@
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono text-(--danger)">{{ formatCurrency(section.totals.cashbon, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono text-(--danger)">{{ formatCurrency(section.totals.pph, true) }}</td>
                   <td class="border border-(--border-soft) px-2.5 py-3.5 text-right font-mono text-(--primary) bg-(--primary)/5">{{ formatCurrency(section.totals.gaji_bersih, true) }}</td>
+                  <td class="border border-(--border-soft) px-2.5 py-3.5"></td>
                 </tr>
               </tfoot>
             </table>
@@ -450,6 +464,60 @@
         </div>
       </div>
     </BaseModal>
+
+    <!-- Modal: Edit Upah Lembur -->
+    <BaseModal :show="isEditModalOpen" @close="closeEditModal" title="Edit Data Lembur">
+      <div v-if="editingRecord" class="space-y-4">
+        <div class="bg-(--bg-soft) rounded-lg p-3 space-y-1 text-sm">
+          <p class="font-semibold text-(--text-main)">{{ editingRecord.name }}</p>
+          <p class="text-(--text-muted) text-xs">{{ editingRecord.employee_code }} · {{ editingRecord.position }} · {{ editingRecord.department }}</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-(--text-muted) mb-1">LM (menit)</label>
+            <input
+              v-model.number="editLm"
+              type="number"
+              min="0"
+              class="w-full px-2 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-(--text-muted) mb-1">LM Count (menit)</label>
+            <input
+              v-model.number="editLmCount"
+              type="number"
+              min="0"
+              class="w-full px-2 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-(--text-muted) mb-1">LBR Count (menit)</label>
+            <input
+              v-model.number="editLemburCount"
+              type="number"
+              min="0"
+              class="w-full px-2 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+              placeholder="0"
+            />
+          </div>
+        </div>
+
+        <p class="text-xs text-(--text-muted) italic">
+          💡 Upah lembur akan dikalkulasi ulang: <code>(Gapok + TJ MK + Tunjangan) / 173 × ((LM Count + LBR Count) / 60)</code> dibulatkan 100.
+        </p>
+
+        <hr class="border-(--border-soft)" />
+
+        <div class="flex justify-end gap-3">
+          <BaseButton variant="ghost" @click="closeEditModal">Batal</BaseButton>
+          <BaseButton variant="primary" :loading="savingUpahLembur" @click="saveUpahLembur">Simpan</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -489,6 +557,14 @@ const pendingConfig = ref(null)
 const savingConfig = ref(false)
 const configUpdatedBy = ref('')
 const configUpdatedAt = ref('')
+
+// Edit Upah Lembur state
+const isEditModalOpen = ref(false)
+const editingRecord = ref(null)
+const editLm = ref(0)
+const editLmCount = ref(0)
+const editLemburCount = ref(0)
+const savingUpahLembur = ref(false)
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
@@ -777,6 +853,56 @@ function handleExport() {
       console.error(err)
       notification.error('Gagal export Excel')
     })
+}
+
+// ─── Edit Upah Lembur ───
+
+function openEditModal(record) {
+  editingRecord.value = record
+  editLm.value = record.lm || 0
+  editLmCount.value = (record.lm_count ?? record.lm) || 0
+  editLemburCount.value = record.lembur_count || 0
+  isEditModalOpen.value = true
+}
+
+function closeEditModal() {
+  isEditModalOpen.value = false
+  editingRecord.value = null
+  editLm.value = 0
+  editLmCount.value = 0
+  editLemburCount.value = 0
+}
+
+async function saveUpahLembur() {
+  if (!editingRecord.value) return
+  savingUpahLembur.value = true
+  try {
+    const res = await put(`/api/v1/payroll/gaji-karyawan/${editingRecord.value.id}/upah-lembur`, {
+      lm: editLm.value || 0,
+      lm_count: editLmCount.value || 0,
+      lembur_count: editLemburCount.value || 0,
+    })
+    
+    // Update local record
+    const idx = records.value.findIndex(r => r.id === editingRecord.value.id)
+    if (idx !== -1) {
+      records.value[idx].lm = res.data.lm
+      records.value[idx].lm_count = res.data.lm_count
+      records.value[idx].lembur_count = res.data.lembur_count
+      records.value[idx].upah_lembur = res.data.upah_lembur
+      records.value[idx].pblt = res.data.pblt
+      records.value[idx].total = res.data.total
+      records.value[idx].gaji_bersih = res.data.gaji_bersih
+    }
+    
+    notification.success(res.message || 'Data lembur berhasil diupdate.')
+    closeEditModal()
+  } catch (error) {
+    console.error('Error updating lembur', error)
+    notification.error(error.message || 'Gagal update data lembur.')
+  } finally {
+    savingUpahLembur.value = false
+  }
 }
 
 onMounted(() => {

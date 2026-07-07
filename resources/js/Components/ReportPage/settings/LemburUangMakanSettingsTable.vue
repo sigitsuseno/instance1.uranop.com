@@ -155,6 +155,48 @@
           </div>
         </div>
       </div>
+
+      <!-- Driver Overtime Manual -->
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+          Uang Lembur Manual Driver
+        </label>
+        <p class="text-xs text-(--text-muted) mb-2">
+          Input nominal uang lembur tambahan untuk driver (di luar uang makan standar).
+        </p>
+        <div class="border border-(--border-soft) rounded-lg overflow-hidden">
+          <div v-if="allinDrivers.length === 0" class="text-xs text-(--text-muted) italic p-3">
+            Tidak ada driver di group ALL IN.
+          </div>
+          <table v-else class="w-full text-xs">
+            <thead>
+              <tr class="bg-(--bg-soft)">
+                <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">Nama</th>
+                <th class="text-right px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft) w-36">Uang Lembur (Rp)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="driver in allinDrivers"
+                :key="driver.id"
+                class="border-b border-(--border-soft)"
+              >
+                <td class="px-2 py-1 text-(--text-main)">{{ driver.name }} <span class="text-(--text-muted)">({{ driver.nip }})</span></td>
+                <td class="px-1 py-0.5">
+                  <input
+                    type="number"
+                    :value="(config.allin_driver_overtime || {})[driver.id] ?? ''"
+                    @input="updateDriverOvertime(driver.id, $event.target.value)"
+                    class="w-full text-right px-2 py-1 rounded border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-xs focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+                    min="0"
+                    placeholder="0"
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
     <!-- SPC Settings -->
@@ -268,6 +310,11 @@ const periods = computed(() => props.extraData?.periods || []);
 const spcEmployees = computed(() => props.extraData?.spcEmployees || []);
 const jktEmployees = computed(() => props.extraData?.jktEmployees || []);
 const allinEmployees = computed(() => props.extraData?.allinEmployees || []);
+const allinDrivers = computed(() =>
+  allinEmployees.value.filter(emp =>
+    (emp.jabatan || '').toUpperCase().includes('DRIVER')
+  )
+);
 const sortedPeriods = computed(() =>
   [...periods.value].sort((a, b) => b.start_date.localeCompare(a.start_date))
 );
@@ -325,6 +372,22 @@ function toggleAllinNoOvertime(empId, isChecked) {
   emitConfig({ allin_no_overtime_employees: currentList });
 }
 
+function updateDriverOvertime(empId, rawValue) {
+  const currentMap = props.config.allin_driver_overtime 
+    ? { ...props.config.allin_driver_overtime } 
+    : {};
+  
+  const value = rawValue === '' || rawValue === null ? null : parseInt(rawValue);
+  
+  if (value === null || isNaN(value) || value <= 0) {
+    delete currentMap[empId];
+  } else {
+    currentMap[empId] = value;
+  }
+  
+  emitConfig({ allin_driver_overtime: currentMap });
+}
+
 function emitConfig(extra = {}) {
   // Merge rates + SPC config + any extra
   const merged = {
@@ -333,6 +396,7 @@ function emitConfig(extra = {}) {
     spc_base_salary: props.config.spc_base_salary ?? null,
     jkt_no_overtime_employees: props.config.jkt_no_overtime_employees ?? [],
     allin_no_overtime_employees: props.config.allin_no_overtime_employees ?? [],
+    allin_driver_overtime: props.config.allin_driver_overtime ?? {},
     ...extra,
   };
   emit('update:config', { ...merged });

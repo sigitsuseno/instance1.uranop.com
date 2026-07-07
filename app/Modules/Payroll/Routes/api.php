@@ -10,6 +10,7 @@ Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::apiResource('periods', PayPeriodApiController::class);
     Route::get('gaji-karyawan', [GajiKaryawanController::class, 'index']);
     Route::get('gaji-karyawan/export', [GajiKaryawanController::class, 'export']);
+    Route::put('gaji-karyawan/{id}/upah-lembur', [GajiKaryawanController::class, 'updateUpahLembur']);
 
     // Konfigurasi Payroll
     Route::get('configs/{type}', [PayrollConfigApiController::class, 'show']);
