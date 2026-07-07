@@ -194,7 +194,20 @@ class RekapPphKompensasiController extends Controller
         });
 
         // ─── Extra Employees (karyawan titipan) untuk Section A ───
-        $extraEmployees = ExtraEmployee::orderBy('nama')->get();
+        $extraEmployees = collect();
+        if ($request->exists('extra_ids')) {
+            $extraIds = $request->input('extra_ids', '');
+            if ($extraIds !== '') {
+                $extraIdArray = array_filter(array_map('trim', explode(',', $extraIds)));
+                if (!empty($extraIdArray)) {
+                    $extraEmployees = ExtraEmployee::whereIn('id', $extraIdArray)->orderBy('nama')->get();
+                }
+            }
+            // Kalau extra_ids ada tapi kosong → tetap empty (tidak ada yang dipilih)
+        } else {
+            // Backward compat: key extra_ids tidak ada → tampilkan semua
+            $extraEmployees = ExtraEmployee::orderBy('nama')->get();
+        }
 
         $extraPphData = $extraEmployees->map(function ($extra) {
             $komponen = $extra->komponen_gaji ?? [];

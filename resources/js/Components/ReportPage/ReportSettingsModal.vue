@@ -62,7 +62,42 @@
 
             <hr class="border-(--border-soft)" />
 
-            <!-- Section 2: Config Spesifik Laporan (SLOT) -->
+            <!-- Section 2: Karyawan Extra -->
+            <div v-if="extraData.extraEmployees?.length">
+              <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-(--text-main)">
+                <i class="bx bx-user-plus text-lg"></i> Karyawan Extra yang Ditampilkan
+              </h3>
+              <p class="text-xs text-(--text-muted) mb-3">
+                Pilih karyawan extra (titipan) yang akan muncul di laporan ini.
+              </p>
+
+              <div class="flex flex-wrap gap-3">
+                <label
+                  v-for="emp in extraData.extraEmployees"
+                  :key="emp.id"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors select-none"
+                  :class="selectedExtraIds.includes(emp.id)
+                    ? 'bg-purple-50 border-purple-300 dark:bg-purple-900/20 dark:border-purple-700'
+                    : 'border-(--border-soft) hover:bg-(--bg-hover)'"
+                >
+                  <input
+                    type="checkbox"
+                    :value="emp.id"
+                    v-model="selectedExtraIds"
+                    class="w-4 h-4 rounded text-(--primary) focus:ring-(--primary-glow) border-(--border-soft)"
+                  />
+                  <span class="text-sm font-medium text-(--text-main)">{{ emp.nama }}</span>
+                </label>
+              </div>
+
+              <p v-if="selectedExtraIds.length === 0 && !loading" class="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                <i class="bx bx-error-circle"></i> Tidak ada karyawan extra dipilih — data titipan tidak akan muncul.
+              </p>
+            </div>
+
+            <hr v-if="extraData.extraEmployees?.length" class="border-(--border-soft)" />
+
+            <!-- Section 3: Config Spesifik Laporan (SLOT) -->
             <div>
               <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-(--text-main)">
                 <i class="bx bx-slider text-lg"></i> Pengaturan Spesifik
@@ -123,6 +158,7 @@ const emit = defineEmits(['close', 'saved']);
 const loading = ref(true);
 const saving = ref(false);
 const selectedGroups = ref([]);
+const selectedExtraIds = ref([]);
 const localConfig = ref({});
 const lastUpdated = ref('');
 const lastUpdatedBy = ref('');
@@ -133,6 +169,7 @@ onMounted(async () => {
     const data = res.data || res;
     selectedGroups.value = data.employee_groups || [];
     localConfig.value = data.config || {};
+    selectedExtraIds.value = localConfig.value.extra_employee_ids || [];
     lastUpdated.value = data.updated_at || '';
     lastUpdatedBy.value = data.updated_by || '';
   } catch (e) {
@@ -151,15 +188,18 @@ function updateLocalConfig(newConfig) {
 async function save() {
   saving.value = true;
   try {
+    // Sync selectedExtraIds ke localConfig sebelum save
+    const configToSave = { ...localConfig.value, extra_employee_ids: selectedExtraIds.value };
+
     const res = await put(`/api/v1/settings/report-configs/${props.reportType}`, {
       employee_groups: selectedGroups.value,
-      config: localConfig.value,
+      config: configToSave,
     });
     lastUpdated.value = res.updated_at || new Date().toLocaleString('id-ID');
     lastUpdatedBy.value = res.updated_by || '';
     emit('saved', {
       employee_groups: selectedGroups.value,
-      config: localConfig.value,
+      config: configToSave,
     });
   } catch (e) {
     console.error('Gagal menyimpan pengaturan:', e);

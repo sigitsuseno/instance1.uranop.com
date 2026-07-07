@@ -104,6 +104,50 @@
               </button>
             </div>
 
+            <hr class="border-(--border-soft)" />
+
+            <!-- Section 3: Extra Employees (hanya untuk Section A) -->
+            <div>
+              <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-(--text-main)">
+                <i class="bx bx-user-plus text-lg"></i> Extra Employees (Section A)
+              </h3>
+              <p class="text-xs text-(--text-muted) mb-3">
+                Pilih karyawan extra/titipan yang akan muncul di Section A (ALL IN).
+              </p>
+
+              <div v-if="extraEmployees.length === 0" class="text-xs text-(--text-muted) py-2">
+                Tidak ada extra employee tersedia.
+              </div>
+
+              <div v-else class="flex flex-wrap gap-3 max-h-[200px] overflow-y-auto border border-(--border-soft) rounded-md p-3">
+                <label
+                  v-for="extra in extraEmployees"
+                  :key="'extra-'+extra.id"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors select-none"
+                  :class="localExtraIds.includes(extra.id)
+                    ? 'bg-purple-50 border-purple-300 dark:bg-purple-900/20 dark:border-purple-700'
+                    : 'border-(--border-soft) hover:bg-(--bg-hover)'"
+                >
+                  <input
+                    type="checkbox"
+                    :value="extra.id"
+                    v-model="localExtraIds"
+                    class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-(--border-soft)"
+                  />
+                  <span class="text-sm font-medium text-(--text-main)">{{ extra.nama }}</span>
+                </label>
+              </div>
+
+              <div class="flex gap-2 mt-2">
+                <button @click="localExtraIds = extraEmployees.map(e => e.id)" class="text-xs text-(--primary) hover:underline">
+                  Pilih Semua
+                </button>
+                <button @click="localExtraIds = []" class="text-xs text-(--text-muted) hover:underline">
+                  Kosongkan
+                </button>
+              </div>
+            </div>
+
           </template>
 
         </div>
@@ -150,6 +194,8 @@ const props = defineProps({
   reportType: { type: String, required: true },
   reportLabel: { type: String, required: true },
   availableGroups: { type: Array, default: () => [] },
+  extraEmployees: { type: Array, default: () => [] },
+  savedExtraIds: { type: Array, default: () => [] },
 });
 
 const emit = defineEmits(['close', 'saved']);
@@ -158,6 +204,7 @@ const loading = ref(true);
 const saving = ref(false);
 const selectedGroups = ref([]);
 const localPrintGroups = ref([]);
+const localExtraIds = ref([]);
 const lastUpdated = ref('');
 const lastUpdatedBy = ref('');
 
@@ -167,13 +214,19 @@ onMounted(async () => {
     const data = res.data || res;
     selectedGroups.value = data.employee_groups || [];
 
-    // Load print_groups from config
     const printFromConfig = data.config?.print_groups || [];
     if (printFromConfig.length > 0) {
       localPrintGroups.value = printFromConfig;
     } else {
-      // Auto-detect default
       autoSelectPrint();
+    }
+
+    const extraFromConfig = data.config?.extra_employee_ids || [];
+    if (extraFromConfig.length > 0) {
+      localExtraIds.value = extraFromConfig;
+    } else {
+      // Default: pilih semua extra
+      localExtraIds.value = props.extraEmployees.map(e => e.id);
     }
 
     lastUpdated.value = data.updated_at || '';
@@ -181,6 +234,7 @@ onMounted(async () => {
   } catch (e) {
     console.error('Gagal memuat pengaturan:', e);
     selectedGroups.value = [...props.availableGroups];
+    localExtraIds.value = props.extraEmployees.map(e => e.id);
     autoSelectPrint();
   } finally {
     loading.value = false;
@@ -200,6 +254,7 @@ async function save() {
       employee_groups: selectedGroups.value,
       config: {
         print_groups: localPrintGroups.value,
+        extra_employee_ids: localExtraIds.value,
       },
     });
     lastUpdated.value = res.updated_at || new Date().toLocaleString('id-ID');
@@ -208,6 +263,7 @@ async function save() {
       employee_groups: selectedGroups.value,
       config: {
         print_groups: localPrintGroups.value,
+        extra_employee_ids: localExtraIds.value,
       },
     });
   } catch (e) {

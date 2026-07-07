@@ -264,6 +264,8 @@
       report-type="rekap-kerja"
       report-label="Rekap Kerja"
       :available-groups="availableGroups"
+      :extra-employees="extraEmployees"
+      :saved-extra-ids="selectedExtraIds"
       @close="showSettings = false"
       @saved="onSettingsSaved"
     />
@@ -285,6 +287,8 @@ const showSettings = ref(false)
 const availableGroups = ref([])
 const selectedGroups = ref([])
 const printGroups = ref([])
+const extraEmployees = ref([])
+const selectedExtraIds = ref([])
 const sections = ref({
   all_in: [],
   bulanan_print: [],
@@ -368,9 +372,23 @@ async function fetchSavedConfig() {
     if (data.config?.print_groups?.length > 0) {
       printGroups.value = data.config.print_groups
     }
+    if (data.config?.extra_employee_ids?.length > 0) {
+      selectedExtraIds.value = data.config.extra_employee_ids
+    }
   } catch (e) {
     selectedGroups.value = []
     printGroups.value = []
+    selectedExtraIds.value = []
+  }
+}
+
+async function fetchExtraEmployees() {
+  try {
+    const res = await get('/api/v1/reports/rekap-kerja/extra-employees')
+    extraEmployees.value = res.data || []
+  } catch (e) {
+    console.error('Gagal fetch extra employees:', e)
+    extraEmployees.value = []
   }
 }
 
@@ -433,12 +451,13 @@ function onSettingsSaved({ employee_groups, config }) {
   showSettings.value = false
   selectedGroups.value = employee_groups
   printGroups.value = config?.print_groups || []
+  selectedExtraIds.value = config?.extra_employee_ids || []
   fetchData()
 }
 
 // ─── Init ───
 onMounted(async () => {
-  await Promise.all([fetchPeriods(), fetchGroups()])
+  await Promise.all([fetchPeriods(), fetchGroups(), fetchExtraEmployees()])
   await fetchSavedConfig()
 })
 </script>

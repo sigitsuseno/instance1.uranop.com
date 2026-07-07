@@ -219,6 +219,7 @@
       report-type="rekap-pph-kompensasi"
       report-label="Rekap PPH & Kompensasi"
       :available-groups="availableGroups"
+      :extra-data="{ extraEmployees }"
       @close="showSettings = false"
       @saved="onSettingsSaved"
     />
@@ -240,6 +241,8 @@ const payPeriods = ref([])
 const showSettings = ref(false)
 const availableGroups = ref([])
 const selectedGroups = ref([])
+const extraEmployees = ref([])
+const selectedExtraIds = ref([])
 const pphData = ref([])
 const kompensasiData = ref([])
 
@@ -291,6 +294,16 @@ async function fetchGroups() {
   }
 }
 
+async function fetchExtraEmployees() {
+  try {
+    const res = await get('/api/v1/settings/extra-employees')
+    extraEmployees.value = res.data?.data || res.data || []
+  } catch (e) {
+    console.error('Gagal fetch extra employees:', e)
+    extraEmployees.value = []
+  }
+}
+
 async function fetchSavedConfig() {
   try {
     const res = await get('/api/v1/settings/report-configs/rekap-pph-kompensasi')
@@ -298,8 +311,12 @@ async function fetchSavedConfig() {
     if (data.employee_groups?.length > 0) {
       selectedGroups.value = data.employee_groups
     }
+    if (data.config?.extra_employee_ids?.length > 0) {
+      selectedExtraIds.value = data.config.extra_employee_ids
+    }
   } catch (e) {
     selectedGroups.value = []
+    selectedExtraIds.value = []
   }
 }
 
@@ -316,7 +333,9 @@ async function fetchData() {
       ? `&groups=${selectedGroups.value.join(',')}`
       : ''
 
-    const res = await get(`/api/v1/reports/rekap-pph-kompensasi?period_id=${payPeriodId.value}${groupParam}`)
+    const extraParam = `&extra_ids=${selectedExtraIds.value.join(',')}`
+
+    const res = await get(`/api/v1/reports/rekap-pph-kompensasi?period_id=${payPeriodId.value}${groupParam}${extraParam}`)
 
     pphData.value = res.pph || []
     kompensasiData.value = res.kompensasi || []
@@ -329,9 +348,10 @@ async function fetchData() {
   }
 }
 
-function onSettingsSaved({ employee_groups }) {
+function onSettingsSaved({ employee_groups, config }) {
   showSettings.value = false
   selectedGroups.value = employee_groups
+  selectedExtraIds.value = config?.extra_employee_ids || []
   fetchData()
 }
 
@@ -386,7 +406,7 @@ function exportKompensasi() {
 
 // ─── Init ───
 onMounted(async () => {
-  await Promise.all([fetchPeriods(), fetchGroups()])
+  await Promise.all([fetchPeriods(), fetchGroups(), fetchExtraEmployees()])
   await fetchSavedConfig()
 })
 </script>

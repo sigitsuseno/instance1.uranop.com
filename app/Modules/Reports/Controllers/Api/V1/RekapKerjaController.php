@@ -18,10 +18,8 @@ class RekapKerjaController extends Controller
     /**
      * GET /api/v1/reports/rekap-kerja
      *
-     * Mengambil data rekap kerja dalam 3 section:
-     * - A. ALL IN
-     * - B. BULANAN PRINT
-     * - C. UANG MAKAN
+     * 3 section: A. ALL IN  |  B. BULANAN PRINT  |  C. UANG MAKAN
+     * Data di-grouping berdasarkan POSITION / JABATAN (BAGIAN).
      */
     public function index(Request $request)
     {
@@ -41,27 +39,25 @@ class RekapKerjaController extends Controller
         $startDate = $period->start_date->format('Y-m-d');
         $endDate   = $period->end_date->format('Y-m-d');
 
-        // Parse selected groups
         $selectedGroups = [];
         if ($groupCodes) {
             $selectedGroups = array_filter(array_map('trim', explode(',', $groupCodes)));
         }
 
-        // ─── Build sections ────────────────────────────────
+        // Section A: ALL IN — semua group yang dipilih + extra employees
+        $extraIds = $this->getExtraEmployeeIds();
+        $allInData = $this->buildSection($startDate, $endDate, $periodId, $selectedGroups, $extraIds);
 
-        // Section A: ALL IN — semua group yang dipilih
-        $allInData = $this->buildSection($startDate, $endDate, $periodId, $selectedGroups, 'all_in');
-
-        // Section B: BULANAN PRINT — dari query param print_groups, atau dari config
+        // Section B: BULANAN PRINT — tanpa extra employees
         $printGroups = [];
         if ($printGroupCodes) {
             $printGroups = array_filter(array_map('trim', explode(',', $printGroupCodes)));
         } else {
             $printGroups = $this->getPrintGroups($selectedGroups);
         }
-        $printData = $this->buildSection($startDate, $endDate, $periodId, $printGroups, 'print');
+        $printData = $this->buildSection($startDate, $endDate, $periodId, $printGroups, []);
 
-        // Section C: UANG MAKAN — dari rekab uang makan
+        // Section C: UANG MAKAN — dikelompokkan per BAGIAN (position)
         $uangMakanData = $this->buildUangMakanSection($period, $selectedGroups);
 
         return response()->json([
@@ -93,14 +89,14 @@ class RekapKerjaController extends Controller
         return response()->json(['data' => $groups]);
     }
 
-    // ─── Private helpers ──────────────────────────────────
+    // ─── Private: Section A & B ──────────────────────────
 
     /**
-     * Build section data grouped by BAGIAN (group name).
+     * Build section data — grouped by POSITION (BAGIAN).
+     * @param array $extraIds  ID extra employees yang dipilih (hanya untuk all_in).
      */
-    private function buildSection(string $startDate, string $endDate, int $periodId, array $groupCodes, string $section): array
+    private function buildSection(string $startDate, string $endDate, int $periodId, array $groupCodes, array $extraIds = []): array
     {
-        // Dapatkan employee_id yang punya roster di range tanggal
         $rosteredEmployeeIds = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
             ->distinct('employee_id')
             ->pluck('employee_id');
@@ -109,10 +105,9 @@ class RekapKerjaController extends Controller
             return [];
         }
 
-        // Query employees
         $query = Employee::whereIn('id', $rosteredEmployeeIds)
             ->where('is_active', true)
-            ->with(['position', 'groups', 'groups.master', 'department']);
+            ->with(['position', 'groups', 'groups.master']);
 
         if (!empty($groupCodes)) {
             $query->whereHas('groups', function ($q) use ($groupCodes) {
@@ -128,34 +123,28 @@ class RekapKerjaController extends Controller
 
         $periodMonth = Carbon::parse($startDate)->format('Y-m');
 
-        // Preload PayRecords untuk overtime
         $payRecords = PayRecord::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_period_id', $periodId)
             ->get()
             ->keyBy('employee_id');
 
-        // Preload BPJS
         $bpjsData = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_period_id', $periodId)
             ->get()
             ->keyBy('employee_id');
 
-        // Group employees by their first group's name (BAGIAN)
+        // ─── Group by POSITION (BAGIAN) ───
         $grouped = [];
 
         foreach ($employees as $emp) {
-            $firstGroup = $emp->groups->first();
-            $groupName = $firstGroup && $firstGroup->master
-                ? $firstGroup->master->name
-                : ($emp->department?->name ?? 'TANPA BAGIAN');
+            $bagian = $emp->position?->name ?: 'TANPA BAGIAN';
 
-            if (!isset($grouped[$groupName])) {
-                $grouped[$groupName] = [];
+            if (!isset($grouped[$bagian])) {
+                $grouped[$bagian] = [];
             }
-            $grouped[$groupName][] = $emp;
+            $grouped[$bagian][] = $emp;
         }
 
-        // Build per-group aggregates
         $result = [];
 
         foreach ($grouped as $bagian => $emps) {
@@ -169,11 +158,9 @@ class RekapKerjaController extends Controller
                 $salary = $emp->activeSalary($periodMonth);
                 $baseSalary = $salary ? (float)$salary->base_salary : (float)($emp->base_salary ?? 0);
 
-                // Overtime from PayRecord
                 $pr = $payRecords->get($emp->id);
                 $overtimePay = $pr ? (float)($pr->upah_lembur ?? 0) : 0;
 
-                // BPJS
                 $bpjs = $bpjsData->get($emp->id);
                 if ($bpjs) {
                     $bpjsTk += (float)($bpjs->employee_jht ?? 0) + (float)($bpjs->employee_jkk ?? 0) + (float)($bpjs->employee_jkm ?? 0);
@@ -199,14 +186,11 @@ class RekapKerjaController extends Controller
             ];
         }
 
-        // Sort by bagian name
         usort($result, fn($a, $b) => strcasecmp($a['bagian'], $b['bagian']));
 
-        // ─── Extra Employees ───
-        // Extra employees tidak punya group — gabung ke "EXTRA" atau skip jika
-        // section-specific filtering aktif
-        if ($section === 'all_in') {
-            $extraEmployees = ExtraEmployee::orderBy('nama')->get();
+        // ─── Extra Employees (hanya jika ada extraIds yang dipilih) ───
+        if (!empty($extraIds)) {
+            $extraEmployees = ExtraEmployee::whereIn('id', $extraIds)->orderBy('nama')->get();
             if ($extraEmployees->isNotEmpty()) {
                 $jml = $extraEmployees->count();
                 $gajiExtra = 0;
@@ -220,13 +204,12 @@ class RekapKerjaController extends Controller
                     $bpjsExtra += (float)($komponen['ttl_bpjs'] ?? 0);
                 }
 
-                $totalExtra = $gajiExtra + $lemburExtra;
                 $result[] = [
                     'bagian'   => 'EXTRA',
                     'jml'      => $jml,
                     'gaji'     => round($gajiExtra, 2),
                     'lembur'   => round($lemburExtra, 2),
-                    'total'    => round($totalExtra, 2),
+                    'total'    => round($gajiExtra + $lemburExtra, 2),
                     'bpjs'     => round($bpjsExtra, 2),
                     'bpjs_tk'  => round($bpjsExtra, 2),
                     'bpjs_ks'  => 0,
@@ -237,12 +220,40 @@ class RekapKerjaController extends Controller
         return $result;
     }
 
+    // ─── Private: Section C (Uang Makan) ─────────────────
+
     /**
-     * Build Uang Makan section by calling rekab internally and grouping by bagian.
+     * Build Uang Makan section — grouped by POSITION (BAGIAN).
+     * Memanggil internal UangMakanReportController::rekab(),
+     * lalu map employee_id → position untuk grouping.
      */
     private function buildUangMakanSection(PayPeriod $period, array $selectedGroups): array
     {
         try {
+            $startDate = $period->start_date->format('Y-m-d');
+            $endDate   = $period->end_date->format('Y-m-d');
+
+            // ─── Preload employee_id → position map ───
+            $rosteredIds = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
+                ->distinct('employee_id')
+                ->pluck('employee_id');
+
+            $empQuery = Employee::whereIn('id', $rosteredIds)
+                ->where('is_active', true)
+                ->with(['position']);
+
+            if (!empty($selectedGroups)) {
+                $empQuery->whereHas('groups', function ($q) use ($selectedGroups) {
+                    $q->whereIn('reference_code', $selectedGroups);
+                });
+            }
+
+            $positionMap = $empQuery->get()
+                ->pluck('position.name', 'id')
+                ->map(fn($name) => $name ?: 'TANPA BAGIAN')
+                ->toArray();
+
+            // ─── Panggil internal rekab ───
             $uangMakanCtrl = app(UangMakanReportController::class);
             $rekabRequest  = Request::create(
                 "/api/v1/reports/uang-makan/rekab?period_id={$period->id}",
@@ -252,14 +263,15 @@ class RekapKerjaController extends Controller
             $rekabData     = json_decode($rekabResponse->getContent(), true);
             $umItems       = $rekabData['data'] ?? [];
 
-            // Group by group_name (BAGIAN)
+            // ─── Group by POSITION ───
             $grouped = [];
 
             foreach ($umItems as $item) {
-                $groupName = $item['group_name'] ?? 'TANPA BAGIAN';
+                $employeeId = $item['id'] ?? null;
+                $bagian = $positionMap[$employeeId] ?? ($item['group_name'] ?? 'TANPA BAGIAN');
 
-                if (!isset($grouped[$groupName])) {
-                    $grouped[$groupName] = [
+                if (!isset($grouped[$bagian])) {
+                    $grouped[$bagian] = [
                         'jml'          => 0,
                         'uang_makan'   => 0,
                         'lembur_sabtu' => 0,
@@ -270,12 +282,12 @@ class RekapKerjaController extends Controller
                 }
 
                 $nominals = $item['nominals'] ?? [];
-                $grouped[$groupName]['jml']++;
-                $grouped[$groupName]['uang_makan']   += (float)($nominals['uang_makan'] ?? 0);
-                $grouped[$groupName]['lembur_sabtu'] += (float)($nominals['lembur_sabtu'] ?? 0);
-                $grouped[$groupName]['lembur_minggu']+= (float)($nominals['lembur_minggu'] ?? 0);
-                $grouped[$groupName]['insentif']     += (float)($nominals['insentif'] ?? 0);
-                $grouped[$groupName]['total']        += (float)($item['total'] ?? 0);
+                $grouped[$bagian]['jml']++;
+                $grouped[$bagian]['uang_makan']   += (float)($nominals['uang_makan'] ?? 0);
+                $grouped[$bagian]['lembur_sabtu'] += (float)($nominals['lembur_sabtu'] ?? 0);
+                $grouped[$bagian]['lembur_minggu']+= (float)($nominals['lembur_minggu'] ?? 0);
+                $grouped[$bagian]['insentif']     += (float)($nominals['insentif'] ?? 0);
+                $grouped[$bagian]['total']        += (float)($item['total'] ?? 0);
             }
 
             $result = [];
@@ -291,10 +303,40 @@ class RekapKerjaController extends Controller
         }
     }
 
+    // ─── Helpers ──────────────────────────────────────────
+
+    /**
+     * Ambil ID extra employees yang dipilih dari config.
+     */
+    private function getExtraEmployeeIds(): array
+    {
+        try {
+            $configService = app(\App\Modules\Settings\Services\ReportConfigService::class);
+            $config = $configService->getConfig('rekap-kerja');
+            return $config['extra_employee_ids'] ?? [];
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * GET /api/v1/reports/rekap-kerja/extra-employees
+     * List semua extra employees untuk checklist di settings modal.
+     */
+    public function extraEmployees()
+    {
+        $extras = ExtraEmployee::orderBy('nama')->get()
+            ->map(fn($e) => [
+                'id'   => $e->id,
+                'nama' => $e->nama,
+            ]);
+
+        return response()->json(['data' => $extras]);
+    }
+
     /**
      * Get print-related groups from selected groups.
-     * Default: groups whose code contains 'PRINT' or name contains 'PRINT'.
-     * Can be overridden by report config.
+     * Default: dari config.print_groups, atau auto-detect "PRINT".
      */
     private function getPrintGroups(array $selectedGroups): array
     {
@@ -302,7 +344,6 @@ class RekapKerjaController extends Controller
             return [];
         }
 
-        // Try to get from report config first
         try {
             $configService = app(\App\Modules\Settings\Services\ReportConfigService::class);
             $config = $configService->getConfig('rekap-kerja');
@@ -310,10 +351,9 @@ class RekapKerjaController extends Controller
                 return array_intersect($selectedGroups, $config['print_groups']);
             }
         } catch (\Throwable $e) {
-            // Fallback
+            // fallback
         }
 
-        // Default: filter groups containing "PRINT" in the name
         $printGroups = EmployeeGroupMaster::where('group_label', 'Imported Shift/Group')
             ->where('is_active', true)
             ->where(function ($q) {
