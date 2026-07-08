@@ -110,6 +110,8 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.manual-sync.data');
         Route::post('/save', [ManualSyncController::class, 'save'])
             ->name('attendance.manual-sync.save');
+        Route::post('/push-prepare', [ManualSyncController::class, 'pushPrepare'])
+            ->name('attendance.manual-sync.push-prepare');
     });
 
 

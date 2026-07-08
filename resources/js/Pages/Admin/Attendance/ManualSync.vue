@@ -114,6 +114,14 @@
           </template>
           Tampilkan Data
         </BaseButton>
+        <BaseButton variant="secondary" :loading="isPushing" :disabled="!selectedPeriod" @click="pushPrepare">
+          <template #icon-left>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M22 2L11 13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </template>
+          Push Prepare
+        </BaseButton>
       </div>
     </div>
 
@@ -137,18 +145,19 @@
         </BaseButton>
       </div>
 
-      <div class="overflow-x-auto">
+      <div class="overflow-auto max-h-[60vh] rounded-lg border border-(--border-soft)">
         <table class="w-full text-sm">
           <thead>
-            <tr class="border-b-2 border-(--border-soft) text-left sticky top-0 bg-(--bg-card)">
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase">NIP</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase">Nama</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase">Tanggal</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase w-[380px]">Jam Scan</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase">WP</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase">Shift</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase">Auto Detect</th>
-              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase w-[120px]">Action</th>
+            <tr class="border-b-2 border-(--border-soft) text-left sticky top-0 bg-(--bg-card) z-10 shadow-sm">
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">NIP</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">Nama</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">Tanggal</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">WP</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">Shift</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">EXCP</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap min-w-[300px]\">Jam Scan</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">Auto Detect</th>
+              <th class="px-2 py-2 text-xs font-medium text-(--text-muted) uppercase whitespace-nowrap">Action</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-(--border-soft)">
@@ -157,6 +166,27 @@
               <td class="px-2 py-2 text-(--text-main) font-mono text-xs">{{ row.employee.nip }}</td>
               <td class="px-2 py-2 text-(--text-main) font-medium">{{ row.employee.name }}</td>
               <td class="px-2 py-2 text-(--text-muted) text-xs whitespace-nowrap">{{ formatDate(row.date) }}</td>
+
+              <!-- WP -->
+              <td class="px-2 py-2">
+                <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 whitespace-nowrap">
+                  {{ row.wp?.employee_type || '-' }}
+                </span>
+              </td>
+
+              <!-- Shift -->
+              <td class="px-2 py-2 text-(--text-main) text-xs whitespace-nowrap">
+                {{ row.shift?.external_code || row.shift?.code || '-' }}
+              </td>
+
+              <!-- EXCP -->
+              <td class="px-2 py-2 text-xs text-center">
+                <span v-if="row.excp" class="px-1.5 py-0.5 rounded text-xs font-bold"
+                  :class="excpBadgeClass(row.excp)">
+                  {{ row.excp }}
+                </span>
+                <span v-else class="text-(--text-muted)">-</span>
+              </td>
 
               <!-- Jam Scan: Radio IN + Radio OUT (horizontal) -->
               <td class="px-2 py-2">
@@ -215,35 +245,22 @@
                 </div>
               </td>
 
-              <!-- WP -->
-              <td class="px-2 py-2">
-                <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 whitespace-nowrap">
-                  {{ row.wp?.employee_type || '-' }}
-                </span>
-              </td>
-
-              <!-- Shift -->
-              <td class="px-2 py-2 text-(--text-main) text-xs whitespace-nowrap">
-                {{ row.shift?.external_code || row.shift?.code || '-' }}
-              </td>
-
               <!-- Auto Detect -->
               <td class="px-2 py-2">
-                <div v-if="row.auto_detect" class="text-xs space-y-0.5">
+                <div class="text-xs space-y-0.5">
                   <div class="flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
                     <span class="text-(--text-soft)">
-                      IN: {{ row.auto_detect.check_in_time ? formatTime(row.auto_detect.check_in_time) : '-' }}
+                      IN: {{ row.check_in ? formatTime(row.check_in) : '-' }}
                     </span>
                   </div>
                   <div class="flex items-center gap-1">
                     <span class="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0"></span>
                     <span class="text-(--text-soft)">
-                      OUT: {{ row.auto_detect.check_out_time ? formatTime(row.auto_detect.check_out_time) : '-' }}
+                      OUT: {{ row.check_out ? formatTime(row.check_out) : '-' }}
                     </span>
                   </div>
                 </div>
-                <div v-else class="text-xs text-red-400 italic">Tidak terdeteksi</div>
               </td>
 
               <!-- Action -->
@@ -357,6 +374,7 @@ const { get, post } = useApi()
 const isLoading = ref(false)
 const isLoadingDisplay = ref(false)
 const isSavingAll = ref(false)
+const isPushing = ref(false)
 const hasLoaded = ref(false)
 const resultBanner = ref(null)
 
@@ -713,12 +731,37 @@ async function saveAll() {
   }
 }
 
+async function pushPrepare() {
+  if (!selectedPeriod.value) return
+  if (!confirm(`Push semua record dalam rentang ${startDate.value} — ${endDate.value} ke att_prepares?`)) return
+
+  isPushing.value = true
+  resultBanner.value = null
+
+  try {
+    const res = await post('/api/v1/attendance/manual-sync/push-prepare', {
+      period_id: selectedPeriod.value,
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+
+    resultBanner.value = {
+      success: res.success !== false,
+      message: res.message || 'Push Prepare selesai.',
+    }
+  } catch (e) {
+    resultBanner.value = { success: false, message: 'Gagal: ' + (e.message || 'Unknown error') }
+  } finally {
+    isPushing.value = false
+  }
+}
+
 // ── Helpers ──
 
 function formatDate(dateStr) {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
-  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' })
 }
 
 function formatTime(dateTimeStr) {
@@ -726,7 +769,19 @@ function formatTime(dateTimeStr) {
   return dateTimeStr.substring(11, 16)
 }
 
+function excpBadgeClass(excp) {
+  if (!excp) return ''
+  // Leave codes: CT, S, I, etc. → blue bg
+  if (/^[A-Z]+$/.test(excp)) return 'bg-blue-100 text-blue-800'
+  // Consecutive worked: 7H, 14H → green bg
+  if (excp.endsWith('H')) return 'bg-green-100 text-green-800'
+  // Consecutive absent: 3A, 5A → red bg
+  if (excp.endsWith('A')) return 'bg-red-100 text-red-800'
+  return ''
+}
+
 function rowStatusBg(row) {
+  if (row.is_sunday || row.is_holiday) return 'bg-red-50'
   if (row.status === 'lengkap') return 'bg-green-50/20'
   if (row.status === 'perhatian') return 'bg-yellow-50/20'
   return 'hover:bg-(--bg-elevated)/30'

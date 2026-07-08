@@ -99,8 +99,8 @@ const allMenus = [
     visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Import Kehadiran', icon: 'bx bx-upload', route: '/admin/attendance/import', visible: isSuperadmin.value || isHrmanager.value },
-      { title: 'Sync Kehadiran', icon: 'bx bx-sync', route: '/admin/attendance/sync', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Manual Sync', icon: 'bx bx-transfer', route: '/admin/attendance/manual-sync', visible: isSuperadmin.value || isHrmanager.value },
+      { title: 'Sync Kehadiran', icon: 'bx bx-sync', route: '/admin/attendance/sync', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Hitung Lembur', icon: 'bx bx-calculator', route: '/admin/attendance/overtime-calculation', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Resume Kehadiran', icon: 'bx bx-file', route: '/admin/attendance/recap', visible: true },
       { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/admin/attendance/consecutive', visible: true },

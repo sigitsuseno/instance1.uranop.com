@@ -144,7 +144,42 @@
 
         <TextInput v-model="form.description" label="Deskripsi Pola Kerja" placeholder="Deskripsi singkat mengenai aturan pola kerja ini" />
 
+        <!-- Jam & Istirahat -->
+        <div>
+          <label class="block text-sm font-medium mb-2 text-(--text-main)">Jam Kerja & Istirahat</label>
+          <div class="grid grid-cols-4 gap-3">
+            <div>
+              <label class="block text-xs text-(--text-muted) mb-1">Jam Kerja/Hari</label>
+              <input v-model.number="form.work_day_hours" type="number" min="1" max="24"
+                class="w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all" />
+            </div>
+            <div>
+              <label class="block text-xs text-(--text-muted) mb-1">Jam ½ Hari</label>
+              <input v-model.number="form.half_day_hours" type="number" min="0" max="24"
+                class="w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all" />
+            </div>
+            <div>
+              <label class="block text-xs text-(--text-muted) mb-1">Istirahat Kerja (jam)</label>
+              <input v-model.number="form.wd_rest_hours" type="number" min="0" max="12"
+                class="w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all" />
+            </div>
+            <div>
+              <label class="block text-xs text-(--text-muted) mb-1">Istirahat ½ Hari (jam)</label>
+              <input v-model.number="form.hd_rest_hours" type="number" min="0" max="12"
+                class="w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all" />
+            </div>
+          </div>
+        </div>
+
         <div class="space-y-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" v-model="form.sun_overtime" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+            <span class="text-sm text-(--text-main)">Lembur Hari Minggu</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" v-model="form.is_half_day_all" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+            <span class="text-sm text-(--text-main)">Setengah Hari Semua (Half Day All)</span>
+          </label>
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" v-model="form.is_active" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
             <span class="text-sm font-medium text-(--text-main)">Aktif</span>
@@ -245,6 +280,12 @@ const form = reactive({
   cut_off_date: 25,
   description: '',
   is_active: true,
+  sun_overtime: false,
+  is_half_day_all: false,
+  work_day_hours: 8,
+  half_day_hours: 4,
+  wd_rest_hours: 1,
+  hd_rest_hours: 0,
 })
 
 function getSatTypeLabel(type) {
@@ -263,6 +304,12 @@ function openForm(item) {
     form.cut_off_date = item.cut_off_date || 25
     form.description = item.description || ''
     form.is_active = item.is_active ?? true
+    form.sun_overtime = item.sun_overtime ?? false
+    form.is_half_day_all = item.is_half_day_all ?? false
+    form.work_day_hours = item.work_day_hours ?? 8
+    form.half_day_hours = item.half_day_hours ?? 4
+    form.wd_rest_hours = item.wd_rest_hours ?? 1
+    form.hd_rest_hours = item.hd_rest_hours ?? 0
   } else {
     form.name = ''
     form.code = ''
@@ -272,6 +319,12 @@ function openForm(item) {
     form.cut_off_date = 25
     form.description = ''
     form.is_active = true
+    form.sun_overtime = false
+    form.is_half_day_all = false
+    form.work_day_hours = 8
+    form.half_day_hours = 4
+    form.wd_rest_hours = 1
+    form.hd_rest_hours = 0
   }
   formVisible.value = {}
 }
@@ -286,6 +339,12 @@ async function savePattern() {
     cut_off_date: form.cut_off_date,
     description: form.description,
     is_active: form.is_active,
+    sun_overtime: form.sun_overtime,
+    is_half_day_all: form.is_half_day_all,
+    work_day_hours: form.work_day_hours,
+    half_day_hours: form.half_day_hours,
+    wd_rest_hours: form.wd_rest_hours,
+    hd_rest_hours: form.hd_rest_hours,
   }
   
   try {

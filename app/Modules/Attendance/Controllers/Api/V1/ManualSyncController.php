@@ -3,9 +3,11 @@
 namespace App\Modules\Attendance\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Attendance\Models\ConsecutiveDay;
 use App\Modules\Attendance\Models\ManualDetect;
 use App\Modules\Attendance\Models\RawLog;
 use App\Modules\Attendance\Services\AttendanceSyncService;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Schedule\Models\Holiday;
@@ -377,6 +379,126 @@ class ManualSyncController extends Controller
         ]);
     }
 
+    /**
+     * POST /api/v1/attendance/manual-sync/push-prepare
+     *
+     * Push data dari att_manual_detect → att_prepares (upsert).
+     * Memproses SEMUA record dalam rentang tanggal (bukan per halaman).
+     *
+     * Body: {
+     *   period_id,  // untuk ambil start_date/end_date jika tidak di-override
+     *   start_date, // optional, override rentang
+     *   end_date,   // optional, override rentang
+     * }
+     */
+    public function pushPrepare(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'period_id'  => 'required|integer|exists:pay_periods,id',
+            'start_date' => 'nullable|date',
+            'end_date'   => 'nullable|date',
+        ]);
+
+        $period    = PayPeriod::findOrFail($validated['period_id']);
+        $startDate = $validated['start_date'] ?? $period->start_date->toDateString();
+        $endDate   = $validated['end_date']   ?? $period->end_date->toDateString();
+
+        // Ambil SEMUA record att_manual_detect dalam rentang
+        $records = ManualDetect::with(['roster', 'shift', 'workPattern'])
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->orderBy('employee_id')
+            ->get();
+
+        if ($records->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada data manual detect untuk dipush.',
+                'pushed'  => 0,
+            ]);
+        }
+
+        $userId  = Auth::id();
+        $pushed  = 0;
+        $skipped = 0;
+        $errors  = [];
+
+        foreach ($records as $record) {
+            DB::beginTransaction();
+            try {
+                // Mapping review_status dari status
+                $reviewStatus = match ($record->status) {
+                    ManualDetect::STATUS_LENGKAP   => 'lengkap',
+                    ManualDetect::STATUS_PERHATIAN => 'perhatian',
+                    default                        => 'cek',
+                };
+
+                // Mapping status ke att_prepares format
+                // att_prepares.status: cuti, izin, sakit, absent, hadir, terlambat, libur, off
+                // att_manual_detect.status: draft, perhatian, lengkap
+                // Jika check_in + check_out ada → 'hadir', else 'absent'
+                $attStatus = ($record->check_in || $record->check_out) ? 'hadir' : 'absent';
+
+                // Ambil schedule dari roster/shift
+                $scheduleIn  = null;
+                $scheduleOut = null;
+                $roster = $record->roster;
+                if ($roster?->shift) {
+                    $scheduleIn  = $roster->shift->start_time?->format('H:i:s');
+                    $scheduleOut = $roster->shift->end_time?->format('H:i:s');
+                }
+
+                DB::table('att_prepares')->upsert(
+                    [
+                        'employee_id'   => $record->employee_id,
+                        'date'          => $record->date->toDateString(),
+                        'periode_start' => $startDate,
+                        'periode_end'   => $endDate,
+                        'check_in'      => $record->check_in,
+                        'check_out'     => $record->check_out,
+                        'schedule_in'   => $scheduleIn,
+                        'schedule_out'  => $scheduleOut,
+                        'status'        => $attStatus,
+                        'review_status' => $reviewStatus,
+                        'updated_at'    => now(),
+                    ],
+                    ['employee_id', 'date'], // unique key
+                    ['check_in', 'check_out', 'schedule_in', 'schedule_out', 'status', 'review_status', 'updated_at']
+                );
+
+                DB::commit();
+                $pushed++;
+            } catch (\Throwable $e) {
+                DB::rollBack();
+                $errors[] = [
+                    'employee_id' => $record->employee_id,
+                    'date'        => $record->date->toDateString(),
+                    'error'       => $e->getMessage(),
+                ];
+                Log::error('ManualSync: pushPrepare failed', [
+                    'employee_id' => $record->employee_id,
+                    'date'        => $record->date->toDateString(),
+                    'error'       => $e->getMessage(),
+                ]);
+            }
+        }
+
+        Log::info('ManualSync: pushPrepare done', [
+            'start'   => $startDate,
+            'end'     => $endDate,
+            'pushed'  => $pushed,
+            'skipped' => $skipped,
+            'errors'  => count($errors),
+        ]);
+
+        return response()->json([
+            'success' => count($errors) === 0,
+            'message' => "{$pushed} record dipush ke att_prepares." . (count($errors) > 0 ? ' ' . count($errors) . ' gagal.' : ''),
+            'pushed'  => $pushed,
+            'errors'  => $errors,
+        ]);
+    }
+
     // ─── Private: Return Records (dengan pagination) ──────────────
 
     /**
@@ -419,7 +541,55 @@ class ManualSyncController extends Controller
             ->take($perPage)
             ->pluck('employee_id');
 
-        // ── Step 3: Ambil semua record untuk employee terpilih ──
+        // ── Step 3: Preload EXCP data (leave + consecutive) ──
+        // Preload approved leave requests overlapping the period
+        $approvedLeaves = LeaveRequest::with('leaveType')
+            ->where('status', 'approved')
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('start_date', [$startDate, $endDate])
+                  ->orWhereBetween('end_date', [$startDate, $endDate])
+                  ->orWhere(function ($q2) use ($startDate, $endDate) {
+                      $q2->where('start_date', '<=', $startDate)
+                         ->where('end_date', '>=', $endDate);
+                  });
+            })
+            ->get();
+
+        // Index leave by "employee_id|date" → leave_type_code
+        $leaveMap = [];
+        foreach ($approvedLeaves as $leave) {
+            $leaveStart = Carbon::parse($leave->start_date);
+            $leaveEnd   = Carbon::parse($leave->end_date);
+            $leaveCode  = $leave->leaveType?->code;
+            for ($d = $leaveStart->copy(); $d->lte($leaveEnd); $d->addDay()) {
+                $leaveMap[$leave->employee_id . '|' . $d->toDateString()] = $leaveCode;
+            }
+        }
+
+        // Preload consecutive days overlapping the period
+        $consecutives = ConsecutiveDay::forPeriod($startDate, $endDate)->get();
+
+        // Index consecutive by "employee_id|date" → "total_days|type_short"
+        $consecMap = [];
+        foreach ($consecutives as $c) {
+            $cStart  = Carbon::parse($c->start_date);
+            $cEnd    = Carbon::parse($c->end_date);
+            $typeShort = $c->type === ConsecutiveDay::TYPE_WORKED ? 'H' : 'A';
+            $label   = $c->total_days . $typeShort;
+            for ($d = $cStart->copy(); $d->lte($cEnd); $d->addDay()) {
+                $consecMap[$c->employee_id . '|' . $d->toDateString()] = $label;
+            }
+        }
+
+        // ── Step 4: Preload holidays ──
+        $holidaySet = array_flip(
+            Holiday::whereBetween('date', [$startDate, $endDate])
+                ->pluck('date')
+                ->map(fn ($d) => $d instanceof Carbon ? $d->toDateString() : (string) $d)
+                ->toArray()
+        );
+
+        // ── Step 5: Ambil semua record untuk employee terpilih ──
         $records = ManualDetect::with(['employee', 'roster', 'workPattern', 'shift'])
             ->whereBetween('date', [$startDate, $endDate])
             ->whereIn('employee_id', $employeeIds)
@@ -427,8 +597,10 @@ class ManualSyncController extends Controller
             ->orderBy('date')
             ->get();
 
-        $data = $records->map(function (ManualDetect $record) {
+        $data = $records->map(function (ManualDetect $record) use ($leaveMap, $consecMap, $holidaySet) {
             $tsr = $record->time_scan_result ?? [];
+            $excpKey = $record->employee_id . '|' . $record->date->toDateString();
+            $excp = $leaveMap[$excpKey] ?? $consecMap[$excpKey] ?? null;
 
             return [
                 'id'               => $record->id,
@@ -438,6 +610,8 @@ class ManualSyncController extends Controller
                     'name' => $record->employee?->name,
                 ],
                 'date'            => $record->date->toDateString(),
+                'is_sunday'       => Carbon::parse($record->date)->isSunday(),
+                'is_holiday'      => isset($holidaySet[$record->date->toDateString()]),
                 'roster'          => [
                     'id'            => $record->roster?->id,
                     'external_code' => $record->roster?->external_code,
@@ -461,6 +635,7 @@ class ManualSyncController extends Controller
                 'status'          => $record->status,
                 'is_manual_in'    => $tsr['manual_in'] ?? null,
                 'is_manual_out'   => $tsr['manual_out'] ?? null,
+                'excp'            => $excp,
             ];
         })->values()->toArray();
 

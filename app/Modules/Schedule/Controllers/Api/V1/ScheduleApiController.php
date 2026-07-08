@@ -30,6 +30,12 @@ class ScheduleApiController extends Controller
             'cut_off_date' => 'required|integer|min:1|max:31',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'sun_overtime' => 'boolean',
+            'is_half_day_all' => 'boolean',
+            'work_day_hours' => 'nullable|integer|min:1|max:24',
+            'half_day_hours' => 'nullable|integer|min:0|max:24',
+            'wd_rest_hours' => 'nullable|integer|min:0|max:12',
+            'hd_rest_hours' => 'nullable|integer|min:0|max:12',
         ]);
 
         $validated['uuid'] = (string) \Illuminate\Support\Str::uuid();
@@ -57,6 +63,12 @@ class ScheduleApiController extends Controller
             'cut_off_date' => 'required|integer|min:1|max:31',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
+            'sun_overtime' => 'boolean',
+            'is_half_day_all' => 'boolean',
+            'work_day_hours' => 'nullable|integer|min:1|max:24',
+            'half_day_hours' => 'nullable|integer|min:0|max:24',
+            'wd_rest_hours' => 'nullable|integer|min:0|max:12',
+            'hd_rest_hours' => 'nullable|integer|min:0|max:12',
         ]);
 
         $validated['updated_by'] = auth()->id() ?? 1;
