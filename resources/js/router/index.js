@@ -33,6 +33,7 @@ const AttendanceRecap = () => import('../Pages/Admin/Attendance/Recap/Index.vue'
 const LogImport = () => import('../Pages/Admin/Attendance/LogImport.vue')
 const RosterIndex = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const SyncKehadiran = () => import('../Pages/Admin/Attendance/SyncKehadiran.vue')
+const ManualSync = () => import('../Pages/Admin/Attendance/ManualSync.vue')
 const OvertimeIndex = () => import('../Pages/Admin/Attendance/Overtime/Index.vue')
 const OvertimeCalculationIndex = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Index.vue')
 const OvertimeCalculationDetail = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Detail.vue')
@@ -163,6 +164,7 @@ const routes = [
       { path: 'attendance/cek-log', name: 'attendance.cek-log', component: () => import('../Pages/Admin/Attendance/CekLog.vue'), meta: { title: 'Cek Log Kehadiran' } },
       { path: 'attendance/roster', name: 'attendance.roster', component: RosterIndex, meta: { title: 'Roster' } },
       { path: 'attendance/sync', name: 'attendance.sync', component: SyncKehadiran, meta: { title: 'Sync Kehadiran' } },
+      { path: 'attendance/manual-sync', name: 'attendance.manual-sync', component: ManualSync, meta: { title: 'Manual Sync' } },
       { path: 'attendance/overtime', name: 'attendance.overtime', component: OvertimeIndex, meta: { title: 'Lembur' } },
       { path: 'attendance/overtime-calculation', name: 'attendance.overtime-calculation', component: OvertimeCalculationIndex, meta: { title: 'Perhitungan Lembur' } },
       { path: 'attendance/overtime-calculation/:id', name: 'attendance.overtime-calculation.detail', component: OvertimeCalculationDetail, meta: { title: 'Detail Perhitungan Lembur' } },

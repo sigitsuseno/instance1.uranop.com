@@ -308,6 +308,52 @@ class AttendanceSyncService
         }
     }
 
+    // ─── Public: Manual Sync Auto-Detect ─────────────────────────────
+
+    /**
+     * Public wrapper untuk Manual Sync — jalankan auto-detect tanpa full roster.
+     *
+     * Dipanggil dari ManualSyncController untuk mendeteksi check_in/check_out
+     * per employee per tanggal berdasarkan work_pattern_type dan shift.
+     *
+     * @param Collection $logs          RawLog collection untuk tanggal tersebut
+     * @param ?Shift     $shift         Shift dari roster
+     * @param string     $dateStr       Tanggal (Y-m-d)
+     * @param bool       $isHoliday     Apakah tanggal hari libur
+     * @param bool       $isSunday      Apakah tanggal hari Minggu
+     * @param string     $workPatternType  FIXED / SHIFT / FLEX-SHIFT / dll
+     * @param string|null $externalCode    External code roster (untuk SHIFT)
+     * @return array [check_in, check_out, status, has_in, has_out, is_holiday, is_sunday]
+     */
+    public function detectForManualSync(
+        Collection $logs,
+        ?Shift $shift,
+        string $dateStr,
+        bool $isHoliday,
+        bool $isSunday,
+        string $workPatternType,
+        ?string $externalCode = null
+    ): array {
+        // Bikin roster dummy dengan data minimal yang dibutuhkan detector
+        $roster = new EmployeeShiftRoster([
+            'work_pattern_type' => $workPatternType,
+            'external_code'     => $externalCode,
+        ]);
+
+        return match ($workPatternType) {
+            'FIXED'       => $this->detectFixed($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'FLEX-SHIFT'  => $this->detectFlexShift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'SHIFT'       => $this->detectShift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'LONGSHIFT'   => $this->detectLongshift($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'SPLIT'       => $this->detectSplit($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'FLEXI'       => $this->detectFlexi($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'HOURLY'      => $this->detectHourly($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'ON_CAL'      => $this->detectOnCall($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            'SEASONAL'    => $this->detectSeasonal($logs, $shift, $dateStr, $isHoliday, $isSunday, $roster),
+            default       => $this->detectShiftWorker($logs, $shift, $dateStr, $isHoliday, $isSunday),
+        };
+    }
+
     // ─── Detectors (ported from hris-system) ────────────────────────
     //  Signature: detectXxx(Collection $logs, ?Shift $shift, string $dateStr,
     //                        bool $isHoliday, bool $isSunday, EmployeeShiftRoster $roster): array

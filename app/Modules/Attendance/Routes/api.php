@@ -1,6 +1,8 @@
 <?php
 
 use App\Modules\Attendance\Controllers\Api\V1\AttendanceApiController;
+use App\Modules\Attendance\Controllers\Api\V1\AttendanceConfigController;
+use App\Modules\Attendance\Controllers\Api\V1\ManualSyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
@@ -88,6 +90,26 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.recap.generate');
         Route::post('/approve', [AttendanceApiController::class, 'recapApprove'])
             ->name('attendance.recap.approve');
+    });
+
+    // ========== ATTENDANCE CONFIGS — per-page settings ==========
+
+    Route::prefix('attendance/configs')->group(function () {
+        Route::get('/', [AttendanceConfigController::class, 'index'])
+            ->name('attendance.configs.index');
+        Route::get('/{page}', [AttendanceConfigController::class, 'show'])
+            ->name('attendance.configs.show');
+        Route::put('/{page}', [AttendanceConfigController::class, 'update'])
+            ->name('attendance.configs.update');
+    });
+
+    // ========== MANUAL SYNC (Manual Detect) ==========
+
+    Route::prefix('attendance/manual-sync')->group(function () {
+        Route::get('/data', [ManualSyncController::class, 'getData'])
+            ->name('attendance.manual-sync.data');
+        Route::post('/save', [ManualSyncController::class, 'save'])
+            ->name('attendance.manual-sync.save');
     });
 
 
