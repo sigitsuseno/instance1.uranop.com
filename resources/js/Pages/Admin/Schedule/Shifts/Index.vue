@@ -178,6 +178,10 @@
         <!-- Status Details -->
         <div class="border-t border-(--border-soft) pt-3 space-y-2">
           <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" v-model="form.is_weekend" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
+            <span class="text-sm font-medium text-(--text-main)">Shift Hari Sabtu</span>
+          </label>
+          <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" v-model="form.is_dayoff" class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary-glow)" />
             <span class="text-sm font-medium text-(--text-main)">Ini adalah shift libur</span>
           </label>
@@ -228,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useScheduleStore } from '../../../../Stores/schedule'
 import { useAuth } from '../../../../composables/useAuth'
 import DataTable from '../../../../Components/Table/DataTable.vue'
@@ -299,6 +303,7 @@ const form = reactive({
   special_hour_start: '',
   special_hour_end: '',
   is_dayoff: false,
+  is_weekend: false,
   is_active: true,
   color: '#3b82f6',
 })
@@ -328,6 +333,7 @@ function openForm(item) {
     form.special_hour_end = meta.special_hour_end || ''
     form.is_special = meta.is_special || false
     form.is_dayoff = !!item.is_dayoff
+    form.is_weekend = !!item.is_weekend
     form.is_active = item.is_active ?? true
     form.color = item.color || '#3b82f6'
   } else {
@@ -352,11 +358,31 @@ function openForm(item) {
     form.special_hour_start = ''
     form.special_hour_end = ''
     form.is_dayoff = false
+    form.is_weekend = false
     form.is_active = true
     form.color = '#3b82f6'
   }
   formVisible.value = {}
 }
+
+// ── Auto-compute Jam Selesai ──
+watch([() => form.work_hour_start, () => form.is_weekend, () => form.work_pattern_id], () => {
+  if (!form.work_hour_start) return
+
+  // Cari work pattern yang dipilih
+  const pattern = store.workPatterns.find(p => p.id === form.work_pattern_id)
+  const hours = form.is_weekend
+    ? (pattern?.half_day_hours ?? 4)
+    : (pattern?.work_day_hours ?? 8)
+
+  // Parse jam mulai, tambah jam kerja
+  const [h, m, s] = form.work_hour_start.split(':').map(Number)
+  const totalMinutes = h * 60 + m + (hours * 60)
+  const endH = Math.floor(totalMinutes / 60) % 24
+  const endM = totalMinutes % 60
+
+  form.work_hour_end = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:${String(s ?? 0).padStart(2, '0')}`
+})
 
 async function saveShift() {
   const payload = {
@@ -378,6 +404,7 @@ async function saveShift() {
     has_overtime: form.has_overtime,
     has_modifier: form.has_modifier,
     is_dayoff: form.is_dayoff,
+    is_weekend: form.is_weekend,
     is_active: form.is_active,
     metadata: {
       color: form.color,

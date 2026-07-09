@@ -197,6 +197,7 @@ class ScheduleApiController extends Controller
             'has_overtime' => 'boolean',
             'has_modifier' => 'boolean',
             'is_dayoff' => 'boolean',
+            'is_weekend' => 'boolean',
             'is_active' => 'boolean',
             'metadata' => 'nullable|array',
         ]);
@@ -239,6 +240,7 @@ class ScheduleApiController extends Controller
             'has_overtime' => 'boolean',
             'has_modifier' => 'boolean',
             'is_dayoff' => 'boolean',
+            'is_weekend' => 'boolean',
             'is_active' => 'boolean',
             'metadata' => 'nullable|array',
         ]);
