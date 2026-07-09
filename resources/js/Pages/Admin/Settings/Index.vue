@@ -6,6 +6,7 @@ import AttendanceSettings from './Partials/AttendanceSettings.vue'
 import PayrollSettings from './Partials/PayrollSettings.vue'
 import WorkPatternSettings from './Partials/WorkPatternSettings.vue'
 import ExtraEmployeesSettings from './Partials/ExtraEmployeesSettings.vue'
+import CekJadwalSettings from './Partials/CekJadwalSettings.vue'
 
 const tabs = [
   { id: 'general', name: 'Umum', icon: 'bx-cog', component: GeneralSettings },
@@ -14,6 +15,7 @@ const tabs = [
   { id: 'work_pattern', name: 'Pola Kerja', icon: 'bx-calendar-star', component: WorkPatternSettings },
   { id: 'attendance', name: 'Absensi & Lembur', icon: 'bx-time', component: AttendanceSettings },
   { id: 'payroll', name: 'Penggajian & Pajak', icon: 'bx-money', component: PayrollSettings },
+  { id: 'cek_jadwal', name: 'Cek Jadwal', icon: 'bx-check-circle', component: CekJadwalSettings },
 ]
 
 const activeTabId = ref(tabs[0].id)

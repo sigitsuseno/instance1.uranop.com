@@ -7,6 +7,7 @@ use App\Modules\Settings\Controllers\Api\V1\EmployeeDataApiController;
 use App\Modules\Settings\Controllers\Api\V1\PayrollConfigApiController;
 use App\Modules\Settings\Controllers\Api\V1\BpjsConfigController;
 use App\Modules\Settings\Controllers\Api\V1\ReportConfigApiController;
+use App\Modules\Settings\Controllers\Api\V1\CekJadwalController;
 use App\Modules\Settings\Controllers\Api\V1\ExtraEmployeeController;
 
 Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
@@ -100,4 +101,9 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         Route::get('/{reportType}',  [ReportConfigApiController::class, 'show']);
         Route::put('/{reportType}',  [ReportConfigApiController::class, 'update']);
     });
+
+    // Cek Jadwal
+    Route::get('/cek-jadwal', [CekJadwalController::class, 'index']);
+    Route::put('/cek-jadwal/{id}/work-pattern', [CekJadwalController::class, 'updateWorkPattern']);
+    Route::put('/cek-jadwal/{id}/kode', [CekJadwalController::class, 'updateKode']);
 });
