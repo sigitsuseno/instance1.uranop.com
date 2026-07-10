@@ -60,17 +60,15 @@ class AttendanceSnapshotController extends Controller
         $month = Carbon::parse($endDate)->month;
         $year = Carbon::parse($endDate)->year;
 
-        // Build base query: employee yang punya roster ATAU autolog di periode ini, exclude GRP-JKT
-        $employeesQuery = Employee::where(function ($q) use ($startDate, $endDate) {
-            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            });
-        })
-            ->whereDoesntHave('groups', function ($q) {
-                $q->where('reference_code', 'GRP-JKT');
-            })
+        // Ambil employee ID dari supervisor_employee_groups per periode
+        $groupEmployeeIds = \App\Modules\Supervisor\Models\SupervisorEmployeeGroup::where('period_start', $startDate)
+            ->where('period_end', $endDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
+        // Build base query: hanya employee yang terdaftar di supervisor_employee_groups
+        $employeesQuery = Employee::whereIn('id', $groupEmployeeIds)
             ->with([
                 'department',
                 'position',
@@ -362,12 +360,12 @@ class AttendanceSnapshotController extends Controller
             $updated = 0;
 
             if ($request->save_all) {
-                // All active employees, exclude GRP-JKT
-                $employeeIds = Employee::where('is_active', 1)
-                    ->whereDoesntHave('groups', function ($q) {
-                        $q->where('reference_code', 'GRP-JKT');
-                    })
-                    ->pluck('id')
+                // Hanya employee yang terdaftar di supervisor_employee_groups periode ini
+                $employeeIds = \App\Modules\Supervisor\Models\SupervisorEmployeeGroup::where('period_start', $startDate)
+                    ->where('period_end', $endDate)
+                    ->pluck('employee_id')
+                    ->unique()
+                    ->values()
                     ->toArray();
             } else {
                 $employeeIds = $request->employee_ids;
@@ -438,9 +436,15 @@ class AttendanceSnapshotController extends Controller
                 );
             }
 
+            // Hapus snapshot karyawan yang sudah tidak ada di group periode ini
+            $deleted = AttendanceSnapshot::where('pay_period_id', $payPeriod->id)
+                ->whereNull('segment')
+                ->whereNotIn('employee_id', $employeeIds)
+                ->delete();
+
             return response()->json([
                 'success' => true,
-                'message' => "Snapshot berhasil disimpan: {$created} baru, {$updated} diperbarui",
+                'message' => "Snapshot berhasil disimpan: {$created} baru, {$updated} diperbarui" . ($deleted > 0 ? ", {$deleted} dihapus (tidak ada di group)" : ''),
             ]);
         } catch (\Exception $e) {
             \Log::error('storeBulk error: ' . $e->getMessage());
@@ -465,10 +469,14 @@ class AttendanceSnapshotController extends Controller
         $izinTypeIds = $leaveTypeIds->where('category', 'permit')->pluck('id');
         $sakitTypeId = $leaveTypeIds->firstWhere('category', 'sick')?->id;
 
-        $employees = Employee::where('is_active', 1)
-            ->whereDoesntHave('groups', function ($q) {
-                $q->where('reference_code', 'GRP-JKT');
-            })
+        // Ambil employee ID dari supervisor_employee_groups per periode
+        $groupEmployeeIds = \App\Modules\Supervisor\Models\SupervisorEmployeeGroup::where('period_start', $startDate)
+            ->where('period_end', $endDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
+        $employees = Employee::whereIn('id', $groupEmployeeIds)
             ->with([
                 'department',
                 'position',

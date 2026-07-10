@@ -201,10 +201,15 @@ class AttendanceAutologController extends Controller
         $workPatternId = $request->input('work_pattern_id');
         $search = $request->input('search');
 
+        // Ambil employee ID dari supervisor_employee_groups per periode
+        $groupEmployeeIds = SupervisorEmployeeGroup::where('period_start', $startDate)
+            ->where('period_end', $endDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
         // Get all employees with filters (no pagination for print)
-        $employees = Employee::whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
-            $query->whereBetween('date', [$startDate, $endDate]);
-        })
+        $employees = Employee::whereIn('id', $groupEmployeeIds)
             ->with([
                 'department',
                 'position',
@@ -922,17 +927,15 @@ class AttendanceAutologController extends Controller
         $workPatternId = $request->input('work_pattern_id');
         $search = $request->input('search');
 
+        // Ambil employee ID dari supervisor_employee_groups per periode
+        $groupEmployeeIds = SupervisorEmployeeGroup::where('period_start', $startDate)
+            ->where('period_end', $endDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
         // Query sama persis dengan index() — all employees, no pagination
-        $employees = Employee::where(function ($q) use ($startDate, $endDate) {
-            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            });
-        })
-            ->whereDoesntHave('groups', function ($q) {
-                $q->where('reference_code', 'GRP-JKT');
-            })
+        $employees = Employee::whereIn('id', $groupEmployeeIds)
             ->with([
                 'department',
                 'position',
