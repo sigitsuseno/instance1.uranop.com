@@ -153,5 +153,14 @@ Route::prefix('v1/supervisor')
             // PPh Karyawan
             Route::get('pph/employees', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeTaxController::class, 'index']);
             Route::put('pph/employees/{id}', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeTaxController::class, 'update']);
+
+            // Karyawan Group (Supervisor Dashboard)
+            Route::prefix('karyawan-group')->group(function () {
+                Route::get('/', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'index']);
+                Route::post('/', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'store']);
+                Route::post('/bulk-update', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'bulkUpdate']);
+                Route::get('/options', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'groupOptions']);
+                Route::delete('/{id}', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'destroy']);
+            });
         });
     });

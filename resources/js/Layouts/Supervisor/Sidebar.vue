@@ -35,6 +35,7 @@ const supervisorMenus = computed(() => [
       { title: 'Kompensasi', icon: 'bx bx-gift', route: '/supervisor/employee-data/kompensasi' },
       { title: 'BPJS Karyawan', icon: 'bx bx-shield-plus', route: '/supervisor/employee-data/bpjs-karyawan' },
       { title: 'PPh Karyawan', icon: 'bx bx-receipt', route: '/supervisor/employee-data/pph-karyawan' },
+      { title: 'Karyawan Group', icon: 'bx bx-layer', route: '/supervisor/employee-data/karyawan-group', visible: isSuperadmin.value },
     ],
   },
   {

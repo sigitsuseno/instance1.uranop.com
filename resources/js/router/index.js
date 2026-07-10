@@ -275,6 +275,8 @@ const routes = [
 
       { path: 'employee-data/pph-karyawan', name: 'supervisor.employee.pph', component: () => import('../Pages/Supervisor/Employee/Pph/Employees.vue'), meta: { title: 'PPh Karyawan' } },
 
+      { path: 'employee-data/karyawan-group', name: 'supervisor.employee.karyawan-group', component: () => import('../Pages/Supervisor/Employee/KaryawanGroup/Index.vue'), meta: { title: 'Karyawan Group' } },
+
       { path: 'reports', name: 'supervisor.reports', component: SupervisorReports, meta: { title: 'Laporan' } },
 
       { path: 'schedule/work-patterns', name: 'supervisor.schedule.work-patterns', component: SupervisorScheduleWorkPatterns, meta: { title: 'Pola Kerja' } },
