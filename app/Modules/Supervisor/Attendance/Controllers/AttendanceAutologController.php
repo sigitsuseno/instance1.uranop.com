@@ -11,6 +11,7 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Organization\Models\Department;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\WorkPattern;
+use App\Modules\Supervisor\Models\SupervisorEmployeeGroup;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -54,18 +55,15 @@ class AttendanceAutologController extends Controller
             $selectedPeriodId = $latestPeriod->id;
         }
 
-        // Build base query: hanya employee yang punya roster di periode ini atau punya autolog
-        // dan exclude GRP-JKT (karena sudah ada service khusus)
-        $employeesQuery = Employee::where(function($q) use ($startDate, $endDate) {
-            $q->whereHas('shiftRosters', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            })->orWhereHas('autologs', function ($query) use ($startDate, $endDate) {
-                $query->whereBetween('date', [$startDate, $endDate]);
-            });
-        })
-            ->whereDoesntHave('groups', function ($q) {
-                $q->where('reference_code', 'GRP-JKT');
-            })
+        // Ambil employee ID dari supervisor_employee_groups per periode
+        $groupEmployeeIds = SupervisorEmployeeGroup::where('period_start', $startDate)
+            ->where('period_end', $endDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
+        // Build base query: hanya employee yang terdaftar di supervisor_employee_groups
+        $employeesQuery = Employee::whereIn('id', $groupEmployeeIds)
             ->with([
                 'department',
                 'position',

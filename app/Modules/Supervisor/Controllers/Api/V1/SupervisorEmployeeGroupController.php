@@ -4,29 +4,44 @@ namespace App\Modules\Supervisor\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Supervisor\Models\SupervisorEmployeeGroup;
-use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupervisorEmployeeGroupController extends Controller
 {
     /**
-     * GET kanban data: available employees (with roster) + existing groups.
+     * GET kanban data: roster employees + group members per pay period.
      */
     public function index(Request $request): JsonResponse
     {
         $year  = (int) $request->query('year', date('Y'));
         $month = (int) $request->query('month', date('n'));
 
-        // Periode: tanggal 25 bulan sebelumnya s/d 24 bulan sekarang (cut-off roster)
-        $periodDate = Carbon::createFromDate($year, $month, 1);
-        $startDate  = $periodDate->copy()->subMonth()->format('Y-m-25');
-        $endDate    = $periodDate->copy()->format('Y-m-24');
+        // Cari pay period berdasarkan tahun & bulan
+        $payPeriod = PayPeriod::where('period_year', $year)
+            ->where('period_month', $month)
+            ->first();
 
-        // ── Ambil employee_id yang punya roster di periode terpilih ──
+        if (!$payPeriod) {
+            return response()->json([
+                'period'      => null,
+                'roster_pool' => [],
+                'group_pool'  => [],
+                'message'     => 'Pay period tidak ditemukan.',
+            ]);
+        }
+
+        $startDate = $payPeriod->start_date->format('Y-m-d');
+        $endDate   = $payPeriod->end_date->format('Y-m-d');
+
+        // ── Karyawan dengan roster di periode ini ──
         $rosterEmployeeIds = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
             ->distinct()
             ->pluck('employee_id');
@@ -38,53 +53,43 @@ class SupervisorEmployeeGroupController extends Controller
             ->orderBy('nip')
             ->get();
 
-        // ── Ambil data group yang sudah tersimpan untuk periode ini ──
+        // ── Karyawan yang sudah di-assign ke group periode ini ──
         $groupedRecords = SupervisorEmployeeGroup::where('period_start', $startDate)
             ->where('period_end', $endDate)
             ->with('employee:id,name,employee_code,nip,photo')
             ->get();
 
-        // Group by group_code untuk kanban columns
-        $groupedByCode = [];
-        foreach ($groupedRecords as $record) {
-            $groupedByCode[$record->group_code][] = [
-                'id'              => $record->id,
-                'uuid'            => $record->uuid,
-                'employee_id'     => $record->employee_id,
-                'employee'        => $record->employee ? [
-                    'id'            => $record->employee->id,
-                    'name'          => $record->employee->name,
-                    'employee_code' => $record->employee->employee_code,
-                    'nip'           => $record->employee->nip,
-                    'photo'         => $record->employee->photo_url ?? null,
-                ] : null,
-                'group_name'      => $record->group_name,
-                'group_code'      => $record->group_code,
-                'group_component' => $record->group_component,
-                'notes'           => $record->notes,
-            ];
-        }
-
-        // Daftar grup unik (untuk column headers)
-        $groups = $groupedRecords->unique('group_code')->map(fn($r) => [
-            'group_name' => $r->group_name,
-            'group_code' => $r->group_code,
-        ])->values();
-
-        // Employee IDs yang sudah di-group (supaya ga muncul di kolom available)
         $groupedEmployeeIds = $groupedRecords->pluck('employee_id')->unique()->toArray();
 
+        // Roster pool: karyawan roster yang BELUM di-assign
+        $rosterPool = $employees
+            ->filter(fn($e) => !in_array($e->id, $groupedEmployeeIds))
+            ->values();
+
+        // Group pool: karyawan yang SUDAH di-assign
+        $groupPool = $groupedRecords->map(function ($r) {
+            return [
+                'id'              => $r->employee_id,
+                'employee_id'     => $r->employee_id,
+                'name'            => $r->employee->name ?? '',
+                'employee_code'   => $r->employee->employee_code ?? '',
+                'nip'             => $r->employee->nip ?? '',
+                'photo_url'       => $r->employee->photo_url ?? null,
+                'department'      => $r->employee->relationLoaded('department') ? $r->employee->department : null,
+                '_group_id'       => $r->id,
+            ];
+        })->values();
+
         return response()->json([
-            'employees'           => $employees,           // semua karyawan roster
-            'grouped_employee_ids' => $groupedEmployeeIds, // ID yang sudah di-group
-            'groups'              => $groups,               // daftar grup
-            'grouped_by_code'     => $groupedByCode,        // karyawan per group
-            'period'              => [
+            'period'      => [
                 'start' => $startDate,
                 'end'   => $endDate,
+                'name'  => $payPeriod->name,
                 'year'  => $year,
                 'month' => $month,
             ],
+            'roster_pool' => $rosterPool,
+            'group_pool'  => $groupPool,
         ]);
     }
 
@@ -151,45 +156,42 @@ class SupervisorEmployeeGroupController extends Controller
     }
 
     /**
-     * POST bulk-update dari kanban (drag & drop batch).
-     * Menerima array assignments dan removals.
+     * POST bulk-update dari kanban (drag & drop).
+     * Menerima array assignments (ke group) dan removals (keluar group).
+     * group_code & group_name pakai nama pay period.
      */
     public function bulkUpdate(Request $request): JsonResponse
     {
         $data = $request->validate([
             'period_start' => 'required|date',
             'period_end'   => 'required|date',
+            'group_name'   => 'required|string|max:100',
+            'group_code'   => 'required|string|max:50',
             'assignments'  => 'nullable|array',
-            'assignments.*.employee_id'     => 'required|integer|exists:employees,id',
-            'assignments.*.group_name'      => 'required|string|max:100',
-            'assignments.*.group_code'      => 'required|string|max:50',
-            'assignments.*.group_component' => 'nullable|array',
-            'assignments.*.notes'           => 'nullable|string|max:500',
+            'assignments.*.employee_id' => 'required|integer|exists:employees,id',
             'removals'     => 'nullable|array',
             'removals.*'   => 'integer|exists:supervisor_employee_groups,id',
         ]);
 
         DB::beginTransaction();
         try {
-            // Process removals
+            // Process removals (drag dari group kembali ke roster)
             if (!empty($data['removals'])) {
                 SupervisorEmployeeGroup::whereIn('id', $data['removals'])->delete();
             }
 
-            // Process assignments
+            // Process assignments (drag dari roster ke group)
             if (!empty($data['assignments'])) {
                 foreach ($data['assignments'] as $assignment) {
                     SupervisorEmployeeGroup::updateOrCreate(
                         [
                             'employee_id'  => $assignment['employee_id'],
-                            'group_code'   => $assignment['group_code'],
                             'period_start' => $data['period_start'],
                             'period_end'   => $data['period_end'],
                         ],
                         [
-                            'group_name'      => $assignment['group_name'],
-                            'group_component' => $assignment['group_component'] ?? null,
-                            'notes'           => $assignment['notes'] ?? null,
+                            'group_name' => $data['group_name'],
+                            'group_code' => $data['group_code'],
                         ]
                     );
                 }
@@ -222,5 +224,196 @@ class SupervisorEmployeeGroupController extends Controller
         }
 
         return response()->json(['data' => $query->get()]);
+    }
+
+    /**
+     * POST preview import Excel: terima file, return data preview.
+     */
+    public function previewImport(Request $request): JsonResponse
+    {
+        $request->validate([
+            'file'    => 'required|file|mimes:xlsx,csv,xls',
+            'year'    => 'required|integer',
+            'month'   => 'required|integer',
+        ]);
+
+        $year  = (int) $request->input('year');
+        $month = (int) $request->input('month');
+
+        $payPeriod = PayPeriod::where('period_year', $year)
+            ->where('period_month', $month)
+            ->first();
+
+        if (!$payPeriod) {
+            return response()->json(['message' => 'Pay period tidak ditemukan.'], 404);
+        }
+
+        $file = $request->file('file');
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getRealPath());
+        $worksheet = $spreadsheet->getActiveSheet();
+        $rows = $worksheet->toArray();
+        array_shift($rows); // skip header
+
+        $employees = Employee::pluck('name', 'nip')->toArray();
+        $employeeIds = Employee::pluck('id', 'nip')->toArray();
+
+        $previewData = [];
+        foreach ($rows as $index => $row) {
+            $nip = trim($row[0] ?? '');
+
+            if (empty($nip)) continue;
+
+            $isValid = true;
+            $errorMsg = [];
+            $empName = $employees[$nip] ?? null;
+            $empId = $employeeIds[$nip] ?? null;
+
+            if (!$empName) {
+                $isValid = false;
+                $errorMsg[] = 'NIP tidak ditemukan';
+            }
+
+            $previewData[] = [
+                'row'           => $index + 2,
+                'nip'           => $nip,
+                'employee_name' => $empName ?? '-',
+                'employee_id'   => $empId,
+                'is_valid'      => $isValid,
+                'error'         => implode(', ', $errorMsg),
+            ];
+        }
+
+        return response()->json([
+            'data'        => $previewData,
+            'period_name' => $payPeriod->name,
+            'period'      => [
+                'start' => $payPeriod->start_date->format('Y-m-d'),
+                'end'   => $payPeriod->end_date->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    /**
+     * POST process import: simpan data valid ke supervisor_employee_groups.
+     */
+    public function processImport(Request $request): JsonResponse
+    {
+        $request->validate([
+            'items'       => 'required|array',
+            'items.*.employee_id' => 'required|integer|exists:employees,id',
+            'year'        => 'required|integer',
+            'month'       => 'required|integer',
+        ]);
+
+        $year  = (int) $request->input('year');
+        $month = (int) $request->input('month');
+
+        $payPeriod = PayPeriod::where('period_year', $year)
+            ->where('period_month', $month)
+            ->first();
+
+        if (!$payPeriod) {
+            return response()->json(['message' => 'Pay period tidak ditemukan.'], 404);
+        }
+
+        $startDate = $payPeriod->start_date->format('Y-m-d');
+        $endDate   = $payPeriod->end_date->format('Y-m-d');
+        $items     = $request->input('items', []);
+
+        DB::beginTransaction();
+        try {
+            $imported = 0;
+            foreach ($items as $item) {
+                $exists = SupervisorEmployeeGroup::where('employee_id', $item['employee_id'])
+                    ->where('period_start', $startDate)
+                    ->where('period_end', $endDate)
+                    ->exists();
+
+                if (!$exists) {
+                    SupervisorEmployeeGroup::create([
+                        'employee_id'  => $item['employee_id'],
+                        'group_name'   => $payPeriod->name,
+                        'group_code'   => $payPeriod->name,
+                        'period_start' => $startDate,
+                        'period_end'   => $endDate,
+                    ]);
+                    $imported++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => "{$imported} karyawan berhasil diimport ke periode {$payPeriod->name}.",
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Gagal import: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * GET download template Excel untuk import.
+     */
+    public function downloadTemplate(Request $request): StreamedResponse
+    {
+        $year  = (int) $request->query('year', date('Y'));
+        $month = (int) $request->query('month', date('n'));
+
+        $payPeriod = PayPeriod::where('period_year', $year)
+            ->where('period_month', $month)
+            ->first();
+
+        $periodName = $payPeriod ? $payPeriod->name : "{$year}-{$month}";
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $sheet->setCellValue('A1', 'NIP');
+        $sheet->setCellValue('B1', 'Nama Karyawan');
+        $sheet->setCellValue('C1', 'Kode Grup');
+        $sheet->setCellValue('D1', 'Periode');
+
+        // Isi dengan data existing (jika ada)
+        if ($payPeriod) {
+            $startDate = $payPeriod->start_date->format('Y-m-d');
+            $endDate   = $payPeriod->end_date->format('Y-m-d');
+
+            $records = SupervisorEmployeeGroup::where('period_start', $startDate)
+                ->where('period_end', $endDate)
+                ->with('employee:id,nip,name')
+                ->get();
+
+            $row = 2;
+            foreach ($records as $r) {
+                $sheet->setCellValueExplicit('A' . $row, $r->employee->nip ?? '', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValue('B' . $row, $r->employee->name ?? '');
+                $sheet->setCellValue('C' . $row, $payPeriod->name);
+                $sheet->setCellValue('D' . $row, "{$startDate} s/d {$endDate}");
+                $row++;
+            }
+        }
+
+        // Styling header
+        $sheet->getStyle('A1:D1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:D1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+            ->getStartColor()->setARGB('FFE0E0E0');
+
+        foreach (range('A', 'D') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $fileName = "Template_KaryawanGroup_{$periodName}.xlsx";
+
+        $response = new StreamedResponse(function () use ($spreadsheet) {
+            $writer = new Xlsx($spreadsheet);
+            $writer->save('php://output');
+        });
+
+        $response->headers->set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        $response->headers->set('Content-Disposition', 'attachment;filename="' . $fileName . '"');
+        $response->headers->set('Cache-Control', 'max-age=0');
+
+        return $response;
     }
 }

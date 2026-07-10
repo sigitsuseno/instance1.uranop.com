@@ -1,18 +1,17 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 import KanbanColumn from './Components/KanbanColumn.vue'
+import ImportModal from './Components/ImportModal.vue'
 
 const { get, post } = useApi()
 const notification = useNotificationStore()
 
 // ── State ──
-const employees = ref([])
-const groups = ref([])
-const groupedById = ref({})
-const groupedEmployeeIds = ref([])
-const period = ref({ start: '', end: '', year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
+const rosterPool = ref([])
+const groupPool = ref([])
+const period = ref({ start: '', end: '', name: '', year: new Date().getFullYear(), month: new Date().getMonth() + 1 })
 
 const activeYear = ref(period.value.year)
 const activeMonth = ref(period.value.month)
@@ -20,10 +19,7 @@ const isLoading = ref(true)
 const draggedEmployeeId = ref(null)
 const selectedIds = ref([])
 const hasChanges = ref(false)
-
-// Local working copy
-const rosterPool = ref([])
-const groupPools = ref({})
+const showImportModal = ref(false)
 
 // ── Months ──
 const months = [
@@ -39,33 +35,9 @@ const fetchData = async () => {
   try {
     const data = await get(`/api/v1/supervisor/employee-data/karyawan-group?year=${activeYear.value}&month=${activeMonth.value}`)
 
-    employees.value = data.employees
-    groups.value = data.groups
-    groupedEmployeeIds.value = data.grouped_employee_ids
-    period.value = data.period
-
-    // Build local pools
-    // Roster pool: employees NOT in any group
-    rosterPool.value = employees.value
-      .filter(e => !groupedEmployeeIds.value.includes(e.id))
-      .map(e => ({ ...e }))
-
-    // Group pools: employees per group_code
-    groupPools.value = {}
-    if (data.grouped_by_code) {
-      Object.entries(data.grouped_by_code).forEach(([code, members]) => {
-        groupPools.value[code] = members.map(m => ({
-          id: m.employee_id,
-          name: m.employee?.name || '',
-          employee_code: m.employee?.employee_code || '',
-          nip: m.employee?.nip || '',
-          photo_url: m.employee?.photo || null,
-          _group_id: m.id,              // ID record di supervisor_employee_groups
-          _group_name: m.group_name,
-          _group_code: m.group_code,
-        }))
-      })
-    }
+    period.value = data.period || { start: '', end: '', name: '' }
+    rosterPool.value = data.roster_pool || []
+    groupPool.value = data.group_pool || []
 
     hasChanges.value = false
     selectedIds.value = []
@@ -77,104 +49,48 @@ const fetchData = async () => {
   }
 }
 
-onMounted(() => fetchData())
-watch([activeMonth, activeYear], () => fetchData())
-
-// ── Column definitions (computed) ──
-const kanbanColumns = computed(() => {
-  const cols = []
-
-  // Kolom 1: Karyawan Roster (available)
-  cols.push({
-    label: 'Karyawan Roster',
-    value: '__roster__',
-    icon: 'bx-user-plus',
-    color: 'var(--text-soft)',
-    employees: rosterPool.value,
-  })
-
-  // Kolom dinamis: per group_code
-  groups.value.forEach(g => {
-    const members = groupPools.value[g.group_code] || []
-    cols.push({
-      label: g.group_name,
-      value: g.group_code,
-      icon: 'bx-folder',
-      color: 'var(--primary)',
-      employees: members,
-    })
-  })
-
-  return cols
-})
+watch([activeMonth, activeYear], () => fetchData(), { immediate: true })
 
 // ── Drag & Drop ──
 const onDragStart = (id) => {
   draggedEmployeeId.value = id
 }
 
-const onDrop = (targetValue) => {
+const onDrop = (target) => {
   if (!draggedEmployeeId.value) return
 
   const sourceEmployeeIds = selectedIds.value.includes(draggedEmployeeId.value)
     ? [...selectedIds.value]
     : [draggedEmployeeId.value]
 
-  // Cari employee dari rosterPool atau groupPools
   sourceEmployeeIds.forEach(empId => {
-    let emp = null
-    let sourceGroupCode = null
+    if (target === 'roster') {
+      // Drag dari group → roster (remove from group)
+      const found = groupPool.value.find(m => m.employee_id === empId)
+      if (!found) return
 
-    // Cek di roster pool
-    emp = rosterPool.value.find(e => e.id === empId)
-    if (!emp) {
-      // Cek di group pools
-      for (const [code, members] of Object.entries(groupPools.value)) {
-        const found = members.find(m => m.id === empId)
-        if (found) {
-          emp = found
-          sourceGroupCode = code
-          break
-        }
-      }
-    }
-
-    if (!emp) return
-
-    // Remove from source
-    if (sourceGroupCode) {
-      groupPools.value[sourceGroupCode] = groupPools.value[sourceGroupCode].filter(m => m.id !== empId)
-    } else {
-      rosterPool.value = rosterPool.value.filter(e => e.id !== empId)
-    }
-
-    // Add to target
-    if (targetValue === '__roster__') {
-      // Pindah ke roster → remove dari group (akan dihapus saat save)
       rosterPool.value.push({
-        id: emp.id,
-        name: emp.name,
-        employee_code: emp.employee_code,
-        nip: emp.nip,
-        _to_delete: emp._group_id || null,
+        id: found.employee_id,
+        name: found.name,
+        employee_code: found.employee_code,
+        nip: found.nip,
+        _to_delete: found._group_id || null,
       })
+      groupPool.value = groupPool.value.filter(m => m.employee_id !== empId)
     } else {
-      // Pindah ke group lain
-      const targetGroup = groups.value.find(g => g.group_code === targetValue)
-      if (!targetGroup) return
+      // Drag dari roster → group (assign)
+      const found = rosterPool.value.find(e => e.id === empId)
+      if (!found) return
 
-      if (!groupPools.value[targetValue]) {
-        groupPools.value[targetValue] = []
-      }
-      groupPools.value[targetValue].push({
-        id: emp.id,
-        name: emp.name,
-        employee_code: emp.employee_code,
-        nip: emp.nip,
-        _group_id: emp._group_id || null,
-        _group_name: targetGroup.group_name,
-        _group_code: targetGroup.group_code,
+      groupPool.value.push({
+        employee_id: found.id,
+        name: found.name,
+        employee_code: found.employee_code,
+        nip: found.nip,
+        photo_url: found.photo || found.photo_url || null,
+        _group_id: null,
       })
+      rosterPool.value = rosterPool.value.filter(e => e.id !== empId)
     }
 
     hasChanges.value = true
@@ -183,32 +99,22 @@ const onDrop = (targetValue) => {
   draggedEmployeeId.value = null
 }
 
-// ── Save Changes ──
+// ── Save ──
 const saveChanges = async () => {
-  const assignments = []
-  const removals = []
+  const assignments = groupPool.value
+    .filter(m => !m._group_id) // yang baru (belum punya record)
+    .map(m => ({ employee_id: m.employee_id }))
 
-  // Collect removals (karyawan di roster pool yang punya _to_delete)
-  rosterPool.value.forEach(e => {
-    if (e._to_delete) removals.push(e._to_delete)
-  })
-
-  // Collect assignments per group
-  Object.entries(groupPools.value).forEach(([code, members]) => {
-    const group = groups.value.find(g => g.group_code === code)
-    members.forEach(m => {
-      assignments.push({
-        employee_id: m.id,
-        group_name: group?.group_name || m._group_name || code,
-        group_code: code,
-      })
-    })
-  })
+  const removals = rosterPool.value
+    .filter(e => e._to_delete)
+    .map(e => e._to_delete)
 
   try {
     await post('/api/v1/supervisor/employee-data/karyawan-group/bulk-update', {
       period_start: period.value.start,
       period_end: period.value.end,
+      group_name: period.value.name,
+      group_code: period.value.name,
       assignments,
       removals,
     })
@@ -230,14 +136,31 @@ const toggleSelection = (id) => {
   else selectedIds.value.push(id)
 }
 
-const selectAllInGroup = (groupEmployees) => {
-  const ids = groupEmployees.map(e => e.id)
+const selectAllInGroup = (employees) => {
+  const ids = employees.map(e => e.employee_id || e.id)
   const allSelected = ids.every(id => selectedIds.value.includes(id))
   if (allSelected) {
     selectedIds.value = selectedIds.value.filter(id => !ids.includes(id))
   } else {
     selectedIds.value = [...new Set([...selectedIds.value, ...ids])]
   }
+}
+
+// ── Column definitions ──
+const rosterColumn = {
+  label: 'Karyawan Roster',
+  value: 'roster',
+  icon: 'bx-user-plus',
+  color: 'var(--text-soft)',
+  employees: rosterPool,
+}
+
+const groupColumn = {
+  label: period.value.name || 'Periode',
+  value: 'group',
+  icon: 'bx-folder',
+  color: 'var(--primary)',
+  employees: groupPool,
 }
 </script>
 
@@ -251,6 +174,15 @@ const selectAllInGroup = (groupEmployees) => {
       </div>
 
       <div class="flex items-center gap-3">
+        <button
+          @click="showImportModal = true"
+          class="bg-(--primary) text-white px-4 py-2.5 rounded-md font-bold shadow-lg shadow-(--primary)/20 flex items-center gap-2 hover:opacity-90 transition-all"
+          title="Import dari Excel"
+        >
+          <i class="bx bx-import text-xl"></i>
+          <span class="hidden md:inline">Import Excel</span>
+        </button>
+
         <transition name="slide-fade">
           <div v-if="hasChanges" class="flex items-center gap-2">
             <button
@@ -308,22 +240,36 @@ const selectAllInGroup = (groupEmployees) => {
         Periode: <strong>{{ period.start }}</strong> s/d <strong>{{ period.end }}</strong>
       </p>
 
-      <!-- Kanban Board -->
-      <div
-        :class="[
-          'grid gap-6 transition-all duration-500',
-          kanbanColumns.length === 1
-            ? 'grid-cols-1'
-            : kanbanColumns.length === 2
-              ? 'grid-cols-1 lg:grid-cols-2'
-              : 'grid-cols-1 lg:grid-cols-2 xl:grid-cols-3',
-        ]"
-      >
+      <!-- Empty state -->
+      <div v-if="!period.name" class="py-20 text-center">
+        <i class="bx bx-calendar-x text-6xl text-(--text-muted) mb-4"></i>
+        <h3 class="text-lg font-semibold text-(--text-main)">Pay period tidak ditemukan</h3>
+        <p class="text-(--text-muted) mt-2">Pilih periode lain atau pastikan pay period sudah digenerate.</p>
+      </div>
+
+      <!-- Empty state: no roster -->
+      <div v-else-if="rosterPool.length === 0 && groupPool.length === 0" class="py-20 text-center">
+        <i class="bx bx-calendar-x text-6xl text-(--text-muted) mb-4"></i>
+        <h3 class="text-lg font-semibold text-(--text-main)">Tidak ada karyawan dengan roster</h3>
+        <p class="text-(--text-muted) mt-2">Pilih periode lain atau pastikan roster sudah digenerate.</p>
+      </div>
+
+      <!-- Kanban Board: 2 columns -->
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <KanbanColumn
-          v-for="col in kanbanColumns"
-          :key="col.value"
-          :category="col"
-          :employees="col.employees"
+          :category="rosterColumn"
+          :employees="rosterPool"
+          :selectedIds="selectedIds"
+          :draggedEmployeeId="draggedEmployeeId"
+          @drop="onDrop"
+          @dragstart="onDragStart"
+          @toggleSelection="toggleSelection"
+          @selectAllInGroup="selectAllInGroup"
+        />
+
+        <KanbanColumn
+          :category="groupColumn"
+          :employees="groupPool"
           :selectedIds="selectedIds"
           :draggedEmployeeId="draggedEmployeeId"
           @drop="onDrop"
@@ -332,14 +278,16 @@ const selectAllInGroup = (groupEmployees) => {
           @selectAllInGroup="selectAllInGroup"
         />
       </div>
-
-      <!-- Empty state if no roster employees at all -->
-      <div v-if="employees.length === 0 && !isLoading" class="py-20 text-center">
-        <i class="bx bx-calendar-x text-6xl text-(--text-muted) mb-4"></i>
-        <h3 class="text-lg font-semibold text-(--text-main)">Tidak ada karyawan dengan roster</h3>
-        <p class="text-(--text-muted) mt-2">Pilih periode lain atau pastikan roster sudah digenerate.</p>
-      </div>
     </div>
+
+    <!-- Import Modal -->
+    <ImportModal
+      :show="showImportModal"
+      :activeYear="activeYear"
+      :activeMonth="activeMonth"
+      @close="showImportModal = false"
+      @success="fetchData"
+    />
   </div>
 </template>
 

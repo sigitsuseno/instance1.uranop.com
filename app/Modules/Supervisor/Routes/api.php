@@ -160,6 +160,9 @@ Route::prefix('v1/supervisor')
                 Route::post('/', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'store']);
                 Route::post('/bulk-update', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'bulkUpdate']);
                 Route::get('/options', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'groupOptions']);
+                Route::post('/preview-import', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'previewImport']);
+                Route::post('/import', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'processImport']);
+                Route::get('/template', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'downloadTemplate']);
                 Route::delete('/{id}', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'destroy']);
             });
         });
