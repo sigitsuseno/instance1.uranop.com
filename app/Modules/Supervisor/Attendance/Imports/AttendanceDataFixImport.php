@@ -284,8 +284,9 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         // ── a.3 Work day (Senin-Jumat) & a.4 Sabtu ──
         //    Ambil lembur, actual_in & actual_out (jadwal),
         //    check_out selalu + lembur setelah actual_out
-        $checkIn = $actualIn->copy();
-        $checkOut = $actualOut->copy();
+        //    Randomisasi kecil biar menit nggak kaku (0-15 menit telat, ±10 menit pulang)
+        $checkIn = $actualIn->copy()->addMinutes(rand(0, 15));
+        $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
 
         if ($lemburMinutes > 0) {
             $checkOut = $checkOut->addMinutes($lemburMinutes);
@@ -362,8 +363,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
 
         // ── b.4 Sabtu → lembur setelah actual_out ──
         if ($roster && $roster->is_sat) {
-            $checkIn = $actualIn->copy();
-            $checkOut = $actualOut->copy();
+            $checkIn = $actualIn->copy()->addMinutes(rand(0, 15));
+            $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
 
             if ($lemburMinutes > 0) {
                 $checkOut = $checkOut->addMinutes($lemburMinutes);
@@ -373,8 +374,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         }
 
         // ── b.3 Work day (Senin-Jumat) ──
-        $checkIn = $actualIn->copy();
-        $checkOut = $actualOut->copy();
+        $checkIn = $actualIn->copy()->addMinutes(rand(0, 15));
+        $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
 
         if ($lemburMinutes > 0) {
             if ($shiftCode === 'P') {
@@ -457,8 +458,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         // ── c.2 Status L → Lembur hari libur ──
         //    Lembur tidak mempengaruhi check_in/check_out, kecuali jika === 4 jam
         if ($status === 'L') {
-            $checkIn = $actualIn->copy();
-            $checkOut = $actualOut->copy();
+            $checkIn = $actualIn->copy()->addMinutes(rand(-15, 5));
+            $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
             $holidayOvertime = 1;
 
             if ($lemburHours == 4) {
@@ -475,8 +476,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         // ── c.1 Status H → Hadir ──
         //    Lembur tidak mempengaruhi check_in/check_out, kecuali jika === 4 jam
         if ($status === 'H') {
-            $checkIn = $actualIn->copy();
-            $checkOut = $actualOut->copy();
+            $checkIn = $actualIn->copy()->addMinutes(rand(0, 15));
+            $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
 
             if ($lemburHours == 4) {
                 if ($shiftCode === 'ML') {
@@ -490,8 +491,8 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         }
 
         // ── Fallback: status lain → present biasa ──
-        $checkIn = $actualIn->copy();
-        $checkOut = $actualOut->copy();
+        $checkIn = $actualIn->copy()->addMinutes(rand(0, 15));
+        $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
 
         return $this->buildRecord($employeeId, $date, $checkIn, $checkOut, $actualIn, $actualOut, $roster, $leave, 'present', 0, 0, 0, 0, 0, 0);
     }

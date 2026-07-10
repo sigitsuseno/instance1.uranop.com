@@ -94,7 +94,7 @@ class RekapAbsensiController extends Controller
                 $log = $logs->get($dateStr);
                 $row['days'][$dateStr] = [
                     'status' => $this->getStatusText($log),
-                    'lembur' => $log ? round((($log->lembur ?? 0) + ($log->lm ?? 0)) / 60, 1) : 0,
+                    'lembur' => round($this->getLemburMenit($log, $date) / 60, 1),
                 ];
             }
 
@@ -173,12 +173,45 @@ class RekapAbsensiController extends Controller
             ->orderBy('employee_code')
             ->get();
 
+        // Build date range
+        $dates = [];
+        $current = Carbon::parse($startDate);
+        $end = Carbon::parse($endDate);
+        while ($current <= $end) {
+            $dates[] = $current->copy();
+            $current->addDay();
+        }
+
+        // Build data array (same structure as index/print)
+        $data = [];
+        foreach ($employees as $i => $employee) {
+            $logs = $employee->autologs->keyBy(fn ($l) => $l->date->toDateString());
+
+            $row = [
+                'no' => $i + 1,
+                'employee_code' => $employee->employee_code,
+                'employee_name' => $employee->name,
+                'department' => $employee->department?->name,
+            ];
+
+            foreach ($dates as $date) {
+                $dateStr = $date->toDateString();
+                $log = $logs->get($dateStr);
+                $row['days'][$dateStr] = [
+                    'status' => $this->getStatusText($log),
+                    'lembur' => round($this->getLemburMenit($log, $date) / 60, 1),
+                ];
+            }
+
+            $data[] = $row;
+        }
+
         $company = Company::first();
         $companyName = $company?->name ?? 'ALL IN KARANGJATI';
         $filename = 'rekap_absensi_' . Carbon::now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(
-            new RekapAbsensiExport($employees, $startDate, $endDate, $companyName),
+            new RekapAbsensiExport($data, $startDate, $endDate, $companyName),
             $filename
         );
     }
@@ -249,7 +282,7 @@ class RekapAbsensiController extends Controller
                 $log = $logs->get($dateStr);
                 $row['days'][$dateStr] = [
                     'status' => $this->getStatusText($log),
-                    'lembur' => $log ? round((($log->lembur ?? 0) + ($log->lm ?? 0)) / 60, 1) : 0,
+                    'lembur' => round($this->getLemburMenit($log, $date) / 60, 1),
                 ];
             }
 
@@ -309,6 +342,24 @@ class RekapAbsensiController extends Controller
             'off' => 'O',
             default => '-',
         };
+    }
+
+    /**
+     * Ambil menit lembur berdasarkan hari:
+     * - Minggu / Holiday → field lm
+     * - Senin s/d Sabtu  → field lembur
+     */
+    protected function getLemburMenit($log, Carbon $date): int
+    {
+        if (! $log) {
+            return 0;
+        }
+
+        if ($date->isSunday() || $log->is_holiday) {
+            return $log->lm ?? 0;
+        }
+
+        return $log->lembur ?? 0;
     }
 
     protected function getPeriod(): array

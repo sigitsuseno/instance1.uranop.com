@@ -77,7 +77,7 @@
             @forelse($employees as $emp)
             <tr>
                 <td class="sticky-no">{{ $emp['no'] }}</td>
-                <td class="sticky-name">{{ $emp['employee_name'] }}<br><small>{{ $emp['employee_code'] }}</small></td>
+                <td class="sticky-name">{{ $emp['employee_name'] }}</td>
                 @foreach($dates as $date)
                 @php $d = $emp['days'][$date->toDateString()] ?? null; @endphp
                 <td class="status-cell status-{{ strtolower($d['status'] ?? 'empty') }}">
