@@ -70,8 +70,8 @@ class SupervisorBreakdownController extends Controller
                 'tunjangan'     => (float) $record->tunjangan,
                 'hari_kerja'    => (int) $record->hari_kerja,
                 'lm'            => (int) $record->lm,
-                'lm_count'      => (int) $record->lm_count,
-                'lembur_count'  => (int) $record->lembur_count,
+                'lm_count'      => (float) $record->lm_count,
+                'lembur_count'  => (float) $record->lembur_count,
                 // Hasil
                 'gaji'         => (float) $record->gaji,
                 'upah_lembur'  => (float) $record->upah_lembur,
@@ -220,8 +220,8 @@ class SupervisorBreakdownController extends Controller
                         $hariKerja = (int) $snapshot->hari_kerja;
                         $deductDay = (float) $snapshot->deduct_day;
                         $lm        = (int) $snapshot->lm;
-                        $lmCount   = (int) $snapshot->lm_count;
-                        $lemburCount = (int) $snapshot->lembur_count;
+                        $lmCount   = (float) $snapshot->lm_count;
+                        $lemburCount = (float) $snapshot->lembur_count;
                     } else {
                         // Split: cari snapshot per segment
                         $segSnapshot = SupervisorAttendanceSnapshot::where('employee_id', $employee->id)
@@ -233,15 +233,15 @@ class SupervisorBreakdownController extends Controller
                             $hariKerja   = (int) $segSnapshot->hari_kerja;
                             $deductDay   = (float) $segSnapshot->deduct_day;
                             $lm          = (int) $segSnapshot->lm;
-                            $lmCount     = (int) $segSnapshot->lm_count;
-                            $lemburCount = (int) $segSnapshot->lembur_count;
+                            $lmCount     = (float) $segSnapshot->lm_count;
+                            $lemburCount = (float) $segSnapshot->lembur_count;
                         } else {
                             // Fallback: hitung dari snapshot utama (non-segment)
                             $hariKerja   = max(0, $hkSegment - (int) $snapshot->deduct_day);
                             $deductDay   = (float) $snapshot->deduct_day;
                             $lm          = (int) $snapshot->lm;
-                            $lmCount     = (int) $snapshot->lm_count;
-                            $lemburCount = (int) $snapshot->lembur_count;
+                            $lmCount     = (float) $snapshot->lm_count;
+                            $lemburCount = (float) $snapshot->lembur_count;
                         }
                     }
 
@@ -259,7 +259,7 @@ class SupervisorBreakdownController extends Controller
                     $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
 
                     // ── Hitungan: Upah Lembur ──
-                    $totalLemburJam = ($lmCount + $lemburCount) / 60;
+                    $totalLemburJam = $lmCount + $lemburCount;
 
                     // Zero overtime untuk section A (ALL IN, kecuali GRP-SPR)
                     $isZeroOvertime = $employee->groups()
@@ -277,7 +277,7 @@ class SupervisorBreakdownController extends Controller
                         $isSpr = $employee->groups()->where('reference_code', 'GRP-SPR')->exists();
                         if ($isSpr) {
                             $lemburCount = 0;
-                            $totalLemburJam = $lmCount / 60;
+                            $totalLemburJam = $lmCount;
                         }
                         $hourlyBase = $gajiPokok + $tjMasaKerja + $tunjangan;
                         if ($hourlyBase > 0 && $totalLemburJam > 0) {
@@ -668,7 +668,7 @@ class SupervisorBreakdownController extends Controller
                 'tunjangan'     => (float) $r->tunjangan,
                 'hari_kerja'    => (int) $r->hari_kerja,
                 'lm'            => (int) $r->lm,
-                'lembur_count'  => (int) $r->lembur_count,
+                'lembur_count'  => (float) $r->lembur_count,
                 'gaji'          => (float) $r->gaji,
                 'upah_lembur'   => (float) $r->upah_lembur,
                 'revisi'        => (float) $r->revisi,

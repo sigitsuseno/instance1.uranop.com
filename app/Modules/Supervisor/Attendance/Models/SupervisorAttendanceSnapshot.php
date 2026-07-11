@@ -46,9 +46,9 @@ class SupervisorAttendanceSnapshot extends Model
         'deduct_day' => 'decimal:2',
         'late_minutes' => 'integer',
         'lm' => 'integer',
-        'lm_count' => 'integer',
+        'lm_count' => 'float',
         'lembur' => 'integer',
-        'lembur_count' => 'integer',
+        'lembur_count' => 'float',
         'synced_at' => 'datetime',
     ];
 

@@ -261,8 +261,8 @@
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.gaji_pokok) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.tj_masa_kerja) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-main) font-medium">{{ record.hari_kerja }}</td>
-                  <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lm > 0 ? (record.lm / 60) + 'j' : '-' }}</td>
-                  <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lembur_count > 0 ? (record.lembur_count / 60) + 'j' : '-' }}</td>
+                  <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lm > 0 ? (record.lm / 60).toFixed(1).replace('.', ',') : '-' }}</td>
+                  <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lembur_count > 0 ? record.lembur_count.toFixed(1).replace('.', ',') : '-' }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.gaji) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.upah_lembur) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.revisi) }}</td>
@@ -285,8 +285,8 @@
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.gaji_pokok, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.tj_masa_kerja, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-center font-bold">{{ section.totals.hari_kerja }}</td>
-                  <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lm > 0 ? (section.totals.lm / 60) + 'j' : '-' }}</td>
-                  <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lembur_count > 0 ? (section.totals.lembur_count / 60) + 'j' : '-' }}</td>
+                  <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lm > 0 ? (section.totals.lm / 60).toFixed(1).replace('.', ',') : '-' }}</td>
+                  <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lembur_count > 0 ? section.totals.lembur_count.toFixed(1).replace('.', ',') : '-' }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.gaji, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.upah_lembur, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.revisi, true) }}</td>
@@ -439,7 +439,7 @@ function computeSectionTotals(data) {
   return {
     hari_kerja: data.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
     lm: data.reduce((acc, r) => acc + (parseInt(r.lm) || 0), 0),
-    lembur_count: data.reduce((acc, r) => acc + (parseInt(r.lembur_count) || 0), 0),
+    lembur_count: data.reduce((acc, r) => acc + (parseFloat(r.lembur_count) || 0), 0),
     gaji: sum('gaji'), upah_lembur: sum('upah_lembur'), revisi: sum('revisi'),
     tunjangan: sum('tunjangan'), premi_hadir: sum('premi_hadir'), pblt: sum('pblt'),
     total: sum('total'), bpjs_tk: sum('bpjs_tk'), bpjs_ks: sum('bpjs_ks'),

@@ -295,10 +295,10 @@ class AttendanceSnapshotController extends Controller
 
         $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
         $lateMinutes = $logs->sum('late_duration');
-        $lmValue = (int) round(($logs->sum('lm_calc')) * 60);
-        $lmCount = $logs->filter(fn ($l) => $l->lm_calc > 0)->count();
-        $lemburValue = (int) round(($logs->sum('lembur_calc')) * 60);
-        $lemburCount = $logs->filter(fn ($l) => $l->lembur_calc > 0)->count();
+        $lm = (int) $logs->sum('lm');
+        $lmCount = (float) $logs->sum('lm_calc');
+        $lembur = (int) $logs->sum('lembur');
+        $lemburCount = (float) $logs->sum('lembur_calc');
 
         $snapshot = AttendanceSnapshot::updateOrCreate(
             [
@@ -314,9 +314,9 @@ class AttendanceSnapshotController extends Controller
                 'absen' => $absentDays,
                 'deduct_day' => $notPaidDays,
                 'late_minutes' => $lateMinutes,
-                'lm' => $lmValue,
+                'lm' => $lm,
                 'lm_count' => $lmCount,
-                'lembur' => $lemburValue,
+                'lembur' => $lembur,
                 'lembur_count' => $lemburCount,
                 'status' => 'draft',
                 'created_by' => Auth::id(),
@@ -395,10 +395,10 @@ class AttendanceSnapshotController extends Controller
 
                 $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
                 $lateMinutes = $logs->sum('late_duration');
-                $lmValue = (int) round(($logs->sum('lm_calc')) * 60);
-                $lmCount = $logs->filter(fn ($l) => $l->lm_calc > 0)->count();
-                $lemburValue = (int) round(($logs->sum('lembur_calc')) * 60);
-                $lemburCount = $logs->filter(fn ($l) => $l->lembur_calc > 0)->count();
+                $lm = (int) $logs->sum('lm');
+                $lmCount = (float) $logs->sum('lm_calc');
+                $lembur = (int) $logs->sum('lembur');
+                $lemburCount = (float) $logs->sum('lembur_calc');
 
                 $existing = AttendanceSnapshot::where('employee_id', $employeeId)
                     ->where('pay_period_id', $payPeriod->id)
@@ -425,9 +425,9 @@ class AttendanceSnapshotController extends Controller
                         'absen' => $absentDays,
                         'deduct_day' => $notPaidDays,
                         'late_minutes' => $lateMinutes,
-                        'lm' => $lmValue,
+                        'lm' => $lm,
                         'lm_count' => $lmCount,
-                        'lembur' => $lemburValue,
+                        'lembur' => $lembur,
                         'lembur_count' => $lemburCount,
                         'status' => 'draft',
                         'created_by' => Auth::id(),
