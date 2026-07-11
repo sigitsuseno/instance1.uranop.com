@@ -1,7 +1,5 @@
 <template>
   <div class="space-y-6">
-    <!-- Hidden file input for Excel import -->
-    <input ref="fileInput" type="file" accept=".xlsx,.csv,.xls" class="hidden" @change="handleImport" />
 
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -37,17 +35,22 @@
           Kalkulasi Gaji
         </BaseButton>
 
-        <!-- Import Excel Button (hidden) -->
-        <!--
+        <!-- Import Excel / Update Data -->
         <BaseButton
           variant="secondary"
           :disabled="!selectedPeriodId || importing"
           :loading="importing"
-          @click="triggerImport"
+          @click="handleUpdateData"
         >
-          ...
+          <template #icon-left>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </template>
+          Update Data
         </BaseButton>
-        -->
 
         <!-- Export Button -->
         <BaseButton
@@ -385,8 +388,6 @@ const generating = ref(false)
 const importing = ref(false)
 const activeSegment = ref(null)
 const searchQuery = ref('')
-const fileInput = ref(null)
-
 const recapRecords = ref([])
 const loadingRecap = ref(false)
 
@@ -543,34 +544,18 @@ async function handleGenerate() {
   finally { generating.value = false }
 }
 
-function triggerImport() { fileInput.value?.click() }
-
-async function handleImport(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
+async function handleUpdateData() {
+  if (!selectedPeriodId.value) return
   importing.value = true
   try {
-    const form = new FormData()
-    form.append('period_id', selectedPeriodId.value)
-    form.append('file', file)
-    if (activeSegment.value) form.append('segment', activeSegment.value)
+    const body = { period_id: selectedPeriodId.value }
+    if (activeSegment.value) body.segment = activeSegment.value
 
-    // Use raw fetch for multipart (useApi doesn't handle FormData well)
-    const token = localStorage.getItem('token')
-    const res = await fetch('/api/v1/supervisor/payroll/breakdown/import', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
-      body: form,
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Gagal import')
-    notification.success(data.message || 'Import berhasil.')
+    const res = await post('/api/v1/supervisor/payroll/breakdown/import', body)
+    notification.success(res.message || 'Data berhasil diupdate dari file.')
     await fetchRecords()
-  } catch (error) { notification.error(error.message || 'Gagal import Excel.') }
-  finally {
-    importing.value = false
-    event.target.value = '' // Reset input
-  }
+  } catch (error) { notification.error(error.message || 'Gagal update data.') }
+  finally { importing.value = false }
 }
 
 function handleExport() {

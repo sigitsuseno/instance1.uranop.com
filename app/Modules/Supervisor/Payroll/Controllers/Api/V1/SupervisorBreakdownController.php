@@ -227,8 +227,8 @@ class SupervisorBreakdownController extends Controller
                             ->whereBetween('date', [$segStart, $segEnd])
                             ->get();
 
-                        $hariKerja   = $hkSegment;
                         $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count();
+                        $hariKerja   = $hkSegment - $deductDay;
                         $lm          = (int) $segLogs->sum('lm');
                         $lmCount     = (float) $segLogs->sum('lm_calc');
                         $lemburCount = (float) $segLogs->sum('lembur_calc');
@@ -239,9 +239,12 @@ class SupervisorBreakdownController extends Controller
                         ? Carbon::parse($segStart)->format('Y-m')
                         : $period->period_year . '-' . str_pad($period->period_month, 2, '0', STR_PAD_LEFT);
 
+                    // TJ Masa Kerja selalu pakai periode payroll (bukan segment month)
+                    $payPeriodMonth = $period->period_year . '-' . str_pad($period->period_month, 2, '0', STR_PAD_LEFT);
+
                     $gajiPokok    = $employee->gaji_pokok($segmentMonth);
                     $premi        = $employee->premi($segmentMonth);
-                    $tjMasaKerja  = $employee->tunjangan_masa_kerja($segmentMonth);
+                    $tjMasaKerja  = $employee->tunjangan_masa_kerja($payPeriodMonth);
                     $tunjangan    = $employee->tunjangan($segmentMonth);
 
                     // ── Hitungan: Gaji ──
@@ -382,92 +385,95 @@ class SupervisorBreakdownController extends Controller
 
     /**
      * POST /api/v1/supervisor/payroll/breakdown/import
-     * Import data breakdown dari file Excel (format .xlsx atau .csv).
-     * Overwrite data existing untuk periode yang dipilih.
+     * Import data breakdown dari file CSV di database/seeders/.
+     * Pattern: persis seperti importPremi() di hris-app.
+     * Hanya UPDATE record yang sudah ada (dari hasil generate/kalkulasi).
      *
-     * Expected kolom (mengikuti format Excel manual Jan-Jun):
-     *   [0]=No, [1]=NIP, [2]=Nama, [3]=L/P, [4]=Bagian, [5]=Jabatan,
-     *   [6]=Tgl Masuk, [7]=Bank, [8]=No Rek, [9]=Atas Nama,
-     *   [10]=Premi, [11]=Gaji Pokok, [12]=TJ MK, [13]=HK,
-     *   [14]=LM, [15]=Lbr Jam, [16]=Gaji, [17]=Lembur,
-     *   [18]=Revisi, [19]=Tunjangan, [20]=Pr Hadir, [21]=PBLT,
-     *   [22]=TOTAL, [23]=BPJS TK, [24]=BPJS KES, [25]=BPJS PEN,
-     *   [26]=Cash Bon, [27]=PPh, [28]=TRIMA
+     * Kolom CSV (0-indexed, delimiter ;):
+     *   [0]=No, [1]=NIP, [2]=Nama, [3]=Bagian, [4]=Jabatan,
+     *   [5]=L/P, [6]=Tgl Masuk, [7]=Masa Kerja, [8]=Status,
+     *   [9]=Jml Anak, [10]=No Rek, [11]=Premi, [12]=Gaji Pokok,
+     *   [13]=TJ MK, [14]=HK, [15]=LM, [16]=Lbr Jam,
+     *   [17]=Gaji, [18]=Lembur, [19]=Revisi, [20]=Tunjangan,
+     *   [21]=Pr Hadir, [22]=PBLT, [23]=TOTAL,
+     *   [24]=BPJS TK, [25]=BPJS KES, [26]=BPJS PEN,
+     *   [27]=Cash Bon, [28]=PPh, [29]=TRIMA
      */
     public function import(Request $request)
     {
         $validated = $request->validate([
             'period_id' => 'required|exists:pay_periods,id',
             'segment'   => 'nullable|in:A,B',
-            'file'      => 'required|file|mimes:xlsx,csv,xls',
         ]);
 
-        $period = PayPeriod::findOrFail($validated['period_id']);
+        $period  = PayPeriod::findOrFail($validated['period_id']);
         $segment = $validated['segment'] ?? null;
 
-        // ── Group config ──
-        $gajiConfig = PayrollConfig::getConfig('gaji_karyawan');
-        $sectionA = $gajiConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
-        $sectionB = $gajiConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
-
         try {
-            $file = $request->file('file');
-            $spreadsheet = IOFactory::load($file->getPathname());
-            $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
+            $csvPath = $this->resolveCsvPath($period, $segment);
 
-            if (count($rows) < 2) {
+            if (!file_exists($csvPath)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'File Excel kosong atau hanya berisi header.',
+                    'message' => 'File CSV tidak ditemukan: ' . $csvPath,
                 ], 400);
             }
 
-            // ── Helper: clean number (format Indonesia) ──
+            $spreadsheet = IOFactory::load($csvPath);
+            $worksheet   = $spreadsheet->getActiveSheet();
+            $rows        = $worksheet->toArray();
+
+            $updated = 0;
+            $skipped = 0;
+
+            DB::beginTransaction();
+
+            // Helper: clean number (format Indonesia) — persis hris-app
             $cleanNum = function ($val) {
-                if (empty($val) && $val !== 0 && $val !== '0') return 0.0;
-                if (is_numeric($val)) return (float) $val;
+                if (empty($val)) {
+                    return 0.0;
+                }
+                if (is_numeric($val)) {
+                    return (float) $val;
+                }
+
                 $str = (string) $val;
                 $str = str_replace(['Rp', ' ', "\xc2\xa0"], '', $str);
+
+                // Handle parentheses: (62.901,76) → -62.901,76
                 $isNegative = false;
                 if (str_starts_with($str, '(') && str_ends_with($str, ')')) {
                     $str = substr($str, 1, -1);
                     $isNegative = true;
                 }
+
+                // If comma exists → decimal separator (Indonesian format)
                 if (strpos($str, ',') !== false) {
-                    $str = str_replace('.', '', $str);
-                    $str = str_replace(',', '.', $str);
-                } elseif (substr_count($str, '.') > 1) {
-                    $str = str_replace('.', '', $str);
+                    $str = str_replace('.', '', $str);   // remove thousand dots
+                    $str = str_replace(',', '.', $str);  // comma → decimal dot
+                } else {
+                    // Multiple dots → thousand separators
+                    if (substr_count($str, '.') > 1) {
+                        $str = str_replace('.', '', $str);
+                    }
+                    // Single dot + exactly 3 trailing digits → thousand separator
+                    elseif (preg_match('/^\d+\.\d{3}$/', $str)) {
+                        $str = str_replace('.', '', $str);
+                    }
                 }
+
                 $result = (float) $str;
                 return $isNegative ? -$result : $result;
             };
 
-            $imported = 0;
-            $skipped = 0;
-
-            DB::beginTransaction();
-
-            // Hapus data existing untuk periode + segment ini
-            $deleteQuery = SupervisorBreakdown::where('pay_period_id', $period->id);
-            if ($period->is_split && $segment) {
-                $deleteQuery->where('segment', $segment);
-            }
-            $deleteQuery->delete();
-
             foreach ($rows as $index => $row) {
-                if ($index === 0) continue; // Skip header
+                if ($index === 0) continue;
 
                 $nip = trim((string) ($row[1] ?? ''));
-                if (empty($nip)) {
-                    $skipped++;
-                    continue;
-                }
+                if (empty($nip)) continue;
 
                 $employee = Employee::where('employee_code', $nip)
                     ->orWhere('nip', $nip)
-                    ->with('groups', 'department', 'position')
                     ->first();
 
                 if (!$employee) {
@@ -475,113 +481,76 @@ class SupervisorBreakdownController extends Controller
                     continue;
                 }
 
-                // ── SECTION ──
-                $groupCodes = $employee->groups->pluck('reference_code')->toArray();
-                $section = null;
-                if (array_intersect($groupCodes, $sectionA)) {
-                    $section = 'A';
-                } elseif (array_intersect($groupCodes, $sectionB)) {
-                    $section = 'B';
-                }
+                // ── Parse CSV columns ──
+                $premi        = $cleanNum($row[11] ?? 0);
+                $gajiPokok    = $cleanNum($row[12] ?? 0);
+                $tjMasaKerja  = $cleanNum($row[13] ?? 0);
+                $hariKerja    = (int) $cleanNum($row[14] ?? 0);
+                $lm           = (int) $cleanNum($row[15] ?? 0);    // LM dalam menit
+                $lemburJam    = $cleanNum($row[16] ?? 0);           // LBR JAM
+                $gaji         = $cleanNum($row[17] ?? 0);
+                $upahLembur   = $cleanNum($row[18] ?? 0);
+                $revisi       = $cleanNum($row[19] ?? 0);
+                $tunjangan    = $cleanNum($row[20] ?? 0);
+                $premiHadir   = $cleanNum($row[21] ?? 0);
+                $pblt         = $cleanNum($row[22] ?? 0);
+                $gajiKotor    = $cleanNum($row[23] ?? 0);
+                $bpjsTk       = $cleanNum($row[24] ?? 0);
+                $bpjsKs       = $cleanNum($row[25] ?? 0);
+                $bpjsPen      = $cleanNum($row[26] ?? 0);
+                $cashbon      = $cleanNum($row[27] ?? 0);
+                $pph          = $cleanNum($row[28] ?? 0);
+                $gajiBersih   = $cleanNum($row[29] ?? 0);
 
-                // ── Parse Excel columns ──
-                $gajiPokok    = $cleanNum($row[11] ?? 0);
-                $premi        = $cleanNum($row[10] ?? 0);
-                $tjMasaKerja  = $cleanNum($row[12] ?? 0);
-                $hariKerja    = (int) $cleanNum($row[13] ?? 0);
-                $lm           = (int) $cleanNum($row[14] ?? 0);
-                $lemburCount  = (int) $cleanNum($row[15] ?? 0);
-                $gaji         = $cleanNum($row[16] ?? 0);
-                $upahLembur   = $cleanNum($row[17] ?? 0);
-                $revisi       = $cleanNum($row[18] ?? 0);
-                $tunjangan    = $cleanNum($row[19] ?? 0);
-                $premiHadir   = $cleanNum($row[20] ?? 0);
-                $pblt         = $cleanNum($row[21] ?? 0);
-                $gajiKotor    = $cleanNum($row[22] ?? 0);
-                $bpjsTk       = $cleanNum($row[23] ?? 0);
-                $bpjsKs       = $cleanNum($row[24] ?? 0);
-                $bpjsPen      = $cleanNum($row[25] ?? 0);
-                $cashbon      = $cleanNum($row[26] ?? 0);
-                $pph          = $cleanNum($row[27] ?? 0);
-                $gajiBersih   = $cleanNum($row[28] ?? 0);
-
-                // ── LM count (konversi jam ke menit) ──
+                // LM count = LM * 60 (konversi jam→menit, karena CSV simpan dalam jam)
                 $lmCount = $lm * 60;
 
-                // ── Deduct day ──
-                $payrollSetting = SystemSetting::where('key', 'payroll_config')->first();
-                $fixedDays = $payrollSetting ? (int) $payrollSetting->fixed_working_day : 25;
-                $deductDay = max(0, $fixedDays - $hariKerja);
+                // ── Cari record existing ──
+                $breakdown = SupervisorBreakdown::where('pay_period_id', $period->id)
+                    ->where('employee_id', $employee->id)
+                    ->when($segment, fn($q) => $q->where('segment', $segment))
+                    ->first();
 
-                // ── Pot kehadiran ──
-                $potKehadiran = round($deductDay * ($gajiPokok / max(1, $fixedDays)), 2);
-
-                $joinDate = $employee->join_date;
-                if ($row[6] ?? null) {
-                    try {
-                        $joinDate = Carbon::createFromFormat('d-M-y', trim((string) $row[6])) ?: $joinDate;
-                    } catch (\Exception $e) {
-                        // keep existing join_date
-                    }
+                if (!$breakdown) {
+                    $skipped++;
+                    continue;
                 }
 
-                SupervisorBreakdown::create([
-                    'pay_period_id'       => $period->id,
-                    'employee_id'         => $employee->id,
-                    'segment'             => $segment,
-                    'section'             => $section,
-                    'group_codes'         => $groupCodes,
-                    'employee_code'       => $employee->employee_code ?? $employee->nip,
-                    'employee_name'       => $employee->name,
-                    'gender'              => $employee->gender,
-                    'department_name'     => $employee->department?->name ?? ($row[4] ?? null),
-                    'position_name'       => $employee->position?->name ?? ($row[5] ?? null),
-                    'join_date'           => $joinDate,
-                    'bank_name'           => $employee->bank_name ?? ($row[7] ?? null),
-                    'bank_account_number' => $employee->bank_account_number ?? ($row[8] ?? null),
-                    'bank_account_name'   => $employee->bank_account_name ?? ($row[9] ?? null),
-                    // Masukan
+                // ── Update record ──
+                $breakdown->update([
                     'gaji_pokok'    => $gajiPokok,
                     'premi'         => $premi,
                     'tj_masa_kerja' => $tjMasaKerja,
                     'tunjangan'     => $tunjangan,
                     'hari_kerja'    => $hariKerja,
-                    'deduct_day'    => $deductDay,
                     'lm'            => $lm,
                     'lm_count'      => $lmCount,
-                    'lembur_count'  => $lemburCount,
-                    // Hasil
-                    'gaji'         => $gaji,
-                    'upah_lembur'  => $upahLembur,
-                    'premi_hadir'  => $premiHadir,
-                    'revisi'       => $revisi,
-                    'gaji_kotor'   => $gajiKotor,
-                    // Potongan
-                    'bpjs_tk'       => $bpjsTk,
-                    'bpjs_ks'       => $bpjsKs,
-                    'bpjs_pen'      => $bpjsPen,
-                    'pph'           => $pph,
+                    'lembur_count'  => $lemburJam,
+                    'gaji'          => $gaji,
+                    'upah_lembur'   => $upahLembur,
+                    'revisi'        => $revisi,
+                    'premi_hadir'   => $premiHadir,
+                    'pblt'          => $pblt,
+                    'gaji_kotor'    => $gajiKotor,
+                    'bpjs_tk'       => abs($bpjsTk),
+                    'bpjs_ks'       => abs($bpjsKs),
+                    'bpjs_pen'      => abs($bpjsPen),
                     'cashbon'       => $cashbon,
-                    'pot_kehadiran' => $potKehadiran,
-                    // Final
-                    'pblt'        => $pblt,
-                    'gaji_bersih' => $gajiBersih,
-                    'status'      => 'imported',
-                    'synced_at'   => now(),
-                    'created_by'  => Auth::id(),
-                    'updated_by'  => Auth::id(),
+                    'pph'           => $pph,
+                    'gaji_bersih'   => $gajiBersih,
+                    'status'        => 'imported',
+                    'synced_at'     => now(),
+                    'updated_by'    => Auth::id(),
                 ]);
 
-                $imported++;
+                $updated++;
             }
 
             DB::commit();
 
             return response()->json([
-                'success'  => true,
-                'message'  => "Berhasil import {$imported} data, {$skipped} baris dilewati.",
-                'imported' => $imported,
-                'skipped'  => $skipped,
+                'success' => true,
+                'message' => "{$updated} data berhasil di-update, {$skipped} data dilewati.",
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -592,9 +561,37 @@ class SupervisorBreakdownController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Gagal import: ' . $e->getMessage(),
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * Resolve CSV file path dari database/seeders/ berdasarkan periode.
+     * Mapping: bulan → UPDATE_{NAMA_BULAN}.csv
+     * Untuk Januari (split): UPDATE_JAN_1.csv (seg A) / UPDATE_JAN_2.csv (seg B)
+     */
+    private function resolveCsvPath($period, ?string $segment): ?string
+    {
+        $monthNames = [
+            1 => 'JANUARI', 2 => 'FEBRUARI', 3 => 'MARET',
+            4 => 'APRIL', 5 => 'MEI', 6 => 'JUNI',
+            7 => 'JULI', 8 => 'AGUSTUS', 9 => 'SEPTEMBER',
+            10 => 'OKTOBER', 11 => 'NOVEMBER', 12 => 'DESEMBER',
+        ];
+
+        $month = (int) $period->period_month;
+        $monthName = $monthNames[$month] ?? strtoupper($period->name);
+
+        // Januari split: dua file terpisah
+        if ($month === 1 && $period->is_split) {
+            $suffix = ($segment === 'B') ? '2' : '1';
+            $filename = "UPDATE_JAN_{$suffix}.csv";
+        } else {
+            $filename = "UPDATE_{$monthName}.csv";
+        }
+
+        return database_path("seeders/{$filename}");
     }
 
     /**
