@@ -99,7 +99,11 @@ Route::prefix('v1/supervisor')
         Route::prefix('payroll')->group(function () {
             Route::get('gaji-karyawan', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorGajiKaryawanController::class, 'index']);
             Route::get('gaji-karyawan/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorGajiKaryawanController::class, 'export']);
+            // Payslips
             Route::get('payslips', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorPayslipController::class, 'index']);
+            Route::put('payslips/{id}', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorPayslipController::class, 'update']);
+            Route::patch('payslips/{id}/status', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorPayslipController::class, 'updateStatus']);
+            Route::delete('payslips/{id}', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorPayslipController::class, 'destroy']);
 
             // Breakdown
             Route::get('breakdown', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'index']);

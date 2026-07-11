@@ -40,13 +40,13 @@
 
     <BaseCard v-if="selectedPeriod" padding="p-0" class="overflow-hidden border border-(--border-soft) bg-(--bg-card) rounded-md shadow-sm">
       <div class="px-4 py-3 border-b border-(--border-soft) flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-(--bg-main)/30">
-        <div><h3 class="text-sm font-semibold text-(--text-main)">Daftar Slip Gaji</h3><p class="text-xs text-(--text-muted) mt-0.5" v-if="records.length > 0">Menampilkan {{ filteredRecords.length }} dari {{ records.length }} data</p><p class="text-xs text-(--text-muted) mt-0.5" v-else>Tidak ada data slip gaji untuk periode ini.</p></div>
+        <div><h3 class="text-sm font-semibold text-(--text-main)">Daftar Slip Gaji</h3><p class="text-xs text-(--text-muted) mt-0.5" v-if="records.length > 0">Menampilkan {{ records.length }} dari {{ records.length }} data</p><p class="text-xs text-(--text-muted) mt-0.5" v-else>Tidak ada data slip gaji untuk periode ini.</p></div>
         <div class="relative w-full sm:w-72" v-if="records.length > 0">
           <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-(--text-soft)"><IconSearch class="h-4 w-4" /></span>
           <input v-model="searchQuery" type="text" placeholder="Cari nama, NIP..." class="w-full h-10 pl-9 pr-3 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-(--primary) focus:border-transparent outline-none transition-all" />
         </div>
       </div>
-      <div class="overflow-x-auto">
+      <div class="overflow-auto max-h-[65vh]">
         <table class="w-full text-xs">
           <thead><tr class="bg-(--bg-elevated) text-(--text-main)">
             <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-10">No</th>
@@ -63,11 +63,11 @@
             <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-16">Cetak</th>
           </tr></thead>
           <tbody>
-            <tr v-if="filteredRecords.length === 0"><td colspan="12" class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
+            <tr v-if="records.length === 0"><td colspan="12" class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
               <div v-if="loading" class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-(--primary)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Memproses data...</div>
               <div v-else>Belum ada data slip gaji untuk periode ini. Pastikan data gaji sudah di-generate dan dikunci pada menu <strong>Gaji Karyawan</strong>.</div>
             </td></tr>
-            <tr v-for="(record, idx) in filteredRecords" :key="record.id" class="hover-row transition-colors" :class="idx % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40'">
+            <tr v-for="(record, idx) in records" :key="record.id" class="hover-row transition-colors" :class="idx % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40'">
               <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ idx + 1 }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-center font-mono text-xs text-(--text-muted)">{{ record.employee_code }}</td>
               <td class="border border-(--border-soft) px-2.5 py-2"><div class="font-semibold text-(--text-main)">{{ record.employee_name }}</div><div class="text-[10px] text-(--text-muted)">{{ record.position }}</div></td>
@@ -82,7 +82,7 @@
               <td class="border border-(--border-soft) px-2 py-2 text-center"><button @click="printSingle(record)" class="w-8 h-8 flex items-center justify-center rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-muted) hover:text-(--primary) hover:border-(--primary)/40 transition-colors mx-auto cursor-pointer" title="Cetak Slip Gaji"><i class="bx bx-printer text-base"></i></button></td>
             </tr>
           </tbody>
-          <tfoot v-if="filteredRecords.length > 0"><tr class="bg-(--bg-elevated) font-bold text-(--text-main) border-t-2 border-(--border-soft)">
+          <tfoot v-if="records.length > 0"><tr class="bg-(--bg-elevated) font-bold text-(--text-main) border-t-2 border-(--border-soft)">
             <td colspan="4" class="border border-(--border-soft) px-2.5 py-3.5 text-right font-bold">TOTAL</td>
             <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.gaji_pokok, true) }}</td>
             <td class="border border-(--border-soft) px-2 py-3.5 text-center">{{ totals.hari_kerja }}</td>
@@ -107,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import Badge from '@/Components/Badge.vue'
@@ -126,22 +126,19 @@ const loading = ref(false)
 const activeSegment = ref(null)
 const searchQuery = ref('')
 const fixedWorkDay = ref(25)
+const pagination = ref({ current_page: 1, last_page: 1, per_page: 50, total: 0 })
+
+let searchTimer = null
 
 const selectedPeriod = computed(() => periods.value.find(p => p.id === selectedPeriodId.value))
 const isSplit = computed(() => selectedPeriod.value?.is_split ?? false)
 
-const filteredRecords = computed(() => {
-  if (!searchQuery.value) return records.value
-  const q = searchQuery.value.toLowerCase()
-  return records.value.filter(r => r.employee_name.toLowerCase().includes(q) || r.employee_code.toLowerCase().includes(q) || r.department.toLowerCase().includes(q))
-})
-
 const totals = computed(() => {
-  const fSum = (key) => filteredRecords.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
+  const fSum = (key) => records.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
   return {
-    gaji_pokok: fSum('gaji_pokok'), hari_kerja: filteredRecords.value.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
+    gaji_pokok: fSum('gaji_pokok'), hari_kerja: records.value.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
     upah_lembur: fSum('upah_lembur'), premi_hadir: fSum('premi_hadir'), gaji_kotor: fSum('gaji_kotor'),
-    potongan: filteredRecords.value.reduce((acc, r) => acc + (r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + r.pot_kehadiran), 0),
+    potongan: records.value.reduce((acc, r) => acc + (r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + r.pot_kehadiran), 0),
     gaji_bersih: fSum('gaji_bersih'),
   }
 })
@@ -162,10 +159,12 @@ async function fetchPayslips() {
   try {
     let url = `/api/v1/supervisor/payroll/payslips?period_id=${selectedPeriodId.value}`
     if (activeSegment.value) url += `&segment=${activeSegment.value}`
+    if (searchQuery.value) url += `&search=${encodeURIComponent(searchQuery.value)}`
     const res = await get(url)
     records.value = res.data || []
     stats.value = res.stats || {}
     fixedWorkDay.value = res.fixed_work_day || 25
+    pagination.value = res.pagination || { current_page: 1, last_page: 1, per_page: 50, total: (res.data || []).length }
   } catch (error) { records.value = []; stats.value = {} }
   finally { loading.value = false }
 }
@@ -173,11 +172,18 @@ async function fetchPayslips() {
 async function switchSegment(seg) { activeSegment.value = seg; await fetchPayslips() }
 
 async function onPeriodChange() {
+  clearTimeout(searchTimer)
   const period = periods.value.find(p => p.id === selectedPeriodId.value)
   activeSegment.value = period?.is_split ? 'A' : null
   searchQuery.value = ''
   await fetchPayslips()
 }
+
+// Debounced search: kirim ke backend untuk cari di SEMUA halaman
+watch(searchQuery, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => fetchPayslips(), 300)
+})
 
 function printSingle(record) {
   const slips = isSplit.value ? [buildSplitSlipData(record)] : [buildNormalSlipData(record)]
@@ -207,7 +213,7 @@ function buildNormalSlipData(r) {
   const potKehadiran = r.pot_kehadiran || Math.round(deductDays * ratePerHari)
   const subTotalEarnings = hkAmount + r.tj_masa_kerja + r.tunjangan + r.premi_hadir + r.upah_lembur + (r.revisi || 0)
   const subTotalDeduction = r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + potKehadiran
-  return { isSplit: false, employeeName: r.employee_name, employeeCode: r.employee_code, periodName: selectedPeriod.value?.name || '', remainingLeave: r.remaining_leave || 0, ratePerHari: Math.round(ratePerHari), hkDays: hk, hkAmount: Math.round(hkAmount), tjMasaKerja: r.tj_masa_kerja, tunjangan: r.tunjangan, premiHadir: r.premi_hadir, overtimeHours: (r.lm_count || 0) + (r.lembur_count || 0), overtimeAmount: r.upah_lembur, revisi: r.revisi || 0, subTotalEarnings: Math.round(subTotalEarnings), bpjsTK: r.bpjs_tk, bpjsKes: r.bpjs_ks, bpjsPensiun: r.bpjs_pen, pph: r.pph, cashbon: r.cashbon, deductDays: deductDays, potonganKehadiran: potKehadiran, pblt: r.pblt, subTotalDeduction: Math.round(subTotalDeduction), totalTerima: r.gaji_bersih }
+  return { isSplit: false, employeeName: r.employee_name, employeeCode: r.employee_code, periodName: selectedPeriod.value?.name || '', remainingLeave: r.remaining_leave || 0, gajiPokok: r.gaji_pokok, ratePerHari: Math.round(ratePerHari), hkDays: hk, hkAmount: Math.round(hkAmount), tjMasaKerja: r.tj_masa_kerja, tunjangan: r.tunjangan, premiHadir: r.premi_hadir, overtimeHours: (r.lm_count || 0) + (r.lembur_count || 0), overtimeAmount: r.upah_lembur, revisi: r.revisi || 0, subTotalEarnings: Math.round(subTotalEarnings), bpjsTK: r.bpjs_tk, bpjsKes: r.bpjs_ks, bpjsPensiun: r.bpjs_pen, pph: r.pph, cashbon: r.cashbon, deductDays: deductDays, potonganKehadiran: potKehadiran, pblt: r.pblt, subTotalDeduction: Math.round(subTotalDeduction), totalTerima: r.gaji_bersih }
 }
 
 function buildSplitPartData(r, part) {
@@ -218,7 +224,7 @@ function buildSplitPartData(r, part) {
   const potKehadiran = r.pot_kehadiran || Math.round(deductDays * ratePerHari)
   const subTotalEarnings = hkAmount + r.tj_masa_kerja + r.tunjangan + r.premi_hadir + r.upah_lembur + (r.revisi || 0)
   const subTotalDeduction = r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + potKehadiran
-  return { part, ratePerHari: Math.round(ratePerHari), hkDays: hk, hkAmount: Math.round(hkAmount), tjMasaKerja: r.tj_masa_kerja, tunjangan: r.tunjangan, premiHadir: r.premi_hadir, overtimeHours: (r.lm_count || 0) + (r.lembur_count || 0), overtimeAmount: r.upah_lembur, revisi: r.revisi || 0, subTotalEarnings: Math.round(subTotalEarnings), bpjsTK: r.bpjs_tk, bpjsKes: r.bpjs_ks, bpjsPensiun: r.bpjs_pen, pph: r.pph, cashbon: r.cashbon, deductDays: deductDays, potonganKehadiran: potKehadiran, pblt: r.pblt, subTotalDeduction: Math.round(subTotalDeduction), totalTerima: r.gaji_bersih }
+  return { part, gajiPokok: r.gaji_pokok, ratePerHari: Math.round(ratePerHari), hkDays: hk, hkAmount: Math.round(hkAmount), tjMasaKerja: r.tj_masa_kerja, tunjangan: r.tunjangan, premiHadir: r.premi_hadir, overtimeHours: (r.lm_count || 0) + (r.lembur_count || 0), overtimeAmount: r.upah_lembur, revisi: r.revisi || 0, subTotalEarnings: Math.round(subTotalEarnings), bpjsTK: r.bpjs_tk, bpjsKes: r.bpjs_ks, bpjsPensiun: r.bpjs_pen, pph: r.pph, cashbon: r.cashbon, deductDays: deductDays, potonganKehadiran: potKehadiran, pblt: r.pblt, subTotalDeduction: Math.round(subTotalDeduction), totalTerima: r.gaji_bersih }
 }
 
 function buildSplitSlipData(r) {
@@ -241,10 +247,10 @@ function generateBulkPrintHtml(slips, isSplitMode) {
     return `<div class="${cls}" style="${style}"><span>${rp}</span><span>${num}</span></div>`
   }
   const periodName = selectedPeriod.value?.name || ''
-  const renderNormalSlip = (s) => `<div class="slip"><div class="sisa-cuti">Sisa Cuti: ${s.remainingLeave} hari</div><div class="co-header"><b class="co-name">PT. KEMILAU UNGARAN SUKSES</b><div class="co-sub">EMBROIDERY &amp; PRINTING FACTORY</div><div class="co-addr">Jl. Ngobo/Jl. PTPN IX No.1 Gudang Dolog BGR Karangjati, Bergas Kab. Smg 50552</div><div class="co-addr">(0298) 522686, 525052</div></div><div class="slip-title">SLIP GAJI</div><div class="emp-info"><span>${s.employeeName}</span><span>BULAN: ${periodName}<br>No ACCOUNT: ${s.employeeCode}</span></div><div class="tbl-hdr"><span>KETERANGAN PENDAPATAN</span><span>JUMLAH</span></div><div class="row b"><span>GAJI POKOK</span><span></span>${amt(s.hkAmount, {noDot: true})}</div><div class="row"><span class="lbl">HK</span><span>${s.hkDays} x Rp ${f(s.ratePerHari)}</span>${amt(s.hkAmount)}</div><div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(s.tjMasaKerja)}</div><div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(s.tunjangan)}</div><div class="row"><span class="lbl">PREMI HADIR</span><span></span>${amt(s.premiHadir)}</div><div class="row"><span class="lbl">LEMBURAN</span><span>${s.overtimeHours} JAM</span>${amt(s.overtimeAmount)}</div><div class="row"><span class="lbl">REVISI</span><span></span>${amt(s.revisi)}</div><div class="row"><span></span><span></span>${amt(s.subTotalEarnings, {bt: true})}</div><div class="sp"></div><div class="row"><span class="lbl">BPJS TK</span><span></span>${amt(s.bpjsTK, {deduct: true})}</div><div class="row"><span class="lbl">BPJS KS</span><span></span>${amt(s.bpjsKes, {deduct: true})}</div><div class="row"><span class="lbl">BPJS PENSIUN</span><span></span>${amt(s.bpjsPensiun, {deduct: true})}</div><div class="row"><span class="lbl">PPH</span><span></span>${amt(s.pph, {deduct: true})}</div><div class="row"><span class="lbl">CASHBON</span><span></span>${amt(s.cashbon, {deduct: true})}</div><div class="row"><span class="lbl">POT. KEHADIRAN</span><span>${s.deductDays} HARI</span>${amt(s.potonganKehadiran, {deduct: true})}</div><div class="row xs"><span></span><span style="text-align:right">PBLT</span>${amt(s.pblt, {pblt: true})}</div><div class="row mb-1"><span></span><span></span>${amt(s.subTotalDeduction, {deduct: true, bt: true})}</div><div class="row total"><span></span><span>TOTAL TERIMA</span>${amt(s.totalTerima)}</div><div class="ftr-date">Tgl. ${new Date().toLocaleDateString('id-ID')}</div><div class="ftr-sign"><div class="sc"><div>HRD,</div><div class="sg"></div><div>ONG KRISTIN</div></div><div class="sc"><div>Diterima oleh,</div><div class="sg"></div><div>${s.employeeName}</div></div></div></div>`
+  const renderNormalSlip = (s) => `<div class="slip"><div class="sisa-cuti">Sisa Cuti: ${s.remainingLeave} hari</div><div class="co-header"><b class="co-name">PT. KEMILAU UNGARAN SUKSES</b><div class="co-sub">EMBROIDERY &amp; PRINTING FACTORY</div><div class="co-addr">Jl. Ngobo/Jl. PTPN IX No.1 Gudang Dolog BGR Karangjati, Bergas Kab. Smg 50552</div><div class="co-addr">(0298) 522686, 525052</div></div><div class="slip-title">SLIP GAJI</div><div class="emp-info"><span>${s.employeeName}</span><span>BULAN: ${periodName}<br>No ACCOUNT: ${s.employeeCode}</span></div><div class="tbl-hdr"><span>KETERANGAN PENDAPATAN</span><span>JUMLAH</span></div><div class="row b"><span>GAJI POKOK</span><span></span>${amt(s.gajiPokok, {noDot: true})}</div><div class="row"><span class="lbl">HK</span><span>${s.hkDays} x Rp ${f(s.ratePerHari)}</span>${amt(s.hkAmount)}</div><div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(s.tjMasaKerja)}</div><div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(s.tunjangan)}</div><div class="row"><span class="lbl">PREMI HADIR</span><span></span>${amt(s.premiHadir)}</div><div class="row"><span class="lbl">LEMBURAN</span><span>${s.overtimeHours} JAM</span>${amt(s.overtimeAmount)}</div><div class="row"><span class="lbl">REVISI</span><span></span>${amt(s.revisi)}</div><div class="row"><span></span><span></span>${amt(s.subTotalEarnings, {bt: true})}</div><div class="sp"></div><div class="row"><span class="lbl">BPJS TK</span><span></span>${amt(s.bpjsTK, {deduct: true})}</div><div class="row"><span class="lbl">BPJS KS</span><span></span>${amt(s.bpjsKes, {deduct: true})}</div><div class="row"><span class="lbl">BPJS PENSIUN</span><span></span>${amt(s.bpjsPensiun, {deduct: true})}</div><div class="row"><span class="lbl">PPH</span><span></span>${amt(s.pph, {deduct: true})}</div><div class="row"><span class="lbl">CASHBON</span><span></span>${amt(s.cashbon, {deduct: true})}</div><div class="row"><span class="lbl">POT. KEHADIRAN</span><span>${s.deductDays} HARI</span>${amt(s.potonganKehadiran, {deduct: true})}</div><div class="row xs"><span></span><span style="text-align:right">PBLT</span>${amt(s.pblt, {pblt: true})}</div><div class="row mb-1"><span></span><span></span>${amt(s.subTotalDeduction, {deduct: true, bt: true})}</div><div class="row total"><span></span><span>TOTAL TERIMA</span>${amt(s.totalTerima)}</div><div class="ftr-date">Tgl. ${new Date().toLocaleDateString('id-ID')}</div><div class="ftr-sign"><div class="sc"><div>HRD,</div><div class="sg"></div><div>ONG KRISTIN</div></div><div class="sc"><div>Diterima oleh,</div><div class="sg"></div><div>${s.employeeName}</div></div></div></div>`
   const renderSplitPart = (p, label) => {
     if (!p) return ''
-    return `<div class="split-part-title">${label}</div><div class="row b"><span>GAJI POKOK</span><span></span>${amt(p.hkAmount, {noDot: true})}</div><div class="row"><span class="lbl">HK</span><span> ${p.hkDays} x Rp ${f(p.ratePerHari)}</span>${amt(p.hkAmount)}</div><div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(p.tjMasaKerja)}</div><div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(p.tunjangan)}</div><div class="row"><span class="lbl">PREMI HADIR</span><span></span>${amt(p.premiHadir)}</div><div class="row"><span class="lbl">LEMBURAN</span><span>${p.overtimeHours} JAM</span>${amt(p.overtimeAmount)}</div><div class="row"><span class="lbl">REVISI</span><span></span>${amt(p.revisi)}</div><div class="row"><span></span><span></span>${amt(p.subTotalEarnings, {bt: true})}</div><div class="sp"></div>${p.part === 2 ? `<div class="row"><span class="lbl">BPJS TK</span><span></span>${amt(p.bpjsTK, {deduct: true})}</div><div class="row"><span class="lbl">BPJS KS</span><span></span>${amt(p.bpjsKes, {deduct: true})}</div><div class="row"><span class="lbl">BPJS PENSIUN</span><span></span>${amt(p.bpjsPensiun, {deduct: true})}</div><div class="row"><span class="lbl">PPH</span><span></span>${amt(p.pph, {deduct: true})}</div>` : ''}<div class="row"><span class="lbl">CASHBON</span><span></span>${amt(p.cashbon, {deduct: true})}</div><div class="row"><span class="lbl">POT. KEHADIRAN</span><span>${p.deductDays} HARI</span>${amt(p.potonganKehadiran, {deduct: true})}</div><div class="row xs"><span></span><span style="text-align:right">PBLT</span>${amt(p.pblt, {pblt: true})}</div><div class="row mb-1"><span></span><span></span>${amt(p.subTotalDeduction, {deduct: true, bt: true})}</div><div class="row part-total"><span></span><span>Sub Total</span>${amt(p.totalTerima)}</div>`
+    return `<div class="split-part-title">${label}</div><div class="row b"><span>GAJI POKOK</span><span></span>${amt(p.gajiPokok, {noDot: true})}</div><div class="row"><span class="lbl">HK</span><span> ${p.hkDays} x Rp ${f(p.ratePerHari)}</span>${amt(p.hkAmount)}</div><div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(p.tjMasaKerja)}</div><div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(p.tunjangan)}</div><div class="row"><span class="lbl">PREMI HADIR</span><span></span>${amt(p.premiHadir)}</div><div class="row"><span class="lbl">LEMBURAN</span><span>${p.overtimeHours} JAM</span>${amt(p.overtimeAmount)}</div><div class="row"><span class="lbl">REVISI</span><span></span>${amt(p.revisi)}</div><div class="row"><span></span><span></span>${amt(p.subTotalEarnings, {bt: true})}</div><div class="sp"></div>${p.part === 2 ? `<div class="row"><span class="lbl">BPJS TK</span><span></span>${amt(p.bpjsTK, {deduct: true})}</div><div class="row"><span class="lbl">BPJS KS</span><span></span>${amt(p.bpjsKes, {deduct: true})}</div><div class="row"><span class="lbl">BPJS PENSIUN</span><span></span>${amt(p.bpjsPensiun, {deduct: true})}</div><div class="row"><span class="lbl">PPH</span><span></span>${amt(p.pph, {deduct: true})}</div>` : ''}<div class="row"><span class="lbl">CASHBON</span><span></span>${amt(p.cashbon, {deduct: true})}</div><div class="row"><span class="lbl">POT. KEHADIRAN</span><span>${p.deductDays} HARI</span>${amt(p.potonganKehadiran, {deduct: true})}</div><div class="row xs"><span></span><span style="text-align:right">PBLT</span>${amt(p.pblt, {pblt: true})}</div><div class="row mb-1"><span></span><span></span>${amt(p.subTotalDeduction, {deduct: true, bt: true})}</div><div class="row part-total"><span></span><span>Sub Total</span>${amt(p.totalTerima)}</div>`
   }
   const renderSplitSlip = (s) => `<div class="slip slip-split"><div class="sisa-cuti">Sisa Cuti: ${s.remainingLeave} hari</div><div class="co-header"><b class="co-name">PT. KEMILAU UNGARAN SUKSES</b><div class="co-sub">EMBROIDERY &amp; PRINTING FACTORY</div><div class="co-addr">Jl. Ngobo/Jl. PTPN IX No.1 Gudang Dolog BGR Karangjati, Bergas Kab. Smg 50552</div><div class="co-addr">(0298) 522686, 525052</div></div><div class="slip-title">SLIP GAJI</div><div class="emp-info"><span>${s.employeeName}</span><span>No ACCOUNT: ${s.employeeCode}</span></div><div class="tbl-hdr"><span>KETERANGAN PENDAPATAN</span><span>JUMLAH</span></div><div class="split-container">${renderSplitPart(s.part1, 'PART 1')}<div class="sp border-b border-dashed border-gray-400 my-1"></div>${renderSplitPart(s.part2, 'PART 2')}</div><div class="row total split-total mt-1"><span></span><span>TOTAL TERIMA</span>${amt(s.totalTerima)}</div><div class="ftr-date">Tgl. ${new Date().toLocaleDateString('id-ID')}</div><div class="ftr-sign"><div class="sc"><div>HRD,</div><div class="sg"></div><div>ONG KRISTIN</div></div><div class="sc"><div>Diterima oleh,</div><div class="sg"></div><div>${s.employeeName}</div></div></div></div>`
   const pages = []
