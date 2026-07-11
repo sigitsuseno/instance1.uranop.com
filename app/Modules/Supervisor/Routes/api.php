@@ -100,6 +100,12 @@ Route::prefix('v1/supervisor')
             Route::get('gaji-karyawan', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorGajiKaryawanController::class, 'index']);
             Route::get('gaji-karyawan/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorGajiKaryawanController::class, 'export']);
             Route::get('payslips', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorPayslipController::class, 'index']);
+
+            // Breakdown
+            Route::get('breakdown', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'index']);
+            Route::post('breakdown/calculate', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'calculate']);
+            Route::post('breakdown/import', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'import']);
+            Route::get('breakdown/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'export']);
         });
 
         // Employee Data

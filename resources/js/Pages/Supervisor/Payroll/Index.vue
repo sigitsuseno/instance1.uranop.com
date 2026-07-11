@@ -1,5 +1,8 @@
 <template>
   <div class="space-y-6">
+    <!-- Hidden file input for Excel import -->
+    <input ref="fileInput" type="file" accept=".xlsx,.csv,.xls" class="hidden" @change="handleImport" />
+
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
@@ -23,7 +26,7 @@
 
         <!-- Generate Awal Button -->
         <BaseButton
-          variant="secondary"
+          variant="primary"
           :disabled="!selectedPeriodId || generating"
           :loading="generating"
           @click="handleGenerate"
@@ -31,23 +34,20 @@
           <template #icon-left>
             <IconRefresh class="w-4 h-4" />
           </template>
-          Generate Awal
+          Kalkulasi Gaji
         </BaseButton>
 
-        <!-- Kalkulasi & Kunci Button -->
+        <!-- Import Excel Button (hidden) -->
+        <!--
         <BaseButton
-          v-if="hasUnlockedRecaps"
-          variant="primary"
-          @click="isApproveModalOpen = true"
+          variant="secondary"
+          :disabled="!selectedPeriodId || importing"
+          :loading="importing"
+          @click="triggerImport"
         >
-          <template #icon-left>
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-          </template>
-          Kalkulasi & Kunci
+          ...
         </BaseButton>
+        -->
 
         <!-- Export Button -->
         <BaseButton
@@ -61,18 +61,16 @@
           Export
         </BaseButton>
 
-        <!-- Setting Button -->
+        <!-- Setting Button (hidden) -->
+        <!--
         <button
           @click="showSettings = true"
           class="h-10 px-3 text-sm rounded-lg border border-(--border-soft) hover:bg-(--bg-hover) flex items-center gap-1.5 transition-colors"
           title="Pengaturan Tampilan"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-          </svg>
-          <span class="hidden sm:inline">Setting</span>
+          ...
         </button>
+        -->
       </div>
     </div>
 
@@ -328,11 +326,10 @@
           </svg>
           Memproses data...
         </div>
-        <div v-else-if="hasUnlockedRecaps">
-          Data kehadiran terdeteksi. Silakan klik tombol <strong>"Kalkulasi & Kunci Gaji"</strong> untuk memproses payroll.
-        </div>
         <div v-else>
-          Belum ada data gaji untuk periode ini. Klik <strong>"Generate"</strong> untuk menghitung data awal kehadiran.
+          Belum ada data gaji untuk periode ini.
+          <br/>Klik <strong>"Kalkulasi Gaji"</strong> untuk menghitung dari data snapshot,
+          atau <strong>"Import Excel"</strong> untuk ambil dari file.
         </div>
       </div>
     </BaseCard>
@@ -348,18 +345,6 @@
         </div>
       </div>
     </BaseCard>
-
-    <!-- Modal: Kalkulasi & Kunci Gaji -->
-    <BaseModal :show="isApproveModalOpen" @close="isApproveModalOpen = false" title="Kalkulasi & Kunci Gaji">
-      <div class="space-y-4">
-        <p class="text-sm text-(--text-main)">Proses ini akan mengkalkulasi ulang gaji berdasarkan data kehadiran terakhir dan <strong>mengunci</strong> data tersebut.</p>
-        <p v-if="unlockedCount > 0" class="text-sm text-(--text-muted)">{{ unlockedCount }} data kehadiran siap diproses.</p>
-        <div class="flex justify-end gap-3 mt-6">
-          <BaseButton variant="ghost" @click="isApproveModalOpen = false">Batal</BaseButton>
-          <BaseButton variant="primary" :loading="approvingPayroll" @click="handleApprovePayroll">Proses & Kunci Gaji</BaseButton>
-        </div>
-      </div>
-    </BaseModal>
 
     <!-- Modal: Setting -->
     <BaseModal :show="showSettings" @close="showSettings = false" title="Pengaturan Gaji Karyawan">
@@ -397,13 +382,13 @@ const periods = ref([])
 const selectedPeriodId = ref('')
 const records = ref([])
 const generating = ref(false)
+const importing = ref(false)
 const activeSegment = ref(null)
 const searchQuery = ref('')
+const fileInput = ref(null)
 
 const recapRecords = ref([])
 const loadingRecap = ref(false)
-const approvingPayroll = ref(false)
-const isApproveModalOpen = ref(false)
 
 const showSettings = ref(false)
 const payrollConfig = ref({ sections: { A: ['GRP-ALLIN', 'GRP-SPR'], B: ['GRP-GD', 'GRP-SS', 'GRP-PS1'] } })
@@ -421,9 +406,6 @@ const periodLabel = computed(() => {
   const months = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER']
   return `${start.getDate()} ${months[start.getMonth()]} - ${end.getDate()} ${months[end.getMonth()]} ${end.getFullYear().toString().slice(-2)}`
 })
-
-const unlockedCount = computed(() => recapRecords.value.filter(r => r.status !== 'locked').length)
-const hasUnlockedRecaps = computed(() => selectedPeriod.value && unlockedCount.value > 0)
 
 const filteredRecords = computed(() => {
   if (!searchQuery.value) return records.value
@@ -519,7 +501,7 @@ async function saveConfig() {
 async function fetchRecords() {
   if (!selectedPeriodId.value) { records.value = []; return }
   try {
-    let url = `/api/v1/supervisor/payroll/gaji-karyawan?period_id=${selectedPeriodId.value}`
+    let url = `/api/v1/supervisor/payroll/breakdown?period_id=${selectedPeriodId.value}`
     if (activeSegment.value) url += `&segment=${activeSegment.value}`
     const res = await get(url)
     records.value = res.data || []
@@ -547,31 +529,48 @@ async function onPeriodChange() {
   const period = periods.value.find(p => p.id === selectedPeriodId.value)
   activeSegment.value = period?.is_split ? 'A' : null
   searchQuery.value = ''
-  await Promise.all([fetchRecords(), fetchRecapRecords()])
+  await fetchRecords()
 }
 
 async function handleGenerate() {
   if (!selectedPeriodId.value) return
   generating.value = true
   try {
-    const res = await post(`/api/v1/attendance/recap/generate`, { period_id: selectedPeriodId.value })
-    notification.success(res.message || 'Berhasil men-generate resume kehadiran.')
-    await Promise.all([fetchRecords(), fetchRecapRecords()])
-  } catch (error) { notification.error(error.message || 'Gagal men-generate resume kehadiran.') }
+    const res = await post(`/api/v1/supervisor/payroll/breakdown/calculate`, { period_id: selectedPeriodId.value })
+    notification.success(res.message || 'Berhasil mengkalkulasi breakdown gaji.')
+    await fetchRecords()
+  } catch (error) { notification.error(error.message || 'Gagal mengkalkulasi breakdown.') }
   finally { generating.value = false }
 }
 
-async function handleApprovePayroll() {
-  const unlockedIds = recapRecords.value.filter(r => r.status !== 'locked').map(r => r.id)
-  if (unlockedIds.length === 0) { notification.warning('Tidak ada data kehadiran yang perlu diproses.'); return }
-  approvingPayroll.value = true
+function triggerImport() { fileInput.value?.click() }
+
+async function handleImport(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  importing.value = true
   try {
-    const res = await post('/api/v1/attendance/recap/approve', { ids: unlockedIds })
-    notification.success(res.message || 'Gaji karyawan berhasil dikalkulasi dan dikunci!')
-    isApproveModalOpen.value = false
-    await Promise.all([fetchRecords(), fetchRecapRecords()])
-  } catch (error) { notification.error(error.message || 'Gagal memproses payroll.') }
-  finally { approvingPayroll.value = false }
+    const form = new FormData()
+    form.append('period_id', selectedPeriodId.value)
+    form.append('file', file)
+    if (activeSegment.value) form.append('segment', activeSegment.value)
+
+    // Use raw fetch for multipart (useApi doesn't handle FormData well)
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/v1/supervisor/payroll/breakdown/import', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: form,
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || 'Gagal import')
+    notification.success(data.message || 'Import berhasil.')
+    await fetchRecords()
+  } catch (error) { notification.error(error.message || 'Gagal import Excel.') }
+  finally {
+    importing.value = false
+    event.target.value = '' // Reset input
+  }
 }
 
 function handleExport() {
@@ -579,7 +578,7 @@ function handleExport() {
   const params = new URLSearchParams()
   if (selectedPeriodId.value) params.append('period_id', selectedPeriodId.value)
   if (activeSegment.value) params.append('segment', activeSegment.value)
-  const url = `/api/v1/supervisor/payroll/gaji-karyawan/export?${params.toString()}`
+  const url = `/api/v1/supervisor/payroll/breakdown/export?${params.toString()}`
   notification.info('Sedang menyiapkan file Excel...')
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => { if (!r.ok) throw new Error('Gagal export Excel'); return r.blob() })

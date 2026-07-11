@@ -2,50 +2,173 @@
 
 namespace App\Modules\Reports\Exports;
 
+use Maatwebsite\Excel\Concerns\FromArray;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
-use Maatwebsite\Excel\Concerns\WithColumnWidths;
-use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
-use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
-use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class GajiKaryawanExport implements WithHeadings, WithStyles, WithColumnWidths, WithEvents
+class GajiKaryawanExport implements FromArray, WithHeadings, WithStyles, WithEvents, WithTitle
 {
-    protected $secAData;
-    protected $secBData;
-    protected $periodName;
+    protected array $secAData;
+    protected array $secBData;
+    protected string $periodLabel;
 
-    // Track writing position
-    protected $row = 1;
+    // 28 columns: A=No ... AB=TRIMA
+    private const LAST_COL = 'AB';
+    private const COL_COUNT = 28;
 
-    // Columns that carry employee data
-    const COLS = ['employee_code','name','gender','department','position','join_year','premi','gaji_pokok','tj_masa_kerja','hari_kerja','lm','lembur_count','gaji','upah_lembur','revisi','tunjangan','premi_hadir','pblt','total','bpjs_tk','bpjs_ks','bpjs_pen','cashbon','pph','gaji_bersih'];
-    const NUM_COLS = ['premi','gaji_pokok','tj_masa_kerja','hari_kerja','lm','lembur_count','gaji','upah_lembur','revisi','tunjangan','premi_hadir','pblt','total','bpjs_tk','bpjs_ks','bpjs_pen','cashbon','pph','gaji_bersih'];
-
-    public function __construct(array $secAData, array $secBData, string $periodName)
+    public function __construct(array $secAData, array $secBData, string $periodLabel)
     {
         $this->secAData = $secAData;
         $this->secBData = $secBData;
-        $this->periodName = $periodName;
+        $this->periodLabel = $periodLabel;
+    }
+
+    public function title(): string
+    {
+        return 'Gaji Karyawan';
     }
 
     public function headings(): array
     {
-        // Not used — we write manually in registerEvents
-        return [];
+        return [
+            'No',            // A
+            'ID No',         // B
+            'NAMA KARYAWAN', // C
+            'L/P',           // D
+            'MASA KERJA',    // E
+            'BAGIAN',        // F
+            'JABATAN',       // G
+            'THN MSK',       // H
+            'STATUS',        // I
+            'PREMI',         // J
+            'GAJI POKOK',    // K
+            'TJ. MK',        // L
+            'HK',            // M
+            'L/M',           // N
+            'LBR JAM',       // O
+            'GAJI',          // P
+            'LEMBUR',        // Q
+            'REVISI',        // R
+            'TUNJANGAN',     // S
+            'PR. HADIR',     // T
+            'PBLT',          // U
+            'TOTAL',         // V
+            'BPJS TK',       // W
+            'BPJS KES',      // X
+            'BPJS PEN',      // Y
+            'CASH BON',      // Z
+            'PPH',           // AA
+            'TRIMA',         // AB
+        ];
     }
 
-    public function columnWidths(): array
+    public function array(): array
+    {
+        $rows = [];
+
+        // ── Section A ──
+        $countA = count($this->secAData);
+        $rows[] = $this->sectionRow("A. KARYAWAN ALL IN ({$countA} Karyawan)");
+        $no = 1;
+        foreach ($this->secAData as $r) {
+            $rows[] = $this->dataRow($r, $no++);
+        }
+        $rows[] = $this->totalRow('TOTAL A. KARYAWAN ALL IN', $this->secAData);
+
+        // ── Section B ──
+        $countB = count($this->secBData);
+        $rows[] = $this->sectionRow("B. KARYAWAN BULANAN PRINT ({$countB} Karyawan)");
+        $no = 1;
+        foreach ($this->secBData as $r) {
+            $rows[] = $this->dataRow($r, $no++);
+        }
+        $rows[] = $this->totalRow('TOTAL B. KARYAWAN BULANAN PRINT', $this->secBData);
+
+        // ── Blank ──
+        $rows[] = array_fill(0, self::COL_COUNT, null);
+
+        // ── Grand ──
+        $rows[] = $this->totalRow('TOTAL KESELURUHAN', array_merge($this->secAData, $this->secBData));
+
+        return $rows;
+    }
+
+    private function dataRow(array $r, int $no): array
     {
         return [
-            'A' => 5,  'B' => 10, 'C' => 25, 'D' => 5,  'E' => 15, 'F' => 15,
-            'G' => 14, 'H' => 12, 'I' => 12, 'J' => 12, 'K' => 5,  'L' => 5,
-            'M' => 8,  'N' => 12, 'O' => 12, 'P' => 12, 'Q' => 12, 'R' => 12,
-            'S' => 10, 'T' => 15, 'U' => 12, 'V' => 12, 'W' => 12, 'X' => 12,
-            'Y' => 12, 'Z' => 15,
+            $no,                           // A
+            $r['employee_code'] ?? '-',    // B
+            $r['name'] ?? '-',             // C
+            $r['gender'] ?? '-',           // D
+            $r['masa_kerja'] ? $r['masa_kerja'] . ' bln' : '0',  // E
+            $r['department'] ?? '-',       // F
+            $r['position'] ?? '-',         // G
+            $r['join_year'] ?? '-',        // H
+            $r['ptkp'] ?? '-',             // I
+            $r['premi'] ?? 0,              // J
+            $r['gaji_pokok'] ?? 0,         // K
+            $r['tj_masa_kerja'] ?? 0,      // L
+            $r['hari_kerja'] ?? 0,         // M
+            $r['lm'] ? round($r['lm'] / 60, 1) : 0,           // N (L/M dalam jam)
+            $r['lembur_count'] ? round($r['lembur_count'] / 60, 1) : 0, // O (LBR JAM dalam jam)
+            $r['gaji'] ?? 0,               // P
+            $r['upah_lembur'] ?? 0,        // Q
+            $r['revisi'] ?? 0,             // R
+            $r['tunjangan'] ?? 0,          // S
+            $r['premi_hadir'] ?? 0,        // T
+            $r['pblt'] ?? 0,               // U
+            $r['total'] ?? 0,              // V
+            $r['bpjs_tk'] ?? 0,            // W
+            $r['bpjs_ks'] ?? 0,            // X
+            $r['bpjs_pen'] ?? 0,           // Y
+            $r['cashbon'] ?? 0,            // Z
+            $r['pph'] ?? 0,                // AA
+            $r['gaji_bersih'] ?? 0,        // AB
+        ];
+    }
+
+    private function sectionRow(string $label): array
+    {
+        $row = array_fill(0, self::COL_COUNT, null);
+        $row[0] = $label;
+        return $row;
+    }
+
+    private function totalRow(string $label, array $data): array
+    {
+        $sum = fn($key) => array_sum(array_map(fn($r) => (float) ($r[$key] ?? 0), $data));
+
+        return [
+            null, null, null, null, null, null,  // A-F
+            $label,                               // G — label di kolom G
+            null,                                 // H
+            null,                                 // I
+            $sum('premi'),                        // J
+            $sum('gaji_pokok'),                   // K
+            $sum('tj_masa_kerja'),                // L
+            $sum('hari_kerja'),                   // M
+            $sum('lm'),                           // N
+            $sum('lembur_count'),                 // O
+            $sum('gaji'),                         // P
+            $sum('upah_lembur'),                  // Q
+            $sum('revisi'),                       // R
+            $sum('tunjangan'),                    // S
+            $sum('premi_hadir'),                  // T
+            $sum('pblt'),                         // U
+            $sum('total'),                        // V
+            $sum('bpjs_tk'),                      // W
+            $sum('bpjs_ks'),                      // X
+            $sum('bpjs_pen'),                     // Y
+            $sum('cashbon'),                      // Z
+            $sum('pph'),                          // AA
+            $sum('gaji_bersih'),                  // AB
         ];
     }
 
@@ -59,170 +182,167 @@ class GajiKaryawanExport implements WithHeadings, WithStyles, WithColumnWidths, 
         return [
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
-                $this->writeSheet($sheet);
+                $spreadsheet = $sheet->getParent();
+                $lastRow = $sheet->getHighestRow();
+                $lastCol = self::LAST_COL;
+
+                // ── Default font ──
+                $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(10);
+
+                // ── Title row (row 1) ──
+                $sheet->insertNewRowBefore(1, 1);
+                $sheet->setCellValue('A1', 'LAPORAN GAJI KARYAWAN');
+                $sheet->mergeCells("A1:{$lastCol}1");
+                $sheet->getStyle('A1')->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 14, 'name' => 'Calibri'],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical'   => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+                $sheet->getRowDimension(1)->setRowHeight(32);
+
+                // Period label (right-aligned in last column, same row)
+                $sheet->setCellValue("{$lastCol}1", strtoupper($this->periodLabel));
+                $sheet->getStyle("{$lastCol}1")->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 10, 'name' => 'Calibri'],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_RIGHT,
+                        'vertical'   => Alignment::VERTICAL_CENTER,
+                    ],
+                ]);
+
+                // ── Header row (row 2) ──
+                $headerRow = 2;
+                $sheet->getStyle("A{$headerRow}:{$lastCol}{$headerRow}")->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 9, 'name' => 'Calibri'],
+                    'fill' => [
+                        'fillType'   => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'D9E2F3'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                        'vertical'   => Alignment::VERTICAL_CENTER,
+                        'wrapText'   => true,
+                    ],
+                ]);
+                $sheet->getRowDimension($headerRow)->setRowHeight(28);
+
+                // ── ALL borders ──
+                $dataStartRow = 3;
+                $borderStyle = [
+                    'borders' => [
+                        'allBorders' => [
+                            'borderStyle' => Border::BORDER_THIN,
+                            'color' => ['rgb' => '000000'],
+                        ],
+                    ],
+                ];
+                $sheet->getStyle("A{$dataStartRow}:{$lastCol}{$lastRow}")->applyFromArray($borderStyle);
+                $sheet->getStyle("A{$headerRow}:{$lastCol}{$headerRow}")->applyFromArray($borderStyle);
+
+                // ── Section header rows ──
+                foreach (range(3, $lastRow) as $r) {
+                    $val = $sheet->getCell("A{$r}")->getValue();
+                    if (is_string($val) && (str_starts_with($val, 'A.') || str_starts_with($val, 'B.'))) {
+                        $sheet->mergeCells("A{$r}:{$lastCol}{$r}");
+                        $sheet->getStyle("A{$r}")->applyFromArray([
+                            'font' => ['bold' => true, 'size' => 10, 'name' => 'Calibri'],
+                            'fill' => [
+                                'fillType'   => Fill::FILL_SOLID,
+                                'startColor' => ['rgb' => 'D9E2F3'],
+                            ],
+                        ]);
+                        $sheet->getRowDimension($r)->setRowHeight(22);
+                    }
+                }
+
+                // ── Total rows (label in column G) ──
+                foreach (range(3, $lastRow) as $r) {
+                    $val = $sheet->getCell("G{$r}")->getValue();
+                    if (is_string($val) && str_starts_with($val, 'TOTAL')) {
+                        $sheet->getStyle("A{$r}:{$lastCol}{$r}")->applyFromArray([
+                            'font' => ['bold' => true, 'size' => 10, 'name' => 'Calibri'],
+                            'fill' => [
+                                'fillType'   => Fill::FILL_SOLID,
+                                'startColor' => ['rgb' => 'D9E2F3'],
+                            ],
+                        ]);
+                        $sheet->mergeCells("A{$r}:F{$r}");
+                        $sheet->getStyle("G{$r}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                        $sheet->getRowDimension($r)->setRowHeight(22);
+                    }
+                }
+
+                // ── Grand total (last row) ──
+                $sheet->getStyle("A{$lastRow}:{$lastCol}{$lastRow}")->applyFromArray([
+                    'font' => ['bold' => true, 'size' => 11, 'name' => 'Calibri'],
+                    'fill' => [
+                        'fillType'   => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => 'B4C6E7'],
+                    ],
+                ]);
+                $sheet->getRowDimension($lastRow)->setRowHeight(26);
+
+                // ── Number format (#,##0) for numeric columns (J through AB) ──
+                $numStartCol = 'J';
+                $sheet->getStyle("{$numStartCol}{$dataStartRow}:{$lastCol}{$lastRow}")
+                    ->getNumberFormat()
+                    ->setFormatCode('#,##0');
+
+                // ── Integer columns (no decimals) ──
+                foreach (['M', 'U'] as $col) {
+                    $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
+                        ->getNumberFormat()
+                        ->setFormatCode('#,##0');
+                }
+
+                // ── L/M & LBR JAM — 1 decimal (jam) ──
+                foreach (['N', 'O'] as $col) {
+                    $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
+                        ->getNumberFormat()
+                        ->setFormatCode('#,##0.0');
+                }
+
+                // ── Column widths ──
+                $colWidths = [
+                    'A' => 5,   'B' => 8,   'C' => 28,  'D' => 5,
+                    'E' => 9,   // MASA KERJA
+                    'F' => 18,  'G' => 18,  'H' => 14,
+                    'I' => 9,   // STATUS
+                    'J' => 14,  'K' => 14,  'L' => 10,  'M' => 6,
+                    'N' => 6,   'O' => 8,   'P' => 14,  'Q' => 12,
+                    'R' => 10,  'S' => 14,  'T' => 12,  'U' => 8,
+                    'V' => 14,  'W' => 12,  'X' => 12,  'Y' => 12,
+                    'Z' => 12,  'AA' => 10, 'AB' => 14,
+                ];
+                foreach ($colWidths as $col => $width) {
+                    $sheet->getColumnDimension($col)->setWidth($width);
+                }
+
+                // ── Alignment ──
+                $centerCols = ['A', 'B', 'D', 'E', 'H', 'I', 'M', 'N', 'O', 'U'];
+                foreach ($centerCols as $col) {
+                    $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                }
+
+                $rightCols = ['J', 'K', 'L', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'X', 'Y', 'Z', 'AA', 'AB'];
+                foreach ($rightCols as $col) {
+                    $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
+                        ->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                }
+
+                // ── Vertical center ──
+                $sheet->getStyle("A{$dataStartRow}:{$lastCol}{$lastRow}")
+                    ->getAlignment()
+                    ->setVertical(Alignment::VERTICAL_CENTER);
+
+                // ── Freeze pane ──
+                $sheet->freezePane('C3');
             },
         ];
-    }
-
-    protected function writeSheet(Worksheet $sheet): void
-    {
-        $this->row = 1;
-
-        // ── Title Row ──
-        $sheet->setCellValue('A1', 'LAPORAN GAJI KARYAWAN');
-        $sheet->mergeCells('A1:L1');
-        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
-
-        $sheet->setCellValue('M1', strtoupper($this->periodName));
-        $sheet->mergeCells('M1:Z1');
-        $sheet->getStyle('M1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-        $sheet->getStyle('M1')->getFont()->setBold(true)->setSize(12);
-
-        $this->row = 2;
-
-        // ── Column Headers ──
-        $headers = ['No', 'ID No', 'NAMA KARYAWAN', 'L/P', 'BAGIAN', 'JABATAN', 'THN MSK',
-                     'PREMI', 'GAJI POKOK', 'TJ. MK', 'HK', 'L/M', 'LBR JAM', 'GAJI',
-                     'LEMBUR', 'REVISI', 'TUNJANGAN', 'PR. HADIR', 'PBLT', 'TOTAL',
-                     'BPJS TK', 'BPJS KES', 'BPJS PEN', 'CASH BON', 'PPH', 'TRIMA'];
-        $col = 'A';
-        foreach ($headers as $h) {
-            $sheet->setCellValue("{$col}{$this->row}", $h);
-            $col++;
-        }
-        $sheet->getStyle("A{$this->row}:Z{$this->row}")->getFont()->setBold(true)->setSize(9);
-        $sheet->getStyle("A{$this->row}:Z{$this->row}")->getAlignment()
-            ->setHorizontal(Alignment::HORIZONTAL_CENTER)
-            ->setVertical(Alignment::VERTICAL_CENTER)
-            ->setWrapText(true);
-
-        $headerRow = $this->row;
-        $this->row++;
-
-        // ── Section A ──
-        $secAEnd = $this->writeSection($sheet, 'A. KARYAWAN ALL IN', $this->secAData, 'A');
-        // ── Section B ──
-        $secBEnd = $this->writeSection($sheet, 'B. KARYAWAN BULANAN PRINT', $this->secBData, 'B');
-
-        $lastRow = max($secBEnd, $headerRow + 1);
-
-        // ── Grand Total ──
-        $allData = array_merge($this->secAData, $this->secBData);
-        if (count($allData) > 0) {
-            $this->row++;
-            $sheet->setCellValue("A{$this->row}", '');
-            $sheet->mergeCells("A{$this->row}:G{$this->row}");
-            $sheet->setCellValue("G{$this->row}", 'TOTAL KESELURUHAN');
-            $sheet->getStyle("G{$this->row}")->getFont()->setBold(true);
-            $sheet->getStyle("G{$this->row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-
-            $this->writeTotalsRow($sheet, $this->row, $allData, 'primary');
-            $lastRow = $this->row;
-        }
-
-        // ── Borders ──
-        $sheet->getStyle("A{$headerRow}:Z{$lastRow}")->getBorders()
-            ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
-
-        // ── Number format ──
-        for ($r = $headerRow + 1; $r <= $lastRow; $r++) {
-            // Column H (8) onwards: number format
-            $sheet->getStyle("H{$r}:Z{$r}")->getNumberFormat()->setFormatCode('#,##0');
-        }
-
-        // ── Freeze Pane ──
-        $sheet->freezePane('D' . ($headerRow + 1));
-    }
-
-    protected function writeSection(Worksheet $sheet, string $label, array $data, string $sectionKey): int
-    {
-        if (empty($data)) {
-            return $this->row - 1;
-        }
-
-        // Section header row
-        $sheet->setCellValue("A{$this->row}", $label . ' (' . count($data) . ' Karyawan)');
-        $sheet->mergeCells("A{$this->row}:Z{$this->row}");
-        $style = $sheet->getStyle("A{$this->row}:Z{$this->row}");
-        $style->getFont()->setBold(true)->setSize(10);
-        $style->getFill()->setFillType(Fill::FILL_SOLID);
-        $style->getFill()->getStartColor()->setARGB('FFE8F5E9'); // light green
-        $style->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
-
-        $sectionStartRow = $this->row;
-        $this->row++;
-
-        // Data rows
-        $num = 1;
-        foreach ($data as $row) {
-            $sheet->setCellValue("A{$this->row}", $num++);
-            $sheet->setCellValue("B{$this->row}", $row['employee_code'] ?? '-');
-            $sheet->setCellValue("C{$this->row}", $row['name'] ?? '-');
-            $sheet->setCellValue("D{$this->row}", $row['gender'] ?? '-');
-            $sheet->setCellValue("E{$this->row}", $row['department'] ?? '-');
-            $sheet->setCellValue("F{$this->row}", $row['position'] ?? '-');
-            $sheet->setCellValue("G{$this->row}", $row['join_year'] ?? '-');
-
-            $col = 'H';
-            foreach (self::NUM_COLS as $key) {
-                $val = $row[$key] ?? 0;
-                // Convert LM and lembur_count from minutes to hours
-                if ($key === 'lm' || $key === 'lembur_count') {
-                    $val = round((float) $val / 60, 1);
-                }
-                $sheet->setCellValue("{$col}{$this->row}", is_numeric($val) ? (float) $val : 0);
-                $col++;
-            }
-
-            $this->row++;
-        }
-
-        // Section total row
-        $sheet->setCellValue("A{$this->row}", '');
-        $sheet->mergeCells("A{$this->row}:G{$this->row}");
-        $sheet->setCellValue("G{$this->row}", 'TOTAL ' . $label);
-        $sheet->getStyle("G{$this->row}")->getFont()->setBold(true);
-        $sheet->getStyle("G{$this->row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-
-        $this->writeTotalsRow($sheet, $this->row, $data, 'section');
-
-        $sectionEndRow = $this->row;
-        $this->row++;
-
-        return $sectionEndRow;
-    }
-
-    protected function writeTotalsRow(Worksheet $sheet, int $row, array $data, string $type): void
-    {
-        $totals = $this->computeTotals($data);
-
-        $col = 'H';
-        foreach (self::NUM_COLS as $key) {
-            $val = $totals[$key] ?? 0;
-            $sheet->setCellValue("{$col}{$row}", $val);
-            $col++;
-        }
-
-        $style = $sheet->getStyle("A{$row}:Z{$row}");
-        $style->getFont()->setBold(true);
-
-        if ($type === 'primary') {
-            $style->getFill()->setFillType(Fill::FILL_SOLID);
-            $style->getFill()->getStartColor()->setARGB('FFE3F2FD'); // light blue
-        }
-    }
-
-    protected function computeTotals(array $data): array
-    {
-        $totals = [];
-        foreach (self::NUM_COLS as $key) {
-            $sum = array_sum(array_map(fn($r) => (float) ($r[$key] ?? 0), $data));
-            // Convert LM and lembur_count from minutes to hours
-            if ($key === 'lm' || $key === 'lembur_count') {
-                $sum = round($sum / 60, 1);
-            }
-            $totals[$key] = $sum;
-        }
-        return $totals;
     }
 }
