@@ -110,6 +110,12 @@ Route::prefix('v1/supervisor')
             Route::post('breakdown/calculate', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'calculate']);
             Route::post('breakdown/import', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'import']);
             Route::get('breakdown/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'export']);
+
+            // THR
+            Route::get('thr', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorThrController::class, 'index']);
+            Route::post('thr/generate', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorThrController::class, 'generate']);
+            Route::put('thr/{id}', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorThrController::class, 'update']);
+            Route::delete('thr/{id}', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorThrController::class, 'destroy']);
         });
 
         // Employee Data
