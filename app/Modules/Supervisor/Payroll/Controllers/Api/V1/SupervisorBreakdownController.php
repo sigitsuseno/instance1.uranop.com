@@ -171,9 +171,6 @@ class SupervisorBreakdownController extends Controller
 
         DB::beginTransaction();
         try {
-            // Hapus dulu data existing untuk periode ini (biar regenerate bersih)
-            SupervisorBreakdown::where('pay_period_id', $period->id)->delete();
-
             foreach ($snapshots as $snapshot) {
                 $employee = $snapshot->employee;
                 if (!$employee) continue;
@@ -305,10 +302,13 @@ class SupervisorBreakdownController extends Controller
                     $gajiBersih = $rounded;
 
                     // ── SIMPAN ──
-                    SupervisorBreakdown::create([
-                        'pay_period_id'       => $period->id,
-                        'employee_id'         => $employee->id,
-                        'segment'             => $segCode,
+                    SupervisorBreakdown::updateOrCreate(
+                        [
+                            'pay_period_id' => $period->id,
+                            'employee_id'   => $employee->id,
+                            'segment'       => $segCode,
+                        ],
+                        [
                         'section'             => $section,
                         'group_codes'         => $groupCodes,
                         'employee_code'       => $employee->employee_code ?? $employee->nip,
