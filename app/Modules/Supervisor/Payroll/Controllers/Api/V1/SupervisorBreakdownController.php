@@ -230,7 +230,7 @@ class SupervisorBreakdownController extends Controller
                             ->whereBetween('date', [$segStart, $segEnd])
                             ->get();
 
-                        $hariKerja   = $segLogs->where('status', 'present')->count();
+                        $hariKerja   = $hkSegment;
                         $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count();
                         $lm          = (int) $segLogs->sum('lm');
                         $lmCount     = (float) $segLogs->sum('lm_calc');
