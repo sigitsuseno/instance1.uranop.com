@@ -210,7 +210,7 @@
             <span>{{ section.label }}</span>
             <span class="text-xs font-normal text-(--text-muted)">{{ section.data.length }} Karyawan</span>
           </div>
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto max-h-[65vh] overflow-y-auto">
             <table class="w-full text-xs">
               <thead>
                 <tr class="bg-(--bg-elevated) text-(--text-main)">
@@ -585,7 +585,7 @@ function handleExport() {
     .then(blob => {
       const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a'); link.href = downloadUrl
-      link.setAttribute('download', `Laporan_Gaji_Karyawan_Supervisor.xlsx`)
+      link.setAttribute('download', `Laporan_Gaji_Karyawan.xlsx`)
       document.body.appendChild(link); link.click(); document.body.removeChild(link)
       URL.revokeObjectURL(downloadUrl)
     })

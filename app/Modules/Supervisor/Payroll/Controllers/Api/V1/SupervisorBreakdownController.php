@@ -7,6 +7,7 @@ use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayrollConfig;
 use App\Modules\Settings\Models\SystemSetting;
+use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
 use App\Modules\Supervisor\Models\SupervisorEmployeeGroup;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
@@ -223,26 +224,17 @@ class SupervisorBreakdownController extends Controller
                         $lmCount   = (float) $snapshot->lm_count;
                         $lemburCount = (float) $snapshot->lembur_count;
                     } else {
-                        // Split: cari snapshot per segment
-                        $segSnapshot = SupervisorAttendanceSnapshot::where('employee_id', $employee->id)
-                            ->where('pay_period_id', $period->id)
-                            ->where('segment', $segCode)
-                            ->first();
+                        // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
+                        // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
+                        $segLogs = AttendanceAutolog::where('employee_id', $employee->id)
+                            ->whereBetween('date', [$segStart, $segEnd])
+                            ->get();
 
-                        if ($segSnapshot) {
-                            $hariKerja   = (int) $segSnapshot->hari_kerja;
-                            $deductDay   = (float) $segSnapshot->deduct_day;
-                            $lm          = (int) $segSnapshot->lm;
-                            $lmCount     = (float) $segSnapshot->lm_count;
-                            $lemburCount = (float) $segSnapshot->lembur_count;
-                        } else {
-                            // Fallback: hitung dari snapshot utama (non-segment)
-                            $hariKerja   = max(0, $hkSegment - (int) $snapshot->deduct_day);
-                            $deductDay   = (float) $snapshot->deduct_day;
-                            $lm          = (int) $snapshot->lm;
-                            $lmCount     = (float) $snapshot->lm_count;
-                            $lemburCount = (float) $snapshot->lembur_count;
-                        }
+                        $hariKerja   = $segLogs->where('status', 'present')->count();
+                        $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count();
+                        $lm          = (int) $segLogs->sum('lm');
+                        $lmCount     = (float) $segLogs->sum('lm_calc');
+                        $lemburCount = (float) $segLogs->sum('lembur_calc');
                     }
 
                     // ── Data masukan (salary lookup) ──
@@ -693,7 +685,7 @@ class SupervisorBreakdownController extends Controller
         if ($period->is_split && $segment) {
             $periodName .= " (Segmen {$segment})";
         }
-        $filename = 'Laporan_Gaji_Karyawan_Supervisor_' . str_replace(' ', '_', $periodName) . '.xlsx';
+        $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodName) . '.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Modules\Reports\Exports\GajiKaryawanExport($secAData, $secBData, $periodName),
