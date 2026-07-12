@@ -3,13 +3,14 @@
 namespace App\Modules\Supervisor\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Employee\Exports\EmployeeSalaryExport;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeSalary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Maatwebsite\Excel\Facades\Excel;
-use App\Modules\Employee\Exports\EmployeeSalaryExport;
 
 class SupervisorEmployeeSalaryController extends Controller
 {
@@ -44,7 +45,7 @@ class SupervisorEmployeeSalaryController extends Controller
             'reason'                => 'nullable|string',
         ]);
 
-        \DB::transaction(function () use ($data, $employee) {
+        DB::transaction(function () use ($data, $employee) {
             // Get current base salary before update
             $current = $employee->salaries()->where('is_active', true)->first();
             $data['previous_basic_salary'] = $current?->base_salary ?? 0;
@@ -110,7 +111,7 @@ class SupervisorEmployeeSalaryController extends Controller
 
         $employee = Employee::findOrFail($data['employee_id']);
 
-        \DB::transaction(function () use ($data, $employee) {
+        DB::transaction(function () use ($data, $employee) {
             $current = $employee->salaries()->where('is_active', true)->first();
             $data['previous_basic_salary'] = $current?->base_salary ?? 0;
             $employee->salaries()->where('is_active', true)->update(['is_active' => false]);
