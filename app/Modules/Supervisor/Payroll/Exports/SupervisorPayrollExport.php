@@ -114,8 +114,11 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
                 $spreadsheet = $sheet->getParent();
 
                 $dataRows = count($this->data);
-                $lastDataRow = 3 + $dataRows; // row 1=title, row 2=period, row 3=headers, row 4+ = data
                 $lastCol = self::LAST_COL;
+
+                // ── Shift data down 3 rows to make room for title + period + headers ──
+                $sheet->insertNewRowBefore(1, 3);
+                $lastDataRow = 3 + $dataRows; // row 1=title, row 2=period, row 3=headers, row 4+ = data
 
                 // ── Default font ──
                 $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
