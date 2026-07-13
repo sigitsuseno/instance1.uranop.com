@@ -61,7 +61,22 @@
           <template #icon-left>
             <IconDownload class="w-4 h-4" />
           </template>
-          Export
+          Export Excel
+        </BaseButton>
+
+        <!-- Print PDF Button -->
+        <BaseButton
+          variant="info"
+          :disabled="!selectedPeriodId || records.length === 0"
+          :loading="printing"
+          @click="handlePrint"
+        >
+          <template #icon-left>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 12H4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-4a2 2 0 0 0-2-2h-2"/><rect x="6" y="14" width="12" height="8"/>
+            </svg>
+          </template>
+          Print PDF
         </BaseButton>
 
         <!-- Setting Button (hidden) -->
@@ -386,6 +401,7 @@ const selectedPeriodId = ref('')
 const records = ref([])
 const generating = ref(false)
 const importing = ref(false)
+const printing = ref(false)
 const activeSegment = ref(null)
 const searchQuery = ref('')
 const recapRecords = ref([])
@@ -575,6 +591,47 @@ function handleExport() {
       URL.revokeObjectURL(downloadUrl)
     })
     .catch(err => { console.error(err); notification.error('Gagal export Excel') })
+}
+
+async function handlePrint() {
+  if (!selectedPeriodId.value) return
+  printing.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const params = new URLSearchParams()
+    if (selectedPeriodId.value) params.append('period_id', selectedPeriodId.value)
+    if (activeSegment.value) params.append('segment', activeSegment.value)
+    const url = `/api/v1/supervisor/payroll/breakdown/print?${params.toString()}`
+
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/pdf',
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    if (!response.ok) throw new Error('Gagal generate PDF')
+    const blob = await response.blob()
+
+    let filename = 'Laporan_Gaji_Karyawan.pdf'
+    const disposition = response.headers.get('Content-Disposition')
+    if (disposition) {
+      const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/)
+      if (match) filename = decodeURIComponent(match[1])
+    }
+
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    notification.success('PDF berhasil di-download.')
+  } catch (err) {
+    console.error(err)
+    notification.error('Gagal generate PDF: ' + err.message)
+  } finally {
+    printing.value = false
+  }
 }
 
 onMounted(() => { fetchPeriods(); fetchPayrollConfig() })

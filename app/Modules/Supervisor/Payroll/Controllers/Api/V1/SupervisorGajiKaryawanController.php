@@ -110,9 +110,15 @@ class SupervisorGajiKaryawanController extends Controller
             $query->where('segment', $segment);
         }
 
-        $records = $query->get()->map(function ($record) {
+        $records = $query->get()->map(function ($record) use ($period) {
             $emp = $record->employee;
             $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+
+            // Masa kerja: selisih bulan dari join_date ke end_date periode (dibulatkan ke bawah)
+            $masaKerja = 0;
+            if ($joinDate && $period->end_date) {
+                $masaKerja = (int) floor($joinDate->diffInMonths(Carbon::parse($period->end_date)));
+            }
 
             return [
                 'employee_code' => $emp?->employee_code ?? $emp?->nip ?? '-',
@@ -121,6 +127,8 @@ class SupervisorGajiKaryawanController extends Controller
                 'position' => $emp?->position?->name ?? '-',
                 'gender' => $emp?->gender ?? '-',
                 'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
+                'masa_kerja' => $masaKerja,
+                'ptkp' => $emp?->ptkp ?? '-',
                 'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
                 'bank_name' => $emp?->bank_name ?? '-',
                 'bank_account_number' => $emp?->bank_account_number ?? '-',

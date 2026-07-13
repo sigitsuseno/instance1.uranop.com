@@ -596,7 +596,7 @@ class SupervisorBreakdownController extends Controller
 
     /**
      * GET /api/v1/supervisor/payroll/breakdown/export
-     * Export data breakdown ke Excel.
+     * Export data breakdown ke Excel — format persis sample (25 kolom, continuous).
      */
     public function export(Request $request)
     {
@@ -612,7 +612,7 @@ class SupervisorBreakdownController extends Controller
             ->join('employees', 'supervisor_breakdowns.employee_id', '=', 'employees.id')
             ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
             ->orderBy('employees.nip')
-            ->select('supervisor_breakdowns.*', 'employees.ptkp', 'employees.nip');
+            ->select('supervisor_breakdowns.*', 'employees.ptkp', 'employees.nip', 'employees.join_date as emp_join_date');
 
         if ($period->is_split) {
             $segment = $segment ?: 'A';
@@ -621,61 +621,50 @@ class SupervisorBreakdownController extends Controller
 
         $records = $query->get();
 
-        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
-        $sectionAGroups = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
-        $sectionBGroups = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
-
         $periodeEnd = Carbon::parse($period->end_date);
 
-        $secAData = [];
-        $secBData = [];
+        $exportData = [];
         foreach ($records as $r) {
-            $groups = $r->group_codes ?? [];
-
-            // Masa kerja (bulan)
+            // Masa kerja (bulan) dari join_date ke periode.end_date
             $masaKerja = 0;
-            if ($r->join_date) {
-                $masaKerja = (int) Carbon::parse($r->join_date)->diffInMonths($periodeEnd);
+            $joinDate = $r->emp_join_date ?? $r->join_date;
+            if ($joinDate) {
+                $masaKerja = (int) Carbon::parse($joinDate)->diffInMonths($periodeEnd);
             }
 
-            $row = [
-                'employee_code'       => $r->nip ?? $r->employee_code,
-                'name'                => $r->employee_name,
-                'department'          => $r->department_name,
-                'position'            => $r->position_name,
-                'gender'              => $r->gender,
-                'masa_kerja'          => $masaKerja,
-                'join_year'           => $r->join_date ? Carbon::parse($r->join_date)->format('d-M-Y') : '-',
-                'ptkp'                => $r->ptkp ?? '-',
-                'groups'              => $groups,
-                'bank_name'           => $r->bank_name,
-                'bank_account_number' => $r->bank_account_number,
-                'bank_account_name'   => $r->bank_account_name,
+            // Join Date format dd/mm/yyyy
+            $joinDateStr = '-';
+            if ($joinDate) {
+                $joinDateStr = Carbon::parse($joinDate)->format('d/m/Y');
+            }
+
+            $exportData[] = [
+                'employee_code' => $r->nip ?? $r->employee_code,
+                'name'          => $r->employee_name,
+                'department'    => $r->department_name,
+                'position'      => $r->position_name,
+                'gender'        => $r->gender,
+                'masa_kerja'    => $masaKerja,
+                'join_date_raw' => $joinDateStr,
+                'ptkp'          => $r->ptkp ?? '-',
                 'gaji_pokok'    => (float) $r->gaji_pokok,
                 'premi'         => (float) $r->premi,
                 'tj_masa_kerja' => (float) $r->tj_masa_kerja,
-                'tunjangan'     => (float) $r->tunjangan,
                 'hari_kerja'    => (int) $r->hari_kerja,
                 'lm'            => (int) $r->lm,
                 'lembur_count'  => (float) $r->lembur_count,
-                'gaji'          => (float) $r->gaji,
                 'upah_lembur'   => (float) $r->upah_lembur,
-                'revisi'        => (float) $r->revisi,
+                'gaji'          => (float) $r->gaji,
+                'tunjangan'     => (float) $r->tunjangan,
                 'premi_hadir'   => (float) $r->premi_hadir,
-                'pblt'          => (float) $r->pblt,
-                'total'         => (float) $r->gaji_kotor,
                 'bpjs_tk'       => (float) $r->bpjs_tk,
                 'bpjs_ks'       => (float) $r->bpjs_ks,
                 'bpjs_pen'      => (float) $r->bpjs_pen,
-                'cashbon'       => (float) $r->cashbon,
                 'pph'           => (float) $r->pph,
+                'cashbon'       => (float) $r->cashbon,
+                'pblt'          => (float) $r->pblt,
                 'gaji_bersih'   => (float) $r->gaji_bersih,
             ];
-            if (array_intersect($groups, $sectionAGroups)) {
-                $secAData[] = $row;
-            } elseif (array_intersect($groups, $sectionBGroups)) {
-                $secBData[] = $row;
-            }
         }
 
         $periodName = $period->name;
@@ -685,8 +674,106 @@ class SupervisorBreakdownController extends Controller
         $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodName) . '.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Reports\Exports\GajiKaryawanExport($secAData, $secBData, $periodName),
+            new \App\Modules\Supervisor\Payroll\Exports\SupervisorPayrollExport($exportData, $periodName),
             $filename
         );
+    }
+
+    /**
+     * GET /api/v1/supervisor/payroll/breakdown/print
+     * Print/PDF data breakdown — format persis sample PDF.
+     */
+    public function printPdf(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = SupervisorBreakdown::where('pay_period_id', $period->id)
+            ->join('employees', 'supervisor_breakdowns.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('supervisor_breakdowns.*', 'employees.ptkp', 'employees.nip', 'employees.join_date as emp_join_date');
+
+        if ($period->is_split) {
+            $segment = $segment ?: 'A';
+            $query->where('segment', $segment);
+        }
+
+        $records = $query->get();
+
+        $periodeEnd = Carbon::parse($period->end_date);
+
+        $data = [];
+        foreach ($records as $r) {
+            $masaKerja = 0;
+            $joinDate = $r->emp_join_date ?? $r->join_date;
+            if ($joinDate) {
+                $masaKerja = (int) Carbon::parse($joinDate)->diffInMonths($periodeEnd);
+            }
+
+            $joinDateStr = '-';
+            if ($joinDate) {
+                $joinDateStr = Carbon::parse($joinDate)->format('d/m/Y');
+            }
+
+            $lm = !empty($r->lm) ? round($r->lm / 60, 1) : 0;
+            $lemburCount = !empty($r->lembur_count) ? round($r->lembur_count, 1) : 0;
+
+            // Bagian / Jabatan digabung
+            $bagianJabatan = trim(($r->department_name ?? '') . ' / ' . ($r->position_name ?? ''), ' / ');
+
+            $data[] = [
+                'no'              => count($data) + 1,
+                'employee_code'   => $r->nip ?? $r->employee_code,
+                'name'            => $r->employee_name,
+                'bagian_jabatan'  => $bagianJabatan,
+                'gender'          => $r->gender,
+                'masa_kerja'      => $masaKerja,
+                'join_date'       => $joinDateStr,
+                'ptkp'            => $r->ptkp ?? '-',
+                'gaji_pokok'      => (float) $r->gaji_pokok,
+                'premi'           => (float) $r->premi,
+                'tj_masa_kerja'   => (float) $r->tj_masa_kerja,
+                'hari_kerja'      => (int) $r->hari_kerja,
+                'lm'              => $lm,
+                'lembur_count'    => $lemburCount,
+                'upah_lembur'     => (float) $r->upah_lembur,
+                'gaji'            => (float) $r->gaji,
+                'tunjangan'       => (float) $r->tunjangan,
+                'premi_hadir'     => (float) $r->premi_hadir,
+                'bpjs_tk'         => (float) $r->bpjs_tk,
+                'bpjs_ks'         => (float) $r->bpjs_ks,
+                'bpjs_pen'        => (float) $r->bpjs_pen,
+                'pph'             => (float) $r->pph,
+                'cashbon'         => (float) $r->cashbon,
+                'pblt'            => (float) $r->pblt,
+                'gaji_bersih'     => (float) $r->gaji_bersih,
+            ];
+        }
+
+        $periodLabel = $period->name;
+        if ($period->is_split && $segment) {
+            $periodLabel .= " (Segmen {$segment})";
+        }
+
+        // Boost limits for large datasets
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('supervisor.payroll.salary-breakdown-pdf', [
+            'data'        => $data,
+            'periodLabel' => $periodLabel,
+            'companyName' => 'PT. KEMILAU UNGARAN SUKSES',
+        ]);
+
+        $pdf->setPaper('A4', 'portrait');
+
+        $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodLabel) . '.pdf';
+        return $pdf->download($filename);
     }
 }
