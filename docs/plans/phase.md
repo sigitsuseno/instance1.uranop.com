@@ -1,0 +1,9 @@
+- phase 1. pondasi, module auth, bisa login sampai dashboard.
+- phase 2. modul organization, modul setting dan athentication authorization.
+- phase 3. modul employee
+- phase 4. modul schedule
+- phase 5. modul leave
+- phase 6. modul kasbon
+- phase 7. modul attendance
+- phase 8. modul payroll
+- phase 9. modul report
