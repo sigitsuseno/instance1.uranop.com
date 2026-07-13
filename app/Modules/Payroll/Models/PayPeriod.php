@@ -29,6 +29,7 @@ class PayPeriod extends Model
         'status',
         'start_date',
         'end_date',
+        'tanggal_penggajian',
         'created_by',
         'updated_by',
     ];
@@ -39,6 +40,7 @@ class PayPeriod extends Model
         'is_split'     => 'boolean',
         'start_date'   => 'date',
         'end_date'     => 'date',
+        'tanggal_penggajian' => 'date',
     ];
 
     protected static function booted(): void

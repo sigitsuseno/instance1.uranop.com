@@ -22,6 +22,7 @@ class PayPeriodApiController extends Controller
                 'name' => $period->name,
                 'start_date' => $period->start_date ? $period->start_date->format('Y-m-d') : null,
                 'end_date' => $period->end_date ? $period->end_date->format('Y-m-d') : null,
+                'tanggal_penggajian' => $period->tanggal_penggajian ? $period->tanggal_penggajian->format('Y-m-d') : null,
                 'status' => $period->status,
                 'is_split' => $period->is_split,
                 'total_employees' => 0, // Mock for now, will calculate in future
@@ -49,6 +50,7 @@ class PayPeriodApiController extends Controller
                 'period_month' => $period->period_month,
                 'start_date' => $period->start_date?->format('Y-m-d'),
                 'end_date' => $period->end_date?->format('Y-m-d'),
+                'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
                 'is_split' => $period->is_split,
                 'status' => $period->status,
                 'date_range' => $period->start_date && $period->end_date
@@ -68,6 +70,7 @@ class PayPeriodApiController extends Controller
             'name' => 'required|string|max:255',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
+            'tanggal_penggajian' => 'nullable|date',
             'is_split' => 'boolean',
             'status' => 'in:active,inactive',
         ]);
@@ -81,6 +84,7 @@ class PayPeriodApiController extends Controller
             'period_month' => $endDate->month,
             'start_date' => $validated['start_date'],
             'end_date' => $validated['end_date'],
+            'tanggal_penggajian' => $validated['tanggal_penggajian'] ?? null,
             'is_split' => $validated['is_split'] ?? false,
             'status' => $validated['status'] ?? 'active',
             'created_by' => auth()->id() ?? 1,
@@ -100,6 +104,7 @@ class PayPeriodApiController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'start_date' => 'sometimes|required|date',
             'end_date' => 'sometimes|required|date|after_or_equal:start_date',
+            'tanggal_penggajian' => 'sometimes|nullable|date',
             'is_split' => 'sometimes|boolean',
             'status' => 'sometimes|required|in:active,inactive'
         ]);

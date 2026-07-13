@@ -368,6 +368,7 @@ function buildNormalSlipData(r) {
     employeeName: r.employee_name,
     employeeCode: r.employee_code,
     periodName: selectedPeriod.value?.name || '',
+    tanggalPenggajian: selectedPeriod.value?.tanggal_penggajian || null,
     remainingLeave: r.remaining_leave || 0,
     ratePerHari: Math.round(ratePerHari),
     hkDays: hk,
@@ -439,6 +440,7 @@ function buildSplitSlipData(r) {
     isSplit: true,
     employeeName: r.employee_name,
     employeeCode: r.employee_code,
+    tanggalPenggajian: selectedPeriod.value?.tanggal_penggajian || null,
     remainingLeave: r.remaining_leave || 0,
     part1,
     part2,
@@ -448,6 +450,7 @@ function buildSplitSlipData(r) {
 
 function generateBulkPrintHtml(slips, isSplitMode) {
   const f = (v) => Number(Math.abs(v) || 0).toLocaleString('id-ID')
+  const formatTgl = (d) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : new Date().toLocaleDateString('id-ID')
 
   const amt = (val, opt = {}) => {
     let num = f(Math.abs(val))
@@ -486,7 +489,7 @@ function generateBulkPrintHtml(slips, isSplitMode) {
 <div class="row xs"><span></span><span style="text-align:right">PBLT</span>${amt(s.pblt, {pblt: true})}</div>
 <div class="row mb-1"><span></span><span></span>${amt(s.subTotalDeduction, {deduct: true, bt: true})}</div>
 <div class="row total"><span></span><span>TOTAL TERIMA</span>${amt(s.totalTerima)}</div>
-<div class="ftr-date">Tgl. ${new Date().toLocaleDateString('id-ID')}</div>
+<div class="ftr-date">Tgl. ${formatTgl(s.tanggalPenggajian)}</div>
 <div class="ftr-sign"><div class="sc"><div>HRD,</div><div class="sg"></div><div>ONG KRISTIN</div></div><div class="sc"><div>Diterima oleh,</div><div class="sg"></div><div>${s.employeeName}</div></div></div>
 </div>`
 
@@ -529,7 +532,7 @@ ${p.part === 2 ? `
     ${renderSplitPart(s.part2, 'PART 2')}
 </div>
 <div class="row total split-total mt-1"><span></span><span>TOTAL TERIMA</span>${amt(s.totalTerima)}</div>
-<div class="ftr-date">Tgl. ${new Date().toLocaleDateString('id-ID')}</div>
+<div class="ftr-date">Tgl. ${formatTgl(s.tanggalPenggajian)}</div>
 <div class="ftr-sign"><div class="sc"><div>HRD,</div><div class="sg"></div><div>ONG KRISTIN</div></div><div class="sc"><div>Diterima oleh,</div><div class="sg"></div><div>${s.employeeName}</div></div></div>
 </div>`
 

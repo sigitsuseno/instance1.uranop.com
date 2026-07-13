@@ -72,6 +72,7 @@
           <TextInput v-model="form.start_date" label="Tanggal Mulai" type="date" />
           <TextInput v-model="form.end_date" label="Tanggal Selesai" type="date" />
         </div>
+        <TextInput v-model="form.tanggal_penggajian" label="Tanggal Penggajian" type="date" />
         <div class="flex items-center gap-3">
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" v-model="form.is_split" class="rounded border-(--border-soft) text-(--primary) focus:ring-(--primary)" />
@@ -118,13 +119,14 @@ const form = ref({
   name: '',
   start_date: '',
   end_date: '',
+  tanggal_penggajian: '',
   is_split: false,
   status_active: true,
 })
 
 function openCreate() {
   editing.value = null
-  form.value = { name: '', start_date: '', end_date: '', is_split: false, status_active: true }
+  form.value = { name: '', start_date: '', end_date: '', tanggal_penggajian: '', is_split: false, status_active: true }
   error.value = ''
   showModal.value = true
 }
@@ -135,6 +137,7 @@ function openEdit(p) {
     name: p.name,
     start_date: p.start_date,
     end_date: p.end_date,
+    tanggal_penggajian: p.tanggal_penggajian || '',
     is_split: p.is_split,
     status_active: p.status === 'active',
   }
@@ -155,6 +158,7 @@ async function handleSave() {
       name: form.value.name,
       start_date: form.value.start_date,
       end_date: form.value.end_date,
+      tanggal_penggajian: form.value.tanggal_penggajian || null,
       is_split: form.value.is_split,
       status: form.value.status_active ? 'active' : 'inactive',
     }

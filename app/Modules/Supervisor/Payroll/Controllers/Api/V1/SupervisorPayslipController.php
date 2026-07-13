@@ -149,6 +149,7 @@ class SupervisorPayslipController extends Controller
                 'segment'    => $segment,
                 'start_date' => $period->start_date?->format('Y-m-d'),
                 'end_date'   => $period->end_date?->format('Y-m-d'),
+                'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
             ],
             'fixed_work_day'  => $fixedWorkDay,
             'pagination'      => [
