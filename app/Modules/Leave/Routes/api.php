@@ -32,18 +32,21 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
     Route::post('requests/bulk-approve', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkApprove']);
     Route::post('requests/bulk-reject', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkReject']);
     Route::post('requests/bulk-cancel', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkCancel']);
-    
+    Route::post('requests/approve-print', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'approveAndPrint']);
+    Route::get('requests/{id}/print', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'printForm']);
+
     // Leave Change Requests
     Route::get('change-requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'indexChangeRequests']);
     Route::post('requests/{id}/change', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'storeChangeRequest']);
     Route::post('change-requests/{id}/approve', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'approveChangeRequest']);
     Route::post('change-requests/{id}/reject', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'rejectChangeRequest']);
-    
-    // New Transactions & Period closure routes
+
+    // Balances & Transactions
     Route::get('balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'balances']);
+    Route::get('employee-balance', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'employeeBalance']);
     Route::post('generate-quota', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'generateQuota']);
     Route::post('recap-period', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'recapPeriod']);
-    
+
     // Export routes
     Route::get('export/requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportRequests']);
     Route::get('export/balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportBalances']);

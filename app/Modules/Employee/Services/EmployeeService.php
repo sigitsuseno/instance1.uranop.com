@@ -293,18 +293,22 @@ class EmployeeService
      */
     public function getOptions(bool $activeOnly = true): array
     {
-        $query = Employee::orderBy('name');
+        $query = Employee::with(['department:id,name', 'position:id,name'])->orderBy('name');
 
         if ($activeOnly) {
             $query->active();
         }
 
-        return $query->get(['id', 'name', 'employee_code'])
+        return $query->get(['id', 'name', 'nip', 'employee_code', 'join_date', 'department_id', 'position_id'])
             ->map(fn ($e) => [
-                'id'    => $e->id,
-                'name'  => $e->name,
-                'code'  => $e->employee_code,
-                'label' => "{$e->employee_code} - {$e->name}",
+                'id'              => $e->id,
+                'name'            => $e->name,
+                'nip'             => $e->nip,
+                'code'            => $e->employee_code,
+                'label'           => "{$e->employee_code} - {$e->name}",
+                'join_date'       => $e->join_date,
+                'department_name' => $e->department?->name,
+                'position_name'   => $e->position?->name,
             ])
             ->toArray();
     }

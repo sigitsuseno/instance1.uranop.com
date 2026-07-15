@@ -109,7 +109,6 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- Export buttons -->
         <BaseButton variant="secondary" size="sm" @click="exportExcel" title="Export Excel">
           <template #icon-left><i class="bx bx-spreadsheet text-base"></i></template>
         </BaseButton>
@@ -117,7 +116,6 @@
           <template #icon-left><i class="bx bxs-file-pdf text-base"></i></template>
         </BaseButton>
 
-        <!-- Bulk approve button (only HR) -->
         <BaseButton
           v-if="isHrOrAdmin"
           variant="success"
@@ -129,7 +127,6 @@
           Approve
         </BaseButton>
 
-        <!-- Bulk reject button (only HR) -->
         <BaseButton
           v-if="isHrOrAdmin"
           variant="danger"
@@ -141,7 +138,6 @@
           Tolak
         </BaseButton>
 
-        <!-- Create button -->
         <BaseButton 
           variant="primary" 
           size="sm" 
@@ -158,27 +154,13 @@
     <!-- Bulk action bar -->
     <div v-if="selectedIds.length > 0 && (approveMode || rejectMode)" class="flex items-center gap-3 mb-4 p-3 rounded-md bg-(--primary)/5 border border-(--primary)/20">
       <span class="text-sm font-medium text-(--text-main)">{{ selectedIds.length }} item terpilih</span>
-      <BaseButton
-        v-if="approveMode"
-        variant="success"
-        size="sm"
-        @click="executeBulkApprove"
-        :loading="bulkProcessing"
-      >
+      <BaseButton v-if="approveMode" variant="success" size="sm" @click="executeBulkApprove" :loading="bulkProcessing">
         Setujui {{ selectedIds.length }} Pengajuan
       </BaseButton>
-      <BaseButton
-        v-if="rejectMode"
-        variant="danger"
-        size="sm"
-        @click="executeBulkReject"
-        :loading="bulkProcessing"
-      >
+      <BaseButton v-if="rejectMode" variant="danger" size="sm" @click="executeBulkReject" :loading="bulkProcessing">
         Tolak {{ selectedIds.length }} Pengajuan
       </BaseButton>
-      <BaseButton variant="ghost" size="sm" @click="cancelBulkMode">
-        Batal
-      </BaseButton>
+      <BaseButton variant="ghost" size="sm" @click="cancelBulkMode">Batal</BaseButton>
     </div>
 
     <!-- Data Table -->
@@ -218,23 +200,15 @@
             <BaseButton variant="ghost" size="sm" @click="viewDetail(item)">
               <template #icon-left><i class="bx bx-show text-lg"></i></template>
             </BaseButton>
-            <!-- Single approve -->
             <BaseButton
               v-if="item.status === 'pending' && isHrOrAdmin"
-              variant="ghost"
-              size="sm"
-              @click="singleApprove(item)"
-              title="Setujui"
+              variant="ghost" size="sm" @click="singleApprove(item)" title="Setujui"
             >
               <template #icon-left><i class="bx bx-check text-lg text-(--success)"></i></template>
             </BaseButton>
-            <!-- Single reject -->
             <BaseButton
               v-if="item.status === 'pending' && isHrOrAdmin"
-              variant="ghost"
-              size="sm"
-              @click="singleReject(item)"
-              title="Tolak"
+              variant="ghost" size="sm" @click="singleReject(item)" title="Tolak"
             >
               <template #icon-left><i class="bx bx-x text-lg text-(--danger)"></i></template>
             </BaseButton>
@@ -253,9 +227,33 @@
       </div>
     </BaseCard>
 
-    <!-- Create Modal -->
-    <BaseModal :show="showCreateModal" title="Ajukan Cuti" size="md" @close="showCreateModal = false">
+    <!-- ============ CREATE MODAL — REDESIGNED ============ -->
+    <BaseModal :show="showCreateModal" size="lg" @close="showCreateModal = false">
+      <template #title>
+        <div class="text-center w-full">
+          <p class="text-xs font-bold tracking-wider text-(--text-main) uppercase">PT KEMILAU UNGARAN SUKSES</p>
+          <p class="text-sm font-bold text-(--text-main) mt-0.5">FORMULIR PERMOHONAN CUTI</p>
+        </div>
+      </template>
+
       <div class="space-y-4">
+        <!-- Row: Periode + NO DOKUMEN -->
+        <div class="flex items-center gap-3 text-xs bg-(--bg-elevated) rounded-md px-3 py-2">
+          <div class="flex items-center gap-2">
+            <span class="text-(--text-muted) shrink-0">Periode:</span>
+            <select
+              v-model="formPeriodId"
+              class="px-2 py-1 rounded border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-xs h-7 focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              @change="onPeriodChange"
+            >
+              <option v-if="periods.length === 0" value="" disabled>Tidak ada periode</option>
+              <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.name }}</option>
+            </select>
+          </div>
+          <span class="ml-auto text-(--text-muted)">NO DOKUMEN: <em>(otomatis)</em></span>
+        </div>
+
+        <!-- Employee Selector (HR) atau display (non-HR) -->
         <div v-if="isHrOrAdmin">
           <SearchableSelect
             v-model="createForm.employee_id"
@@ -264,24 +262,69 @@
             placeholder="Cari nama atau NIP..."
             :required="true"
             :error="errors.employee_id"
+            @update:model-value="onEmployeeSelected"
           />
         </div>
         <div v-else class="p-3 bg-(--bg-elevated) rounded-md text-sm text-(--text-main)">
           <span class="text-xs text-(--text-muted)">Mengajukan cuti untuk:</span>
           <p class="font-semibold mt-0.5">{{ auth.userName }}</p>
         </div>
-        <SelectInput
-          v-model="createForm.leave_type_id"
-          label="Tipe Cuti"
-          :options="leaveTypeOptions"
-          placeholder="Pilih tipe cuti"
-          :required="true"
-          :error="errors.leave_type_id"
-        />
-        <div class="grid grid-cols-2 gap-4">
+
+        <!-- Auto-filled employee info -->
+        <div v-if="selectedEmployee" class="grid grid-cols-2 gap-3 p-3 bg-(--bg-elevated)/50 rounded-md border border-(--border-soft) text-sm">
+          <div>
+            <span class="text-xs text-(--text-muted) block">Nama Lengkap</span>
+            <span class="font-medium text-(--text-main)">{{ selectedEmployee.name || '-' }}</span>
+          </div>
+          <div>
+            <span class="text-xs text-(--text-muted) block">Tanggal Masuk</span>
+            <span class="font-medium text-(--text-main)">{{ selectedEmployee.join_date ? formatDate(selectedEmployee.join_date) : '-' }}</span>
+          </div>
+          <div class="col-span-2">
+            <span class="text-xs text-(--text-muted) block">Bagian / Jabatan</span>
+            <span class="font-medium text-(--text-main)">{{ selectedEmployee.department_name || '-' }} / {{ selectedEmployee.position_name || '-' }}</span>
+          </div>
+        </div>
+
+        <!-- Jenis Cuti — grid cards grouped by category -->
+        <div>
+          <label class="block text-sm font-medium text-(--text-main) mb-2">
+            Mengajukan Permohonan Cuti <span class="text-(--danger)">*</span>
+          </label>
+          <div v-if="errors.leave_type_id" class="text-xs text-(--danger) mb-2">{{ errors.leave_type_id }}</div>
+          <div class="space-y-3">
+            <div v-for="group in leaveTypeGroups" :key="group.label">
+              <p class="text-[10px] uppercase tracking-wider text-(--text-muted) mb-1.5 font-semibold">{{ group.label }}</p>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button
+                  v-for="lt in group.types"
+                  :key="lt.id"
+                  type="button"
+                  @click="createForm.leave_type_id = lt.id; errors.leave_type_id = ''"
+                  class="flex items-center gap-2 px-2.5 py-1.5 rounded-md border text-xs text-left transition-all"
+                  :class="[
+                    createForm.leave_type_id === lt.id
+                      ? 'border-(--primary) bg-(--primary)/10 text-(--primary) font-semibold'
+                      : 'border-(--border-soft) bg-(--bg-card) text-(--text-main) hover:border-(--text-soft)'
+                  ]"
+                >
+                  <span class="w-3.5 h-3.5 rounded border flex-shrink-0 flex items-center justify-center"
+                    :class="createForm.leave_type_id === lt.id ? 'bg-(--primary) border-(--primary)' : 'border-(--border-soft)'"
+                  >
+                    <i v-if="createForm.leave_type_id === lt.id" class="bx bx-check text-white text-[10px]"></i>
+                  </span>
+                  <span class="truncate leading-tight">{{ lt.name }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Date range + Duration -->
+        <div class="grid grid-cols-3 gap-3">
           <TextInput
             v-model="createForm.start_date"
-            label="Tanggal Mulai"
+            label="Terhitung Mulai Tgl"
             type="date"
             :required="true"
             :error="errors.start_date"
@@ -289,32 +332,57 @@
           />
           <TextInput
             v-model="createForm.end_date"
-            label="Tanggal Selesai"
+            label="s/d Tanggal"
             type="date"
             :required="true"
             :error="errors.end_date"
             @change="calculateDays"
           />
+          <TextInput
+            v-model="createForm.days_requested"
+            label="Durasi (Hari)"
+            type="number"
+            min="1"
+            :required="true"
+            :error="errors.days_requested"
+          />
         </div>
-        <TextInput
-          v-model="createForm.days_requested"
-          label="Durasi Pengajuan (Hari)"
-          type="number"
-          min="1"
-          :required="true"
-          :error="errors.days_requested"
-        />
+
+        <!-- Sisa Cuti Tahunan -->
+        <div v-if="sisaCutiTahunan !== null" class="flex items-center gap-2 text-sm bg-(--bg-elevated) rounded-md px-3 py-2">
+          <span class="text-(--text-muted)">Sisa Cuti Tahunan:</span>
+          <span class="font-bold text-(--text-main)" :class="{ 'text-(--danger)': sisaCutiTahunan <= 0 }">{{ sisaCutiTahunan }} hari</span>
+        </div>
+
+        <!-- Alasan -->
         <TextInput
           v-model="createForm.reason"
-          label="Alasan Cuti / Izin"
-          placeholder="Tulis detail alasan"
+          label="Alasan / Keterangan"
+          placeholder="Tulis detail alasan pengajuan cuti..."
           :required="true"
           :error="errors.reason"
         />
       </div>
+
       <template #footer>
-        <BaseButton variant="ghost" @click="showCreateModal = false">Batal</BaseButton>
-        <BaseButton variant="primary" @click="submitRequest" :loading="submitting">Ajukan</BaseButton>
+        <div class="flex items-center justify-between w-full">
+          <BaseButton variant="ghost" @click="showCreateModal = false">Batal</BaseButton>
+          <div class="flex items-center gap-2">
+            <BaseButton variant="primary" @click="submitRequest" :loading="submitting">
+              <template #icon-left><i class="bx bx-send text-base"></i></template>
+              Ajukan
+            </BaseButton>
+            <BaseButton
+              v-if="isHrOrAdmin"
+              variant="success"
+              @click="approveAndPrint"
+              :loading="approvingPrinting"
+            >
+              <template #icon-left><i class="bx bx-printer text-base"></i></template>
+              Approve & Print
+            </BaseButton>
+          </div>
+        </div>
       </template>
     </BaseModal>
 
@@ -416,6 +484,7 @@ const requests = ref([])
 const loadingPeriods = ref(false)
 const loadingRequests = ref(false)
 const submitting = ref(false)
+const approvingPrinting = ref(false)
 const bulkProcessing = ref(false)
 
 const filters = reactive({ status: '', search: '' })
@@ -427,6 +496,7 @@ const showDetailModal = ref(false)
 const showRejectModal = ref(false)
 const detailItem = ref(null)
 const rejectReason = ref('')
+const formPeriodId = ref('')
 
 const approveMode = ref(false)
 const rejectMode = ref(false)
@@ -443,6 +513,7 @@ const createForm = reactive({
 
 const rejectTarget = reactive({ isBulk: false, id: null, count: 0 })
 const errors = ref({})
+const sisaCutiTahunan = ref(null)
 
 let searchTimeout = null
 
@@ -452,9 +523,29 @@ const isHrOrAdmin = computed(() => {
   return allowed.includes(auth.userRole) || auth.isSuperadmin || auth.isHrmanager
 })
 
-const leaveTypeOptions = computed(() =>
-  leaveTypes.value.map((t) => ({ value: t.id, label: t.name }))
-)
+const todayFormatted = computed(() => {
+  return new Date().toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })
+})
+
+const selectedEmployee = computed(() => {
+  if (!createForm.employee_id) return null
+  const emp = employeeOptions.value.find(e => e.value === createForm.employee_id)
+  return emp || null
+})
+
+const leaveTypeGroups = computed(() => {
+  const groups = [
+    { label: 'Cuti', cat: 'leave', types: [] },
+    { label: 'Khusus', cat: 'special', types: [] },
+    { label: 'Izin', cat: 'permit', types: [] },
+    { label: 'Sakit', cat: 'sick', types: [] },
+  ]
+  for (const lt of leaveTypes.value) {
+    const group = groups.find(g => g.cat === lt.category) || groups[1]
+    group.types.push(lt)
+  }
+  return groups.filter(g => g.types.length > 0)
+})
 
 const headers = [
   { key: 'employee_name', label: 'Karyawan' },
@@ -481,7 +572,7 @@ async function fetchPeriods() {
   try {
     const res = await api.get('/api/v1/leave/periods')
     periods.value = res.data || []
-    const active = periods.value.find((p) => p.status === 'active')
+    const active = periods.value.find(p => p.status === 'active')
     if (active) selectedPeriodId.value = active.id
     else if (periods.value.length > 0) selectedPeriodId.value = periods.value[0].id
   } catch (err) {
@@ -505,7 +596,15 @@ async function fetchEmployees() {
   try {
     const res = await api.get('/api/v1/employees/options')
     const list = res.data || []
-    employeeOptions.value = list.map((e) => ({ value: e.id, label: `${e.name} (${e.nip})` }))
+    employeeOptions.value = list.map(e => ({
+      value: e.id,
+      label: `${e.name} (${e.nip})`,
+      name: e.name,
+      nip: e.nip,
+      join_date: e.join_date,
+      department_name: e.department_name || e.department?.name || '',
+      position_name: e.position_name || e.position?.name || '',
+    }))
   } catch (err) {
     notify.error('Gagal memuat opsi karyawan.')
   }
@@ -549,6 +648,30 @@ function handlePageChange(page) {
   fetchRequests()
 }
 
+// --- Employee selected → fetch sisa cuti ---
+function onEmployeeSelected(empId) {
+  if (!empId) { sisaCutiTahunan.value = null; return }
+  fetchSisaCuti()
+}
+
+function onPeriodChange() {
+  if (createForm.employee_id) fetchSisaCuti()
+}
+
+async function fetchSisaCuti() {
+  if (!createForm.employee_id || !formPeriodId.value) return
+  try {
+    // Cari leave_type_id untuk "Cuti Tahunan" (code: CT)
+    const ct = leaveTypes.value.find(t => t.code === 'CT')
+    if (!ct) { sisaCutiTahunan.value = null; return }
+
+    const res = await api.get(`/api/v1/leave/employee-balance?employee_id=${createForm.employee_id}&leave_type_id=${ct.id}&leave_period_id=${formPeriodId.value}`)
+    sisaCutiTahunan.value = res.data?.balance ?? 0
+  } catch {
+    sisaCutiTahunan.value = null
+  }
+}
+
 // --- Create ---
 function openCreateModal() {
   errors.value = {}
@@ -558,7 +681,14 @@ function openCreateModal() {
   createForm.end_date = ''
   createForm.days_requested = ''
   createForm.reason = ''
+  sisaCutiTahunan.value = null
+  formPeriodId.value = selectedPeriodId.value || (periods.value.length > 0 ? periods.value[0].id : '')
   showCreateModal.value = true
+
+  if (!isHrOrAdmin.value && auth.user?.employee_id) {
+    createForm.employee_id = auth.user.employee_id
+    fetchSisaCuti()
+  }
 }
 
 function calculateDays() {
@@ -600,6 +730,54 @@ async function submitRequest() {
     notify.error(err.message || 'Gagal menyimpan pengajuan.')
   } finally {
     submitting.value = false
+  }
+}
+
+// --- Approve & Print ---
+async function approveAndPrint() {
+  errors.value = {}
+  if (isHrOrAdmin.value && !createForm.employee_id) errors.value.employee_id = 'Karyawan wajib dipilih.'
+  if (!createForm.leave_type_id) errors.value.leave_type_id = 'Tipe cuti wajib dipilih.'
+  if (!createForm.start_date) errors.value.start_date = 'Tanggal mulai wajib dipilih.'
+  if (!createForm.end_date) errors.value.end_date = 'Tanggal selesai wajib dipilih.'
+  if (!createForm.days_requested || createForm.days_requested < 1) errors.value.days_requested = 'Jumlah hari minimal 1 hari.'
+  if (!createForm.reason) errors.value.reason = 'Alasan pengajuan wajib diisi.'
+  if (Object.keys(errors.value).length > 0) return
+
+  approvingPrinting.value = true
+  try {
+    // 1. Save + approve + decrement
+    const res = await api.post('/api/v1/leave/requests/approve-print', {
+      employee_id: createForm.employee_id,
+      leave_type_id: createForm.leave_type_id,
+      start_date: createForm.start_date,
+      end_date: createForm.end_date,
+      days_requested: parseInt(createForm.days_requested),
+      reason: createForm.reason,
+    })
+
+    notify.success(res.message || 'Pengajuan disetujui & siap cetak.')
+
+    const requestId = res.data?.id
+    showCreateModal.value = false
+    fetchRequests()
+
+    // 2. Print — buka HTML form di window baru
+    if (requestId) {
+      const token = localStorage.getItem('token')
+      const printUrl = `/api/v1/leave/requests/${requestId}/print`
+      const response = await fetch(printUrl, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const html = await response.text()
+      const win = window.open('', '_blank', 'width=900,height=700')
+      win.document.write(html)
+      win.document.close()
+    }
+  } catch (err) {
+    notify.error(err.message || 'Gagal approve & print.')
+  } finally {
+    approvingPrinting.value = false
   }
 }
 

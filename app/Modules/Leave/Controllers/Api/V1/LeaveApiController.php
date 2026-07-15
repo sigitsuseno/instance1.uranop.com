@@ -13,6 +13,7 @@ use App\Modules\Employee\Models\Employee;
 use App\Modules\Leave\Services\LeaveRequestService;
 use App\Modules\Leave\Exports\LeaveRequestsExport;
 use App\Modules\Leave\Exports\LeaveBalancesExport;
+use App\Modules\Organization\Models\Company;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -136,6 +137,83 @@ class LeaveApiController extends Controller
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }
+    }
+
+    /**
+     * Approve & Print: langsung simpan approved + potong saldo + return data untuk cetak
+     * Hanya HR/Admin. Tidak ada flow pending.
+     */
+    public function approveAndPrint(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id'    => 'required|exists:employees,id',
+            'leave_type_id'  => 'required|exists:leave_types,id',
+            'start_date'     => 'required|date',
+            'end_date'       => 'required|date|after_or_equal:start_date',
+            'days_requested' => 'required|integer|min:1',
+            'reason'         => 'nullable|string',
+        ]);
+
+        try {
+            $leaveRequest = $this->leaveService->approveAndPrintRequest($validated, Auth::user());
+            $leaveRequest->load(['employee.department', 'employee.position', 'leaveType', 'leavePeriod']);
+
+            return response()->json([
+                'message' => 'Pengajuan cuti disetujui & siap cetak.',
+                'data'    => $leaveRequest,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 400);
+        }
+    }
+
+    /**
+     * Print form cuti — return HTML siap window.print()
+     */
+    public function printForm($id)
+    {
+        $leaveRequest = LeaveRequest::with([
+            'employee.department', 'employee.position', 'leaveType', 'leavePeriod'
+        ])->findOrFail($id);
+
+        // Hitung sisa cuti tahunan
+        $ct = LeaveType::where('code', 'CT')->first();
+        $sisaCuti = 0;
+        if ($ct && $leaveRequest->leave_period_id) {
+            $sisaCuti = $this->leaveService->getAvailableBalance(
+                $leaveRequest->employee_id, $ct->id, $leaveRequest->leave_period_id
+            );
+        }
+
+        $html = view('leave.print-form', [
+            'request'   => $leaveRequest,
+            'sisaCuti'  => $sisaCuti,
+            'tglEfektif'=> now()->format('d/m/Y'),
+            'noDokumen' => $this->generateNoDokumen($leaveRequest),
+            'company'   => Company::first(),
+        ])->render();
+
+        return response($html);
+    }
+
+    /**
+     * Generate nomor dokumen format: nomor_surat / SPc / KUS / bulan_romawi / tahun
+     * nomor_surat = count leave_requests di periode aktif + 1
+     */
+    private function generateNoDokumen($leaveRequest)
+    {
+        // Hitung total leave_requests di periode aktif
+        $activePeriod = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
+        $nomorSurat = 1;
+        if ($activePeriod) {
+            $nomorSurat = LeaveRequest::where('leave_period_id', $activePeriod->id)->count() + 1;
+        }
+
+        $romawi = ['', 'I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'];
+        $bulan  = $romawi[(int) now()->format('m')];
+        $tahun  = now()->format('Y');
+
+        return "{$nomorSurat} / SPc / KUS / {$bulan} / {$tahun}";
     }
 
     /**
@@ -449,6 +527,43 @@ class LeaveApiController extends Controller
         }
 
         return response()->json(['data' => $balances]);
+    }
+
+    /**
+     * Get single employee leave balance — ringan, langsung query spesifik.
+     * GET /api/v1/leave/employee-balance?employee_id=X&leave_type_id=Y
+     */
+    public function employeeBalance(Request $request)
+    {
+        $validated = $request->validate([
+            'employee_id'  => 'required|exists:employees,id',
+            'leave_type_id' => 'required|exists:leave_types,id',
+        ]);
+
+        $periodId = $request->input('leave_period_id');
+        if (!$periodId) {
+            $activePeriod = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
+            $periodId = $activePeriod ? $activePeriod->id : null;
+        }
+
+        if (!$periodId) {
+            return response()->json(['data' => ['balance' => 0]]);
+        }
+
+        $balance = $this->leaveService->getAvailableBalance(
+            $validated['employee_id'],
+            $validated['leave_type_id'],
+            $periodId
+        );
+
+        return response()->json([
+            'data' => [
+                'employee_id'   => (int) $validated['employee_id'],
+                'leave_type_id' => (int) $validated['leave_type_id'],
+                'period_id'     => (int) $periodId,
+                'balance'       => (float) $balance,
+            ]
+        ]);
     }
 
     /**

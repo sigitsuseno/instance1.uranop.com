@@ -179,6 +179,82 @@ class LeaveRequestService
     }
 
     /**
+     * Approve & Print: langsung simpan approved + potong saldo + update roster
+     * Khusus HR/Admin — tanpa flow pending dulu.
+     */
+    public function approveAndPrintRequest(array $data, $user)
+    {
+        $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+
+        $period = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
+        if (!$period) {
+            throw new Exception('Tidak ada periode cuti yang aktif.');
+        }
+
+        // Validasi saldo jika cuti mengurangi jatah
+        if ($leaveType->balance_type === 'decrement') {
+            $available = $this->getAvailableBalance($data['employee_id'], $leaveType->id, $period->id);
+
+            $pendingDays = LeaveRequest::where('employee_id', $data['employee_id'])
+                ->where('leave_type_id', $leaveType->id)
+                ->where('status', 'pending')
+                ->sum('days_requested');
+
+            if ($data['days_requested'] > ($available - $pendingDays)) {
+                throw new Exception('Saldo cuti tidak mencukupi atau masih ada pengajuan yang belum di-approve.');
+            }
+        }
+
+        return DB::transaction(function () use ($data, $user, $period, $leaveType) {
+            // 1. Buat leave_request langsung approved
+            $leaveRequest = LeaveRequest::create([
+                'employee_id'    => $data['employee_id'],
+                'leave_type_id'  => $data['leave_type_id'],
+                'leave_period_id' => $period->id,
+                'start_date'     => $data['start_date'],
+                'end_date'       => $data['end_date'],
+                'days_requested' => $data['days_requested'],
+                'reason'         => $data['reason'] ?? null,
+                'status'         => 'approved',
+                'approved_by'    => $user->id,
+                'approved_at'    => now(),
+            ]);
+
+            // 2. Potong saldo (decrement)
+            if ($leaveType->balance_type === 'decrement') {
+                EmployeeLeave::create([
+                    'employee_id'    => $data['employee_id'],
+                    'leave_type_id'  => $leaveType->id,
+                    'leave_period_id' => $period->id,
+                    'reference_id'   => $leaveRequest->id,
+                    'transaction_type' => 'decrement',
+                    'amount'         => $data['days_requested'],
+                    'description'    => 'Approval & Print Cuti #' . $leaveRequest->id,
+                    'created_by'     => $user->id,
+                    'updated_by'     => $user->id,
+                ]);
+            }
+
+            // 3. Update roster
+            $isLeave  = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
+            $isPermit = ($leaveType->category === 'permit') ? 1 : 0;
+
+            DB::table('sch_employee_shift_rosters')
+                ->where('employee_id', $data['employee_id'])
+                ->whereBetween('date', [$data['start_date'], $data['end_date']])
+                ->update([
+                    'external_code' => $leaveType->code,
+                    'is_leave'      => $isLeave,
+                    'is_permit'     => $isPermit,
+                    'leave_id'      => $leaveRequest->id,
+                    'updated_at'    => now(),
+                ]);
+
+            return $leaveRequest;
+        });
+    }
+
+    /**
      * Reject pengajuan (Hanya Superadmin / HR Manager)
      */
     public function rejectRequest(LeaveRequest $request, $user, $reason)
