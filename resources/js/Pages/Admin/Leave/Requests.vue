@@ -212,6 +212,11 @@
             >
               <template #icon-left><i class="bx bx-x text-lg text-(--danger)"></i></template>
             </BaseButton>
+            <BaseButton
+              variant="ghost" size="sm" @click="printRequest(item)" title="Cetak"
+            >
+              <template #icon-left><i class="bx bx-printer text-lg text-(--primary)"></i></template>
+            </BaseButton>
           </div>
         </template>
       </DataTable>
@@ -870,6 +875,23 @@ async function singleReject(item) {
 function viewDetail(item) {
   detailItem.value = item
   showDetailModal.value = true
+}
+
+// --- Print ---
+async function printRequest(item) {
+  try {
+    const token = localStorage.getItem('token')
+    const printUrl = `/api/v1/leave/requests/${item.id}/print`
+    const response = await fetch(printUrl, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    const html = await response.text()
+    const win = window.open('', '_blank', 'width=900,height=700')
+    win.document.write(html)
+    win.document.close()
+  } catch (err) {
+    notify.error('Gagal mencetak form.')
+  }
 }
 
 // --- Export ---

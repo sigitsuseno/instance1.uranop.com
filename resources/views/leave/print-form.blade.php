@@ -187,13 +187,13 @@
 <table class="hdr-table">
     <tr>
         <!-- Row 1: PT (left, rowspan 2) | FORMULIR box (right) -->
-        <td colspan="3" rowspan="2" class="pt-cell">
-            @if ($company && $company->logo)
-                <img src="{{ $company->logo }}" style="display:inline-block;width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:6px;" alt="">
+        <td colspan="3" rowspan="2" class="pt-cell" style="text-align:center;">
+            @if ($logoUrl)
+                <img src="{{ $logoUrl }}" style="display:block;width:40px;height:40px;border-radius:50%;margin:0 auto 4px;" alt="">
             @else
-                <span class="logo-inline"></span>
+                <span class="logo-inline" style="display:block;margin:0 auto 3px;"></span>
             @endif
-            <span>{{ $company ? strtoupper($company->name) : 'PT KEMILAU UNGARAN SUKSES' }}</span>
+            <span style="font-size:10pt;">{{ $company ? strtoupper($company->name) : 'PT KEMILAU UNGARAN SUKSES' }}</span>
         </td>
         <td colspan="5" class="form-box">
             <div class="f1">FORMULIR</div>

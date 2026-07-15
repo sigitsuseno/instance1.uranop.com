@@ -185,12 +185,19 @@ class LeaveApiController extends Controller
             );
         }
 
+        $company  = Company::first();
+        $logoUrl  = null;
+        if ($company && $company->logo_path) {
+            $logoUrl = \Illuminate\Support\Facades\Storage::url($company->logo_path);
+        }
+
         $html = view('leave.print-form', [
             'request'   => $leaveRequest,
             'sisaCuti'  => $sisaCuti,
             'tglEfektif'=> now()->format('d/m/Y'),
             'noDokumen' => $this->generateNoDokumen($leaveRequest),
-            'company'   => Company::first(),
+            'company'   => $company,
+            'logoUrl'   => $logoUrl,
         ])->render();
 
         return response($html);
