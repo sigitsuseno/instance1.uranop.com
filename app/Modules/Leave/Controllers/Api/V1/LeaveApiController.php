@@ -188,7 +188,7 @@ class LeaveApiController extends Controller
         $company  = Company::first();
         $logoUrl  = null;
         if ($company && $company->logo_path) {
-            $logoUrl = \Illuminate\Support\Facades\Storage::url($company->logo_path);
+            $logoUrl = asset('storage/' . $company->logo_path);
         }
 
         $html = view('leave.print-form', [

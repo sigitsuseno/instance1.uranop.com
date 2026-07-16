@@ -48,3 +48,12 @@ Penting, payroll itu ada yang split pelajari split ini.
 1. gini jadi bulan januari sampai juni kan sudah berjalan dan di kerjakan manual di excel. jadi biar datanya di aplikasi cocok sama yang di excel, maka ambil langsung aja dari excel. nah untuk bulan selanjutnya beda prosesnya.
 1. untuk perhitungan lebih baik kamu lihat di /admin/payroll
 1. ya (isGroupGaji() untuk /supervisor kan maksutmu ?)
+
+Step 1 : submenu Karyawan.
+Step 2 : submenu Group Karyawan
+Step 3 : submenu Gaji Karyawan
+Step 4 : submenu Kontrak Kerja
+Step 5 : submenu Kompensasi
+Step 6 : submenu Dokumen, submenu Keluarga & tanggungan, submenu riwayat pekerjaan, submenu resign & phk
+
+yun, gini aja, aku ingin fronten applikasi menu Data Karyawan, Jadwal Kerja, Pengelolaan Kasbon, Pengelolaan cuti beserta semua submenu-nya. aku ingin kamu salin aja dari aplikasi instance1. data menggunakan data dummy dulu. yang di sesuaikan cuma perubahan dari vue spa web ke vue spa desktop,
