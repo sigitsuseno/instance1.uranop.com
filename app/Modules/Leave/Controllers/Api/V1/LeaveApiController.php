@@ -129,6 +129,7 @@ class LeaveApiController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'days_requested' => 'required|integer|min:1',
             'reason' => 'nullable|string',
+            'note' => 'nullable|array',
         ]);
 
         try {
@@ -152,6 +153,7 @@ class LeaveApiController extends Controller
             'end_date'       => 'required|date|after_or_equal:start_date',
             'days_requested' => 'required|integer|min:1',
             'reason'         => 'nullable|string',
+            'note'           => 'nullable|array',
         ]);
 
         try {
@@ -832,5 +834,26 @@ class LeaveApiController extends Controller
 
         $filename = 'Saldo_Cuti' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.xlsx';
         return Excel::download(new LeaveBalancesExport($balances, $periodName), $filename);
+    }
+
+    /**
+     * Update tanggal_masuk di note JSON — untuk inline edit di tabel
+     */
+    public function updateTanggalMasuk(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'tanggal_masuk' => 'nullable|date',
+        ]);
+
+        $leaveRequest = LeaveRequest::findOrFail($id);
+
+        $note = $leaveRequest->note ?? [];
+        $note['tanggal_masuk'] = $validated['tanggal_masuk'] ?? null;
+        $leaveRequest->update(['note' => $note]);
+
+        return response()->json([
+            'message' => 'Tanggal masuk berhasil diupdate.',
+            'data' => $leaveRequest->fresh(),
+        ]);
     }
 }

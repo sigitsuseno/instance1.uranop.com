@@ -23,6 +23,7 @@ class LeaveRequest extends Model
         'end_date',
         'days_requested',
         'reason',
+        'note',
         'status',
         'approved_by',
         'approved_at',
@@ -41,6 +42,7 @@ class LeaveRequest extends Model
         'start_date' => 'date:Y-m-d',
         'end_date' => 'date:Y-m-d',
         'approved_at' => 'datetime',
+        'note' => 'array',
     ];
 
     protected static function boot()

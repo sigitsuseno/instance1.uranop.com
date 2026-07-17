@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flowchart Panduan Aplikasi Uranop</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Calibri, sans-serif;
+      background: #f0f4f8;
+      color: #1a2b3c;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #065A82;
+      font-size: 24px;
+      margin-bottom: 5px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 15px rgba(0,0,0,0.08);
+      padding: 25px 30px;
+      margin-bottom: 25px;
+      page-break-inside: avoid;
+    }
+    .card h2 {
+      color: #065A82;
+      font-size: 18px;
+      margin-bottom: 15px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #e8eef4;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+    .legend {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-size: 12px;
+      color: #555;
+    }
+    .legend span { display: flex; align-items: center; gap: 5px; }
+    .legend-box {
+      width: 18px; height: 14px; border-radius: 3px; display: inline-block;
+    }
+    .footer {
+      text-align: center;
+      color: #999;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+    .btn-print {
+      position: fixed; top: 15px; right: 15px;
+      background: #065A82; color: white; border: none;
+      padding: 10px 20px; border-radius: 8px; cursor: pointer;
+      font-size: 14px; font-weight: bold;
+    }
+    .btn-print:hover { background: #043d5c; }
+    @media print {
+      body { background: white; padding: 0; }
+      .btn-print { display: none; }
+      .card { box-shadow: none; border: 1px solid #ddd; margin-bottom: 15px; }
+    }
+  </style>
+</head>
+<body>
+  <button class="btn-print" onclick="window.print()">🖨️ Cetak / Save PDF</button>
+
+  <div class="container">
+    <h1>📋 FLOWCHART PANDUAN APLIKASI URANOP</h1>
+    <p class="subtitle">Diagram alur penggunaan sistem HRIS — dibuat sesederhana mungkin untuk pemula</p>
+
+    <!-- 1. LOGIN -->
+    <div class="card">
+      <h2>1️⃣ Cara Login ke Aplikasi</h2>
+      <div class="mermaid">
+flowchart TD
+    A["🖥️ Buka Browser (Chrome/Edge)"] --> B["🔗 Ketik: instance1.uranop.com"]
+    B --> C["👁️ Halaman Login Muncul<br/>(Email + Password)"]
+    C --> D["✏️ Masukkan Email<br/>contoh: superadmin@uranop.com"]
+    D --> E["🔑 Masukkan Password"]
+    E --> F{Klik Tombol<br/>LOGIN}
+    F -->|✅ Berhasil| G["🏠 Masuk ke Dashboard"]
+    F -->|❌ Gagal| H["⚠️ Cek ulang email/password"]
+    H --> D
+
+    style A fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style G fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+    style H fill:#ffcdd2,stroke:#d32f2f,color:#1a2b3c
+    style F fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- 2. MENU UTAMA -->
+    <div class="card">
+      <h2>2️⃣ Struktur Menu Utama (Sidebar Kiri)</h2>
+      <div class="mermaid">
+flowchart LR
+    DASH["🏠 Dashboard<br/>(Beranda)"] --> MASTER["📁 Data Master"]
+    DASH --> PERUSAHAAN["🏢 Perusahaan"]
+    DASH --> KARYAWAN["👥 Data Karyawan"]
+    DASH --> JADWAL["📅 Jadwal Kerja"]
+    DASH --> KASBON["💰 Kasbon"]
+    DASH --> CUTI["🏖️ Cuti"]
+    DASH --> HADIR["📋 Kehadiran"]
+    DASH --> BPJS["🏥 BPJS & PPh 21"]
+    DASH --> PAYROLL["💵 Payroll"]
+    DASH --> LAPORAN["📊 Laporan"]
+    DASH --> SETTING["⚙️ Settings"]
+
+    MASTER --> M1["Bagian / Departemen"]
+    MASTER --> M2["Pekerjaan / Jabatan"]
+    MASTER --> M3["Kalender Kerja"]
+    MASTER --> M4["Gaji & LTHR"]
+    MASTER --> M5["Penggajian (Periode)"]
+    MASTER --> M6["Pengaturan Cuti"]
+
+    KARYAWAN --> K1["Daftar Karyawan"]
+    KARYAWAN --> K2["Import Karyawan (Excel)"]
+    KARYAWAN --> K3["Grouping / Urutan"]
+    KARYAWAN --> K4["Gaji Karyawan"]
+    KARYAWAN --> K5["Kontrak / Kompensasi"]
+    KARYAWAN --> K6["Keluarga / Dokumen"]
+    KARYAWAN --> K7["Resign & PHK"]
+
+    HADIR --> H1["Import Kehadiran"]
+    HADIR --> H2["Sync Kehadiran"]
+    HADIR --> H3["Hitung Lembur"]
+    HADIR --> H4["Resume / Rekap"]
+
+    CUTI --> C1["Generate Cuti Tahunan"]
+    CUTI --> C2["Pengajuan Cuti"]
+    CUTI --> C3["Saldo & Rekap Cuti"]
+
+    PAYROLL --> P1["Gaji Karyawan"]
+    PAYROLL --> P2["Slip Gaji"]
+    PAYROLL --> P3["THR"]
+
+    style DASH fill:#e8eaf6,stroke:#3949ab,color:#1a2b3c
+    style MASTER fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style KARYAWAN fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style HADIR fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style CUTI fill:#e0f7fa,stroke:#00838f,color:#1a2b3c
+    style PAYROLL fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+      </div>
+      <div class="legend">
+        <span><span class="legend-box" style="background:#fff3e0;border:1px solid #f57c00"></span> Data Master</span>
+        <span><span class="legend-box" style="background:#e8f5e9;border:1px solid #2e7d32"></span> Karyawan</span>
+        <span><span class="legend-box" style="background:#fce4ec;border:1px solid #c62828"></span> Kehadiran</span>
+        <span><span class="legend-box" style="background:#e0f7fa;border:1px solid #00838f"></span> Cuti</span>
+        <span><span class="legend-box" style="background:#f3e5f5;border:1px solid #6a1b9a"></span> Payroll</span>
+      </div>
+    </div>
+
+    <!-- 3. OPERASI CRUD -->
+    <div class="card">
+      <h2>3️⃣ Operasi Dasar (Tambah, Edit, Hapus Data)</h2>
+      <div class="mermaid">
+flowchart TD
+    START["📋 Buka Halaman<br/>(contoh: Data Karyawan)"] --> VIEW["👀 Lihat Tabel Data<br/>- Search: cari data<br/>- Klik judul kolom: urutkan<br/>- Klik halaman: pindah"]
+
+    VIEW --> PILIH{"Mau ngapain?"}
+
+    PILIH -->|"➕ Tambah Baru"| ADD1["Klik tombol + Tambah / Create"]
+    ADD1 --> ADD2["Isi form<br/>(kolom * wajib diisi)"]
+    ADD2 --> ADD3["Klik SIMPAN"]
+    ADD3 --> SELESAI["✅ Data tersimpan<br/>Muncul di tabel"]
+
+    PILIH -->|"✏️ Edit"| EDIT1["Klik ikon ✏️ di baris data"]
+    EDIT1 --> EDIT2["Ubah data di form"]
+    EDIT2 --> EDIT3["Klik SIMPAN"]
+    EDIT3 --> SELESAI2["✅ Perubahan tersimpan"]
+
+    PILIH -->|"🗑️ Hapus"| DEL1["Klik ikon 🗑️ di baris data"]
+    DEL1 --> DEL2{"Konfirmasi:<br/>Yakin hapus?"}
+    DEL2 -->|"Ya"| DEL3["✅ Data terhapus<br/>(TIDAK BISA dikembalikan!)"]
+    DEL2 -->|"Batal"| VIEW
+
+    style START fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style SELESAI fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+    style SELESAI2 fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+    style DEL3 fill:#ffcdd2,stroke:#d32f2f,color:#1a2b3c
+    style PILIH fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style DEL2 fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- 4. IMPORT FLOW -->
+    <div class="card">
+      <h2>4️⃣ Alur Import Data dari Excel</h2>
+      <div class="mermaid">
+flowchart TD
+    IMP1["📥 Buka halaman Import<br/>(misal: Import Karyawan)"] --> IMP2["📥 Download Template Excel<br/>(file contoh)"]
+    IMP2 --> IMP3["✏️ Isi data di Excel<br/>⚠️ JANGAN ubah judul kolom!"]
+    IMP3 --> IMP4["📤 Upload file Excel<br/>(drag & drop atau pilih file)"]
+    IMP4 --> IMP5{"Sistem validasi<br/>data"}
+    IMP5 -->|"❌ Ada error"| IMP6["🔴 Lihat error, perbaiki Excel"]
+    IMP6 --> IMP3
+    IMP5 -->|"✅ Data OK"| IMP7["Klik PROSES IMPORT"]
+    IMP7 --> IMP8["🎉 Data masuk ke sistem"]
+
+    style IMP1 fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style IMP8 fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+    style IMP6 fill:#ffcdd2,stroke:#d32f2f,color:#1a2b3c
+    style IMP5 fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- 5. KEHADIRAN FLOW -->
+    <div class="card">
+      <h2>5️⃣ Alur Pengolahan Kehadiran</h2>
+      <div class="mermaid">
+flowchart LR
+    A["📥 Import Data<br/>dari Fingerprint / Excel"] --> B["🔄 Sync Kehadiran<br/>(Manual atau Otomatis)"]
+    B --> C["🧮 Hitung Lembur"]
+    C --> D["📊 Resume Kehadiran<br/>(ringkasan siap pakai)"]
+    D --> E["💵 Masuk ke Payroll<br/>(potongan & bonus)"]
+
+    style A fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style C fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style E fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- 6. CUTI FLOW -->
+    <div class="card">
+      <h2>6️⃣ Alur Pengelolaan Cuti</h2>
+      <div class="mermaid">
+flowchart TD
+    GEN["🪄 Awal Tahun: Generate Cuti Tahunan<br/>(otomatis buat semua karyawan)"] --> AJU["📝 Karyawan / HR Ajukan Cuti"]
+    AJU --> APP{"HR Approve?"}
+    APP -->|"✅ Ya"| POTONG["📉 Saldo Cuti Berkurang"]
+    APP -->|"❌ Tolak"| TOLAK["↩️ Kembali (bisa ajukan ulang)"]
+    POTONG --> CETAK["🖨️ Cetak Form Cuti"]
+    POTONG --> REKAP["📊 Masuk Rekap Cuti"]
+    AJU --> BATAL["❌ Pembatalan Cuti<br/>(batalkan cuti yg sudah diajukan)"]
+    BATAL --> KEMBALI["📈 Saldo Cuti Kembali"]
+
+    style GEN fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style POTONG fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+    style TOLAK fill:#ffcdd2,stroke:#d32f2f,color:#1a2b3c
+    style APP fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- 7. PAYROLL FLOW -->
+    <div class="card">
+      <h2>7️⃣ Alur Penggajian (Payroll)</h2>
+      <div class="mermaid">
+flowchart TD
+    SETUP["⚙️ Setup Awal:<br/>- Gaji Pokok Karyawan<br/>- Komponen Gaji<br/>- Periode Penggajian"] --> HITUNG["🧮 Hitung Gaji:<br/>Gaji Pokok + Tunjangan<br/>+ Lembur - Potongan<br/>- BPJS - PPh 21"]
+
+    HITUNG --> SLIP["📄 Cetak Slip Gaji<br/>(per orang atau massal)"]
+    HITUNG --> THR["🎁 Hitung THR<br/>(saat hari raya)"]
+    HITUNG --> LAP["📊 Laporan Payroll"]
+
+    style SETUP fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style HITUNG fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style SLIP fill:#c8e6c9,stroke:#388e3c,color:#1a2b3c
+    style THR fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- BAGAN BESAR -->
+    <div class="card">
+      <h2>🗺️ Bagan Besar: Alur Kerja Harian Uranop</h2>
+      <div class="mermaid">
+flowchart TD
+    subgraph SETUP_AWAL["⚙️ SETUP AWAL (sekali di awal)"]
+        S1["Atur Bagian & Jabatan"] --> S2["Atur Kalender Kerja"]
+        S2 --> S3["Input Data Karyawan"]
+        S3 --> S4["Atur Gaji Karyawan"]
+        S4 --> S5["Atur Shift & Pola Kerja"]
+    end
+
+    subgraph BULANAN["📅 RUTINITAS BULANAN"]
+        B1["Import Absensi<br/>dari mesin fingerprint"] --> B2["Sync & Hitung Lembur"]
+        B2 --> B3["Proses Kasbon<br/>(pengajuan & cicilan)"]
+        B2 --> B4["Proses Cuti<br/>(pengajuan & approval)"]
+        B3 --> B5["Hitung Payroll"]
+        B4 --> B5
+        B5 --> B6["Cetak Slip Gaji"]
+        B6 --> B7["Buat Laporan"]
+    end
+
+    subgraph TAHUNAN["📆 RUTINITAS TAHUNAN"]
+        T1["Generate Cuti Tahunan"] --> T2["Generate THR"]
+        T2 --> T3["Laporan PPh 21 Tahunan"]
+    end
+
+    SETUP_AWAL --> BULANAN
+    BULANAN --> TAHUNAN
+
+    style SETUP_AWAL fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style BULANAN fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style TAHUNAN fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+      </div>
+    </div>
+
+    <p class="footer">📅 Dibuat: Juli 2026 &nbsp;|&nbsp; Aplikasi Uranop — instance1.uranop.com &nbsp;|&nbsp; Untuk pertanyaan: hubungi Admin/HRD</p>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis',
+        padding: 15,
+      },
+      themeVariables: {
+        fontSize: '13px',
+        fontFamily: 'Segoe UI, Calibri, sans-serif',
+      }
+    });
+  </script>
+</body>
+</html>

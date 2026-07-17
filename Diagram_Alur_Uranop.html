@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagram Alur Penggunaan Aplikasi Uranop</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Calibri, sans-serif;
+      background: #f5f7fa;
+      color: #1a2b3c;
+      padding: 15px;
+    }
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #065A82;
+      font-size: 22px;
+      margin-bottom: 3px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #777;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      padding: 20px 25px;
+      margin-bottom: 20px;
+    }
+    .card h2 {
+      color: #065A82;
+      font-size: 16px;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #e8eef4;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+    .btn-print {
+      position: fixed; top: 10px; right: 10px;
+      background: #065A82; color: white; border: none;
+      padding: 8px 16px; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: bold; z-index: 999;
+    }
+    .btn-print:hover { background: #043d5c; }
+    .footer {
+      text-align: center; color: #aaa; font-size: 11px; margin-top: 15px; padding: 10px;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .btn-print { display: none; }
+      .card { box-shadow: none; border: 1px solid #ddd; margin-bottom: 12px; break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <button class="btn-print" onclick="window.print()">🖨️ Cetak / PDF</button>
+
+  <div class="container">
+    <h1>📋 DIAGRAM ALUR PENGGUNAAN APLIKASI URANOP</h1>
+    <p class="subtitle">Panduan lengkap: dari setup awal → operasional harian → tutup bulan → laporan tahunan</p>
+
+    <!-- KOMPLIT -->
+    <div class="card">
+      <h2>🔷 ALUR LENGKAP PENGGUNAAN APLIKASI</h2>
+      <div class="mermaid">
+flowchart TD
+    START(["🚀 MULAI"]) --> LOGIN["🔐 LOGIN<br/>email + password"]
+
+    LOGIN --> DASH["🏠 DASHBOARD<br/>ringkasan data perusahaan"]
+
+    DASH --> PILIH{"Mau ngapain?<br/>(pilih menu di sidebar kiri)"}
+
+    %% ===== SETUP AWAL =====
+    PILIH -->|"⚙️ Setup Awal"| SETUP
+
+    subgraph SETUP["⚙️ SETUP AWAL — dilakukan sekali di awal pakai"]
+        direction TB
+        S1["1. Data Master: Buat Bagian & Jabatan"] --> S2["2. Kalender: Tentukan hari kerja & libur"]
+        S2 --> S3["3. Input Data Karyawan (satu-satu atau import Excel)"]
+        S3 --> S4["4. Atur Gaji per Karyawan (pokok + tunjangan)"]
+        S4 --> S5["5. Jadwal Kerja: Buat shift & pola kerja"]
+        S5 --> S6["6. Generate Jadwal (roster)"]
+        S6 --> S7["7. Setup BPJS & PPh 21 (tarif, parameter)"]
+    end
+
+    SETUP --> OPERASI
+
+    %% ===== OPERASI HARIAN / BULANAN =====
+    PILIH -->|"📅 Operasional"| OPERASI
+
+    subgraph OPERASI["📅 OPERASIONAL HARIAN / BULANAN"]
+        direction TB
+
+        subgraph ABSEN["📋 KEHADIRAN"]
+            A1["Import data absensi dari mesin fingerprint (Excel)"] --> A2["Sync Kehadiran (cocokkan dgn roster)"]
+            A2 --> A3["Hitung Lembur (otomatis)"]
+            A3 --> A4["Resume Kehadiran (rekap hadir, terlambat, lembur)"]
+        end
+
+        subgraph CUTI2["🏖️ CUTI & IZIN"]
+            L1["Generate jatah cuti tahunan (awal tahun)"] --> L2["Ajukan cuti / izin karyawan"]
+            L2 --> L3["HR Approve / Tolak"]
+            L3 --> L4["Saldo cuti otomatis berkurang"]
+            L2 -.-> L5["Bisa dibatalkan (saldo kembali)"]
+        end
+
+        subgraph KASBON2["💰 KASBON (PINJAMAN)"]
+            KB1["Karyawan ajukan pinjaman"] --> KB2["HR / Manager setujui/tolak"]
+            KB2 --> KB3["Catat cicilan pelunasan"]
+            KB3 --> KB4["Pantau sisa pinjaman"]
+        end
+
+        ABSEN --> PAYROLL_MAIN
+        CUTI2 --> PAYROLL_MAIN
+        KASBON2 --> PAYROLL_MAIN
+    end
+
+    %% ===== PAYROLL =====
+    subgraph PAYROLL_MAIN["💵 PAYROLL — Hitung Gaji"]
+        direction TB
+        P1["Buat Periode Penggajian (bulan ini)"]
+        P1 --> P2["HITUNG GAJI KARYAWAN:<br/>➕ Gaji Pokok + Tunjangan<br/>➕ Uang Lembur<br/>➕ Uang Makan<br/>➖ Potongan Terlambat<br/>➖ Iuran BPJS<br/>➖ PPh 21<br/>➖ Cicilan Kasbon"]
+        P2 --> P3["CETAK SLIP GAJI (per orang / massal)"]
+        P2 --> P4["BAYAR THR (saat hari raya)"]
+    end
+
+    PAYROLL_MAIN --> LAPORAN_MAIN
+
+    %% ===== LAPORAN =====
+    PILIH -->|"📊 Laporan"| LAPORAN_MAIN
+
+    subgraph LAPORAN_MAIN["📊 LAPORAN — Rekap & Audit"]
+        direction TB
+        RPT1["Laporan Kehadiran<br/>(rekap hadir, alpha, terlambat, lembur)"]
+        RPT2["Laporan Payroll<br/>(total gaji per periode)"]
+        RPT3["Laporan Lembur & Uang Makan"]
+        RPT4["Laporan BPJS (iuran per bulan)"]
+        RPT5["Laporan PPh 21<br/>(bulanan & tahunan)"]
+        RPT6["Rekap Gaji / Kerja / PPH"]
+    end
+
+    LAPORAN_MAIN --> SELESAI
+
+    %% ===== LAIN-LAIN =====
+    PILIH -->|"🔧 Lainnya"| LAIN
+
+    subgraph LAIN["🔧 ADMINISTRASI LAINNYA"]
+        direction TB
+        O1["Kelola Kontrak Kerja (PKWT/PKWTT)"]
+        O2["Kelola Dokumen Karyawan (KTP, Ijazah, KK)"]
+        O3["Kelola Keluarga & Tanggungan"]
+        O4["Kelola Riwayat Jabatan"]
+        O5["Proses Resign / PHK"]
+        O6["Grouping & Urutan Karyawan"]
+    end
+
+    OPERASI --> SELESAI
+    LAIN --> SELESAI
+
+    SELESAI(["✅ SELESAI — logout<br/>atau lanjutkan pekerjaan lain"])
+
+    %% Styles
+    style START fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style LOGIN fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style DASH fill:#e8eaf6,stroke:#3949ab,color:#1a2b3c
+    style PILIH fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style SETUP fill:#ede7f6,stroke:#512da8,color:#1a2b3c
+    style OPERASI fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style ABSEN fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style CUTI2 fill:#e0f7fa,stroke:#00838f,color:#1a2b3c
+    style KASBON2 fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style PAYROLL_MAIN fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style LAPORAN_MAIN fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style LAIN fill:#f5f5f5,stroke:#9e9e9e,color:#1a2b3c
+    style SELESAI fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- RINGKASAN SIKLUS -->
+    <div class="card">
+      <h2>🔷 SIKLUS BULANAN & TAHUNAN</h2>
+      <div class="mermaid">
+flowchart LR
+    subgraph HARIAN["🕐 HARIAN"]
+        HD1["Import absensi"] --> HD2["Cek keterlambatan"]
+    end
+
+    subgraph MINGGUAN["📆 MINGGUAN"]
+        MG1["Ajukan & approve cuti"] --> MG2["Proses kasbon"]
+    end
+
+    subgraph BULANAN["📅 BULANAN (Tutup Buku)"]
+        BL1["1. Sync kehadiran"] --> BL2["2. Hitung lembur"]
+        BL2 --> BL3["3. Resume kehadiran"]
+        BL3 --> BL4["4. Hitung gaji (payroll)"]
+        BL4 --> BL5["5. Cetak slip gaji"]
+        BL5 --> BL6["6. Bayar iuran BPJS"]
+        BL6 --> BL7["7. Bayar PPh 21"]
+        BL7 --> BL8["8. Buat laporan"]
+    end
+
+    subgraph TAHUNAN["📆 TAHUNAN"]
+        TH1["Generate cuti tahunan"] --> TH2["Hitung & bayar THR"]
+        TH2 --> TH3["Laporan PPh 21 Tahunan (1721-A1)"]
+    end
+
+    HARIAN --> BULANAN
+    MINGGUAN --> BULANAN
+    BULANAN --> TAHUNAN
+
+    style HARIAN fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style MINGGUAN fill:#e0f7fa,stroke:#00838f,color:#1a2b3c
+    style BULANAN fill:#ede7f6,stroke:#512da8,color:#1a2b3c
+    style TAHUNAN fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- FLOW LENGKAP SATU BARIS -->
+    <div class="card">
+      <h2>🔷 RANGKUMAN: Urutan Pakai dari Nol Sampai Mahir</h2>
+      <div class="mermaid">
+flowchart LR
+    A["1️⃣ Setup<br/>Data Master"] --> B["2️⃣ Input<br/>Karyawan"]
+    B --> C["3️⃣ Atur<br/>Jadwal"]
+    C --> D["4️⃣ Jalankan<br/>Absensi"]
+    D --> E["5️⃣ Proses<br/>Lembur"]
+    E --> F["6️⃣ Urus<br/>Cuti & Kasbon"]
+    F --> G["7️⃣ Hitung<br/>Gaji"]
+    G --> H["8️⃣ Cetak<br/>Slip"]
+    H --> I["9️⃣ Buat<br/>Laporan"]
+
+    style A fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style B fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style C fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style D fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style E fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style F fill:#e0f7fa,stroke:#00838f,color:#1a2b3c
+    style G fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style H fill:#ede7f6,stroke:#512da8,color:#1a2b3c
+    style I fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <p class="footer">📅 Dibuat: Juli 2026 &nbsp;|&nbsp; Aplikasi Uranop &nbsp;|&nbsp; instance1.uranop.com &nbsp;|&nbsp; Login: superadmin@uranop.com</p>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'basis',
+        padding: 12,
+        nodeSpacing: 30,
+        rankSpacing: 40,
+      },
+      themeVariables: {
+        fontSize: '12px',
+        fontFamily: 'Segoe UI, Calibri, sans-serif',
+      }
+    });
+  </script>
+</body>
+</html>

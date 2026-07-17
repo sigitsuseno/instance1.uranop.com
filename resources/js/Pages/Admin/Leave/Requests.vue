@@ -189,6 +189,14 @@
         <template #item.date_range="{ item }">
           <span>{{ formatDate(item.start_date) }} - {{ formatDate(item.end_date) }}</span>
         </template>
+        <template #item.tanggal_masuk="{ item }">
+          <input
+            type="date"
+            :value="item.note?.tanggal_masuk ? item.note.tanggal_masuk.substring(0, 10) : (item.employee?.join_date ? item.employee.join_date.substring(0, 10) : '')"
+            @change="updateTanggalMasuk(item, $event.target.value)"
+            class="px-2 py-1 text-xs rounded border border-(--border-soft) bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary) focus:border-transparent w-32"
+          />
+        </template>
         <template #item.days_requested="{ value }">
           <span class="font-semibold">{{ value }} hari</span>
         </template>
@@ -282,10 +290,6 @@
             <span class="font-medium text-(--text-main)">{{ selectedEmployee.name || '-' }}</span>
           </div>
           <div>
-            <span class="text-xs text-(--text-muted) block">Tanggal Masuk</span>
-            <span class="font-medium text-(--text-main)">{{ selectedEmployee.join_date ? formatDate(selectedEmployee.join_date) : '-' }}</span>
-          </div>
-          <div class="col-span-2">
             <span class="text-xs text-(--text-muted) block">Bagian / Jabatan</span>
             <span class="font-medium text-(--text-main)">{{ selectedEmployee.department_name || '-' }} / {{ selectedEmployee.position_name || '-' }}</span>
           </div>
@@ -358,6 +362,14 @@
           <span class="text-(--text-muted)">Sisa Cuti Tahunan:</span>
           <span class="font-bold text-(--text-main)" :class="{ 'text-(--danger)': sisaCutiTahunan <= 0 }">{{ sisaCutiTahunan }} hari</span>
         </div>
+
+        <!-- Tanggal Masuk untuk Print Form -->
+        <TextInput
+          v-model="createForm.tanggal_masuk"
+          label="Tanggal Masuk (untuk cetak form)"
+          type="date"
+          helper="Default dari data karyawan, bisa diubah untuk keperluan cetak"
+        />
 
         <!-- Alasan -->
         <TextInput
@@ -514,6 +526,7 @@ const createForm = reactive({
   end_date: '',
   days_requested: '',
   reason: '',
+  tanggal_masuk: '',
 })
 
 const rejectTarget = reactive({ isBulk: false, id: null, count: 0 })
@@ -558,6 +571,7 @@ const headers = [
   { key: 'department', label: 'Departemen' },
   { key: 'leave_type', label: 'Tipe' },
   { key: 'date_range', label: 'Tanggal Cuti' },
+  { key: 'tanggal_masuk', label: 'Tgl Masuk' },
   { key: 'days_requested', label: 'Total Durasi' },
   { key: 'status', label: 'Status' },
   { key: 'actions', label: 'Aksi', sortable: false },
@@ -655,7 +669,12 @@ function handlePageChange(page) {
 
 // --- Employee selected → fetch sisa cuti ---
 function onEmployeeSelected(empId) {
-  if (!empId) { sisaCutiTahunan.value = null; return }
+  if (!empId) { sisaCutiTahunan.value = null; createForm.tanggal_masuk = ''; return }
+  // Auto-fill tanggal_masuk dari data karyawan
+  const emp = employeeOptions.value.find(e => e.value === empId)
+  if (emp?.join_date) {
+    createForm.tanggal_masuk = emp.join_date.substring(0, 10) // YYYY-MM-DD
+  }
   fetchSisaCuti()
 }
 
@@ -686,6 +705,7 @@ function openCreateModal() {
   createForm.end_date = ''
   createForm.days_requested = ''
   createForm.reason = ''
+  createForm.tanggal_masuk = ''
   sisaCutiTahunan.value = null
   formPeriodId.value = selectedPeriodId.value || (periods.value.length > 0 ? periods.value[0].id : '')
   showCreateModal.value = true
@@ -727,6 +747,7 @@ async function submitRequest() {
       end_date: createForm.end_date,
       days_requested: parseInt(createForm.days_requested),
       reason: createForm.reason,
+      note: createForm.tanggal_masuk ? { tanggal_masuk: createForm.tanggal_masuk } : null,
     })
     notify.success('Pengajuan cuti berhasil disubmit.')
     showCreateModal.value = false
@@ -759,6 +780,7 @@ async function approveAndPrint() {
       end_date: createForm.end_date,
       days_requested: parseInt(createForm.days_requested),
       reason: createForm.reason,
+      note: createForm.tanggal_masuk ? { tanggal_masuk: createForm.tanggal_masuk } : null,
     })
 
     notify.success(res.message || 'Pengajuan disetujui & siap cetak.')
@@ -875,6 +897,21 @@ async function singleReject(item) {
 function viewDetail(item) {
   detailItem.value = item
   showDetailModal.value = true
+}
+
+// --- Inline edit tanggal masuk ---
+async function updateTanggalMasuk(item, value) {
+  try {
+    await api.patch(`/api/v1/leave/requests/${item.id}/tanggal-masuk`, {
+      tanggal_masuk: value || null,
+    })
+    // Update local cache biar gak perlu refetch
+    if (!item.note) item.note = {}
+    item.note.tanggal_masuk = value || null
+    notify.success('Tanggal masuk diupdate.')
+  } catch (err) {
+    notify.error('Gagal update tanggal masuk.')
+  }
 }
 
 // --- Print ---

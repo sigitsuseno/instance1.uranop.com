@@ -34,6 +34,7 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
     Route::post('requests/bulk-cancel', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'bulkCancel']);
     Route::post('requests/approve-print', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'approveAndPrint']);
     Route::get('requests/{id}/print', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'printForm']);
+    Route::patch('requests/{id}/tanggal-masuk', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'updateTanggalMasuk']);
 
     // Leave Change Requests
     Route::get('change-requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'indexChangeRequests']);

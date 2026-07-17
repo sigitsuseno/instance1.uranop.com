@@ -68,6 +68,7 @@ class LeaveRequestService
                 'end_date' => $data['end_date'],
                 'days_requested' => $data['days_requested'],
                 'reason' => $data['reason'] ?? null,
+                'note' => $data['note'] ?? null,
                 'status' => 'pending'
             ]);
         });
@@ -215,6 +216,7 @@ class LeaveRequestService
                 'end_date'       => $data['end_date'],
                 'days_requested' => $data['days_requested'],
                 'reason'         => $data['reason'] ?? null,
+                'note'           => $data['note'] ?? null,
                 'status'         => 'approved',
                 'approved_by'    => $user->id,
                 'approved_at'    => now(),

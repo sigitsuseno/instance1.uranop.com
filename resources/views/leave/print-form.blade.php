@@ -13,6 +13,12 @@
             line-height: 1.35;
         }
 
+        /* ═══════ OUTER BORDER — seluruh form ═══════ */
+        .form-wrapper {
+            border: 1.5px solid #000;
+            padding: 10px;
+        }
+
         /* ═══════ TOP HEADER TABLE ═══════ */
         .hdr-table {
             width: 100%;
@@ -55,7 +61,7 @@
         /* Row 2 */
         .hdr-table .empty-cell { background: #fff; }
 
-        /* ═══════ EMPLOYEE INFO ═══════ */
+        /* ═══════ EMPLOYEE INFO — bordered table ═══════ */
         .emp-section {
             margin: 9px 0 5px;
         }
@@ -63,19 +69,23 @@
             font-size: 10pt;
             margin-bottom: 4px;
         }
-        .emp-row {
-            display: flex;
+        .emp-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.2px solid #000;
+        }
+        .emp-table td {
+            border: 1px solid #000;
+            padding: 4px 6px;
             font-size: 10pt;
-            margin-bottom: 3px;
+            vertical-align: middle;
         }
-        .emp-row .lbl {
-            width: 130px;
-            flex-shrink: 0;
+        .emp-table .lbl {
+            width: 135px;
+            font-weight: normal;
+            background: #fafafa;
         }
-        .emp-row .val {
-            border-bottom: 1px dotted #000;
-            flex: 1;
-            padding: 0 6px;
+        .emp-table .val {
             font-weight: bold;
         }
 
@@ -87,6 +97,8 @@
         .cuti-grid {
             display: flex;
             gap: 10px;
+            border: 1.2px solid #000;
+            padding: 6px 8px;
         }
         .cuti-col { flex: 1; }
         .cuti-item {
@@ -109,30 +121,33 @@
             font-size: 8pt;
             text-transform: none;
             margin-left: 14px;
-            border-bottom: 1px dotted #000;
+            border-bottom: 1px solid #000;
             display: inline-block;
             min-width: 140px;
             margin-top: -1px;
             margin-bottom: 4px;
         }
 
-        /* ═══════ DATE + SISA CUTI ═══════ */
+        /* ═══════ DATE + SISA CUTI — bordered ═══════ */
         .date-section {
             margin: 10px 0 4px;
             font-size: 10pt;
         }
-        .date-section .line {
-            display: flex;
-            align-items: baseline;
-            gap: 6px;
-            margin-bottom: 3px;
+        .date-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1.2px solid #000;
         }
-        .date-section .val {
-            border-bottom: 1px dotted #000;
-            padding: 0 10px;
+        .date-table td {
+            border: 1px solid #000;
+            padding: 5px 8px;
+            font-size: 10pt;
+            vertical-align: middle;
+        }
+        .date-table .val {
             font-weight: bold;
-            min-width: 70px;
             text-align: center;
+            min-width: 80px;
         }
         .disclaimer {
             font-size: 9pt;
@@ -183,6 +198,8 @@
 </head>
 <body>
 
+<div class="form-wrapper">
+
 <!-- ═══════════════ HEADER TABLE ═══════════════ -->
 <table class="hdr-table">
     <tr>
@@ -201,7 +218,7 @@
         </td>
     </tr>
     <tr>
-        <!-- Row 2: TGL EFEKTIF, date, NO DOKUMEN, doc# (PT cell di atas sudah merge 3 kolom via rowspan) -->
+        <!-- Row 2: TGL EFEKTIF, date, NO DOKUMEN, doc# -->
         <td>TGL&nbsp;EFEKTIF</td>
         <td>{{ $tglEfektif }}</td>
         <td>NO&nbsp;DOKUMEN</td>
@@ -212,18 +229,31 @@
 <!-- ═══════════════ EMPLOYEE INFO ═══════════════ -->
 <div class="emp-section">
     <div class="intro">Dengan ini saya,</div>
-    <div class="emp-row">
-        <span class="lbl">Nama Lengkap</span>
-        <span class="val">: {{ strtoupper($request->employee->name ?? '') }}</span>
-    </div>
-    <div class="emp-row">
-        <span class="lbl">Bagian / Jabatan</span>
-        <span class="val">: {{ strtoupper(trim(($request->employee->department->name ?? '') . ' / ' . ($request->employee->position->name ?? ''), ' /')) }}</span>
-    </div>
-    <div class="emp-row">
-        <span class="lbl">Tanggal Masuk</span>
-        <span class="val">: {{ $request->employee->join_date ? \Carbon\Carbon::parse($request->employee->join_date)->format('d/m/Y') : '_________________' }}</span>
-    </div>
+
+    @php
+        // Ambil tanggal_masuk dari note JSON, fallback ke join_date employee
+        $tanggalMasuk = null;
+        if (!empty($request->note['tanggal_masuk'])) {
+            $tanggalMasuk = $request->note['tanggal_masuk'];
+        } elseif ($request->employee->join_date) {
+            $tanggalMasuk = $request->employee->join_date;
+        }
+    @endphp
+
+    <table class="emp-table">
+        <tr>
+            <td class="lbl">Nama Lengkap</td>
+            <td class="val">: {{ strtoupper($request->employee->name ?? '') }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Bagian / Jabatan</td>
+            <td class="val">: {{ strtoupper(trim(($request->employee->department->name ?? '') . ' / ' . ($request->employee->position->name ?? ''), ' /')) }}</td>
+        </tr>
+        <tr>
+            <td class="lbl">Tanggal Masuk</td>
+            <td class="val">: {{ $tanggalMasuk ? \Carbon\Carbon::parse($tanggalMasuk)->format('d/m/Y') : '_________________' }}</td>
+        </tr>
+    </table>
 </div>
 
 <!-- ═══════════════ LEAVE TYPES (3 columns) ═══════════════ -->
@@ -275,12 +305,14 @@
 
 <!-- ═══════════════ DATE + SISA CUTI ═══════════════ -->
 <div class="date-section">
-    <div class="line">
-        <span>Terhitung mulai tanggal</span>
-        <span class="val">{{ \Carbon\Carbon::parse($request->start_date)->format('d/m/Y') }}</span>
-        <span style="margin-left: 24px;">Sisa cuti tahunan</span>
-        <span class="val">: {{ (int)$sisaCuti }}</span>
-    </div>
+    <table class="date-table">
+        <tr>
+            <td style="width:35%;">Terhitung mulai tanggal</td>
+            <td class="val">{{ \Carbon\Carbon::parse($request->start_date)->format('d/m/Y') }}</td>
+            <td style="width:35%;">Sisa cuti tahunan</td>
+            <td class="val">: {{ (int)$sisaCuti }}</td>
+        </tr>
+    </table>
 </div>
 
 <div class="disclaimer">
@@ -306,6 +338,8 @@
 <div class="footer-note">
     <span class="b">Note :</span> Maksimal paling lambat diserahkan kembali ke <span class="b">HRD</span> sebelum tanggal: <span class="red">{{ $deadline }}</span>
 </div>
+
+</div><!-- /form-wrapper -->
 
 <script>
     window.onload = function() { window.print(); }
