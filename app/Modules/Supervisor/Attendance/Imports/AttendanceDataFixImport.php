@@ -324,7 +324,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         $actualIn = $shiftStart->copy();
         $actualOut = $shiftEnd->copy();
 
-        $shiftCode = $roster && $roster->shift ? $roster->shift->code : null;
+        $shiftCode = $roster ? $roster->external_code : null;
 
         // ── b.1 Minggu → off ──
         if ($roster && $roster->is_sun) {
@@ -423,7 +423,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
         $actualOut = $shiftEnd->copy();
 
         // Shift code utk penentuan lembur === 4
-        $shiftCode = $roster && $roster->shift ? strtoupper(trim($roster->shift->code ?? '')) : '';
+        $shiftCode = $roster ? strtoupper(trim($roster->external_code ?? '')) : '';
 
         // ── c.3 Status OFF → off ──
         if ($status === 'OFF') {
@@ -463,7 +463,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
             $holidayOvertime = 1;
 
             if ($lemburHours == 4) {
-                if ($shiftCode === 'ML') {
+                if (in_array($shiftCode, ['ML', 'S'])) {
                     $checkIn = $checkIn->subMinutes($lemburMinutes);
                 } else {
                     $checkOut = $checkOut->addMinutes($lemburMinutes);
@@ -480,7 +480,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
             $checkOut = $actualOut->copy()->addMinutes(rand(-10, 10));
 
             if ($lemburHours == 4) {
-                if ($shiftCode === 'ML') {
+                if (in_array($shiftCode, ['ML', 'S'])) {
                     $checkIn = $checkIn->subMinutes($lemburMinutes);
                 } else {
                     $checkOut = $checkOut->addMinutes($lemburMinutes);

@@ -57,3 +57,41 @@ Step 5 : submenu Kompensasi
 Step 6 : submenu Dokumen, submenu Keluarga & tanggungan, submenu riwayat pekerjaan, submenu resign & phk
 
 yun, gini aja, aku ingin fronten applikasi menu Data Karyawan, Jadwal Kerja, Pengelolaan Kasbon, Pengelolaan cuti beserta semua submenu-nya. aku ingin kamu salin aja dari aplikasi instance1. data menggunakan data dummy dulu. yang di sesuaikan cuma perubahan dari vue spa web ke vue spa desktop,
+
+gini jo, proses di AttendanceImportService dan AttendanceDataFixImport itu saat mengisi check_in, check_out, actual_in dan actual_out itu :
+
+A. di AttendanceImportService
+
+1. Data karyawan = ambil data karyawan dari sch_employee_shift_roster
+2. Data holiday = abil data holiday dari sch_holiday
+3. data cuti_sakit_izin = ambil data dari leave_request yang berelasi dengan leave_types
+4. ambil att_prepare = ambil data dari attendance prepare untuk =
+    - $check_in = att_prepare->check_in
+    - $check_out = att_prepare->check_in
+    - $lembur = att_prepare->overtime
+5. ambil jadwal dari shift
+
+- $schedul_in = sch_employee_shift_roster->shift->work_hour_start
+- $schedul_out = sch_employee_shift_roster->shift->work_hour_end
+
+6. mengisi check_in, check_out, actual_in dan actual_out dengan 3 kondisi berdasarkan sch_employee_shift_roster->work_pattern_type :
+   6.1. jika sch_employee_shift_roster->work_pattern_type = FIXED,
+   a. Hari minggu dan holliday  
+    - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
+   b. cuti / izin / sakit  
+    - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
+   c. hari kerja - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
+   d. lembur maksimal di hari kerja 3 jam,
+   6.3. jika sch_employee_shift_roster->work_pattern_type = FLEX-SHIFT,
+   a. Hari minggu dan holliday  
+    - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
+   b. cuti / izin / sakit  
+    - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
+   c. hari kerja - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
+   d. lembur maksimal di hari kerja 3 jam,
+   6.1. jika sch_employee_shift_roster->work_pattern_type = SHIFT,
+   a. sch_employee_shift_roster->external_code = "L" - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
+   b. cuti / izin / sakit  
+    - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
+   c. sch_employee_shift_roster->external_code != "L"
+   c.1 jika lembur === 4 - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out

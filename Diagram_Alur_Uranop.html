@@ -189,6 +189,433 @@ flowchart TD
       </div>
     </div>
 
+    <!-- DETAIL INPUT DATA KARYAWAN -->
+    <div class="card">
+      <h2>🔷 DETAIL: Input Data Karyawan (Manual &amp; Import Excel)</h2>
+      <div class="mermaid">
+flowchart TD
+    START_INPUT(["📋 Mulai Input Karyawan"]) --> PILIH_CARA{"Pilih cara input?"}
+
+    %% ===== MANUAL ENTRY =====
+    PILIH_CARA -->|"✍️ Manual (satu-satu)"| MANUAL
+
+    subgraph MANUAL["✍️ INPUT MANUAL"]
+        direction TB
+        M1["Buka Form Tambah Karyawan<br/>(klik tombol + / Tambah)"] --> M2["Isi Data Pribadi:<br/>Nama, NIK, JK, TTL, Agama,<br/>Alamat, Email, No. HP"]
+        M2 --> M3["Isi Data Kepegawaian:<br/>NIP, Status Kerja, Tgl Masuk,<br/>Bagian & Jabatan"]
+        M3 --> M4["Isi Data Gaji & Bank:<br/>Gaji Pokok, Tunjangan,<br/>Nama Bank, No. Rekening"]
+        M4 --> M5["Isi Data Pajak & BPJS:<br/>NPWP, PTKP,<br/>BPJS Kesehatan & Ketenagakerjaan"]
+        M5 --> M6["Upload Foto (opsional)<br/>max 2 MB, JPG/PNG"]
+        M6 --> M7["Klik SIMPAN → validasi sistem"]
+        M7 --> M8{"Valid?"}
+        M8 -->|"❌ Error"| M9["Perbaiki field yang merah"] --> M7
+        M8 -->|"✅ Sukses"| M10["Karyawan tersimpan!<br/>Tampil di daftar karyawan"]
+    end
+
+    %% ===== IMPORT EXCEL =====
+    PILIH_CARA -->|"📥 Import Excel (massal)"| IMPORT
+
+    subgraph IMPORT["📥 IMPORT EXCEL"]
+        direction TB
+        I1["Klik menu Import Karyawan"] --> I2["Download template Excel<br/>(format standar Uranop)"]
+        I2 --> I3["Isi data di Excel:<br/>Nama, NIK, JK, Bagian,<br/>Jabatan, Status, Gaji, dll"]
+        I3 --> I4["Upload file Excel (.xlsx/.xls/.csv)"]
+        I4 --> I5["Sistem baca & validasi:<br/>• Cek format kolom<br/>• Deteksi duplikat NIK<br/>• Auto-detect Bagian dari keyword<br/>• Auto firstOrCreate Jabatan"]
+        I5 --> I6{"Ada error?"}
+        I6 -->|"❌ Ada"| I7["Tampilkan baris error<br/>→ Download error report<br/>→ Perbaiki & upload ulang"] --> I4
+        I6 -->|"✅ Tidak"| I8["Konfirmasi: X data siap diimpor"]
+        I8 --> I9["Klik PROSES IMPORT"]
+        I9 --> I10["Data masuk ke database!<br/>Karyawan siap diatur selanjutnya"]
+    end
+
+    MANUAL --> LANJUT
+    IMPORT --> LANJUT
+
+    LANJUT["✅ Karyawan Siap<br/>→ Lanjut: Atur Gaji, BPJS, Kontrak, dll"]
+
+    style START_INPUT fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style PILIH_CARA fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style MANUAL fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style IMPORT fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style LANJUT fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- DETAIL JADWAL KERJA -->
+    <div class="card">
+      <h2>🔷 DETAIL: Jadwal Kerja — Shift, Pola, & Generate Roster</h2>
+      <div class="mermaid">
+flowchart TD
+    START_SCH(["📅 Mulai Atur Jadwal Kerja"]) --> STEP1
+
+    subgraph STEP1["1️⃣ BUAT POLA KERJA"]
+        direction TB
+        P1["Klik menu Pola Kerja → Tambah"] --> P2["Isi data pola:<br/>• Kode & Nama (cth: SHIFT-3-GROUP)<br/>• Tipe Karyawan (staff/non-staff)<br/>• Jumlah Hari Kerja (1-7)<br/>• Tipe Sabtu (off/half/full)<br/>• Tanggal Cut-off (25)<br/>• Jam kerja/hari, jam istirahat"]
+        P2 --> P3["Simpan Pola Kerja"]
+    end
+
+    STEP1 --> STEP2
+
+    subgraph STEP2["2️⃣ BUAT SHIFT (Jam Kerja)"]
+        direction TB
+        SH1["Klik menu Shift → Tambah"] --> SH2["Isi data shift:<br/>• Kode (cth: PAGI, SIANG, MALAM)<br/>• Jam Masuk & Pulang<br/>• Jendela Check-in / Check-out<br/>• Toleransi keterlambatan (menit)<br/>• Centang: Overnight? Lembur? Libur?"]
+        SH2 --> SH3["Simpan → Shift siap dipakai"]
+    end
+
+    STEP2 --> STEP3
+
+    subgraph STEP3["3️⃣ BUAT SIKLUS (Pola Harian)"]
+        direction TB
+        C1["Klik Pola → Tambah Siklus"] --> C2["Tentukan nama grup siklus<br/>(cth: Grup A, Grup B)"]
+        C2 --> C3["Isi detail per hari:<br/>• Hari ke-1: Shift Pagi<br/>• Hari ke-2: Shift Pagi<br/>• Hari ke-3: Shift Siang<br/>• Hari ke-4: Libur<br/>... dst (sesuai pola rotasi)"]
+        C3 --> C4["Simpan Siklus → siap digunakan"]
+    end
+
+    STEP3 --> STEP4
+
+    subgraph STEP4["4️⃣ GENERATE ROSTER (Jadwal Kerja)"]
+        direction TB
+        G1["Klik menu Generate Roster"] --> G2["Pilih parameter:<br/>• Tahun & Bulan<br/>• Pola Kerja<br/>• Grup Siklus<br/>• Karyawan (pilih satu/banyak)"]
+        G2 --> G3["Klik GENERATE"]
+        G3 --> G4["Sistem generate otomatis:<br/>• Loop tiap karyawan<br/>• Assign shift per tanggal<br/>• Sesuai siklus (berulang)<br/>• Tandai Sabtu/Minggu/Libur"]
+        G4 --> G5["✅ Roster berhasil digenerate!<br/>(bisa di-override manual per sel)"]
+    end
+
+    STEP4 --> ALT
+
+    subgraph ALT["🔄 ALTERNATIF: Import Roster Excel"]
+        direction TB
+        ALT1["Siapkan file Excel matrix:<br/>baris = karyawan, kolom = tanggal<br/>isi = kode shift / L (libur)"] --> ALT2["Upload file + pilih bulan/tahun"]
+        ALT2 --> ALT3["Sistem proses & update roster"]
+    end
+
+    STEP4 --> SELESAI_SCH
+    ALT --> SELESAI_SCH
+
+    SELESAI_SCH(["✅ Jadwal Kerja Siap!<br/>→ Lanjut: Import Absensi & Sync Kehadiran"])
+
+    style START_SCH fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style STEP1 fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style STEP2 fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style STEP3 fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style STEP4 fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style ALT fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style SELESAI_SCH fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- DETAIL CUTI & IZIN -->
+    <div class="card">
+      <h2>🔷 DETAIL: Pengelolaan Cuti &amp; Izin</h2>
+      <div class="mermaid">
+flowchart TD
+    START_CUTI(["🏖️ Cuti & Izin"]) --> PERIODE
+
+    subgraph PERIODE["📅 PERIODE CUTI"]
+        direction TB
+        PR1["Cek LeavePeriod aktif<br/>(start_date s/d end_date)"] --> PR2["Generate jatah cuti tahunan:<br/>12 hari CT per karyawan<br/>(via EmployeeLeave transaction)"]
+    end
+
+    PERIODE --> AJUKAN
+
+    subgraph AJUKAN["✍️ AJUKAN CUTI"]
+        direction TB
+        AJ1["Pilih Karyawan + Tipe Cuti<br/>(CT Tahunan, CS Sakit,<br/>CI Izin, CK Keperluan, dll)"] --> AJ2["Isi form: tgl mulai, tgl selesai,<br/>jumlah hari, alasan"]
+        AJ2 --> AJ3["Sistem validasi:<br/>• Cek sisa saldo (utk CT)<br/>• Cek overlap tanggal<br/>• Cek periode aktif"]
+        AJ3 --> AJ4{"Valid?"}
+        AJ4 -->|"❌"| AJ5["Tampilkan error<br/>(saldo kurang / overlap)"] --> AJ1
+        AJ4 -->|"✅"| AJ6["Submit → status: Pending"]
+    end
+
+    AJUKAN --> APPROVAL
+
+    subgraph APPROVAL["👔 APPROVAL HR"]
+        direction TB
+        AP1["HR Review pengajuan cuti"] --> AP2{"Keputusan?"}
+        AP2 -->|"✅ Approve"| AP3["Saldo cuti otomatis berkurang<br/>(EmployeeLeave decrement)<br/>Status: Approved"]
+        AP2 -->|"❌ Reject"| AP4["Status: Rejected<br/>Saldo tidak berkurang"]
+    end
+
+    APPROVAL --> ACTION
+
+    subgraph ACTION["📋 TINDAKAN LANJUT"]
+        direction TB
+        ACT1["Cetak Form Cuti<br/>(HTML → window.print)"] --> ACT2["Dokumen resmi dgn<br/>nomor surat & logo perusahaan"]
+        ACT3["Batalkan Cuti yg sudah approve<br/>→ Saldo kembali (increment)<br/>→ Status: Cancelled"]
+        ACT4["Export data cuti ke Excel"]
+    end
+
+    ACTION --> SELESAI_CUTI(["✅ Selesai"])
+
+    style START_CUTI fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style PERIODE fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style AJUKAN fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style APPROVAL fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style ACTION fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style SELESAI_CUTI fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- DETAIL KEHADIRAN -->
+    <div class="card">
+      <h2>🔷 DETAIL: Kehadiran — Import, Sync, Lengkapi, &amp; Lembur</h2>
+      <div class="mermaid">
+flowchart TD
+    START_ABS(["📋 Kehadiran"]) --> IMPORT_ABS
+
+    subgraph IMPORT_ABS["📥 IMPORT DATA ABSENSI"]
+        direction TB
+        IMP1["Pilih sumber import:"] --> IMP2
+        IMP2["1️⃣ Upload Excel (.xlsx/.csv)<br/>dari mesin fingerprint"] --> IMP3["Background Job:<br/>ProcessAttendanceLogImport<br/>→ simpan ke raw_logs"]
+        IMP2b["2️⃣ Upload .BIN file<br/>dari mesin fingerprint"] --> IMP3b["FingerprintBinParser<br/>→ parse langsung → raw_logs"]
+        IMP3 --> IMP4["Cek status import<br/>(polling batch status)"]
+        IMP3b --> IMP4
+    end
+
+    IMPORT_ABS --> SYNC
+
+    subgraph SYNC["🔄 SYNC KEHADIRAN"]
+        direction TB
+        SY1["Pilih rentang tanggal<br/>+ karyawan (opsional)"] --> SY2["AttendanceSyncService<br/>proses raw_logs → att_prepares"]
+        SY2 --> SY3["Deteksi Check-in / Check-out<br/>cocokkan dgn roster & shift"]
+        SY3 --> SY4["Tentukan status:<br/>hadir / terlambat / alpha /<br/>cuti / izin / sakit / libur"]
+    end
+
+    SYNC --> LENGKAPI
+
+    subgraph LENGKAPI["✏️ LENGKAPI & REVIEW"]
+        direction TB
+        LG1["Lihat daftar att_prepares<br/>(bisa filter per grup karyawan)"] --> LG2{"Ada yg kosong?"}
+        LG2 -->|"Ya"| LG3["Lengkapi Manual (bulk):<br/>isi check_in/check_out kosong"]
+        LG2 -->|"Ya"| LG3b["Auto-Lengkapi:<br/>isi otomatis per rules grup"]
+        LG2 -->|"Tidak"| LG4["Review status kehadiran"]
+        LG3 --> LG4
+        LG3b --> LG4
+    end
+
+    LENGKAPI --> LEMBUR
+
+    subgraph LEMBUR["⏰ HITUNG LEMBUR"]
+        direction TB
+        LB1["Pilih rentang tanggal"] --> LB2["AttendanceCalculatorService<br/>hitung overtime multiplier"]
+        LB2 --> LB3["Hasil: lm (jam lembur),<br/>lm_count (kali lembur),<br/>overtime, overtime_count"]
+        LB3 --> LB4["Skip otomatis: cuti/izin/sakit"]
+    end
+
+    LEMBUR --> LOCK
+
+    subgraph LOCK["🔒 KUNCI & RESUME"]
+        direction TB
+        LK1["Lock record kehadiran<br/>(bulk, tidak bisa diedit)"] --> LK2["Resume Kehadiran:<br/>total hadir, terlambat,<br/>lembur, alpha per karyawan"]
+        LK2 --> LK3["Export ke Excel"]
+    end
+
+    LOCK --> SELESAI_ABS(["✅ Kehadiran siap → lanjut Payroll"])
+
+    style START_ABS fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style IMPORT_ABS fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style SYNC fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style LENGKAPI fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style LEMBUR fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style LOCK fill:#ede7f6,stroke:#512da8,color:#1a2b3c
+    style SELESAI_ABS fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- DETAIL BPJS & PPh21 -->
+    <div class="card">
+      <h2>🔷 DETAIL: Pengelolaan BPJS &amp; PPh 21</h2>
+      <div class="mermaid">
+flowchart TD
+    START_TAX(["💰 BPJS & PPh 21"]) --> SETUP_BPJS
+
+    subgraph SETUP_BPJS["⚙️ SETUP BPJS"]
+        direction TB
+        BP1["Setup tarif BPJS:<br/>• BPJS Kesehatan (KS)<br/>• BPJS Ketenagakerjaan (TK)<br/>• BPJS Pensiun (PEN)"] --> BP2["Tentukan % iuran:<br/>perusahaan vs karyawan"]
+        BP2 --> BP3["Simpan di PayrollConfig"]
+    end
+
+    SETUP_BPJS --> SETUP_PPH
+
+    subgraph SETUP_PPH["⚙️ SETUP PPh 21"]
+        direction TB
+        PP1["Setup parameter PPh 21:<br/>• PTKP (TK, K/0, K/1, K/2, K/3)<br/>• Tarif progresif (5%-30%)<br/>• Biaya Jabatan (5%)"] --> PP2["Simpan di PayrollConfig"]
+    end
+
+    SETUP_PPH --> ASSIGN
+
+    subgraph ASSIGN["👤 ASSIGN KE KARYAWAN"]
+        direction TB
+        AS1["Per karyawan — isi data:<br/>• NPWP / non-NPWP<br/>• PTKP (status pajak)<br/>• BPJS KS & TK number"] --> AS2["Data tersimpan di Employee:<br/>npwp, has_npwp, ptkp,<br/>bpjs_kesehatan, bpjs_ketenagakerjaan"]
+    end
+
+    ASSIGN --> CALC
+
+    subgraph CALC["🧮 KALKULASI (saat Payroll)"]
+        direction TB
+        CL1["Saat hitung gaji (PayRecord):"] --> CL2["Potong otomatis:<br/>• bpjs_tk = % x gaji_pokok<br/>• bpjs_ks = % x gaji_pokok<br/>• bpjs_pen = % x gaji_pokok"]
+        CL2 --> CL3["Hitung PPh 21:<br/>• PKP = (gaji_bruto - biaya_jabatan) x 12 - PTKP<br/>• Terapkan tarif progresif<br/>• Tanpa NPWP = +20%"]
+    end
+
+    CALC --> LAPOR_TAX
+
+    subgraph LAPOR_TAX["📊 LAPORAN"]
+        direction TB
+        LT1["Laporan BPJS per bulan:<br/>total iuran per karyawan"] --> LT2["Laporan PPh 21 Bulanan"]
+        LT2 --> LT3["Laporan PPh 21 Tahunan:<br/>Form 1721-A1"]
+    end
+
+    LAPOR_TAX --> SELESAI_TAX(["✅ Selesai"])
+
+    style START_TAX fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style SETUP_BPJS fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style SETUP_PPH fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style ASSIGN fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style CALC fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style LAPOR_TAX fill:#ede7f6,stroke:#512da8,color:#1a2b3c
+    style SELESAI_TAX fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- DETAIL PAYROLL -->
+    <div class="card">
+      <h2>🔷 DETAIL: Payroll — Hitung Gaji, Slip, THR</h2>
+      <div class="mermaid">
+flowchart TD
+    START_PAY(["💵 Payroll"]) --> BUAT_PERIODE
+
+    subgraph BUAT_PERIODE["📅 BUAT PERIODE PENGGGAJIAN"]
+        direction TB
+        BP1["Buat PayPeriod baru:<br/>• Nama (cth: Gaji Juni 2026)<br/>• Start date (25 Mei) s/d End date (24 Juni)<br/>• Tanggal penggajian<br/>• Split segment? (A/B)"] --> BP2["Status: Active"]
+    end
+
+    BUAT_PERIODE --> GENERATE
+
+    subgraph GENERATE["⚙️ GENERATE PAY RECORDS"]
+        direction TB
+        GN1["Generate PayRecord per karyawan:<br/>• Ambil data gaji pokok, tunjangan<br/>• Ambil data kehadiran (hari_kerja)<br/>• Ambil data lembur (lm, lm_count, lembur_count)<br/>• Ambil data kasbon (cicilan)"] --> GN2["Kalkulasi otomatis:<br/>➕ Gaji = (pokok / HK) x hari_kerja<br/>➕ Upah Lembur = kalkulasi multiplier<br/>➕ Premi Hadir, PBLT, Revisi<br/>➕ Gaji Kotor = total semua<br/>➖ BPJS TK, KS, PEN<br/>➖ PPh 21<br/>➖ Cicilan Kasbon<br/>💰 Gaji Bersih"]
+    end
+
+    GENERATE --> EDIT_LEMBUR
+
+    subgraph EDIT_LEMBUR["✏️ SESUAIKAN DATA"]
+        direction TB
+        EL1["Review & edit manual:<br/>• LM (jam lembur)<br/>• LM Count (kali lembur)<br/>• Lembur Count"] --> EL2["Auto-recalculate:<br/>upah_lembur, gaji_kotor, gaji_bersih"]
+    end
+
+    EDIT_LEMBUR --> SLIP
+
+    subgraph SLIP["📄 SLIP GAJI"]
+        direction TB
+        SL1["Lihat Payslip per periode<br/>(filter per segment A/B)"] --> SL2["Tampilan lengkap:<br/>• Gaji Pokok, Tunjangan<br/>• Hari Kerja, Lembur<br/>• Potongan (BPJS, PPh, Kasbon)<br/>• Sisa Cuti<br/>• Gaji Bersih"]
+        SL2 --> SL3["CETAK SLIP GAJI<br/>(per orang / massal)"]
+    end
+
+    SLIP --> THR
+
+    subgraph THR["🎉 THR (Hari Raya)"]
+        direction TB
+        TH1["Pilih periode THR"] --> TH2["Hitung THR per karyawan<br/>(1x gaji pokok utk &gt;1 thn,<br/>proporsional utk &lt;1 thn)"]
+        TH2 --> TH3["Generate & cetak slip THR"]
+    end
+
+    THR --> SELESAI_PAY(["✅ Payroll selesai → lanjut Laporan"])
+
+    style START_PAY fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style BUAT_PERIODE fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style GENERATE fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style EDIT_LEMBUR fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style SLIP fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style THR fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style SELESAI_PAY fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
+    <!-- DETAIL LAPORAN -->
+    <div class="card">
+      <h2>🔷 DETAIL: Laporan — Kehadiran, Payroll, Lembur, BPJS, PPh 21</h2>
+      <div class="mermaid">
+flowchart TD
+    START_RPT(["📊 Laporan"]) --> PILIH_RPT{"Pilih jenis laporan?"}
+
+    %% Laporan Kehadiran
+    PILIH_RPT -->|"📋 Kehadiran"| RPT_ABS
+
+    subgraph RPT_ABS["📋 LAPORAN KEHADIRAN"]
+        direction TB
+        RA1["Pilih Periode (PayPeriod)"] --> RA2["Pilih Grup Karyawan:<br/>GRP-JKT / GRP-ALLIN / GRP-PS1 dll"]
+        RA2 --> RA3["Tampil Matrix Harian:<br/>baris = karyawan, kolom = tanggal<br/>isi = status (H, A, L, C, I, S)"]
+        RA3 --> RA4["Export Excel<br/>(3 section: Jakarta, All In, Printing)"]
+    end
+
+    %% Laporan Lembur
+    PILIH_RPT -->|"⏰ Lembur"| RPT_LEMBUR
+
+    subgraph RPT_LEMBUR["⏰ LAPORAN LEMBUR & UANG MAKAN"]
+        direction TB
+        RL1["Pilih rentang tanggal"] --> RL2["Tampil per karyawan:<br/>total lm, total_lm (jam),<br/>lembur_hb, total_lhb (kali),<br/>uang makan"]
+        RL2 --> RL3["Export ke Excel"]
+    end
+
+    %% Laporan Payroll
+    PILIH_RPT -->|"💵 Payroll"| RPT_PAY
+
+    subgraph RPT_PAY["💵 LAPORAN PAYROLL"]
+        direction TB
+        RP1["Pilih Periode + Tab:<br/>All-In / Print"] --> RP2["Tampil detail per karyawan:<br/>gaji pokok, tunjangan, lembur,<br/>potongan, gaji bersih"]
+        RP2 --> RP3["Laporan Resume:<br/>ringkasan total per group"]
+        RP3 --> RP4["Export Excel"]
+    end
+
+    %% Laporan BPJS
+    PILIH_RPT -->|"🏥 BPJS"| RPT_BPJS
+
+    subgraph RPT_BPJS["🏥 LAPORAN BPJS"]
+        direction TB
+        RB1["Pilih Periode"] --> RB2["Tampil per karyawan:<br/>iuran bpjs_tk, bpjs_ks,<br/>bpjs_pen"]
+        RB2 --> RB3["Export Excel"]
+    end
+
+    %% Laporan PPh 21
+    PILIH_RPT -->|"📑 PPh 21"| RPT_PPH
+
+    subgraph RPT_PPH["📑 LAPORAN PPh 21"]
+        direction TB
+        RH1["Pilih Periode (bulanan)"] --> RH2["Tampil per karyawan:<br/>PKP, tarif, PPh terutang"]
+        RH2 --> RH3["Laporan Tahunan:<br/>Form 1721-A1"]
+        RH3 --> RH4["Export Excel"]
+    end
+
+    %% Rekap Gaji/Kerja/PPH
+    PILIH_RPT -->|"📊 Rekap"| RPT_REKAP
+
+    subgraph RPT_REKAP["📊 REKAP GAJI / KERJA / PPH"]
+        direction TB
+        RK1["Rekap Gaji: total gaji per periode"] --> RK2["Rekap Kerja: total hari kerja"]
+        RK2 --> RK3["Rekap PPh Kompensasi"]
+    end
+
+    RPT_ABS --> SELESAI_RPT
+    RPT_LEMBUR --> SELESAI_RPT
+    RPT_PAY --> SELESAI_RPT
+    RPT_BPJS --> SELESAI_RPT
+    RPT_PPH --> SELESAI_RPT
+    RPT_REKAP --> SELESAI_RPT
+
+    SELESAI_RPT(["✅ Laporan siap!"])
+
+    style START_RPT fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+    style PILIH_RPT fill:#fff9c4,stroke:#f9a825,color:#1a2b3c
+    style RPT_ABS fill:#fce4ec,stroke:#c62828,color:#1a2b3c
+    style RPT_LEMBUR fill:#e8f5e9,stroke:#2e7d32,color:#1a2b3c
+    style RPT_PAY fill:#e3f2fd,stroke:#1976d2,color:#1a2b3c
+    style RPT_BPJS fill:#f3e5f5,stroke:#6a1b9a,color:#1a2b3c
+    style RPT_PPH fill:#fff3e0,stroke:#f57c00,color:#1a2b3c
+    style RPT_REKAP fill:#ede7f6,stroke:#512da8,color:#1a2b3c
+    style SELESAI_RPT fill:#c8e6c9,stroke:#2e7d32,color:#1a2b3c
+      </div>
+    </div>
+
     <!-- RINGKASAN SIKLUS -->
     <div class="card">
       <h2>🔷 SIKLUS BULANAN & TAHUNAN</h2>
