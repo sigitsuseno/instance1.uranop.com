@@ -280,7 +280,7 @@
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.tj_masa_kerja) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-main) font-medium">{{ record.hari_kerja }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lm > 0 ? (record.lm / 60).toFixed(1).replace('.', ',') : '-' }}</td>
-                  <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lembur_count > 0 ? record.lembur_count.toFixed(1).replace('.', ',') : '-' }}</td>
+                  <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lembur_count > 0 ? (record.lembur_count / 60).toFixed(1).replace('.', ',') : '-' }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.gaji) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.upah_lembur) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.revisi) }}</td>
@@ -304,7 +304,7 @@
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.tj_masa_kerja, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-center font-bold">{{ section.totals.hari_kerja }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lm > 0 ? (section.totals.lm / 60).toFixed(1).replace('.', ',') : '-' }}</td>
-                  <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lembur_count > 0 ? section.totals.lembur_count.toFixed(1).replace('.', ',') : '-' }}</td>
+                  <td class="border border-(--border-soft) px-2 py-3.5 text-center text-(--text-muted)">{{ section.totals.lembur_count > 0 ? (section.totals.lembur_count / 60).toFixed(1).replace('.', ',') : '-' }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.gaji, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.upah_lembur, true) }}</td>
                   <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(section.totals.revisi, true) }}</td>

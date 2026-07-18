@@ -486,8 +486,8 @@ class SupervisorBreakdownController extends Controller
                 $gajiPokok    = $cleanNum($row[12] ?? 0);
                 $tjMasaKerja  = $cleanNum($row[13] ?? 0);
                 $hariKerja    = (int) $cleanNum($row[14] ?? 0);
-                $lm           = (int) $cleanNum($row[15] ?? 0);    // LM dalam menit
-                $lemburJam    = $cleanNum($row[16] ?? 0);           // LBR JAM
+                $lm           = $cleanNum($row[15] ?? 0);    // LM dalam jam
+                $lemburJam    = $cleanNum($row[16] ?? 0);    // LBR JAM dalam jam
                 $gaji         = $cleanNum($row[17] ?? 0);
                 $upahLembur   = $cleanNum($row[18] ?? 0);
                 $revisi       = $cleanNum($row[19] ?? 0);
@@ -503,7 +503,10 @@ class SupervisorBreakdownController extends Controller
                 $gajiBersih   = $cleanNum($row[29] ?? 0);
 
                 // LM count = LM * 60 (konversi jam→menit, karena CSV simpan dalam jam)
-                $lmCount = $lm * 60;
+                $lmCount = round($lm * 60);
+
+                // Lembur count = LBR JAM * 60 (konversi jam→menit)
+                $lemburCount = round($lemburJam * 60);
 
                 // ── Cari record existing ──
                 $breakdown = SupervisorBreakdown::where('pay_period_id', $period->id)
@@ -523,9 +526,9 @@ class SupervisorBreakdownController extends Controller
                     'tj_masa_kerja' => $tjMasaKerja,
                     'tunjangan'     => $tunjangan,
                     'hari_kerja'    => $hariKerja,
-                    'lm'            => $lm,
+                    'lm'            => round($lm * 60),
                     'lm_count'      => $lmCount,
-                    'lembur_count'  => $lemburJam,
+                    'lembur_count'  => $lemburCount,
                     'gaji'          => $gaji,
                     'upah_lembur'   => $upahLembur,
                     'revisi'        => $revisi,
