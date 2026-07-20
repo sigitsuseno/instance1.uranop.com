@@ -13,40 +13,59 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Import attendance dari sch_employee_shift_rosters ke attendance_autologs
- * dengan rules per work_pattern_type (FIXED / FLEX-SHIFT / SHIFT).
+ * Import attendance: copy check_in, check_out, overtime dari att_prepares
+ * ke attendance_autologs dengan aturan per work_pattern_type dan group.
  *
  * Sumber data:
- *   1. Karyawan: sch_employee_shift_rosters (filter 6 group)
- *   2. Holiday: sch_holidays
+ *   1. Karyawan: sch_employee_shift_rosters (6 group)
+ *   2. Holiday:   sch_holidays
  *   3. Cuti/Izin/Sakit: leave_requests + leave_types
- *   4. Scan: att_prepares (check_in, check_out, overtime)
- *   5. Jadwal: shift->work_hour_start / work_hour_end
+ *   4. Scan:      att_prepares (check_in, check_out, overtime, late_minutes)
+ *   5. Jadwal:    shift->work_hour_start / work_hour_end
  *
- * Rule utama: Excel > att_prepares
- * - Ada Excel (periode 1-6) → overwrite dengan XLSX
- * - Tidak ada Excel → data final = hasil Service ini
+ * Aturan lembur per pattern + group:
+ *   FIXED / FLEX-SHIFT:
+ *     GRP-ALLIN, GRP-JKT, GRP-SPR, GRP-GD → lembur=0 semua hari
+ *     GRP-SP1 → Sabtu lembur=0, Sen-Jum cap 3 jam (180 menit)
+ *     Minggu/Holiday → off
+ *     Cuti/Izin/Sakit → status leave
+ *   SHIFT (GRP-SS):
+ *     Ambil apa adanya dari att_prepare
+ *     external_code="L" → off
+ *     Cuti/Izin/Sakit → status leave
+ *
+ * lm selalu 0 untuk semua.
+ *
+ * Excel overwrite (periode 1-6) dijalankan setelah import roster.
  */
 class AttendanceImportService
 {
-    /** @var array<string> Group yang diproses */
+    /** @var array<string> Semua group yang diproses */
     protected const GROUP_CODES = [
         'GRP-JKT',
         'GRP-ALLIN',
         'GRP-SPR',
         'GRP-GD',
         'GRP-SS',
-        'GRP-SP1',
+        'GRP-PS1',
     ];
 
-    /** @var array<int, string> Period yang punya Excel */
+    /** @var array<string> Group yang lembur-nya selalu 0 (FIXED/FLEX-SHIFT) */
+    protected const ZERO_LEMBUR_GROUPS = ['GRP-ALLIN', 'GRP-JKT', 'GRP-SPR', 'GRP-GD'];
+
+    /** @var array<string> Group yang lembur-nya di-cap 3 jam (FIXED/FLEX-SHIFT) */
+    protected const CAP_LEMBUR_GROUPS = ['GRP-PS1'];
+
+    /** @var array<int, string> Period yang punya Excel overwrite */
     protected const EXCEL_PERIODS = [1, 2, 3, 4, 5, 6];
 
-    /** Maksimal lembur untuk FIXED & FLEX-SHIFT (dalam menit) */
+    /** Maksimal lembur Senin-Jumat untuk FIXED & FLEX-SHIFT (menit) */
     protected const MAX_OVERTIME_MINUTES = 180;
 
     /** @var array<string, array{category: string, is_paid: bool}>|null */
     protected static ?array $leaveTypeCache = null;
+
+    // ── State ──
 
     protected string $startDate;
     protected string $endDate;
@@ -57,9 +76,16 @@ class AttendanceImportService
     protected int $updated = 0;
     protected int $skipped = 0;
 
-    /**
-     * Main entry point.
-     */
+    /** @var array<int> Employee IDs dari ZERO_LEMBUR_GROUPS */
+    protected array $zeroLemburIds = [];
+
+    /** @var array<int> Employee IDs dari CAP_LEMBUR_GROUPS */
+    protected array $capLemburIds = [];
+
+    // ═══════════════════════════════════════════════════════════════
+    //  MAIN
+    // ═══════════════════════════════════════════════════════════════
+
     public function import(
         string $startDate,
         string $endDate,
@@ -80,27 +106,30 @@ class AttendanceImportService
             'groups'    => self::GROUP_CODES,
         ]);
 
-        // ── ① Dapatkan employee_id dari 6 group ──
-        $groupEmployeeIds = EmployeeGroup::whereIn('reference_code', self::GROUP_CODES)
-            ->pluck('employee_id')
-            ->unique()
-            ->values();
+        // ── ① Employee IDs per group category ──
+        $allGroupIds = EmployeeGroup::whereIn('reference_code', self::GROUP_CODES)
+            ->pluck('employee_id')->unique()->values();
 
-        Log::info('Group employee IDs', ['count' => $groupEmployeeIds->count()]);
+        $this->zeroLemburIds = EmployeeGroup::whereIn('reference_code', self::ZERO_LEMBUR_GROUPS)
+            ->pluck('employee_id')->unique()->values()->toArray();
 
-        if ($groupEmployeeIds->isEmpty()) {
+        $this->capLemburIds = EmployeeGroup::whereIn('reference_code', self::CAP_LEMBUR_GROUPS)
+            ->pluck('employee_id')->unique()->values()->toArray();
+
+        Log::info('Employee IDs', [
+            'total'       => $allGroupIds->count(),
+            'zero_lembur' => count($this->zeroLemburIds),
+            'cap_lembur'  => count($this->capLemburIds),
+        ]);
+
+        if ($allGroupIds->isEmpty()) {
             Log::warning('No employees found in target groups');
-
-            return [
-                'inserted' => 0,
-                'updated'  => 0,
-                'skipped'  => 0,
-            ];
+            return ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
         }
 
-        // ── ② Query roster (primary driver) ──
+        // ── ② Query roster ──
         $rosters = EmployeeShiftRoster::with(['shift', 'leave.leaveType'])
-            ->whereIn('employee_id', $groupEmployeeIds->toArray())
+            ->whereIn('employee_id', $allGroupIds->toArray())
             ->whereBetween('date', [$startDate, $endDate])
             ->orderBy('date')
             ->orderBy('employee_id')
@@ -110,15 +139,10 @@ class AttendanceImportService
 
         if ($rosters->isEmpty()) {
             Log::warning('No roster records found');
-
-            return [
-                'inserted' => 0,
-                'updated'  => 0,
-                'skipped'  => 0,
-            ];
+            return ['inserted' => 0, 'updated' => 0, 'skipped' => 0];
         }
 
-        // ── ③ Load holidays dari sch_holidays ──
+        // ── ③ Load holidays ──
         $holidayDates = Holiday::whereBetween('date', [$startDate, $endDate])
             ->pluck('date')
             ->map(fn ($d) => Carbon::parse($d)->toDateString())
@@ -128,7 +152,6 @@ class AttendanceImportService
 
         // ── ④ Load att_prepares (key: employee_id_date) ──
         $preparesMap = $this->loadPreparesMap($rosters);
-
         Log::info('Prepares loaded', ['count' => count($preparesMap)]);
 
         // ── ⑤ Proses setiap roster ──
@@ -170,10 +193,9 @@ class AttendanceImportService
             $filePath = $periodFileMap[$periodId] ?? null;
             if ($filePath) {
                 $excelResult = AttendanceDataFixImport::runImport(
-                    userId: 1, // system
-                    filePath: $filePath
+                    userId: 1,
+                    filePath: $filePath,
                 );
-
                 Log::info('Excel overwrite result', $excelResult);
             }
         }
@@ -186,19 +208,20 @@ class AttendanceImportService
         ];
     }
 
-    /**
-     * Proses satu roster → upsert ke attendance_autologs.
-     */
+    // ═══════════════════════════════════════════════════════════════
+    //  PROCESS ROSTER
+    // ═══════════════════════════════════════════════════════════════
+
     protected function processRoster(EmployeeShiftRoster $roster, array $holidayDates, array $preparesMap): void
     {
         $date       = Carbon::parse($roster->date);
         $dateStr    = $date->toDateString();
-        $dayOfWeek  = (int) $date->dayOfWeek; // 0=Minggu .. 6=Sabtu
+        $dayOfWeek  = (int) $date->dayOfWeek;   // 0=Minggu .. 6=Sabtu
         $isSunday   = $dayOfWeek === 0;
         $isSaturday = $dayOfWeek === 6;
         $isHoliday  = in_array($dateStr, $holidayDates);
 
-        // ── Data dari att_prepares (key: employee_id_date) ──
+        // ── Data dari att_prepares ──
         $prepareKey = $roster->employee_id . '_' . $dateStr;
         $prepare    = $preparesMap[$prepareKey] ?? null;
         $checkIn    = $prepare['check_in'] ?? null;
@@ -207,9 +230,9 @@ class AttendanceImportService
         $lateMin    = (int) ($prepare['late_minutes'] ?? 0);
 
         // ── Data jadwal dari shift ──
-        $shift       = $roster->shift;
-        $schedulIn   = null;
-        $schedulOut  = null;
+        $shift      = $roster->shift;
+        $schedulIn  = null;
+        $schedulOut = null;
 
         if ($shift && $shift->work_hour_start) {
             $schedulIn = Carbon::parse($dateStr . ' ' . $shift->work_hour_start);
@@ -219,20 +242,36 @@ class AttendanceImportService
         }
 
         // ── Data cuti/izin/sakit ──
-        $leave      = $roster->leave;
-        $leaveType  = $leave?->leaveType;
-        $isLeave    = $leave !== null;
-        $leaveCode  = $leaveType?->code;
+        $leave     = $roster->leave;
+        $leaveType = $leave?->leaveType;
+        $isLeave   = $leave !== null;
+        $leaveCode = $leaveType?->code;
 
-        // ── Tentukan pattern type ──
+        // ── Tentukan kategori lembur berdasarkan group ──
+        $empId     = $roster->employee_id;
+        $lemburRule = 'zero'; // default: lembur = 0
+        if (in_array($empId, $this->capLemburIds)) {
+            $lemburRule = 'cap';
+        }
+
+        // ── Dispatch ke handler ──
         $patternType = $roster->work_pattern_type;
 
-        // ── Dispatch ke handler sesuai pattern ──
         $record = match ($patternType) {
-            'FIXED'      => $this->processFixed($roster, $dateStr, $isSunday, $isSaturday, $isHoliday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
-            'FLEX-SHIFT' => $this->processFlexShift($roster, $dateStr, $isSunday, $isSaturday, $isHoliday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
-            'SHIFT'      => $this->processShift($roster, $dateStr, $isSaturday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
-            default      => null,
+            'FIXED', 'FLEX-SHIFT' => $this->processFixedFlex(
+                $roster, $dateStr,
+                $isSunday, $isSaturday, $isHoliday, $lemburRule,
+                $checkIn, $checkOut, $schedulIn, $schedulOut,
+                $overtime, $lateMin,
+                $isLeave, $leaveCode, $leave, $leaveType,
+            ),
+            'SHIFT' => $this->processShift(
+                $roster, $dateStr,
+                $checkIn, $checkOut, $schedulIn, $schedulOut,
+                $overtime, $lateMin,
+                $isLeave, $leaveCode, $leave, $leaveType,
+            ),
+            default => null,
         };
 
         if ($record === null) {
@@ -241,12 +280,12 @@ class AttendanceImportService
         }
 
         // ── Upsert ──
-        $exists = SupervisorAttendance::where('employee_id', $roster->employee_id)
+        $exists = SupervisorAttendance::where('employee_id', $empId)
             ->where('date', $dateStr)
             ->exists();
 
         if ($exists) {
-            SupervisorAttendance::where('employee_id', $roster->employee_id)
+            SupervisorAttendance::where('employee_id', $empId)
                 ->where('date', $dateStr)
                 ->update($record);
             $this->updated++;
@@ -257,15 +296,16 @@ class AttendanceImportService
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  PATTERN: FIXED
+    //  PATTERN: FIXED & FLEX-SHIFT (aturan identik)
     // ═══════════════════════════════════════════════════════════════
 
-    protected function processFixed(
+    protected function processFixedFlex(
         EmployeeShiftRoster $roster,
         string $dateStr,
         bool $isSunday,
         bool $isSaturday,
         bool $isHoliday,
+        string $lemburRule,     // 'zero' | 'cap'
         $checkIn,
         $checkOut,
         $schedulIn,
@@ -279,203 +319,47 @@ class AttendanceImportService
     ): ?array {
         // a. Minggu / Holiday → off
         if ($isSunday || $isHoliday) {
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: null,
-                checkOut: null,
-                actualIn: null,
-                actualOut: null,
-                status: 'off',
-                lateDuration: 0,
-                lembur: 0,
-                isLeave: false,
-                leaveId: null,
-                izinDuration: 0,
-                sakitDuration: 0,
-                deductDay: null,
-            );
+            return $this->buildRecord($roster, $dateStr, null, null, null, null, 'off', 0, 0, false, null, 0, 0, null);
         }
 
         // b. Cuti / Izin / Sakit
         if ($isLeave && $leaveCode) {
-            $izinDur  = ($leaveType?->category === 'permit') ? 1 : 0;
-            $sakitDur = ($leaveType?->category === 'sick') ? 1 : 0;
-            $deductDay = ($leaveType?->category === 'permit') ? 1 : (($leaveType?->category === 'leave') ? 0 : (($leaveType?->category === 'sick') ? 0 : null));
+            $izinDur   = ($leaveType?->category === 'permit') ? 1 : 0;
+            $sakitDur  = ($leaveType?->category === 'sick') ? 1 : 0;
+            $deductDay = match ($leaveType?->category) {
+                'permit' => 1,
+                'leave'  => 0,
+                'sick'   => 0,
+                default  => null,
+            };
 
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: null,
-                checkOut: null,
-                actualIn: null,
-                actualOut: null,
-                status: $leaveCode,
-                lateDuration: 0,
-                lembur: 0,
-                isLeave: true,
-                leaveId: $leave?->id,
-                izinDuration: $izinDur,
-                sakitDuration: $sakitDur,
-                deductDay: $deductDay,
-            );
+            return $this->buildRecord($roster, $dateStr, null, null, null, null, $leaveCode, 0, 0, true, $leave?->id, $izinDur, $sakitDur, $deductDay);
         }
 
-        // b2. Sabtu → hari kerja, lembur = 0
+        // c. Sabtu → present, lembur = 0, check_in/out random deket jadwal
         if ($isSaturday) {
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: $checkIn,
-                checkOut: $checkOut,
-                actualIn: $schedulIn,
-                actualOut: $schedulOut,
-                status: 'present',
-                lateDuration: $lateMin,
-                lembur: 0,
-                isLeave: false,
-                leaveId: null,
-                izinDuration: 0,
-                sakitDuration: 0,
-                deductDay: null,
-            );
+            $satCheckIn  = $schedulIn  ? (clone $schedulIn)->addMinutes(rand(-15, 15)) : null;
+            $satCheckOut = $schedulOut ? (clone $schedulOut)->addMinutes(rand(-15, 15)) : null;
+            return $this->buildRecord($roster, $dateStr, $satCheckIn, $satCheckOut, $schedulIn, $schedulOut, 'present', $lateMin, 0);
         }
 
-        // c. Hari kerja (Senin-Jumat) — lembur maks 3 jam
-        $lemburMinutes = min($overtime, self::MAX_OVERTIME_MINUTES);
+        // d. Senin-Jumat → lembur sesuai group
+        $lemburMinutes = match ($lemburRule) {
+            'zero' => 0,
+            'cap'  => min($overtime, self::MAX_OVERTIME_MINUTES),
+            default => 0,
+        };
 
-        return $this->buildRecord(
-            roster: $roster,
-            dateStr: $dateStr,
-            checkIn: $checkIn,
-            checkOut: $checkOut,
-            actualIn: $schedulIn,
-            actualOut: $schedulOut,
-            status: 'present',
-            lateDuration: $lateMin,
-            lembur: $lemburMinutes,
-            isLeave: false,
-            leaveId: null,
-            izinDuration: 0,
-            sakitDuration: 0,
-            deductDay: null,
-        );
+        return $this->buildRecord($roster, $dateStr, $checkIn, $checkOut, $schedulIn, $schedulOut, 'present', $lateMin, $lemburMinutes);
     }
 
     // ═══════════════════════════════════════════════════════════════
-    //  PATTERN: FLEX-SHIFT
-    // ═══════════════════════════════════════════════════════════════
-
-    protected function processFlexShift(
-        EmployeeShiftRoster $roster,
-        string $dateStr,
-        bool $isSunday,
-        bool $isSaturday,
-        bool $isHoliday,
-        $checkIn,
-        $checkOut,
-        $schedulIn,
-        $schedulOut,
-        int $overtime,
-        int $lateMin,
-        bool $isLeave,
-        ?string $leaveCode,
-        $leave,
-        $leaveType
-    ): ?array {
-        // a. Minggu / Holiday → off
-        if ($isSunday || $isHoliday) {
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: null,
-                checkOut: null,
-                actualIn: null,
-                actualOut: null,
-                status: 'off',
-                lateDuration: 0,
-                lembur: 0,
-                isLeave: false,
-                leaveId: null,
-                izinDuration: 0,
-                sakitDuration: 0,
-                deductDay: null,
-            );
-        }
-
-        // b. Cuti / Izin / Sakit
-        if ($isLeave && $leaveCode) {
-            $izinDur  = ($leaveType?->category === 'permit') ? 1 : 0;
-            $sakitDur = ($leaveType?->category === 'sick') ? 1 : 0;
-            $deductDay = ($leaveType?->category === 'permit') ? 1 : (($leaveType?->category === 'leave') ? 0 : (($leaveType?->category === 'sick') ? 0 : null));
-
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: null,
-                checkOut: null,
-                actualIn: null,
-                actualOut: null,
-                status: $leaveCode,
-                lateDuration: 0,
-                lembur: 0,
-                isLeave: true,
-                leaveId: $leave?->id,
-                izinDuration: $izinDur,
-                sakitDuration: $sakitDur,
-                deductDay: $deductDay,
-            );
-        }
-
-        // b2. Sabtu → hari kerja, lembur = 0
-        if ($isSaturday) {
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: $checkIn,
-                checkOut: $checkOut,
-                actualIn: $schedulIn,
-                actualOut: $schedulOut,
-                status: 'present',
-                lateDuration: $lateMin,
-                lembur: 0,
-                isLeave: false,
-                leaveId: null,
-                izinDuration: 0,
-                sakitDuration: 0,
-                deductDay: null,
-            );
-        }
-
-        // c. Hari kerja (Senin-Jumat) — lembur maks 3 jam
-        $lemburMinutes = min($overtime, self::MAX_OVERTIME_MINUTES);
-
-        return $this->buildRecord(
-            roster: $roster,
-            dateStr: $dateStr,
-            checkIn: $checkIn,
-            checkOut: $checkOut,
-            actualIn: $schedulIn,
-            actualOut: $schedulOut,
-            status: 'present',
-            lateDuration: $lateMin,
-            lembur: $lemburMinutes,
-            isLeave: false,
-            leaveId: null,
-            izinDuration: 0,
-            sakitDuration: 0,
-            deductDay: null,
-        );
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  PATTERN: SHIFT (Satpam)
+    //  PATTERN: SHIFT (Satpam — GRP-SS)
     // ═══════════════════════════════════════════════════════════════
 
     protected function processShift(
         EmployeeShiftRoster $roster,
         string $dateStr,
-        bool $isSaturday,
         $checkIn,
         $checkOut,
         $schedulIn,
@@ -489,68 +373,25 @@ class AttendanceImportService
     ): ?array {
         // a. external_code = "L" → off
         if ($roster->external_code === 'L') {
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: null,
-                checkOut: null,
-                actualIn: null,
-                actualOut: null,
-                status: 'off',
-                lateDuration: 0,
-                lembur: 0,
-                isLeave: false,
-                leaveId: null,
-                izinDuration: 0,
-                sakitDuration: 0,
-                deductDay: null,
-            );
+            return $this->buildRecord($roster, $dateStr, null, null, null, null, 'off', 0, 0);
         }
 
         // b. Cuti / Izin / Sakit
         if ($isLeave && $leaveCode) {
-            $izinDur  = ($leaveType?->category === 'permit') ? 1 : 0;
-            $sakitDur = ($leaveType?->category === 'sick') ? 1 : 0;
-            $deductDay = ($leaveType?->category === 'permit') ? 1 : (($leaveType?->category === 'leave') ? 0 : (($leaveType?->category === 'sick') ? 0 : null));
+            $izinDur   = ($leaveType?->category === 'permit') ? 1 : 0;
+            $sakitDur  = ($leaveType?->category === 'sick') ? 1 : 0;
+            $deductDay = match ($leaveType?->category) {
+                'permit' => 1,
+                'leave'  => 0,
+                'sick'   => 0,
+                default  => null,
+            };
 
-            return $this->buildRecord(
-                roster: $roster,
-                dateStr: $dateStr,
-                checkIn: null,
-                checkOut: null,
-                actualIn: null,
-                actualOut: null,
-                status: $leaveCode,
-                lateDuration: 0,
-                lembur: 0,
-                isLeave: true,
-                leaveId: $leave?->id,
-                izinDuration: $izinDur,
-                sakitDuration: $sakitDur,
-                deductDay: $deductDay,
-            );
+            return $this->buildRecord($roster, $dateStr, null, null, null, null, $leaveCode, 0, 0, true, $leave?->id, $izinDur, $sakitDur, $deductDay);
         }
 
-        // c. external_code != "L" → hari kerja
-        // Sabtu: lembur selalu 2 jam (120 menit), selainnya dari att_prepare (no cap)
-        $lemburMinutes = $isSaturday ? 120 : $overtime;
-
-        return $this->buildRecord(
-            roster: $roster,
-            dateStr: $dateStr,
-            checkIn: $checkIn,
-            checkOut: $checkOut,
-            actualIn: $schedulIn,
-            actualOut: $schedulOut,
-            status: 'present',
-            lateDuration: $lateMin,
-            lembur: $lemburMinutes,
-            isLeave: false,
-            leaveId: null,
-            izinDuration: 0,
-            sakitDuration: 0,
-            deductDay: null,
-        );
+        // c. Hari kerja → ambil apa adanya dari att_prepare
+        return $this->buildRecord($roster, $dateStr, $checkIn, $checkOut, $schedulIn, $schedulOut, 'present', $lateMin, $overtime);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -567,19 +408,15 @@ class AttendanceImportService
         string $status,
         int $lateDuration,
         int $lembur,
-        bool $isLeave,
-        ?int $leaveId,
-        int $izinDuration,
-        int $sakitDuration,
-        ?int $deductDay,
+        bool $isLeave = false,
+        ?int $leaveId = null,
+        int $izinDuration = 0,
+        int $sakitDuration = 0,
+        ?int $deductDay = null,
     ): array {
         $scanCount = 0;
-        if ($checkIn) {
-            $scanCount++;
-        }
-        if ($checkOut) {
-            $scanCount++;
-        }
+        if ($checkIn)  $scanCount++;
+        if ($checkOut) $scanCount++;
 
         return [
             'company_id'               => 1,
@@ -625,8 +462,8 @@ class AttendanceImportService
             'izin_duration'      => $izinDuration,
             'sakit_duration'     => $sakitDuration,
             'lembur_calc'        => $lembur > 0 ? round($lembur / 60, 2) : 0,
-            'lm'                 => 0,
-            'lm_calc'            => null,
+            'lm'                 => 0,   // selalu 0
+            'lm_calc'            => 0,   // selalu 0
             'created_at'         => now(),
             'updated_at'         => now(),
         ];
@@ -637,8 +474,7 @@ class AttendanceImportService
     // ═══════════════════════════════════════════════════════════════
 
     /**
-     * Load att_prepares untuk semua roster, return map: key = "employee_id_date"
-     * → array check_in, check_out, overtime, late_minutes.
+     * Load att_prepares → map: key = "employee_id_date"
      */
     protected function loadPreparesMap($rosters): array
     {
@@ -651,11 +487,7 @@ class AttendanceImportService
         $prepares = DB::table('att_prepares')
             ->whereIn('employee_id', $employeeIds)
             ->whereBetween('date', [$this->startDate, $this->endDate])
-            ->get([
-                'employee_id', 'date',
-                'check_in', 'check_out',
-                'overtime', 'late_minutes',
-            ]);
+            ->get(['employee_id', 'date', 'check_in', 'check_out', 'overtime', 'late_minutes']);
 
         $map = [];
         foreach ($prepares as $p) {
