@@ -71,11 +71,11 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
             $joinDateStr = $r['join_year'];
         }
 
-        // L/M dalam jam (÷60, 1 desimal)
-        $lm = !empty($r['lm']) ? round($r['lm'] / 60, 1) : 0;
+        // L/M dalam jam (1 desimal)
+        $lm = !empty($r['lm']) ? round($r['lm'], 1) : 0;
 
-        // Lbr Hitung (menit → jam, 1 desimal)
-        $lemburCount = !empty($r['lembur_count']) ? round($r['lembur_count'] / 60, 1) : 0;
+        // Lbr Hitung (jam, 1 desimal)
+        $lemburCount = !empty($r['lembur_count']) ? round($r['lembur_count'], 1) : 0;
 
         return [
             $no,                                        // A — No

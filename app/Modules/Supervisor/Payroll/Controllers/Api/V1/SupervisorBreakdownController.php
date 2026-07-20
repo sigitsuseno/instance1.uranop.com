@@ -229,7 +229,7 @@ class SupervisorBreakdownController extends Controller
 
                         $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count();
                         $hariKerja   = $hkSegment - $deductDay;
-                        $lm          = (int) $segLogs->sum('lm');
+                        $lm          = (int) ($segLogs->sum('lm') / 60);
                         $lmCount     = (float) $segLogs->sum('lm_calc');
                         $lemburCount = (float) $segLogs->sum('lembur_calc');
                     }
@@ -502,11 +502,12 @@ class SupervisorBreakdownController extends Controller
                 $pph          = $cleanNum($row[28] ?? 0);
                 $gajiBersih   = $cleanNum($row[29] ?? 0);
 
-                // LM count = LM * 60 (konversi jam→menit, karena CSV simpan dalam jam)
-                $lmCount = round($lm * 60);
+                // LM: CSV dalam HARI → (hari × 8) jam, lalu (jam - 1) × 2
+                $lmHours = $lm * 8;
+                $lmCount = max(0, ($lmHours / 8)) * 14;
 
-                // Lembur count = LBR JAM * 60 (konversi jam→menit)
-                $lemburCount = round($lemburJam * 60);
+                // LBR JAM: CSV sudah dalam JAM → langsung pakai
+                $lemburCount = $lemburJam;
 
                 // ── Cari record existing ──
                 $breakdown = SupervisorBreakdown::where('pay_period_id', $period->id)
@@ -526,7 +527,7 @@ class SupervisorBreakdownController extends Controller
                     'tj_masa_kerja' => $tjMasaKerja,
                     'tunjangan'     => $tunjangan,
                     'hari_kerja'    => $hariKerja,
-                    'lm'            => round($lm * 60),
+                    'lm'            => $lmHours,
                     'lm_count'      => $lmCount,
                     'lembur_count'  => $lemburCount,
                     'gaji'          => $gaji,
@@ -724,7 +725,7 @@ class SupervisorBreakdownController extends Controller
                 $joinDateStr = Carbon::parse($joinDate)->format('d/m/Y');
             }
 
-            $lm = !empty($r->lm) ? round($r->lm / 60, 1) : 0;
+            $lm = !empty($r->lm) ? round($r->lm, 1) : 0;
             $lemburCount = !empty($r->lembur_count) ? round($r->lembur_count, 1) : 0;
 
             // Bagian / Jabatan digabung
