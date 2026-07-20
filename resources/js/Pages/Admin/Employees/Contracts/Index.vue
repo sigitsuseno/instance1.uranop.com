@@ -187,7 +187,7 @@ function exportContracts() {
   if (searchQuery.value) params.set('search', searchQuery.value)
   if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
   if (contractStatusFilter.value) params.set('status', contractStatusFilter.value)
-  window.open(`/api/employees/contracts/export?${params.toString()}`, '_blank')
+  window.open(`/api/v1/employees/contracts/export?${params.toString()}`, '_blank')
 }
 
 // ========== HELPERS ==========
