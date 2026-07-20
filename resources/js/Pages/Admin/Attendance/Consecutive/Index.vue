@@ -27,13 +27,20 @@
     <!-- Filter Bar -->
     <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
           <label class="text-sm font-medium whitespace-nowrap">Periode</label>
           <select v-model="selectedPeriod"
             class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-elevated) text-sm min-w-[280px]"
             @change="fetchList" :disabled="isLoading">
             <option v-for="p in payPeriods" :key="p.id" :value="p.id">{{ p.label }}</option>
           </select>
+          <label class="text-sm font-medium whitespace-nowrap ml-2">Karyawan</label>
+          <SearchableSelect
+            v-model="filterEmployeeId"
+            :options="employeeSelectOptions"
+            placeholder="Cari nama atau kode karyawan..."
+            class="min-w-[240px]"
+          />
         </div>
         <div class="flex gap-2">
           <select v-model="filterType"
@@ -188,7 +195,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 import SearchableSelect from '@/Components/SearchableSelect.vue'
@@ -203,10 +210,14 @@ const isLoading = ref(true)
 const isSaving = ref(false)
 const selectedPeriod = ref('current')
 const filterType = ref('')
+const filterEmployeeId = ref('')
 const streaks = ref([])
 const pagination = ref({ currentPage: 1, lastPage: 1 })
 const payPeriods = ref([])
 const employeeOptions = ref([])
+
+// ── Watch filterEmployeeId → fetchList
+watch(filterEmployeeId, () => fetchList())
 
 // ── Modal ──
 const showModal = ref(false)
@@ -263,6 +274,7 @@ async function fetchList(page = 1) {
     const { start, end } = getPeriodDates()
     const params = new URLSearchParams({ start_date: start, end_date: end, per_page: '50', page: String(page) })
     if (filterType.value) params.set('type', filterType.value)
+    if (filterEmployeeId.value) params.set('employee_id', filterEmployeeId.value)
     const res = await get(`/api/v1/attendance/consecutive?${params}`)
     const p = res.data || {}
     streaks.value = p.data || []
