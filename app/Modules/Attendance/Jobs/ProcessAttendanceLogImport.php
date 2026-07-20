@@ -3,6 +3,7 @@
 namespace App\Modules\Attendance\Jobs;
 
 use App\Modules\Attendance\Imports\AttendanceLogImport;
+use App\Modules\Attendance\Imports\AttendanceRawLogImport;
 use App\Modules\Attendance\Models\RawLog;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -12,6 +13,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
+use PhpOffice\PhpSpreadsheet\IOFactory;
 use Throwable;
 
 class ProcessAttendanceLogImport implements ShouldQueue
@@ -62,21 +64,29 @@ class ProcessAttendanceLogImport implements ShouldQueue
                 ]);
             }
 
-            // Run import
-            $import = new AttendanceLogImport($this->importBatch, $this->fileName);
+            // Auto-detect format: RAW (fingerprint machine) vs PIVOTED (old format)
+            $detectedFormat = $this->detectFormat();
+            $import = $this->createImporter($detectedFormat);
+
+            Log::info('Detected import format', [
+                'batch'  => $this->importBatch,
+                'format' => $detectedFormat,
+            ]);
+
             Excel::import($import, $this->filePath);
 
             $result = [
-                'status'        => 'completed',
-                'success'       => true,
-                'inserted'      => $import->getInserted(),
-                'total_errors'  => count($import->getErrors()),
-                'total_warnings'=> count($import->getWarnings()),
-                'errors'        => $import->getErrors(),
-                'warnings'      => $import->getWarnings(),
-                'batch'         => $this->importBatch,
-                'mode'          => $this->mode,
-                'file'          => $this->fileName,
+                'status'         => 'completed',
+                'success'        => true,
+                'inserted'       => $import->getInserted(),
+                'total_errors'   => count($import->getErrors()),
+                'total_warnings' => count($import->getWarnings()),
+                'errors'         => $import->getErrors(),
+                'warnings'       => $import->getWarnings(),
+                'batch'          => $this->importBatch,
+                'mode'           => $this->mode,
+                'file'           => $this->fileName,
+                'format'         => $detectedFormat,
             ];
 
             // Store result in cache (24 hours)
@@ -89,6 +99,7 @@ class ProcessAttendanceLogImport implements ShouldQueue
 
             Log::info('Import log absensi selesai', [
                 'batch'    => $this->importBatch,
+                'format'   => $detectedFormat,
                 'inserted' => $import->getInserted(),
                 'errors'   => count($import->getErrors()),
                 'warnings' => count($import->getWarnings()),
@@ -117,6 +128,71 @@ class ProcessAttendanceLogImport implements ShouldQueue
 
             throw $e;
         }
+    }
+
+    /**
+     * Detect file format by reading the first few rows' headers.
+     * Returns 'raw' for fingerprint machine format, 'pivoted' for the old format.
+     */
+    protected function detectFormat(): string
+    {
+        try {
+            $spreadsheet = IOFactory::load($this->filePath);
+            $worksheet   = $spreadsheet->getActiveSheet();
+
+            // Check first 5 rows for header
+            $headerRow = null;
+            foreach ($worksheet->getRowIterator(1, 5) as $row) {
+                $rowValues = [];
+                $cellIterator = $row->getCellIterator();
+                $cellIterator->setIterateOnlyExistingCells(false);
+                foreach ($cellIterator as $cell) {
+                    $rowValues[] = $cell->getValue();
+                }
+
+                // Skip empty rows
+                $nonEmpty = array_filter($rowValues, fn ($v) => $v !== null && $v !== '');
+                if (empty($nonEmpty)) {
+                    continue;
+                }
+
+                $headerRow = $rowValues;
+                break;
+            }
+
+            // Dispose spreadsheet to free memory
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+
+            if (empty($headerRow)) {
+                return 'pivoted'; // default to old format
+            }
+
+            if (AttendanceRawLogImport::isRawFormat($headerRow)) {
+                return 'raw';
+            }
+
+            return 'pivoted';
+        } catch (Throwable $e) {
+            Log::warning('Format detection failed, defaulting to pivoted', [
+                'batch' => $this->importBatch,
+                'error' => $e->getMessage(),
+            ]);
+
+            return 'pivoted';
+        }
+    }
+
+    /**
+     * Create the appropriate importer based on detected format.
+     */
+    protected function createImporter(string $format): AttendanceLogImport|AttendanceRawLogImport
+    {
+        if ($format === 'raw') {
+            return new AttendanceRawLogImport($this->importBatch, $this->fileName);
+        }
+
+        return new AttendanceLogImport($this->importBatch, $this->fileName);
     }
 
     /**

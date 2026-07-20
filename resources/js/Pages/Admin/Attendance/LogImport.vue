@@ -12,11 +12,43 @@
       <BaseCard>
         <div class="space-y-4">
           <div>
-            <h3 class="font-semibold text-(--text-main) mb-1">Panduan Import</h3>
-            <p class="text-sm text-(--text-muted)">
-              Unggah file log absensi dengan format <strong>.xlsx</strong> atau <strong>.csv</strong>.
-              File harus memiliki kolom: <strong>NIP, Nama, Tanggal, Scan 1-4</strong>.
-            </p>
+            <h3 class="font-semibold text-(--text-main) mb-3">Panduan Import</h3>
+
+            <!-- Format selector -->
+            <div class="flex flex-wrap items-center gap-4 mb-3">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" v-model="importFormat" value="auto" class="text-(--primary)" />
+                <span class="text-sm font-medium text-(--text-main)">Auto Detect</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" v-model="importFormat" value="raw" class="text-(--primary)" />
+                <span class="text-sm font-medium text-(--text-main)">Raw — Mesin Fingerprint</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" v-model="importFormat" value="pivoted" class="text-(--primary)" />
+                <span class="text-sm font-medium text-(--text-main)">Pivoted — Template Rekap</span>
+              </label>
+            </div>
+
+            <!-- Format info -->
+            <div class="p-3 rounded-md bg-(--bg-elevated) border border-(--border-soft)">
+              <template v-if="importFormat === 'raw'">
+                <p class="text-xs text-(--text-muted)">
+                  <strong>Raw:</strong> Satu baris = satu kali scan. Kolom: <strong>Tanggal scan, Tanggal, Jam, PIN, NIP, Nama, Jabatan, Departemen, Kantor, Verifikasi, I/O, Workcode, SN, Mesin</strong>
+                </p>
+              </template>
+              <template v-else-if="importFormat === 'pivoted'">
+                <p class="text-xs text-(--text-muted)">
+                  <strong>Pivoted:</strong> Satu baris = satu karyawan per hari. Kolom: <strong>PIN, NIP, Nama, ... , Tanggal, Scan 1, Scan 2, Scan 3, Scan 4</strong>
+                </p>
+              </template>
+              <template v-else>
+                <p class="text-xs text-(--text-muted)">
+                  <strong>Auto Detect:</strong> Sistem akan membaca header file dan otomatis memilih format yang sesuai.
+                  Format Raw dikenali dari header: <strong>Tanggal scan, I/O, SN</strong>.
+                </p>
+              </template>
+            </div>
           </div>
 
           <div class="flex items-center gap-3">
@@ -112,6 +144,10 @@
             </div>
             <div v-if="importResult.inserted !== undefined" class="mt-1 text-sm text-(--text-muted)">
               {{ importResult.inserted }} data berhasil diimport.
+              <span v-if="importResult.format" class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium"
+                :class="importResult.format === 'raw' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'">
+                {{ importResult.format === 'raw' ? 'Format Raw' : 'Format Pivoted' }}
+              </span>
               <span v-if="importResult.total_errors > 0" class="text-red-600"> ({{ importResult.total_errors }} error)</span>
               <span v-if="importResult.total_warnings > 0" class="text-yellow-600"> ({{ importResult.total_warnings }} warning)</span>
             </div>
@@ -160,6 +196,7 @@ const selectedFile = ref(null)
 const dragOver = ref(false)
 const importing = ref(false)
 const importMode = ref('create')
+const importFormat = ref('auto')
 const importResult = ref(null)
 
 let pollTimer = null
@@ -210,6 +247,7 @@ async function handleImport() {
     const formData = new FormData()
     formData.append('file', selectedFile.value)
     formData.append('mode', importMode.value)
+    formData.append('format', importFormat.value)
 
     const response = await post('/api/v1/attendance/logs/import', formData)
 
