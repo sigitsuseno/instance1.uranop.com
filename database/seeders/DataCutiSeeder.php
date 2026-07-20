@@ -350,7 +350,7 @@ class DataCutiSeeder extends Seeder
      */
     protected function mapEmployees(): void
     {
-        $employees = Employee::where('is_active', true)->get();
+        $employees = Employee::orderBy('id', 'asc')->get();
 
         foreach ($employees as $emp) {
             if ($emp->nip) {

@@ -12,6 +12,8 @@ class SisaCutiDes2025Seeder extends Seeder
 {
     protected $csvFile = 'SISA CUTI DES 2025.csv';
 
+    protected int $periodId = 1; // Periode 2025-2026
+
     /**
      * CSV columns: NIP;Kode Karyawan;Nama Lengkap;Sisa Cuti
      */
@@ -50,10 +52,8 @@ class SisaCutiDes2025Seeder extends Seeder
         $header = array_shift($rows);
         echo "Header: " . implode(' | ', $header) . "\n";
 
-        $updatedEmployeeCode = 0;
         $updatedLeaveBalance = 0;
         $employeesNotFound = [];
-        $rowsSkipped = 0;
 
         foreach ($rows as $rowIndex => $row) {
             if (count($row) < 4) {
@@ -66,7 +66,6 @@ class SisaCutiDes2025Seeder extends Seeder
             $sisaCuti     = (int) trim($row[3]);
 
             if (empty($nip) || $nip === 'NIP') {
-                $rowsSkipped++;
                 continue;
             }
 
@@ -80,25 +79,17 @@ class SisaCutiDes2025Seeder extends Seeder
                 continue;
             }
 
-            // 1. Update employee_code dari "Kode Karyawan"
-            if (! empty($kodeKaryawan) && $employee->employee_code !== $kodeKaryawan) {
-                $employee->employee_code = $kodeKaryawan;
-                $employee->save();
-                $updatedEmployeeCode++;
-            }
-
-            // 2. Update/Create employee_leave amount dari "Sisa Cuti"
-            $this->updateLeaveBalance($employee->id, $leaveType->id, $sisaCuti);
+            // Update employee_leave amount dari "Sisa Cuti"
+            $this->updateLeaveBalance($employee->id, $leaveType->id, $sisaCuti, $this->periodId);
             $updatedLeaveBalance++;
 
             if (($rowIndex + 1) % 50 === 0) {
-                echo "  Diproses " . ($rowIndex + 1) . " baris... (employee_code: {$updatedEmployeeCode}, leave: {$updatedLeaveBalance})\n";
+                echo "  Diproses " . ($rowIndex + 1) . " baris... (leave balance: {$updatedLeaveBalance})\n";
             }
         }
 
         echo "\n=== HASIL ===\n";
         echo "Total baris CSV: " . count($rows) . "\n";
-        echo "Employee code diupdate: {$updatedEmployeeCode}\n";
         echo "Leave balance diupdate: {$updatedLeaveBalance}\n";
 
         if (! empty($employeesNotFound)) {
@@ -116,12 +107,11 @@ class SisaCutiDes2025Seeder extends Seeder
      * leave_period_id = 1, leave_type = CT (Cuti Tahunan).
      * transaction_type = 'initial' untuk menandai saldo awal.
      */
-    protected function updateLeaveBalance(int $employeeId, int $leaveTypeId, int $amount): void
+    protected function updateLeaveBalance(int $employeeId, int $leaveTypeId, int $amount, int $periodId): void
     {
-        // Cari record existing untuk employee + leave_type + leave_period_id=1 + transaction_type='initial'
         $existing = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
-            ->where('leave_period_id', 1)
+            ->where('leave_period_id', $periodId)
             ->first();
 
         if ($existing) {
@@ -136,8 +126,9 @@ class SisaCutiDes2025Seeder extends Seeder
                 'uuid'             => (string) Str::uuid(),
                 'employee_id'      => $employeeId,
                 'leave_type_id'    => $leaveTypeId,
-                'leave_period_id'  => 1,
+                'leave_period_id'  => $periodId,
                 'reference_id'     => null,
+                'transaction_type' => 'initial',
                 'amount'           => $amount,
                 'description'      => 'Sisa Cuti Desember 2025',
                 'created_by'       => 1,

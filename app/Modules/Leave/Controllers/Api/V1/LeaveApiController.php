@@ -588,7 +588,7 @@ class LeaveApiController extends Controller
         ]);
 
         $period = LeavePeriod::findOrFail($validated['leave_period_id']);
-        $employees = Employee::where('is_active', 1)->get();
+        $employees = Employee::orderBy('id', 'asc')->get();
         $policy = LeavePolicy::findOrFail($validated['leave_policy_id']);
 
         $generatedCount = 0;
