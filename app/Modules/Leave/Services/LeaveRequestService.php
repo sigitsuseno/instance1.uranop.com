@@ -8,28 +8,75 @@ use App\Modules\Leave\Models\LeavePeriod;
 use App\Modules\Leave\Models\EmployeeLeave;
 use App\Modules\Leave\Models\LeaveChangeRequest;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Exception;
 
 class LeaveRequestService
 {
     /**
-     * Helper: Hitung saldo cuti yang sudah di-approve
+     * Ambil saldo Cuti Tahunan (CT) dari SINGLE record employee_leaves.
+     * Model: 1 employee + 1 leave_type + 1 period = 1 record.
      */
-    public function getAvailableBalance($employeeId, $leaveTypeId, $periodId)
+    public function getAvailableBalance($employeeId, $leaveTypeId, $periodId): int
     {
-        $additions = EmployeeLeave::where('employee_id', $employeeId)
+        $record = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
             ->where('leave_period_id', $periodId)
-            ->whereIn('transaction_type', ['increment', 'initial'])
-            ->sum('amount');
-            
-        $deductions = EmployeeLeave::where('employee_id', $employeeId)
+            ->first();
+
+        return $record ? (int) $record->amount : 0;
+    }
+
+    /**
+     * Ambil atau buat SINGLE balance record untuk Cuti Tahunan.
+     * Kalau belum ada → buat dengan amount default 12.
+     */
+    protected function getOrCreateBalanceRecord(int $employeeId, int $leaveTypeId, int $periodId): EmployeeLeave
+    {
+        $record = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
             ->where('leave_period_id', $periodId)
-            ->where('transaction_type', 'decrement')
-            ->sum('amount');
-            
-        return $additions - $deductions;
+            ->first();
+
+        if (! $record) {
+            $record = EmployeeLeave::create([
+                'uuid'             => (string) Str::uuid(),
+                'employee_id'      => $employeeId,
+                'leave_type_id'    => $leaveTypeId,
+                'leave_period_id'  => $periodId,
+                'transaction_type' => 'initial',
+                'amount'           => 12,
+                'description'      => 'Saldo awal Cuti Tahunan (auto)',
+                'created_by'       => 1,
+            ]);
+        }
+
+        return $record;
+    }
+
+    /**
+     * Decrement saldo pada SINGLE balance record.
+     * Return sisa saldo setelah decrement.
+     */
+    protected function decrementBalance(int $employeeId, int $leaveTypeId, int $periodId, int $days): int
+    {
+        $record = $this->getOrCreateBalanceRecord($employeeId, $leaveTypeId, $periodId);
+        $sisa = max(0, (int) $record->amount - $days);
+        $record->updateQuietly(['amount' => $sisa]);
+
+        return $sisa;
+    }
+
+    /**
+     * Increment/kembalikan saldo pada SINGLE balance record.
+     */
+    protected function incrementBalance(int $employeeId, int $leaveTypeId, int $periodId, int $days): int
+    {
+        $record = $this->getOrCreateBalanceRecord($employeeId, $leaveTypeId, $periodId);
+        $sisa = (int) $record->amount + $days;
+        $record->updateQuietly(['amount' => $sisa]);
+
+        return $sisa;
     }
 
     /**
@@ -40,7 +87,6 @@ class LeaveRequestService
     {
         $leaveType = $request->leaveType;
 
-        // Hanya untuk tipe cuti yang mengurangi jatah (balance_type = decrement)
         if ($leaveType && $leaveType->balance_type === 'decrement') {
             $sisa = $this->getAvailableBalance(
                 $request->employee_id,
@@ -57,22 +103,21 @@ class LeaveRequestService
     public function submitRequest(array $data)
     {
         $leaveType = LeaveType::findOrFail($data['leave_type_id']);
-        
+
         $period = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
         if (!$period) {
             throw new Exception('Tidak ada periode cuti yang aktif.');
         }
-        
-        // Validasi saldo jika cuti mengurangi jatah
+
+        // Validasi saldo jika cuti mengurangi jatah (CT)
         if ($leaveType->balance_type === 'decrement') {
             $available = $this->getAvailableBalance($data['employee_id'], $leaveType->id, $period->id);
-            
-            // Hitung juga pengajuan yang masih pending agar tidak overlap
+
             $pendingDays = LeaveRequest::where('employee_id', $data['employee_id'])
                 ->where('leave_type_id', $leaveType->id)
                 ->where('status', 'pending')
                 ->sum('days_requested');
-                
+
             if ($data['days_requested'] > ($available - $pendingDays)) {
                 throw new Exception('Saldo cuti tidak mencukupi atau masih ada pengajuan yang belum di-approve.');
             }
@@ -80,15 +125,15 @@ class LeaveRequestService
 
         return DB::transaction(function () use ($data, $period) {
             return LeaveRequest::create([
-                'employee_id' => $data['employee_id'],
-                'leave_type_id' => $data['leave_type_id'],
+                'employee_id'    => $data['employee_id'],
+                'leave_type_id'  => $data['leave_type_id'],
                 'leave_period_id' => $period->id,
-                'start_date' => $data['start_date'],
-                'end_date' => $data['end_date'],
+                'start_date'     => $data['start_date'],
+                'end_date'       => $data['end_date'],
                 'days_requested' => $data['days_requested'],
-                'reason' => $data['reason'] ?? null,
-                'note' => $data['note'] ?? null,
-                'status' => 'pending'
+                'reason'         => $data['reason'] ?? null,
+                'note'           => $data['note'] ?? null,
+                'status'         => 'pending',
             ]);
         });
     }
@@ -103,18 +148,16 @@ class LeaveRequestService
         }
 
         $leaveType = LeaveType::findOrFail($data['leave_type_id']);
-        
-        // Validasi saldo jika cuti mengurangi jatah
+
         if ($leaveType->balance_type === 'decrement') {
             $available = $this->getAvailableBalance($data['employee_id'], $leaveType->id, $request->leave_period_id);
-            
-            // Hitung pengajuan pending (exclude current request)
+
             $pendingDays = LeaveRequest::where('employee_id', $data['employee_id'])
                 ->where('leave_type_id', $leaveType->id)
                 ->where('status', 'pending')
                 ->where('id', '!=', $request->id)
                 ->sum('days_requested');
-                
+
             if ($data['days_requested'] > ($available - $pendingDays)) {
                 throw new Exception('Saldo cuti tidak mencukupi atau masih ada pengajuan yang belum di-approve.');
             }
@@ -122,12 +165,12 @@ class LeaveRequestService
 
         return DB::transaction(function () use ($request, $data) {
             $request->update([
-                'employee_id' => $data['employee_id'],
-                'leave_type_id' => $data['leave_type_id'],
-                'start_date' => $data['start_date'],
-                'end_date' => $data['end_date'],
+                'employee_id'    => $data['employee_id'],
+                'leave_type_id'  => $data['leave_type_id'],
+                'start_date'     => $data['start_date'],
+                'end_date'       => $data['end_date'],
                 'days_requested' => $data['days_requested'],
-                'reason' => $data['reason'] ?? null,
+                'reason'         => $data['reason'] ?? null,
             ]);
             return $request;
         });
@@ -138,14 +181,10 @@ class LeaveRequestService
      */
     public function approveRequest(LeaveRequest $request, $user)
     {
-        // Pengecekan role sesuai request user: "jika bukan superadmin dan hrmanager tidak bisa klik approve"
-        if (!$user->hasRole(['superadmin', 'hrmanager', 'hr'])) { // Asumsi ada role hr/hrmanager
-             // Kita pakai pengecekan string manual untuk aman jika Role namanya agak beda
-            $roles = $user->roles->pluck('name')->toArray();
-            $allowed = ['superadmin', 'hrmanager', 'hr_manager', 'hr'];
-            if (empty(array_intersect($roles, $allowed))) {
-                throw new Exception('Anda tidak memiliki akses untuk menyetujui pengajuan cuti.');
-            }
+        $roles = $user->roles->pluck('name')->toArray();
+        $allowed = ['superadmin', 'hrmanager', 'hr_manager', 'hr'];
+        if (empty(array_intersect($roles, $allowed))) {
+            throw new Exception('Anda tidak memiliki akses untuk menyetujui pengajuan cuti.');
         }
 
         if ($request->status !== 'pending') {
@@ -154,32 +193,25 @@ class LeaveRequestService
 
         DB::transaction(function () use ($request, $user) {
             $request->update([
-                'status' => 'approved',
+                'status'      => 'approved',
                 'approved_by' => $user->id,
                 'approved_at' => now(),
             ]);
 
-            // Jika tipe cuti ini mengurangi jatah, buat record deduksi di employee_leaves
             $leaveType = $request->leaveType;
+
+            // CT: UPDATE single balance record (decrement)
             if ($leaveType->balance_type === 'decrement') {
-                $period = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
-                if ($period) {
-                    EmployeeLeave::create([
-                        'employee_id' => $request->employee_id,
-                        'leave_type_id' => $leaveType->id,
-                        'leave_period_id' => $period->id,
-                        'reference_id' => $request->id,
-                        'transaction_type' => 'decrement',
-                        'amount' => $request->days_requested,
-                        'description' => 'Approval Pengajuan Cuti #' . $request->id,
-                        'created_by' => $user->id,
-                        'updated_by' => $user->id,
-                    ]);
-                }
+                $this->decrementBalance(
+                    $request->employee_id,
+                    $leaveType->id,
+                    $request->leave_period_id,
+                    $request->days_requested
+                );
             }
 
             // Update roster
-            $isLeave = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
+            $isLeave  = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
             $isPermit = ($leaveType->category === 'permit') ? 1 : 0;
 
             DB::table('sch_employee_shift_rosters')
@@ -187,13 +219,13 @@ class LeaveRequestService
                 ->whereBetween('date', [$request->start_date, $request->end_date])
                 ->update([
                     'external_code' => $leaveType->code,
-                    'is_leave' => $isLeave,
-                    'is_permit' => $isPermit,
-                    'leave_id' => $request->id,
-                    'updated_at' => now(),
+                    'is_leave'      => $isLeave,
+                    'is_permit'     => $isPermit,
+                    'leave_id'      => $request->id,
+                    'updated_at'    => now(),
                 ]);
 
-            // Sync sisa cuti setelah decrement
+            // Sync sisa_cuti
             $this->syncSisaCuti($request);
         });
 
@@ -213,7 +245,7 @@ class LeaveRequestService
             throw new Exception('Tidak ada periode cuti yang aktif.');
         }
 
-        // Validasi saldo jika cuti mengurangi jatah
+        // Validasi saldo CT
         if ($leaveType->balance_type === 'decrement') {
             $available = $this->getAvailableBalance($data['employee_id'], $leaveType->id, $period->id);
 
@@ -243,19 +275,14 @@ class LeaveRequestService
                 'approved_at'    => now(),
             ]);
 
-            // 2. Potong saldo (decrement)
+            // 2. CT: UPDATE single balance record (decrement)
             if ($leaveType->balance_type === 'decrement') {
-                EmployeeLeave::create([
-                    'employee_id'    => $data['employee_id'],
-                    'leave_type_id'  => $leaveType->id,
-                    'leave_period_id' => $period->id,
-                    'reference_id'   => $leaveRequest->id,
-                    'transaction_type' => 'decrement',
-                    'amount'         => $data['days_requested'],
-                    'description'    => 'Approval & Print Cuti #' . $leaveRequest->id,
-                    'created_by'     => $user->id,
-                    'updated_by'     => $user->id,
-                ]);
+                $this->decrementBalance(
+                    $data['employee_id'],
+                    $leaveType->id,
+                    $period->id,
+                    $data['days_requested']
+                );
             }
 
             // 3. Update roster
@@ -273,7 +300,7 @@ class LeaveRequestService
                     'updated_at'    => now(),
                 ]);
 
-            // Sync sisa cuti setelah decrement
+            // Sync sisa_cuti
             $this->syncSisaCuti($leaveRequest);
 
             return $leaveRequest;
@@ -296,17 +323,18 @@ class LeaveRequestService
         }
 
         $request->update([
-            'status' => 'rejected',
+            'status'           => 'rejected',
             'rejection_reason' => $reason,
-            'approved_by' => $user->id,
-            'approved_at' => now(),
+            'approved_by'      => $user->id,
+            'approved_at'      => now(),
         ]);
 
         return $request;
     }
 
     /**
-     * Batalkan pengajuan dan kembalikan kuota (Kompensasi)
+     * Batalkan pengajuan dan kembalikan kuota.
+     * CT: UPDATE single balance record (increment).
      */
     public function cancelRequest(LeaveRequest $request, $user)
     {
@@ -318,32 +346,21 @@ class LeaveRequestService
 
         DB::transaction(function () use ($request, $user) {
             $oldStatus = $request->status;
-            
-            $request->update([
-                'status' => 'cancelled',
-            ]);
 
-            // Jika sebelumnya sudah diapprove dan sudah memotong jatah, kembalikan jatahnya (increment)
+            $request->update(['status' => 'cancelled']);
+
+            // Jika sebelumnya approved dan CT → kembalikan saldo (UPDATE, bukan CREATE)
             if ($oldStatus === 'approved') {
                 $leaveType = $request->leaveType;
                 if ($leaveType->balance_type === 'decrement') {
-                    $period = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
-                    if ($period) {
-                        EmployeeLeave::create([
-                            'employee_id' => $request->employee_id,
-                            'leave_type_id' => $leaveType->id,
-                            'leave_period_id' => $period->id,
-                            'reference_id' => $request->id,
-                            'transaction_type' => 'increment', // KOMPENSASI PENGEMBALIAN
-                            'amount' => $request->days_requested,
-                            'description' => 'Kompensasi Pembatalan Cuti #' . $request->id,
-                            'created_by' => $user->id,
-                            'updated_by' => $user->id,
-                        ]);
+                    $this->incrementBalance(
+                        $request->employee_id,
+                        $leaveType->id,
+                        $request->leave_period_id,
+                        $request->days_requested
+                    );
 
-                        // Sync sisa cuti setelah pengembalian
-                        $this->syncSisaCuti($request);
-                    }
+                    $this->syncSisaCuti($request);
                 }
             }
         });
@@ -360,29 +377,29 @@ class LeaveRequestService
             throw new Exception('Hanya cuti yang sudah disetujui yang dapat diajukan perubahannya.');
         }
 
-        // Check if there is already a pending change request
         $hasPending = LeaveChangeRequest::where('leave_request_id', $originalRequest->id)
             ->where('status', 'pending')
             ->exists();
-            
+
         if ($hasPending) {
             throw new Exception('Sudah ada pengajuan perubahan cuti yang masih pending untuk cuti ini.');
         }
 
         return LeaveChangeRequest::create([
-            'leave_request_id' => $originalRequest->id,
-            'new_start_date' => $data['new_start_date'],
-            'new_end_date' => $data['new_end_date'],
+            'leave_request_id'   => $originalRequest->id,
+            'new_start_date'     => $data['new_start_date'],
+            'new_end_date'       => $data['new_end_date'],
             'new_days_requested' => $data['new_days_requested'],
-            'reason' => $data['reason'] ?? null,
-            'status' => 'pending',
-            'created_by' => $user->id,
-            'updated_by' => $user->id,
+            'reason'             => $data['reason'] ?? null,
+            'status'             => 'pending',
+            'created_by'         => $user->id,
+            'updated_by'         => $user->id,
         ]);
     }
 
     /**
-     * Approve pengajuan perubahan cuti
+     * Approve pengajuan perubahan cuti.
+     * CT: UPDATE single balance record (adjust diff days).
      */
     public function approveChangeRequest(LeaveChangeRequest $changeRequest, $user)
     {
@@ -399,15 +416,15 @@ class LeaveRequestService
         DB::transaction(function () use ($changeRequest, $user) {
             $originalRequest = $changeRequest->leaveRequest;
             $leaveType = $originalRequest->leaveType;
-            $period = LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->first();
+            $periodId  = $originalRequest->leave_period_id;
 
-            $oldDays = $originalRequest->days_requested;
-            $newDays = $changeRequest->new_days_requested;
+            $oldDays  = $originalRequest->days_requested;
+            $newDays  = $changeRequest->new_days_requested;
             $diffDays = $newDays - $oldDays;
 
-            // Validasi saldo jika tipe cuti ini mengurangi jatah dan butuh tambahan hari
+            // Validasi saldo jika butuh tambahan hari
             if ($leaveType->balance_type === 'decrement' && $diffDays > 0) {
-                $available = $this->getAvailableBalance($originalRequest->employee_id, $leaveType->id, $period->id);
+                $available = $this->getAvailableBalance($originalRequest->employee_id, $leaveType->id, $periodId);
                 if ($diffDays > $available) {
                     throw new Exception('Saldo cuti tidak mencukupi untuk penambahan hari pada perubahan cuti ini.');
                 }
@@ -415,32 +432,21 @@ class LeaveRequestService
 
             // 1. Update status change request
             $changeRequest->update([
-                'status' => 'approved',
+                'status'      => 'approved',
                 'approved_by' => $user->id,
                 'approved_at' => now(),
             ]);
 
-            // 2. Sesuaikan Ledger Balance (EmployeeLeave)
-            if ($leaveType->balance_type === 'decrement' && $diffDays != 0 && $period) {
-                $transactionType = $diffDays > 0 ? 'decrement' : 'increment';
-                $amount = abs($diffDays);
-                $desc = $diffDays > 0 
-                    ? 'Penambahan hari karena perubahan cuti #' . $originalRequest->id 
-                    : 'Pengembalian saldo karena perubahan cuti #' . $originalRequest->id;
+            // 2. CT: UPDATE single balance record (adjust diff)
+            if ($leaveType->balance_type === 'decrement' && $diffDays != 0) {
+                if ($diffDays > 0) {
+                    // Tambahan hari → decrement
+                    $this->decrementBalance($originalRequest->employee_id, $leaveType->id, $periodId, $diffDays);
+                } else {
+                    // Pengurangan hari → increment/kembalikan
+                    $this->incrementBalance($originalRequest->employee_id, $leaveType->id, $periodId, abs($diffDays));
+                }
 
-                EmployeeLeave::create([
-                    'employee_id' => $originalRequest->employee_id,
-                    'leave_type_id' => $leaveType->id,
-                    'leave_period_id' => $period->id,
-                    'reference_id' => $originalRequest->id,
-                    'transaction_type' => $transactionType,
-                    'amount' => $amount,
-                    'description' => $desc,
-                    'created_by' => $user->id,
-                    'updated_by' => $user->id,
-                ]);
-
-                // Sync sisa cuti setelah penyesuaian
                 $this->syncSisaCuti($originalRequest);
             }
 
@@ -450,22 +456,22 @@ class LeaveRequestService
                 ->where('leave_id', $originalRequest->id)
                 ->update([
                     'external_code' => null,
-                    'is_leave' => 0,
-                    'is_permit' => 0,
-                    'leave_id' => null,
-                    'updated_at' => now(),
+                    'is_leave'      => 0,
+                    'is_permit'     => 0,
+                    'leave_id'      => null,
+                    'updated_at'    => now(),
                 ]);
 
             // 4. Update Original Request
             $originalRequest->update([
-                'start_date' => $changeRequest->new_start_date,
-                'end_date' => $changeRequest->new_end_date,
+                'start_date'     => $changeRequest->new_start_date,
+                'end_date'       => $changeRequest->new_end_date,
                 'days_requested' => $changeRequest->new_days_requested,
-                'updated_by' => $user->id,
+                'updated_by'     => $user->id,
             ]);
 
             // 5. Apply new rosters
-            $isLeave = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
+            $isLeave  = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
             $isPermit = ($leaveType->category === 'permit') ? 1 : 0;
 
             DB::table('sch_employee_shift_rosters')
@@ -473,10 +479,10 @@ class LeaveRequestService
                 ->whereBetween('date', [$changeRequest->new_start_date, $changeRequest->new_end_date])
                 ->update([
                     'external_code' => $leaveType->code,
-                    'is_leave' => $isLeave,
-                    'is_permit' => $isPermit,
-                    'leave_id' => $originalRequest->id,
-                    'updated_at' => now(),
+                    'is_leave'      => $isLeave,
+                    'is_permit'     => $isPermit,
+                    'leave_id'      => $originalRequest->id,
+                    'updated_at'    => now(),
                 ]);
         });
 
@@ -499,10 +505,10 @@ class LeaveRequestService
         }
 
         $changeRequest->update([
-            'status' => 'rejected',
+            'status'           => 'rejected',
             'rejection_reason' => $reason,
-            'approved_by' => $user->id,
-            'approved_at' => now(),
+            'approved_by'      => $user->id,
+            'approved_at'      => now(),
         ]);
 
         return $changeRequest;

@@ -338,18 +338,11 @@ class DataCutiSeeder extends Seeder
      */
     protected function getCurrentBalance(int $employeeId, int $leaveTypeId, int $periodId): int
     {
-        $additions = EmployeeLeave::where('employee_id', $employeeId)
+        $balance = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
             ->where('leave_period_id', $periodId)
             ->sum('amount');
-
-        $deductions = EmployeeLeave::where('employee_id', $employeeId)
-            ->where('leave_type_id', $leaveTypeId)
-            ->where('leave_period_id', $periodId)
-            ->where('transaction_type', 'decrement')
-            ->sum('amount');
-
-        return (int) ($additions - $deductions);
+        return (int) ($balance);
     }
 
     /**
