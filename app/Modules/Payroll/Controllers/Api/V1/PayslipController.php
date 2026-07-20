@@ -68,16 +68,38 @@ class PayslipController extends Controller
         $employeeIds = $records->pluck('employee_id')->unique()->toArray();
         $leaveBalances = [];
         if ($leavePeriod && !empty($employeeIds)) {
-            $rawBalances = \App\Modules\Leave\Models\EmployeeLeave::whereIn('employee_id', $employeeIds)
-                ->where('leave_period_id', $leavePeriod->id)
-                ->select('employee_id',
-                    DB::raw("SUM(CASE WHEN transaction_type='increment' THEN amount ELSE 0 END) as total_in"),
-                    DB::raw("SUM(CASE WHEN transaction_type='decrement' THEN amount ELSE 0 END) as total_out")
-                )
-                ->groupBy('employee_id')
-                ->get();
-            foreach ($rawBalances as $b) {
-                $leaveBalances[$b->employee_id] = (int) ($b->total_in - $b->total_out);
+            // Ambil sisa_cuti dari leave_request terakhir per employee di periode aktif
+            $ct = \App\Modules\Leave\Models\LeaveType::where('code', 'CT')->first();
+            if ($ct) {
+                $sub = \App\Modules\Leave\Models\LeaveRequest::selectRaw('MAX(id)')
+                    ->where('leave_period_id', $leavePeriod->id)
+                    ->where('leave_type_id', $ct->id)
+                    ->whereNotNull('sisa_cuti')
+                    ->whereIn('employee_id', $employeeIds)
+                    ->groupBy('employee_id');
+
+                $latestRequests = \App\Modules\Leave\Models\LeaveRequest::whereIn('id', $sub)
+                    ->pluck('sisa_cuti', 'employee_id');
+
+                foreach ($latestRequests as $empId => $sisa) {
+                    $leaveBalances[$empId] = (int) $sisa;
+                }
+            }
+
+            // Fallback: karyawan yang belum punya leave_request, cek dari EmployeeLeave
+            $missingIds = array_diff($employeeIds, array_keys($leaveBalances));
+            if (!empty($missingIds)) {
+                $rawBalances = \App\Modules\Leave\Models\EmployeeLeave::whereIn('employee_id', $missingIds)
+                    ->where('leave_period_id', $leavePeriod->id)
+                    ->select('employee_id',
+                        \DB::raw("SUM(CASE WHEN transaction_type IN ('increment','initial') THEN amount ELSE 0 END) as total_in"),
+                        \DB::raw("SUM(CASE WHEN transaction_type='decrement' THEN amount ELSE 0 END) as total_out")
+                    )
+                    ->groupBy('employee_id')
+                    ->get();
+                foreach ($rawBalances as $b) {
+                    $leaveBalances[$b->employee_id] = (int) ($b->total_in - $b->total_out);
+                }
             }
         }
 

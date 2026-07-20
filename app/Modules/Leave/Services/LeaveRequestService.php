@@ -20,7 +20,7 @@ class LeaveRequestService
         $additions = EmployeeLeave::where('employee_id', $employeeId)
             ->where('leave_type_id', $leaveTypeId)
             ->where('leave_period_id', $periodId)
-            ->where('transaction_type', 'increment')
+            ->whereIn('transaction_type', ['increment', 'initial'])
             ->sum('amount');
             
         $deductions = EmployeeLeave::where('employee_id', $employeeId)
@@ -30,6 +30,25 @@ class LeaveRequestService
             ->sum('amount');
             
         return $additions - $deductions;
+    }
+
+    /**
+     * Hitung sisa cuti setelah transaksi & update di leave_requests.sisa_cuti.
+     * Dipanggil setelah approve / cancel / change yang mengubah saldo.
+     */
+    protected function syncSisaCuti(LeaveRequest $request): void
+    {
+        $leaveType = $request->leaveType;
+
+        // Hanya untuk tipe cuti yang mengurangi jatah (balance_type = decrement)
+        if ($leaveType && $leaveType->balance_type === 'decrement') {
+            $sisa = $this->getAvailableBalance(
+                $request->employee_id,
+                $request->leave_type_id,
+                $request->leave_period_id
+            );
+            $request->updateQuietly(['sisa_cuti' => $sisa]);
+        }
     }
 
     /**
@@ -159,8 +178,7 @@ class LeaveRequestService
                 }
             }
 
-            // Update sch_employee_shift_rosters: set external_code sesuai kode leave type
-            // Kalo ga ada roster record → update 0 rows (skip, no error)
+            // Update roster
             $isLeave = in_array($leaveType->category, ['leave', 'sick', 'special']) ? 1 : 0;
             $isPermit = ($leaveType->category === 'permit') ? 1 : 0;
 
@@ -174,6 +192,9 @@ class LeaveRequestService
                     'leave_id' => $request->id,
                     'updated_at' => now(),
                 ]);
+
+            // Sync sisa cuti setelah decrement
+            $this->syncSisaCuti($request);
         });
 
         return $request;
@@ -252,6 +273,9 @@ class LeaveRequestService
                     'updated_at'    => now(),
                 ]);
 
+            // Sync sisa cuti setelah decrement
+            $this->syncSisaCuti($leaveRequest);
+
             return $leaveRequest;
         });
     }
@@ -316,6 +340,9 @@ class LeaveRequestService
                             'created_by' => $user->id,
                             'updated_by' => $user->id,
                         ]);
+
+                        // Sync sisa cuti setelah pengembalian
+                        $this->syncSisaCuti($request);
                     }
                 }
             }
@@ -412,6 +439,9 @@ class LeaveRequestService
                     'created_by' => $user->id,
                     'updated_by' => $user->id,
                 ]);
+
+                // Sync sisa cuti setelah penyesuaian
+                $this->syncSisaCuti($originalRequest);
             }
 
             // 3. Clear old rosters

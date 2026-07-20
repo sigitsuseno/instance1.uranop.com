@@ -22,6 +22,7 @@ class LeaveRequest extends Model
         'start_date',
         'end_date',
         'days_requested',
+        'sisa_cuti',
         'reason',
         'note',
         'status',

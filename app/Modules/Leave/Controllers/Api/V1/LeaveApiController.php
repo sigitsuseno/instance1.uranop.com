@@ -178,23 +178,8 @@ class LeaveApiController extends Controller
             'employee.department', 'employee.position', 'leaveType', 'leavePeriod'
         ])->findOrFail($id);
 
-        // Hitung sisa cuti tahunan
-        // Rumus: 12 - total_leave
-        // total_leave = SUM days_requested dari semua leave_request CT milik employee,
-        // dengan end_date dalam rentang leave_period->start_date s/d leave_request->end_date
-        // (termasuk leave_request yang sedang dicetak — jadi tiap request punya sisa unique)
-        $ct = LeaveType::where('code', 'CT')->first();
-        $sisaCuti = 0;
-        if ($ct && $leaveRequest->leave_period_id && $leaveRequest->leavePeriod) {
-            $totalLeave = LeaveRequest::where('employee_id', $leaveRequest->employee_id)
-                ->where('leave_type_id', $ct->id)
-                ->where('status', 'approved')
-                ->whereDate('end_date', '>=', $leaveRequest->leavePeriod->start_date->toDateString())
-                ->whereDate('end_date', '<=', $leaveRequest->end_date->toDateString())
-                ->sum('days_requested');
-
-            $sisaCuti = 12 - (int)$totalLeave;
-        }
+        // Sisa cuti diambil langsung dari leave_request->sisa_cuti
+        $sisaCuti = $leaveRequest->sisa_cuti;
 
         $company  = Company::first();
         $logoUrl  = null;
