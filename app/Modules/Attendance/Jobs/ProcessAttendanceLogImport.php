@@ -29,12 +29,14 @@ class ProcessAttendanceLogImport implements ShouldQueue
      * @param  string  $fileName   Original filename
      * @param  string  $importBatch  Unique batch identifier
      * @param  string  $mode        'create' | 'replace'
+     * @param  string  $format      'auto' | 'raw' | 'pivoted'
      */
     public function __construct(
         protected string $filePath,
         protected string $fileName,
         protected string $importBatch,
-        protected string $mode = 'create'
+        protected string $mode = 'create',
+        protected string $format = 'auto'
     ) {}
 
     /**
@@ -133,9 +135,19 @@ class ProcessAttendanceLogImport implements ShouldQueue
     /**
      * Detect file format by reading the first few rows' headers.
      * Returns 'raw' for fingerprint machine format, 'pivoted' for the old format.
+     * If $this->format is not 'auto', returns the explicit format directly.
      */
     protected function detectFormat(): string
     {
+        // Use explicit format if specified
+        if ($this->format !== 'auto') {
+            Log::info('Using explicit format', [
+                'batch'  => $this->importBatch,
+                'format' => $this->format,
+            ]);
+
+            return $this->format;
+        }
         try {
             $spreadsheet = IOFactory::load($this->filePath);
             $worksheet   = $spreadsheet->getActiveSheet();

@@ -30,6 +30,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
         // Global Contracts
         Route::prefix('contracts')->group(function () {
             Route::get('/stats', [ContractApiController::class, 'stats'])->name('employees.contracts.global.stats');
+            Route::get('/export', [ContractApiController::class, 'export'])->name('employees.contracts.global.export');
             Route::post('/import', [ContractApiController::class, 'import'])->name('employees.contracts.global.import');
         });
 

@@ -181,4 +181,22 @@ class ContractApiController extends Controller
             'stats' => $result['stats']
         ]);
     }
+
+    /**
+     * GET /api/contracts/export
+     */
+    public function export(Request $request): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $filters = $request->only([
+            'search',
+            'employee_id',
+            'contract_type',
+            'status',
+        ]);
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Modules\Employee\Exports\EmployeeContractExport($filters),
+            'kontrak_kerja_' . date('Y-m-d_His') . '.xlsx'
+        );
+    }
 }

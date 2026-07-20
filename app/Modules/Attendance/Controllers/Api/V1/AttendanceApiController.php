@@ -60,13 +60,15 @@ class AttendanceApiController extends Controller
     public function import(Request $request): JsonResponse
     {
         $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls,csv|max:20480',
-            'mode' => 'nullable|in:create,replace',
+            'file'   => 'required|file|mimes:xlsx,xls,csv|max:20480',
+            'mode'   => 'nullable|in:create,replace',
+            'format' => 'nullable|in:auto,raw,pivoted',
         ]);
 
         try {
-            $file = $request->file('file');
-            $mode = $request->input('mode', 'create');
+            $file   = $request->file('file');
+            $mode   = $request->input('mode', 'create');
+            $format = $request->input('format', 'auto');
 
             // Create temp directory if not exists
             $tempDir = storage_path('app/temp/imports');
@@ -86,7 +88,8 @@ class AttendanceApiController extends Controller
                 $fullPath,
                 $file->getClientOriginalName(),
                 $batch,
-                $mode
+                $mode,
+                $format
             );
 
             $modeText = $mode === 'replace' ? 'Replace (hapus data lama)' : 'Create (tambah baru)';
