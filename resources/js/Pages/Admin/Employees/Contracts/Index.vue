@@ -187,7 +187,27 @@ function exportContracts() {
   if (searchQuery.value) params.set('search', searchQuery.value)
   if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
   if (contractStatusFilter.value) params.set('status', contractStatusFilter.value)
-  window.open(`/api/v1/employees/contracts/export?${params.toString()}`, '_blank')
+
+  // Gunakan fetch dengan credential biar Sanctum cookie ikut
+  fetch(`/api/v1/employees/contracts/export?${params.toString()}`, {
+    credentials: 'include',
+  })
+    .then(res => {
+      if (!res.ok) throw new Error('Export gagal')
+      return res.blob()
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `kontrak_kerja_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      notification.addNotification('Export kontrak berhasil didownload.', 'success')
+    })
+    .catch(() => {
+      notification.addNotification('Gagal export kontrak. Pastikan anda sudah login.', 'error')
+    })
 }
 
 // ========== HELPERS ==========
