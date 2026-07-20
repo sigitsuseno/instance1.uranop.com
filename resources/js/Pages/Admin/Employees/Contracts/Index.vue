@@ -188,10 +188,11 @@ function exportContracts() {
   if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
   if (contractStatusFilter.value) params.set('status', contractStatusFilter.value)
 
-  // Gunakan fetch dengan credential biar Sanctum cookie ikut
-  fetch(`/api/v1/employees/contracts/export?${params.toString()}`, {
-    credentials: 'include',
-  })
+  const headers = { 'Accept': 'application/json' }
+  const token = localStorage.getItem('token')
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  fetch(`/api/v1/employees/contracts/export?${params.toString()}`, { headers })
     .then(res => {
       if (!res.ok) throw new Error('Export gagal')
       return res.blob()
