@@ -182,6 +182,14 @@ async function markCompensationPaid(contractId, employeeId) {
   }
 }
 
+function exportContracts() {
+  const params = new URLSearchParams()
+  if (searchQuery.value) params.set('search', searchQuery.value)
+  if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
+  if (contractStatusFilter.value) params.set('status', contractStatusFilter.value)
+  window.open(`/api/employees/contracts/export?${params.toString()}`, '_blank')
+}
+
 // ========== HELPERS ==========
 const getInitials = (name) => {
   if (!name) return '?'
@@ -268,6 +276,12 @@ onMounted(() => {
             <i class="bx bx-upload text-lg"></i>
           </template>
           Import Kontrak
+        </BaseButton>
+        <BaseButton v-if="permission.can('view employees')" variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200" @click="exportContracts">
+          <template #icon-left>
+            <i class="bx bx-export text-lg"></i>
+          </template>
+          Export
         </BaseButton>
       </div>
     </div>
