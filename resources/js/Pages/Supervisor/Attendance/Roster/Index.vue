@@ -128,7 +128,7 @@
             <th v-for="d in visibleDates" :key="d.date"
               class="px-3 py-3 text-center text-xs font-medium text-(--text-muted) uppercase tracking-wider min-w-[100px]"
               :class="{ 'bg-red-50/30 dark:bg-red-900/10': d.isWeekend, 'ring-2 ring-inset ring-indigo-500': d.date === activeDate }">
-              <div>{{ d.day }} {{ monthNames[new Date(d.date).getMonth()] }}</div>
+              <div>{{ d.day }} {{ monthNames[parseMonth(d.date)] }}</div>
               <div class="text-[10px]">{{ d.dayName }}</div>
             </th>
           </tr>
@@ -451,8 +451,10 @@ function onPeriodChange() {
 
 // ── Date Navigation ──
 function shiftWindow(dir) {
-  const newStart = dateWindowStart.value + (dir * WINDOW_SIZE)
-  if (newStart >= 0 && newStart < allDates.value.length) {
+  let newStart = dateWindowStart.value + (dir * WINDOW_SIZE)
+  // Clamp biar bisa sampai ujung (nggak stuck di tengah)
+  newStart = Math.max(0, Math.min(newStart, allDates.value.length - WINDOW_SIZE))
+  if (newStart !== dateWindowStart.value) {
     dateWindowStart.value = newStart
     if (visibleDates.value.length > 0) {
       activeDate.value = visibleDates.value[0].date
@@ -467,14 +469,21 @@ function getCellData(empId, dateStr) {
 
 function formatDateLong(dateStr) {
   if (!dateStr) return ''
-  const d = new Date(dateStr)
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
   const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu']
-  return `${dayNames[d.getDay()]}, ${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`
+  return `${dayNames[date.getDay()]}, ${d} ${monthNames[m - 1]} ${y}`
 }
 
 function statusLabel(status) {
   const map = { present: 'Hadir', absent: 'Absen', leave: 'Cuti', permit: 'Izin', holiday: 'Libur', off: 'Off', pending: 'Menunggu' }
   return map[status] || status || '-'
+}
+
+// Timezone-safe month parser: "2026-07-28" → 6 (July, 0-indexed)
+function parseMonth(dateStr) {
+  if (!dateStr) return 0
+  return parseInt(dateStr.split('-')[1], 10) - 1
 }
 
 function statusBadgeClass(status) {

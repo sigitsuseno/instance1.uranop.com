@@ -195,6 +195,7 @@ class AttendanceImportService
         $dateStr    = $date->toDateString();
         $dayOfWeek  = (int) $date->dayOfWeek; // 0=Minggu .. 6=Sabtu
         $isSunday   = $dayOfWeek === 0;
+        $isSaturday = $dayOfWeek === 6;
         $isHoliday  = in_array($dateStr, $holidayDates);
 
         // ── Data dari att_prepares (key: employee_id_date) ──
@@ -228,9 +229,9 @@ class AttendanceImportService
 
         // ── Dispatch ke handler sesuai pattern ──
         $record = match ($patternType) {
-            'FIXED'      => $this->processFixed($roster, $dateStr, $isSunday, $isHoliday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
-            'FLEX-SHIFT' => $this->processFlexShift($roster, $dateStr, $isSunday, $isHoliday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
-            'SHIFT'      => $this->processShift($roster, $dateStr, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
+            'FIXED'      => $this->processFixed($roster, $dateStr, $isSunday, $isSaturday, $isHoliday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
+            'FLEX-SHIFT' => $this->processFlexShift($roster, $dateStr, $isSunday, $isSaturday, $isHoliday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
+            'SHIFT'      => $this->processShift($roster, $dateStr, $isSaturday, $checkIn, $checkOut, $schedulIn, $schedulOut, $overtime, $lateMin, $isLeave, $leaveCode, $leave, $leaveType),
             default      => null,
         };
 
@@ -263,6 +264,7 @@ class AttendanceImportService
         EmployeeShiftRoster $roster,
         string $dateStr,
         bool $isSunday,
+        bool $isSaturday,
         bool $isHoliday,
         $checkIn,
         $checkOut,
@@ -319,7 +321,27 @@ class AttendanceImportService
             );
         }
 
-        // c. Hari kerja (Senin-Sabtu) — lembur maks 3 jam
+        // b2. Sabtu → hari kerja, lembur = 0
+        if ($isSaturday) {
+            return $this->buildRecord(
+                roster: $roster,
+                dateStr: $dateStr,
+                checkIn: $checkIn,
+                checkOut: $checkOut,
+                actualIn: $schedulIn,
+                actualOut: $schedulOut,
+                status: 'present',
+                lateDuration: $lateMin,
+                lembur: 0,
+                isLeave: false,
+                leaveId: null,
+                izinDuration: 0,
+                sakitDuration: 0,
+                deductDay: null,
+            );
+        }
+
+        // c. Hari kerja (Senin-Jumat) — lembur maks 3 jam
         $lemburMinutes = min($overtime, self::MAX_OVERTIME_MINUTES);
 
         return $this->buildRecord(
@@ -348,6 +370,7 @@ class AttendanceImportService
         EmployeeShiftRoster $roster,
         string $dateStr,
         bool $isSunday,
+        bool $isSaturday,
         bool $isHoliday,
         $checkIn,
         $checkOut,
@@ -404,7 +427,27 @@ class AttendanceImportService
             );
         }
 
-        // c. Hari kerja (Senin-Sabtu) — lembur maks 3 jam
+        // b2. Sabtu → hari kerja, lembur = 0
+        if ($isSaturday) {
+            return $this->buildRecord(
+                roster: $roster,
+                dateStr: $dateStr,
+                checkIn: $checkIn,
+                checkOut: $checkOut,
+                actualIn: $schedulIn,
+                actualOut: $schedulOut,
+                status: 'present',
+                lateDuration: $lateMin,
+                lembur: 0,
+                isLeave: false,
+                leaveId: null,
+                izinDuration: 0,
+                sakitDuration: 0,
+                deductDay: null,
+            );
+        }
+
+        // c. Hari kerja (Senin-Jumat) — lembur maks 3 jam
         $lemburMinutes = min($overtime, self::MAX_OVERTIME_MINUTES);
 
         return $this->buildRecord(
@@ -432,6 +475,7 @@ class AttendanceImportService
     protected function processShift(
         EmployeeShiftRoster $roster,
         string $dateStr,
+        bool $isSaturday,
         $checkIn,
         $checkOut,
         $schedulIn,
@@ -487,8 +531,9 @@ class AttendanceImportService
             );
         }
 
-        // c. external_code != "L" → hari kerja, lembur dari att_prepare (no cap)
-        $lemburMinutes = $overtime;
+        // c. external_code != "L" → hari kerja
+        // Sabtu: lembur selalu 2 jam (120 menit), selainnya dari att_prepare (no cap)
+        $lemburMinutes = $isSaturday ? 120 : $overtime;
 
         return $this->buildRecord(
             roster: $roster,
