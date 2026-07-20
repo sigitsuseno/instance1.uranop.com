@@ -12,6 +12,7 @@ const summary = ref({});
 const period = ref({});
 const isLoading = ref(true);
 const exportScope = ref('single'); // 'single' | 'all'
+const exportDate = ref(new Date().toISOString().split('T')[0]); // YYYY-MM-DD untuk exportByDate
 
 async function fetchData() {
     isLoading.value = true;
@@ -131,6 +132,40 @@ async function handleExport() {
         
         // Ambil filename dari Content-Disposition header
         let filename = 'export.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+        
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+async function handleExportByDate() {
+    const url = `/api/v1/supervisor/attendance/absensi/export-by-date?date=${exportDate.value}`;
+    try {
+        const token = localStorage.getItem('token');
+        const headers = { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Download gagal');
+        }
+        const blob = await response.blob();
+        
+        let filename = 'absensi.xlsx';
         const disposition = response.headers.get('Content-Disposition');
         if (disposition) {
             const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
@@ -342,6 +377,19 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
             </div>
 
             <div class="mt-8 flex justify-end gap-3 no-print">
+                <!-- Export Per Tanggal (seluruh karyawan) -->
+                <div class="flex items-center gap-2">
+                    <input 
+                        type="date" 
+                        v-model="exportDate" 
+                        class="px-3 py-2 border border-(--border-soft) rounded-lg text-sm bg-(--bg-card) text-(--text-main)"
+                    />
+                    <button @click="handleExportByDate" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition flex items-center gap-1 text-sm" title="Export kehadiran seluruh karyawan untuk tanggal yang dipilih">
+                        <i class="bx bx-calendar-export text-base"></i>
+                        <span>Export</span>
+                    </button>
+                </div>
+
                 <!-- Export dengan pilihan scope -->
                 <div class="relative flex rounded-xl overflow-hidden">
                     <button @click="handleExport" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white transition flex items-center gap-2" :title="exportScope === 'single' ? 'Export detail karyawan ini' : 'Export semua karyawan'">

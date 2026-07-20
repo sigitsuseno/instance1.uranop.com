@@ -998,6 +998,183 @@ class AttendanceAutologController extends Controller
     }
 
     /**
+     * Export kehadiran seluruh karyawan untuk satu tanggal tertentu.
+     * GET /api/v1/supervisor/attendance/absensi/export-by-date?date=YYYY-MM-DD
+     */
+    public function exportByDate(Request $request)
+    {
+        $targetDate = Carbon::parse($request->input('date', now()->toDateString()))->toDateString();
+
+        // Cari periode yang mencakup tanggal ini di supervisor_employee_groups
+        $groupEmployeeIds = SupervisorEmployeeGroup::where('period_start', '<=', $targetDate)
+            ->where('period_end', '>=', $targetDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
+        // Ambil autolog untuk tanggal tersebut
+        $autologs = AttendanceAutolog::with([
+            'employee.department',
+            'employee.position',
+            'employeeShiftRoster.shift',
+        ])
+            ->whereIn('employee_id', $groupEmployeeIds)
+            ->whereDate('date', $targetDate)
+            ->get();
+
+        // Fallback: karyawan yang tidak punya autolog di tanggal itu tetap muncul
+        // (misal: tidak hadir, belum sync)
+        $employeesWithLog = $autologs->pluck('employee_id')->unique();
+
+        $employeesWithoutLog = Employee::whereIn('id', $groupEmployeeIds)
+            ->whereNotIn('id', $employeesWithLog)
+            ->with(['department', 'position'])
+            ->get();
+
+        $rows = [];
+        $no = 1;
+
+        // Data dari autolog
+        foreach ($autologs as $log) {
+            $shiftStart = $log->employeeShiftRoster?->shift?->work_hour_start
+                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
+                : null;
+            $shiftEnd = $log->employeeShiftRoster?->shift?->work_hour_end
+                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
+                : null;
+
+            $lemburJam = $log->lembur > 0 ? round($log->lembur / 60, 1) : 0;
+
+            $rows[] = [
+                'no'              => $no++,
+                'nip'             => $log->employee->employee_code ?? '-',
+                'nama'            => $log->employee->name ?? '-',
+                'department'      => $log->employee->department?->name ?? '-',
+                'position'        => $log->employee->position?->name ?? '-',
+                'shift_start'     => $shiftStart ?? '--:--',
+                'shift_end'       => $shiftEnd ?? '--:--',
+                'check_in'        => $log->check_in ? $log->check_in->format('H:i') : '--:--',
+                'check_out'       => $log->check_out ? $log->check_out->format('H:i') : '--:--',
+                'lembur'          => $lemburJam,
+                'status'          => $this->getStatusLabel($log->status),
+            ];
+        }
+
+        // Karyawan tanpa autolog: tetap muncul, status = '-'
+        foreach ($employeesWithoutLog as $employee) {
+            $rows[] = [
+                'no'              => $no++,
+                'nip'             => $employee->employee_code,
+                'nama'            => $employee->name,
+                'department'      => $employee->department?->name ?? '-',
+                'position'        => $employee->position?->name ?? '-',
+                'shift_start'     => '--:--',
+                'shift_end'       => '--:--',
+                'check_in'        => '--:--',
+                'check_out'       => '--:--',
+                'lembur'          => 0,
+                'status'          => '-',
+            ];
+        }
+
+        $dateFormatted = Carbon::parse($targetDate)->format('d F Y');
+        $filename = 'Absensi_' . Carbon::parse($targetDate)->format('d_F_Y') . '.xlsx';
+
+        return Excel::download(new class($rows, $targetDate, $dateFormatted) implements
+            \Maatwebsite\Excel\Concerns\FromCollection,
+            \Maatwebsite\Excel\Concerns\WithHeadings,
+            \Maatwebsite\Excel\Concerns\WithColumnWidths,
+            \Maatwebsite\Excel\Concerns\WithStyles,
+            \Maatwebsite\Excel\Concerns\WithTitle
+        {
+            private array $rows;
+            private string $targetDate;
+            private string $dateFormatted;
+
+            public function __construct(array $rows, string $targetDate, string $dateFormatted)
+            {
+                $this->rows = $rows;
+                $this->targetDate = $targetDate;
+                $this->dateFormatted = $dateFormatted;
+            }
+
+            public function title(): string
+            {
+                return 'Absensi ' . $this->targetDate;
+            }
+
+            public function collection()
+            {
+                return collect($this->rows);
+            }
+
+            public function headings(): array
+            {
+                return [
+                    ['KEHADIRAN KARYAWAN — ' . $this->dateFormatted],
+                    [''],
+                    ['No', 'NIP', 'Nama', 'Departemen', 'Jabatan', 'Jadwal Masuk', 'Jadwal Pulang', 'Actual In', 'Actual Out', 'Lembur (Jam)', 'Status'],
+                ];
+            }
+
+            public function columnWidths(): array
+            {
+                return [
+                    'A' => 5,
+                    'B' => 12,
+                    'C' => 25,
+                    'D' => 15,
+                    'E' => 18,
+                    'F' => 14,
+                    'G' => 14,
+                    'H' => 12,
+                    'I' => 12,
+                    'J' => 14,
+                    'K' => 10,
+                ];
+            }
+
+            public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet)
+            {
+                $lastRow = 3 + count($this->rows);
+
+                // Title row (A1)
+                $sheet->mergeCells('A1:K1');
+                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(13);
+
+                // Header row (A3:K3)
+                $sheet->getStyle('A3:K3')->applyFromArray([
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                    'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '4F46E5']],
+                ]);
+
+                // Borders untuk seluruh range
+                $sheet->getStyle('A3:K' . $lastRow)->applyFromArray([
+                    'borders' => [
+                        'allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN],
+                    ],
+                ]);
+
+                // Zebra striping untuk data rows
+                for ($row = 4; $row <= $lastRow; $row++) {
+                    if ($row % 2 === 0) {
+                        $sheet->getStyle('A' . $row . ':K' . $row)
+                            ->getFill()
+                            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                            ->getStartColor()->setRGB('F9FAFB');
+                    }
+                }
+
+                // Freeze pane: header + title tetap terlihat
+                $sheet->freezePane('A4');
+
+                // Auto-filter untuk header
+                $sheet->setAutoFilter('A3:K' . $lastRow);
+            }
+        }, $filename);
+    }
+
+    /**
      * Export detail autolog harian per employee ke Excel.
      */
     public function exportDetail($employeeId, Request $request)
