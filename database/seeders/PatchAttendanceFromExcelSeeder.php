@@ -150,20 +150,23 @@ class PatchAttendanceFromExcelSeeder extends Seeder
                 }
 
                 $updateData = [];
+                $hasChange = false;
 
                 if ($row['actual_in'] !== null) {
                     $updateData['check_in'] = Carbon::parse($dateStr.' '.$row['actual_in'])->format('Y-m-d H:i:s');
+                    $hasChange = true;
                 }
 
                 if ($row['actual_out'] !== null) {
                     $updateData['check_out'] = Carbon::parse($dateStr.' '.$row['actual_out'])->format('Y-m-d H:i:s');
+                    $hasChange = true;
                 }
 
-                $updateData['is_manual_edit'] = 1;
-                $updateData['last_edited_at'] = now()->format('Y-m-d H:i:s');
-                $updateData['updated_at'] = now()->format('Y-m-d H:i:s');
+                if ($hasChange) {
+                    $updateData['is_manual_edit'] = 1;
+                    $updateData['last_edited_at'] = now()->format('Y-m-d H:i:s');
+                    $updateData['updated_at'] = now()->format('Y-m-d H:i:s');
 
-                if (! empty($updateData)) {
                     DB::table('attendance_autologs')
                         ->where('id', $attendance->id)
                         ->update($updateData);
@@ -242,36 +245,35 @@ class PatchAttendanceFromExcelSeeder extends Seeder
         $dataStart = false;
 
         foreach ($rows as $row) {
-            $firstCell = trim((string) ($row[0] ?? ''));
-
-            // Cari header: "Hari / Tanggal"
+            // Cari header: cek seluruh cell, bukan cuma kolom pertama
             if (! $dataStart) {
-                if (str_contains($firstCell, 'Hari') && str_contains($firstCell, 'Tanggal')) {
+                $rowText = implode(' ', array_map(fn ($c) => trim((string) ($c ?? '')), $row));
+                if (str_contains($rowText, 'Hari') && str_contains($rowText, 'Tanggal')) {
                     $dataStart = true;
                 }
-
                 continue;
             }
+
+            // Kolom: 0=NIP, 1=Nama, 2=Hari/Tanggal, 3=Actual In, 4=Actual Out, 5=Lembur
+            $dateCell = trim((string) ($row[2] ?? ''));
 
             // Skip TOTAL atau kosong
-            if (empty($firstCell) || str_starts_with($firstCell, 'TOTAL')) {
+            if (empty($dateCell) || str_starts_with($dateCell, 'TOTAL')) {
                 continue;
             }
 
-            $date = $this->parseDate($firstCell);
+            $date = $this->parseDate($dateCell);
 
             if (! $date) {
                 continue;
             }
 
             $data[] = [
-                'date' => $date,
-                'jadwal_masuk' => $this->parseTime($row[1] ?? null),
-                'jadwal_pulang' => $this->parseTime($row[2] ?? null),
-                'actual_in' => $this->parseTime($row[3] ?? null),
-                'actual_out' => $this->parseTime($row[4] ?? null),
+                'date'             => $date,
+                'actual_in'        => $this->parseTime($row[3] ?? null),
+                'actual_out'       => $this->parseTime($row[4] ?? null),
                 'overtime_minutes' => $this->parseOvertime($row[5] ?? null),
-                'overtime_text' => trim((string) ($row[5] ?? '')),
+                'overtime_text'    => trim((string) ($row[5] ?? '')),
             ];
         }
 
