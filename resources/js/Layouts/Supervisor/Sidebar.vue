@@ -11,7 +11,7 @@ const emit = defineEmits(['toggle'])
 
 const route = useRoute()
 
-const { isSuperadmin, isHrmanager, isAdmManager } = useAuth()
+const auth = useAuth()
 
 const supervisorMenus = computed(() => [
   {
@@ -35,7 +35,7 @@ const supervisorMenus = computed(() => [
       { title: 'Kompensasi', icon: 'bx bx-gift', route: '/supervisor/employee-data/kompensasi' },
       { title: 'BPJS Karyawan', icon: 'bx bx-shield-plus', route: '/supervisor/employee-data/bpjs-karyawan' },
       { title: 'PPh Karyawan', icon: 'bx bx-receipt', route: '/supervisor/employee-data/pph-karyawan' },
-      { title: 'Karyawan Group', icon: 'bx bx-layer', route: '/supervisor/employee-data/karyawan-group', visible: isSuperadmin.value },
+      { title: 'Karyawan Group', icon: 'bx bx-layer', route: '/supervisor/employee-data/karyawan-group', visible: auth.isSuperadmin },
     ],
   },
   {
@@ -65,7 +65,7 @@ const supervisorMenus = computed(() => [
     children: [
       { title: 'Import', icon: 'bx bx-upload', route: '/supervisor/attendance/import' },
       { title: 'Data Absensi', icon: 'bx bx-file', route: '/supervisor/attendance' },
-      { title: 'Roster Autolog', icon: 'bx bx-grid-alt', route: '/supervisor/attendance/roster', visible: isSuperadmin.value },
+      { title: 'Roster Autolog', icon: 'bx bx-grid-alt', route: '/supervisor/attendance/roster', visible: auth.isSuperadmin },
       { title: 'Lembur Staf', icon: 'bx bx-time', route: '/supervisor/attendance/overtime' },
       { title: 'Rekap Absensi', icon: 'bx bx-table', route: '/supervisor/attendance/recap' },
       { title: 'Snapshot', icon: 'bx bx-camera', route: '/supervisor/attendance/snapshot' },
