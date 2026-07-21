@@ -10,5 +10,5 @@ namespace Database\Seeders;
  */
 class PatchAttendanceMei2026Seeder extends PatchAttendanceFromExcelSeeder
 {
-    protected string $scanFolder = __DIR__.'/mei 2026';
+    protected string $scanFolder = __DIR__.'/FINGER-MEI';
 }

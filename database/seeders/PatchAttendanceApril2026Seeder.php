@@ -10,6 +10,6 @@ namespace Database\Seeders;
  */
 class PatchAttendanceApril2026Seeder extends PatchAttendanceFromExcelSeeder
 {
-    protected string $scanFolder = __DIR__.'/april 2026';
+    protected string $scanFolder = __DIR__.'/FINGER-JUNI';
 }
 
