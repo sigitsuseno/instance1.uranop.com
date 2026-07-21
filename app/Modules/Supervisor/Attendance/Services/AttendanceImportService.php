@@ -343,6 +343,22 @@ class AttendanceImportService
             return $this->buildRecord($roster, $dateStr, $satCheckIn, $satCheckOut, $schedulIn, $schedulOut, 'present', $lateMin, 0);
         }
 
+        // c.1 Shift siang (external_code "S") → check_in mundur, check_out 22:50
+        if ($roster->shift && $roster->shift->external_code === 'S') {
+            $siangCheckIn = $schedulIn
+                ? (clone $schedulIn)->subMinutes(rand(0, 15) + $overtime)
+                : null;
+            $siangCheckOut = Carbon::parse($dateStr . ' 22:50')->addMinutes(rand(0, 5));
+
+            $lemburMinutes = match ($lemburRule) {
+                'zero' => 0,
+                'cap'  => min($overtime, self::MAX_OVERTIME_MINUTES),
+                default => 0,
+            };
+
+            return $this->buildRecord($roster, $dateStr, $siangCheckIn, $siangCheckOut, $schedulIn, $schedulOut, 'present', $lateMin, $lemburMinutes);
+        }
+
         // d. Senin-Jumat → lembur sesuai group
         $lemburMinutes = match ($lemburRule) {
             'zero' => 0,
