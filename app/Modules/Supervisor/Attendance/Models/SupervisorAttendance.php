@@ -8,12 +8,13 @@ use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Company;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
+use App\Modules\Shared\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class SupervisorAttendance extends Model
 {
-    use SoftDeletes;
+    use HasAuditLog, SoftDeletes;
 
     protected $table = 'attendance_autologs';
 

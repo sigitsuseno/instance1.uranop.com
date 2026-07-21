@@ -302,7 +302,7 @@ class AttendanceAutologController extends Controller
             ->where('id', $employeeId)
             ->firstOrFail();
 
-        $logs = AttendanceAutolog::with('employeeShiftRoster.workPattern')
+        $logs = AttendanceAutolog::with(['employeeShiftRoster.workPattern', 'leave.leaveType'])
             ->where('employee_id', $employeeId)
             ->whereBetween('date', [$startDate, $endDate])
             ->orderBy('date')
@@ -365,6 +365,7 @@ class AttendanceAutologController extends Controller
                 'lembur' => $log?->lembur ?? 0,
                 'lembur_display' => $this->formatOvertime($log?->lembur ?? 0),
                 'status' => $log?->status ?? 'pending',
+                'leave_type_code' => $log?->leave?->leaveType?->code,
                 'status_label' => $this->getStatusLabel($log?->status ?? 'pending'),
                 'status_badge' => $this->getStatusBadge($log?->status ?? 'pending'),
                 'is_locked' => $log?->is_locked ?? false,

@@ -5,13 +5,14 @@ namespace App\Modules\Supervisor\Attendance\Models;
 use App\Modules\Auth\Models\User;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Shared\Traits\HasAuditLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class SupervisorAttendanceSnapshot extends Model
 {
-    use SoftDeletes;
+    use HasAuditLog, SoftDeletes;
 
     protected $table = 'supervisor_att_snapshot';
 

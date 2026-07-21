@@ -81,10 +81,10 @@ class SupervisorDashboardController extends Controller
                 'days_left'     => $c->days_left,
             ]);
 
-        // ── Recent Audit Logs (Filtered for hrbranch user) ────────────
+        // ── Recent Audit Logs (Filtered for hrbranch role) ────────────
         $recentAuditLogs = AuditLog::with('user:id,name')
             ->whereHas('user', function ($q) {
-                $q->where('email', 'hrbranch@uranop.com');
+                $q->where('user_type', 'hrbranch');
             })
             ->latest()
             ->limit(15)

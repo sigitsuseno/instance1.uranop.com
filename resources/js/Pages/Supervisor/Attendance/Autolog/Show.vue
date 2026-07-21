@@ -368,7 +368,7 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <span class="inline-block px-3 py-1 text-xs rounded-full font-medium" :class="getStatusBadgeClass(day.status)">
-                                    {{ getStatusLabel(day.status) }}
+                                    {{ (day.status === 'leave' && day.leave_type_code) ? day.leave_type_code : getStatusLabel(day.status) }}
                                 </span>
                             </td>
                         </tr>
