@@ -113,9 +113,15 @@ class JakartaHelper
             $days[$dateStr] = $dayResult;
         }
 
-        return $this->buildEmployeeItem(
+        $item = $this->buildEmployeeItem(
             $employee, $days, $upahPerHari, $hourlyRate,
             $gaji, $tjMk, $tunjangan, $totalOvertime, $totalUangMakan
         );
+
+        // Karyawan Jakarta: Total Hari Kerja selalu 0
+        $item['total_hari_kerja'] = 0;
+        $item['total_terima'] = round($item['total_overtime'] + $item['total_uang_makan'], 2);
+
+        return $item;
     }
 }
