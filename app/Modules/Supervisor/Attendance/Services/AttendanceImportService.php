@@ -338,8 +338,8 @@ class AttendanceImportService
 
         // c. Sabtu → present, lembur = 0, check_in/out random deket jadwal
         if ($isSaturday) {
-            $satCheckIn  = $schedulIn  ? (clone $schedulIn)->addMinutes(rand(-15, 15)) : null;
-            $satCheckOut = $schedulOut ? (clone $schedulOut)->addMinutes(rand(-15, 15)) : null;
+            $satCheckIn  = $schedulIn  ? (clone $schedulIn)->addMinutes(rand(-5, 15)) : null;
+            $satCheckOut = $schedulOut ? (clone $schedulOut)->addMinutes(rand(0, 10)) : null;
             return $this->buildRecord($roster, $dateStr, $satCheckIn, $satCheckOut, $schedulIn, $schedulOut, 'present', $lateMin, 0);
         }
 
