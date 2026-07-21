@@ -199,6 +199,101 @@
       </div>
     </div>
 
+    <!-- TKN Settings -->
+    <hr class="border-(--border-soft) my-5" />
+
+    <div>
+      <h4 class="text-sm font-semibold mb-3 text-(--text-main)">
+        🔧 C. KARYAWAN TEKNISI (KRY-TKN)
+      </h4>
+      <p class="text-xs text-(--text-muted) mb-3">
+        Formula uang makan khusus teknisi. BUKAN section terpisah — karyawan tetap di section GRP aslinya (Jakarta / ALL IN).
+      </p>
+
+      <!-- TKN: Weekday Flat -->
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+          Nominal Flat Weekday (Rp)
+        </label>
+        <input
+          type="number"
+          :value="config.tkn_weekday_flat ?? 15000"
+          @input="emitConfig({ tkn_weekday_flat: $event.target.value === '' ? null : parseInt($event.target.value) })"
+          class="w-full max-w-xs px-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+          min="0"
+        />
+        <p class="text-xs text-(--text-muted) mt-1">
+          Diberikan jika total jam lembur ≥ 11 jam di hari weekday.
+        </p>
+      </div>
+
+      <!-- TKN: Saturday Rate -->
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+          Rate Sabtu (per 7 jam) — Rp
+        </label>
+        <input
+          type="number"
+          :value="config.tkn_saturday_rate ?? 100000"
+          @input="emitConfig({ tkn_saturday_rate: $event.target.value === '' ? null : parseInt($event.target.value) })"
+          class="w-full max-w-xs px-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+          min="0"
+        />
+        <p class="text-xs text-(--text-muted) mt-1">
+          Formula: <code>lemburTotal × (Rate ÷ 7)</code>. Default 100.000 → ≈14.286/jam.
+        </p>
+      </div>
+
+      <!-- TKN: Sunday/Holiday Rate -->
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+          Rate Minggu / Holiday (per 7 jam) — Rp
+        </label>
+        <input
+          type="number"
+          :value="config.tkn_holiday_rate ?? 200000"
+          @input="emitConfig({ tkn_holiday_rate: $event.target.value === '' ? null : parseInt($event.target.value) })"
+          class="w-full max-w-xs px-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+          min="0"
+        />
+        <p class="text-xs text-(--text-muted) mt-1">
+          Formula: <code>lemburTotal × (Rate ÷ 7)</code>. Default 200.000 → ≈28.571/jam.
+        </p>
+      </div>
+
+      <!-- TKN: Employee List -->
+      <div>
+        <p class="text-xs font-medium text-(--text-muted) mb-2">
+          👥 Karyawan KRY-TKN ({{ tknEmployees.length }} orang)
+        </p>
+        <div v-if="tknEmployees.length === 0" class="text-xs text-(--text-muted) italic">
+          Tidak ada karyawan dengan group KRY-TKN.
+        </div>
+        <div v-else class="overflow-x-auto rounded-lg border border-(--border-soft) max-h-48 overflow-y-auto">
+          <table class="w-full text-xs">
+            <thead>
+              <tr class="bg-(--bg-soft) sticky top-0">
+                <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">NIP</th>
+                <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">Nama</th>
+                <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">Jabatan</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="emp in tknEmployees"
+                :key="emp.id"
+                class="border-b border-(--border-soft)"
+              >
+                <td class="px-2 py-1 text-(--text-main)">{{ emp.nip }}</td>
+                <td class="px-2 py-1 text-(--text-main)">{{ emp.name }}</td>
+                <td class="px-2 py-1 text-(--text-muted)">{{ emp.jabatan }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- SPC Settings -->
     <hr class="border-(--border-soft) my-5" />
 
@@ -297,11 +392,15 @@ const emit = defineEmits(['update:config']);
 // Reactive copy of config excluding SPC-specific keys (they go flat with group rates)
 const localRates = reactive({ ...props.config });
 
-// Remove SPC, JKT, and ALLIN config keys from rates (they're handled separately)
+// Remove SPC, JKT, ALLIN, and TKN config keys from rates (they're handled separately)
 delete localRates.spc_start_period_id;
 delete localRates.spc_base_salary;
 delete localRates.jkt_no_overtime_employees;
 delete localRates.allin_no_overtime_employees;
+delete localRates.allin_driver_overtime;
+delete localRates.tkn_weekday_flat;
+delete localRates.tkn_saturday_rate;
+delete localRates.tkn_holiday_rate;
 
 // Expose only the group rate entries
 const groupRates = computed(() => localRates);
@@ -315,6 +414,7 @@ const allinDrivers = computed(() =>
     (emp.jabatan || '').toUpperCase().includes('DRIVER')
   )
 );
+const tknEmployees = computed(() => props.extraData?.tknEmployees || []);
 const sortedPeriods = computed(() =>
   [...periods.value].sort((a, b) => b.start_date.localeCompare(a.start_date))
 );
@@ -327,6 +427,10 @@ watch(() => props.config, (val) => {
   delete localRates.spc_base_salary;
   delete localRates.jkt_no_overtime_employees;
   delete localRates.allin_no_overtime_employees;
+  delete localRates.allin_driver_overtime;
+  delete localRates.tkn_weekday_flat;
+  delete localRates.tkn_saturday_rate;
+  delete localRates.tkn_holiday_rate;
 }, { deep: true });
 
 function updateRate(groupName, key, event) {
@@ -389,7 +493,7 @@ function updateDriverOvertime(empId, rawValue) {
 }
 
 function emitConfig(extra = {}) {
-  // Merge rates + SPC config + any extra
+  // Merge rates + SPC config + TKN config + any extra
   const merged = {
     ...localRates,
     spc_start_period_id: props.config.spc_start_period_id ?? null,
@@ -397,6 +501,9 @@ function emitConfig(extra = {}) {
     jkt_no_overtime_employees: props.config.jkt_no_overtime_employees ?? [],
     allin_no_overtime_employees: props.config.allin_no_overtime_employees ?? [],
     allin_driver_overtime: props.config.allin_driver_overtime ?? {},
+    tkn_weekday_flat: props.config.tkn_weekday_flat ?? 15000,
+    tkn_saturday_rate: props.config.tkn_saturday_rate ?? 100000,
+    tkn_holiday_rate: props.config.tkn_holiday_rate ?? 200000,
     ...extra,
   };
   emit('update:config', { ...merged });

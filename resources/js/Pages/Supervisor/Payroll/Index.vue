@@ -455,7 +455,7 @@ function computeSectionTotals(data) {
   const sum = (key) => data.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
   return {
     hari_kerja: data.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
-    lm: data.reduce((acc, r) => acc + (parseInt(r.lm) || 0), 0),
+    lm: data.reduce((acc, r) => acc + (parseFloat(r.lm) || 0), 0),
     lembur_count: data.reduce((acc, r) => acc + (parseFloat(r.lembur_count) || 0), 0),
     gaji: sum('gaji'), upah_lembur: sum('upah_lembur'), revisi: sum('revisi'),
     tunjangan: sum('tunjangan'), premi_hadir: sum('premi_hadir'), pblt: sum('pblt'),

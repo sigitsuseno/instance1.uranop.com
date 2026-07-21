@@ -262,15 +262,23 @@
     @php
         $selName = strtoupper($request->leaveType->name ?? '');
         function chkSel($label, $selName) {
-            $a = strtoupper(str_replace(['CUTI ','IZIN '], '', $label));
-            $b = strtoupper(str_replace(['CUTI ','IZIN '], '', $selName));
-            return $a === $b || str_contains($selName, $label) || str_contains($label, $b);
+            $aL = strtoupper(str_replace(['CUTI ','IZIN '], '', $label));
+            $bL = strtoupper(str_replace(['CUTI ','IZIN '], '', $selName));
+            if ($aL === $bL) return true;
+            if (str_contains($selName, $label)) return true;
+            if (str_contains($label, $bL)) return true;
+            // Keyword-based: label gabungan (e.g. MENIKAH/MENIKAHKAN ANAK)
+            if (str_contains($label, 'MENIKAH') && str_contains($selName, 'MENIKAH')) return true;
+            // Keyword-based: KEMATIAN ≈ KELUARGA MENINGGAL
+            if ((str_contains($label, 'KEMATIAN') || str_contains($label, 'MENINGGAL'))
+                && (str_contains($selName, 'KEMATIAN') || str_contains($selName, 'MENINGGAL'))) return true;
+            return false;
         }
     @endphp
 
     <!-- Col 1 -->
     <div class="cuti-col">
-        @foreach (['TAHUNAN','MENIKAH','MENIKAHKAN ANAK','KHITAN/ BAPTIS','MELAHIRKAN/ KEGUGURAN'] as $l)
+        @foreach (['TAHUNAN','MENIKAH/MENIKAHKAN ANAK','KHITAN/ BAPTIS','MELAHIRKAN/ KEGUGURAN'] as $l)
             <div class="cuti-item {{ chkSel($l, $selName) ? 'selected' : '' }}">
                 <div class="box"></div><span>{{ $l }}</span>
             </div>
@@ -279,7 +287,7 @@
 
     <!-- Col 2 -->
     <div class="cuti-col">
-        @foreach (['KEMATIAN KELUARGA (KANDUNG)','KEMATIAN ANGGOTA SERUMAH','SAKIT','HAID','CUTI IBADAH'] as $l)
+        @foreach (['KEMATIAN (KELUARGA / ANGGOTA SERUMAH / SAUDARA)','SAKIT','HAID','CUTI IBADAH'] as $l)
             <div class="cuti-item {{ chkSel($l, $selName) ? 'selected' : '' }}">
                 <div class="box"></div><span>{{ $l }}</span>
             </div>

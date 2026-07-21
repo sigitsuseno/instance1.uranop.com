@@ -10,10 +10,10 @@ use Carbon\Carbon;
  * BUKAN section terpisah — karyawan tetap di section GRP aslinya.
  * KRY-TKN hanya penanda untuk override formula uang makan.
  * 
- * Formula:
- *   Weekday ≥ 11 jam → flat 15.000
- *   Sabtu           → lemburTotal × (100.000 ÷ 7)
- *   Minggu/Holiday  → lemburTotal × (200.000 ÷ 7)
+ * Formula (config-driven, fallback default):
+ *   Weekday ≥ 11 jam → flat (default 15.000)
+ *   Sabtu           → lemburTotal × (rate ÷ 7) (default 100.000)
+ *   Minggu/Holiday  → lemburTotal × (rate ÷ 7) (default 200.000)
  */
 class TknHelper
 {
@@ -117,15 +117,17 @@ class TknHelper
 
             if ($lemburTotal > 0) {
                 if ($isMingguHoliday) {
-                    // Minggu / Holiday: per jam × (200.000 ÷ 7)
-                    $nominal = round($lemburTotal * (200000 / 7), 2);
+                    // Minggu / Holiday: per jam × (rate ÷ 7)
+                    $rate = (int)($config['tkn_holiday_rate'] ?? 200000);
+                    $nominal = round($lemburTotal * ($rate / 7), 2);
                 } elseif ($dayOfWeek == 6) {
-                    // Sabtu: per jam × (100.000 ÷ 7)
-                    $nominal = round($lemburTotal * (100000 / 7), 2);
+                    // Sabtu: per jam × (rate ÷ 7)
+                    $rate = (int)($config['tkn_saturday_rate'] ?? 100000);
+                    $nominal = round($lemburTotal * ($rate / 7), 2);
                 } else {
-                    // Weekday: ≥ 11 jam → flat 15.000
+                    // Weekday: ≥ 11 jam → flat
                     if ($workHour >= 11) {
-                        $nominal = 15000;
+                        $nominal = (int)($config['tkn_weekday_flat'] ?? 15000);
                     }
                 }
             }

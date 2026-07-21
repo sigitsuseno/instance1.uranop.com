@@ -70,7 +70,7 @@ class SupervisorBreakdownController extends Controller
                 'tj_masa_kerja' => (float) $record->tj_masa_kerja,
                 'tunjangan'     => (float) $record->tunjangan,
                 'hari_kerja'    => (int) $record->hari_kerja,
-                'lm'            => (float) $record->lm,
+                'lm'            => round((float) $record->lm / 8, 1),
                 'lm_count'      => (float) $record->lm_count,
                 'lembur_count'  => (float) $record->lembur_count,
                 // Hasil
@@ -655,7 +655,7 @@ class SupervisorBreakdownController extends Controller
                 'premi'         => (float) $r->premi,
                 'tj_masa_kerja' => (float) $r->tj_masa_kerja,
                 'hari_kerja'    => (int) $r->hari_kerja,
-                'lm'            => (float) $r->lm,
+                'lm'            => round((float) $r->lm / 8, 1),
                 'lembur_count'  => (float) $r->lembur_count,
                 'upah_lembur'   => (float) $r->upah_lembur,
                 'gaji'          => (float) $r->gaji,
@@ -725,7 +725,7 @@ class SupervisorBreakdownController extends Controller
                 $joinDateStr = Carbon::parse($joinDate)->format('d/m/Y');
             }
 
-            $lm = !empty($r->lm) ? round($r->lm, 1) : 0;
+            $lm = !empty($r->lm) ? round($r->lm / 8, 1) : 0;
             $lemburCount = !empty($r->lembur_count) ? round($r->lembur_count, 1) : 0;
 
             // Bagian / Jabatan digabung
