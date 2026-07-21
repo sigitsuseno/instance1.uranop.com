@@ -357,7 +357,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
             return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'off', 0, 0, 0, 0, 0, 0);
         }
 
-        if (in_array($status, ['OUT', '-', 'ALFA'])) {
+        if (in_array($status, ['OUT', '-', 'ALFA', ''])) {
             return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'absent', 1, 0, 0, 0, 0, 0);
         }
 
@@ -447,7 +447,7 @@ class AttendanceDataFixImport implements SkipsEmptyRows, SkipsOnError, ToCollect
             return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'izin', 0, 0, 1, 0, 0, 0);
         }
 
-        if (in_array($status, ['OUT', '-', 'ALFA', ''])) {
+        if (in_array($status, ['OUT', '-', 'ALFA'])) {
             return $this->buildRecord($employeeId, $date, null, null, $actualIn, $actualOut, $roster, $leave, 'absent', 1, 0, 0, 0, 0, 0);
         }
 
