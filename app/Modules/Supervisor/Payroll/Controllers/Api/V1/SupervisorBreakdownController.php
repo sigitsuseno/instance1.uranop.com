@@ -70,7 +70,7 @@ class SupervisorBreakdownController extends Controller
                 'tj_masa_kerja' => (float) $record->tj_masa_kerja,
                 'tunjangan'     => (float) $record->tunjangan,
                 'hari_kerja'    => (int) $record->hari_kerja,
-                'lm'            => (int) $record->lm,
+                'lm'            => (float) $record->lm,
                 'lm_count'      => (float) $record->lm_count,
                 'lembur_count'  => (float) $record->lembur_count,
                 // Hasil
@@ -217,7 +217,7 @@ class SupervisorBreakdownController extends Controller
                     if ($segCode === null) {
                         $hariKerja = (int) $snapshot->hari_kerja;
                         $deductDay = (float) $snapshot->deduct_day;
-                        $lm        = (int) $snapshot->lm;
+                        $lm        = (float) $snapshot->lm;
                         $lmCount   = (float) $snapshot->lm_count;
                         $lemburCount = (float) $snapshot->lembur_count;
                     } else {
@@ -229,7 +229,7 @@ class SupervisorBreakdownController extends Controller
 
                         $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count();
                         $hariKerja   = $hkSegment - $deductDay;
-                        $lm          = (int) ($segLogs->sum('lm') / 60);
+                        $lm          = $segLogs->sum('lm') / 60;
                         $lmCount     = (float) $segLogs->sum('lm_calc');
                         $lemburCount = (float) $segLogs->sum('lembur_calc');
                     }
@@ -655,7 +655,7 @@ class SupervisorBreakdownController extends Controller
                 'premi'         => (float) $r->premi,
                 'tj_masa_kerja' => (float) $r->tj_masa_kerja,
                 'hari_kerja'    => (int) $r->hari_kerja,
-                'lm'            => (int) $r->lm,
+                'lm'            => (float) $r->lm,
                 'lembur_count'  => (float) $r->lembur_count,
                 'upah_lembur'   => (float) $r->upah_lembur,
                 'gaji'          => (float) $r->gaji,

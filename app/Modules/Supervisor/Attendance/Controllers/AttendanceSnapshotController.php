@@ -295,9 +295,9 @@ class AttendanceSnapshotController extends Controller
 
         $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
         $lateMinutes = $logs->sum('late_duration');
-        $lm = round($logs->sum('lm') / 60, 2);
+        $lm = $logs->sum('lm') / 60;
         $lmCount = (float) $logs->sum('lm_calc');
-        $lembur = round($logs->sum('lembur') / 60, 2);
+        $lembur = $logs->sum('lembur') / 60;
         $lemburCount = (float) $logs->sum('lembur_calc');
 
         $snapshot = AttendanceSnapshot::updateOrCreate(
@@ -395,9 +395,9 @@ class AttendanceSnapshotController extends Controller
 
                 $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
                 $lateMinutes = $logs->sum('late_duration');
-                $lm = round($logs->sum('lm') / 60, 2);
+                $lm = $logs->sum('lm') / 60;
                 $lmCount = (float) $logs->sum('lm_calc');
-                $lembur = round($logs->sum('lembur') / 60, 2);
+                $lembur = $logs->sum('lembur') / 60;
                 $lemburCount = (float) $logs->sum('lembur_calc');
 
                 $existing = AttendanceSnapshot::where('employee_id', $employeeId)

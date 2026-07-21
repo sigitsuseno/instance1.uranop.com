@@ -45,10 +45,10 @@ class SupervisorAttendanceSnapshot extends Model
         'absen' => 'integer',
         'deduct_day' => 'decimal:2',
         'late_minutes' => 'integer',
-        'lm' => 'float',
-        'lm_count' => 'float',
-        'lembur' => 'float',
-        'lembur_count' => 'float',
+        'lm' => 'decimal:2',
+        'lm_count' => 'decimal:2',
+        'lembur' => 'decimal:2',
+        'lembur_count' => 'decimal:2',
         'synced_at' => 'datetime',
     ];
 
