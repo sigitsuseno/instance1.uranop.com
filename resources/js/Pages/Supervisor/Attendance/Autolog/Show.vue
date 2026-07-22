@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { useApi } from '../../../../composables/useApi';
 
@@ -11,8 +11,24 @@ const dailyData = ref([]);
 const summary = ref({});
 const period = ref({});
 const isLoading = ref(true);
-const exportScope = ref('single'); // 'single' | 'all'
-const exportDate = ref(new Date().toISOString().split('T')[0]); // YYYY-MM-DD untuk exportByDate
+const exportScope = ref('single');
+const exportDate = ref(new Date().toISOString().split('T')[0]);
+
+// Groups yang libur/minggu jadwalnya kosong
+const blankOnHolidayGroups = ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-PS1'];
+const isBlankGroup = computed(() => {
+    const groups = employee.value?.groups || [];
+    return groups.some(g => blankOnHolidayGroups.includes(g));
+});
+
+function jadwalMasuk(day) {
+    if (isBlankGroup.value && (day.is_holiday || day.is_weekend)) return '--:--';
+    return day.shift_start || '--:--';
+}
+function jadwalPulang(day) {
+    if (isBlankGroup.value && (day.is_holiday || day.is_weekend)) return '--:--';
+    return day.shift_end || '--:--';
+}
 
 async function fetchData() {
     isLoading.value = true;
@@ -335,10 +351,10 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                                 <div class="text-xs" :class="day.is_weekend ? 'text-red-500 font-bold' : 'text-(--text-muted)'">{{ day.day }}</div>
                             </td>
                             <td class="px-6 py-4 text-center font-mono text-gray-500">
-                                {{ day.shift_start || '--:--' }}
+                                {{ jadwalMasuk(day) }}
                             </td>
                             <td class="px-6 py-4 text-center font-mono text-gray-500">
-                                {{ day.shift_end || '--:--' }}
+                                {{ jadwalPulang(day) }}
                             </td>
                             <td class="px-6 py-4 text-center font-mono text-indigo-600 font-bold">
                                 {{ day.check_in || '--:--' }}

@@ -298,6 +298,7 @@ class AttendanceAutologController extends Controller
         $employee = Employee::with([
             'department',
             'position',
+            'groups',
         ])
             ->where('id', $employeeId)
             ->firstOrFail();
@@ -391,6 +392,7 @@ class AttendanceAutologController extends Controller
                 'name' => $employee->name,
                 'department' => $employee->department?->name,
                 'position' => $employee->position?->name,
+                'groups' => $employee->groups->pluck('reference_code')->toArray(),
             ],
             'dailyData' => $dailyData,
             'summary' => [
@@ -464,6 +466,7 @@ class AttendanceAutologController extends Controller
         $employee = Employee::with([
             'department',
             'position',
+            'groups',
         ])
             ->where('id', $employeeId)
             ->firstOrFail();
