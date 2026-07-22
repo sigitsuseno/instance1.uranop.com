@@ -100,12 +100,12 @@ class AttendanceAutologController extends Controller
                 'position' => $employee->position?->name,
                 'hadir' => $logs->where('status', 'present')->count(),
                 'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
-                'CT' => $logs->where('status', 'leave')->count(),
-                'Izin' => $logs->where('izin_duration', 1)->count(),
-                'Sakit' => $logs->where('sakit_duration', 1)->count(),
-                'Absen' => $logs->where('status', 'absent')->count(),
-                'Libur' => $logs->where('status', 'holiday')->count(),
-                'Off' => $logs->where('status', 'off')->count(),
+                'cuti' => $logs->where('status', 'leave')->count(),
+                'izin' => $logs->where('izin_duration', 1)->count(),
+                'sakit' => $logs->where('sakit_duration', 1)->count(),
+                'absen' => $logs->where('status', 'absent')->count(),
+                'libur' => $logs->where('status', 'holiday')->count(),
+                'off' => $logs->where('status', 'off')->count(),
                 'is_locked' => $logs->count() > 0 && $logs->first()?->is_locked,
             ];
         }
