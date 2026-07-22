@@ -13,7 +13,11 @@ Route::post('/mobile/login', [AuthApiController::class, 'mobileLogin'])->name('m
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthApiController::class, 'logout']);
     Route::get('/user', [AuthApiController::class, 'user']);
-    
+
+    // === Desktop Sync Endpoints ===
+    Route::get('/users', [AuthApiController::class, 'listUsers']);
+    Route::get('/permissions', [RolePermissionApiController::class, 'indexPermissions']);
+
     // Notifications
     Route::get('/notifications', [\App\Modules\Auth\Controllers\Api\V1\NotificationApiController::class, 'index']);
     Route::post('/notifications/mark-all-read', [\App\Modules\Auth\Controllers\Api\V1\NotificationApiController::class, 'markAllAsRead']);
