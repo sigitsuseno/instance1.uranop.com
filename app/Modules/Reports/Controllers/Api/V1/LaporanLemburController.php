@@ -1022,6 +1022,13 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             return $emp;
         });
 
+        // Karyawan SPC Jakarta (section D): Total Hari Kerja selalu 0
+        $spcJakartaEmployees = $spcJakartaEmployees->map(function ($emp) {
+            $emp['total_hari_kerja'] = 0;
+            $emp['total_terima'] = round($emp['total_overtime'] + $emp['total_uang_makan'], 2);
+            return $emp;
+        });
+
         // ── Assemble sections ──────────────────────────────────────
         $sections = [
             [

@@ -197,7 +197,7 @@
                 </template>
 
                 <!-- Employee Totals -->
-                <td class="px-3 py-3 text-right font-bold text-emerald-600 border-r border-(--border-soft)">{{ item.total_hari_kerja ? formatNumber(item.total_hari_kerja) : '-' }}</td>
+                <td class="px-3 py-3 text-right font-bold text-emerald-600 border-r border-(--border-soft)">{{ item.total_hari_kerja != null ? formatNumber(item.total_hari_kerja) : '-' }}</td>
                 <td class="px-3 py-3 text-right font-bold text-green-600 border-r border-(--border-soft)">{{ item.total_overtime ? formatNumber(item.total_overtime) : '-' }}</td>
                 <td class="px-3 py-3 text-right font-bold text-amber-600 border-r border-(--border-soft)">{{ item.total_uang_makan ? formatNumber(item.total_uang_makan) : '-' }}</td>
                 <td class="px-3 py-3 text-right font-bold text-(--primary)">{{ item.total_terima ? formatNumber(item.total_terima) : '-' }}</td>
@@ -209,7 +209,7 @@
                   TOTAL {{ section.label }}
                 </td>
                 <template v-for="dateStr in dates" :key="'st-' + section.key + '-' + dateStr">
-                  <td :colspan="section.key === 'jakarta' ? 5 : 6" class="px-2 py-2"></td>
+                  <td :colspan="(section.key === 'jakarta' || section.key === 'spc_jakarta') ? 5 : 6" class="px-2 py-2"></td>
                 </template>
                 <td class="px-3 py-2 text-right text-xs text-emerald-700 border-r">{{ formatNumber(section.totals.total_hari_kerja) }}</td>
                 <td class="px-3 py-2 text-right text-xs text-green-700 border-r">{{ formatNumber(section.totals.total_overtime) }}</td>
