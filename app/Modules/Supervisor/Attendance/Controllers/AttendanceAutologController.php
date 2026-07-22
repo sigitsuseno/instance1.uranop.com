@@ -768,6 +768,114 @@ class AttendanceAutologController extends Controller
     }
 
     /**
+     * Update Holiday: set semua autolog di tanggal holiday menjadi status='holiday'
+     * dengan check_in/out=NULL, actual_in/out=NULL. Kecuali karyawan GRP-SS.
+     * POST /api/v1/supervisor/attendance/roster/holiday
+     */
+    public function updateHoliday(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $startDate = Carbon::parse($request->input('start_date'))->toDateString();
+        $endDate = Carbon::parse($request->input('end_date'))->toDateString();
+
+        // Ambil semua holiday dalam range
+        $holidayDates = \App\Modules\Schedule\Models\Holiday::whereBetween('date', [$startDate, $endDate])
+            ->pluck('date')
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->toArray();
+
+        if (empty($holidayDates)) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Tidak ada holiday dalam periode ini.',
+                'updated' => 0,
+            ]);
+        }
+
+        // Ambil semua employee KECUALI GRP-SS
+        $employeeIds = Employee::whereDoesntHave('groups', function ($q) {
+            $q->where('reference_code', 'GRP-SS');
+        })->pluck('id');
+
+        if ($employeeIds->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Tidak ada karyawan yang perlu diupdate.',
+                'updated' => 0,
+            ]);
+        }
+
+        $updatedCount = 0;
+        $insertedCount = 0;
+
+        try {
+            DB::beginTransaction();
+
+            foreach ($holidayDates as $dateStr) {
+                // Ambil autologs yang sudah ada di tanggal holiday ini
+                $existingAutologs = AttendanceAutolog::whereDate('date', $dateStr)
+                    ->whereIn('employee_id', $employeeIds)
+                    ->get()
+                    ->keyBy('employee_id');
+
+                foreach ($employeeIds as $empId) {
+                    if (isset($existingAutologs[$empId])) {
+                        // UPDATE existing
+                        $existingAutologs[$empId]->update([
+                            'check_in'        => null,
+                            'check_out'       => null,
+                            'actual_in'       => null,
+                            'actual_out'      => null,
+                            'status'          => 'holiday',
+                            'is_holiday'      => true,
+                            'is_manual_edit'  => true,
+                            'last_edited_at'  => now(),
+                            'last_edited_by'  => Auth::id(),
+                        ]);
+                        $updatedCount++;
+                    } else {
+                        // INSERT baru
+                        AttendanceAutolog::create([
+                            'employee_id'     => $empId,
+                            'date'            => $dateStr,
+                            'check_in'        => null,
+                            'check_out'       => null,
+                            'actual_in'       => null,
+                            'actual_out'      => null,
+                            'status'          => 'holiday',
+                            'is_holiday'      => true,
+                            'is_manual_edit'  => true,
+                            'last_edited_at'  => now(),
+                            'last_edited_by'  => Auth::id(),
+                        ]);
+                        $insertedCount++;
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success'  => true,
+                'message'  => "Holiday berhasil diupdate! {$updatedCount} updated, {$insertedCount} inserted.",
+                'updated'  => $updatedCount,
+                'inserted' => $insertedCount,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Update Holiday Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Sync data dari att_prepares ke attendance_autologs.
      * Tombol Sync di halaman Data Absensi.
      */

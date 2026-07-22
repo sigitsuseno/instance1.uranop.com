@@ -14,6 +14,11 @@
           :class="adjustmentSuccess ? 'text-green-600' : 'text-red-600'">
           {{ adjustmentMessage }}
         </span>
+        <!-- Holiday Feedback -->
+        <span v-if="holidayMessage" class="text-sm font-medium"
+          :class="holidaySuccess ? 'text-green-600' : 'text-red-600'">
+          {{ holidayMessage }}
+        </span>
         <!-- Update Cuti Button -->
         <button @click="handleAdjustment"
           :disabled="isAdjusting"
@@ -25,6 +30,21 @@
             <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
           </svg>
           {{ isAdjusting ? 'Update Cuti...' : 'Update Cuti' }}
+        </button>
+        <!-- Update Holiday Button -->
+        <button @click="handleHolidayUpdate"
+          :disabled="isHolidaying"
+          class="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium">
+          <svg v-if="isHolidaying" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" />
+          </svg>
+          <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+          </svg>
+          {{ isHolidaying ? 'Update Holiday...' : 'Update Holiday' }}
         </button>
         <!-- Refresh Button -->
         <button @click="fetchData"
@@ -358,6 +378,9 @@ const isSaving = ref(false)
 const isAdjusting = ref(false)
 const adjustmentMessage = ref('')
 const adjustmentSuccess = ref(false)
+const isHolidaying = ref(false)
+const holidayMessage = ref('')
+const holidaySuccess = ref(false)
 const editError = ref(null)
 
 const availableGroups = ref([])
@@ -518,6 +541,39 @@ async function handleAdjustment() {
   } finally {
     isAdjusting.value = false
     setTimeout(() => { adjustmentMessage.value = '' }, 8000)
+  }
+}
+
+// ── Holiday Update ──
+async function handleHolidayUpdate() {
+  if (!startDate.value || !endDate.value) {
+    holidayMessage.value = 'Periode belum dipilih.'
+    holidaySuccess.value = false
+    setTimeout(() => { holidayMessage.value = '' }, 5000)
+    return
+  }
+  isHolidaying.value = true
+  holidayMessage.value = ''
+  try {
+    const res = await post('/api/v1/supervisor/attendance/roster/holiday', {
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+    if (res.success) {
+      holidaySuccess.value = true
+      holidayMessage.value = res.message || 'Holiday berhasil diupdate!'
+      // Refresh data setelah update
+      await fetchData()
+    } else {
+      holidaySuccess.value = false
+      holidayMessage.value = res.message || 'Gagal update holiday.'
+    }
+  } catch (e) {
+    holidaySuccess.value = false
+    holidayMessage.value = e.message || 'Gagal update holiday.'
+  } finally {
+    isHolidaying.value = false
+    setTimeout(() => { holidayMessage.value = '' }, 8000)
   }
 }
 
