@@ -100,7 +100,7 @@ class AttendanceAutologController extends Controller
                 'position' => $employee->position?->name,
                 'hadir' => $logs->where('status', 'present')->count(),
                 'lembur' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
-                'cuti' => $logs->where('status', 'leave')->count(),
+                'CT' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
                 'absen' => $logs->where('status', 'absent')->count(),
