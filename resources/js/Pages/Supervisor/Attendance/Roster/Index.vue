@@ -8,6 +8,35 @@
           Matrix kehadiran per karyawan — klik cell untuk edit check_in, check_out, lembur, LM
         </p>
       </div>
+      <div class="flex items-center gap-3">
+        <!-- Adjustment Feedback -->
+        <span v-if="adjustmentMessage" class="text-sm font-medium"
+          :class="adjustmentSuccess ? 'text-green-600' : 'text-red-600'">
+          {{ adjustmentMessage }}
+        </span>
+        <!-- Update Cuti Button -->
+        <button @click="handleAdjustment"
+          :disabled="isAdjusting"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium">
+          <svg v-if="isAdjusting" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" />
+          </svg>
+          <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+          </svg>
+          {{ isAdjusting ? 'Update Cuti...' : 'Update Cuti' }}
+        </button>
+        <!-- Refresh Button -->
+        <button @click="fetchData"
+          :disabled="isLoading"
+          class="px-3 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-(--bg-elevated) transition flex items-center gap-1 text-sm"
+          title="Refresh data">
+          <svg class="w-4 h-4" :class="{ 'animate-spin': isLoading }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10" />
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Group Checkboxes -->
@@ -272,6 +301,22 @@
               :disabled="editForm.is_locked || !editForm.id" />
           </div>
         </div>
+
+        <!-- Status -->
+        <div>
+          <label class="block text-sm font-medium text-(--text-main) mb-1">Status</label>
+          <select v-model="editForm.status"
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            :disabled="editForm.is_locked || !editForm.id">
+            <option value="present">Hadir</option>
+            <option value="absent">Absen</option>
+            <option value="leave">Cuti</option>
+            <option value="permit">Izin</option>
+            <option value="holiday">Libur</option>
+            <option value="off">Off</option>
+            <option value="pending">Pending</option>
+          </select>
+        </div>
       </div>
 
       <template #footer>
@@ -310,6 +355,9 @@ const { get, post } = useApi()
 // ── State ──
 const isLoading = ref(true)
 const isSaving = ref(false)
+const isAdjusting = ref(false)
+const adjustmentMessage = ref('')
+const adjustmentSuccess = ref(false)
 const editError = ref(null)
 
 const availableGroups = ref([])
@@ -333,6 +381,7 @@ const editForm = ref({
   check_out: '',
   lembur: 0,
   lm: 0,
+  status: 'present',
   shift_start: null,
   shift_end: null,
   is_locked: false,
@@ -439,6 +488,39 @@ onMounted(async () => {
   }
 })
 
+// ── Adjustment (Update Cuti ke Autolog) ──
+async function handleAdjustment() {
+  if (!startDate.value || !endDate.value) {
+    adjustmentMessage.value = 'Periode belum dipilih.'
+    adjustmentSuccess.value = false
+    setTimeout(() => { adjustmentMessage.value = '' }, 5000)
+    return
+  }
+  isAdjusting.value = true
+  adjustmentMessage.value = ''
+  try {
+    const res = await post('/api/v1/supervisor/attendance/roster/adjustment', {
+      start_date: startDate.value,
+      end_date: endDate.value,
+    })
+    if (res.success) {
+      adjustmentSuccess.value = true
+      adjustmentMessage.value = res.message || 'Cuti berhasil diupdate!'
+      // Refresh data setelah adjustment
+      await fetchData()
+    } else {
+      adjustmentSuccess.value = false
+      adjustmentMessage.value = res.message || 'Gagal update cuti.'
+    }
+  } catch (e) {
+    adjustmentSuccess.value = false
+    adjustmentMessage.value = e.message || 'Gagal update cuti.'
+  } finally {
+    isAdjusting.value = false
+    setTimeout(() => { adjustmentMessage.value = '' }, 8000)
+  }
+}
+
 // ── Period ──
 function onPeriodChange() {
   const p = payPeriods.value.find(x => x.id === selectedPeriod.value)
@@ -509,6 +591,7 @@ function openEdit(emp, dateObj) {
     check_out: cell.check_out || '',
     lembur: cell.lembur || 0,
     lm: cell.lm || 0,
+    status: cell.status || 'present',
     shift_start: cell.shift_start || null,
     shift_end: cell.shift_end || null,
     is_locked: cell.is_locked || false,
@@ -530,6 +613,7 @@ async function handleSaveEdit() {
       check_out: editForm.value.check_out || null,
       lembur: editForm.value.lembur,
       lm: editForm.value.lm,
+      status: editForm.value.status,
     })
 
     if (res.success) {
@@ -541,6 +625,7 @@ async function handleSaveEdit() {
         autologData.value[empId][dateStr].check_out = res.data.check_out
         autologData.value[empId][dateStr].lembur = res.data.lembur
         autologData.value[empId][dateStr].lm = res.data.lm
+        autologData.value[empId][dateStr].status = res.data.status
       }
       closeEdit()
     } else {

@@ -698,6 +698,76 @@ class AttendanceAutologController extends Controller
     }
 
     /**
+     * Adjustment roster: update status + leave_id di autolog berdasarkan leave_requests.
+     * HANYA update status='leave' dan leave_id — tanpa field lain, tanpa recalculate lembur.
+     * POST /api/v1/supervisor/attendance/roster/adjustment
+     */
+    public function adjustmentRoster(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $startDate = Carbon::parse($request->input('start_date'))->toDateString();
+        $endDate = Carbon::parse($request->input('end_date'))->toDateString();
+
+        // Ambil leave_requests approved dalam range
+        $leaveRequests = LeaveRequest::where('status', 'approved')
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('start_date', [$startDate, $endDate])
+                    ->orWhereBetween('end_date', [$startDate, $endDate])
+                    ->orWhere(function ($q) use ($startDate, $endDate) {
+                        $q->where('start_date', '<=', $startDate)
+                            ->where('end_date', '>=', $endDate);
+                    });
+            })
+            ->get();
+
+        // Ambil autologs dalam range
+        $autologs = AttendanceAutolog::whereBetween('date', [$startDate, $endDate])->get();
+
+        $updatedCount = 0;
+
+        try {
+            DB::beginTransaction();
+
+            foreach ($autologs as $autolog) {
+                $dateStr = Carbon::parse($autolog->date)->toDateString();
+
+                // Cek apakah employee punya approved leave di tanggal ini
+                $leaveForDate = $leaveRequests->where('employee_id', $autolog->employee_id)
+                    ->filter(function ($lr) use ($dateStr) {
+                        return $lr->start_date->toDateString() <= $dateStr
+                            && $lr->end_date->toDateString() >= $dateStr;
+                    })->first();
+
+                if ($leaveForDate) {
+                    $autolog->update([
+                        'status'   => 'leave',
+                        'leave_id' => $leaveForDate->id,
+                    ]);
+                    $updatedCount++;
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Cuti berhasil diupdate! {$updatedCount} records diperbarui.",
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Adjustment Roster Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Sync data dari att_prepares ke attendance_autologs.
      * Tombol Sync di halaman Data Absensi.
      */
@@ -882,6 +952,7 @@ class AttendanceAutologController extends Controller
             'check_out' => ['nullable', 'date_format:H:i'],
             'lembur'    => ['nullable', 'integer', 'min:0'],
             'lm'        => ['nullable', 'integer', 'min:0'],
+            'status'    => ['nullable', 'string', 'in:present,absent,leave,permit,holiday,off,pending'],
         ]);
 
         $autolog = AttendanceAutolog::findOrFail($validated['id']);
@@ -898,6 +969,7 @@ class AttendanceAutologController extends Controller
             'check_out'       => $validated['check_out'] ?? $autolog->check_out,
             'lembur'          => $validated['lembur'] ?? $autolog->lembur,
             'lm'              => $validated['lm'] ?? $autolog->lm,
+            'status'          => $validated['status'] ?? $autolog->status,
             'is_manual_edit'  => true,
             'last_edited_at'  => now(),
             'last_edited_by'  => Auth::id(),
@@ -915,6 +987,7 @@ class AttendanceAutologController extends Controller
                 'check_out' => $autolog->check_out ? $autolog->check_out->format('H:i') : null,
                 'lembur'    => (int) $autolog->lembur,
                 'lm'        => (int) $autolog->lm,
+                'status'    => $autolog->status,
             ],
         ]);
     }
