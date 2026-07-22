@@ -58,7 +58,7 @@ function getStatusLabel(status) {
     const labels = {
         present: 'Hadir',
         absent: 'Absen',
-        leave: 'Cuti',
+        leave: 'CT',
         permit: 'Izin',
         holiday: 'Libur',
         off: 'Off',
