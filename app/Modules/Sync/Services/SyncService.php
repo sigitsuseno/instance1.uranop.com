@@ -13,11 +13,15 @@ use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Employee\Models\EmployeeSalary;
 use App\Modules\Employee\Models\EmployeeSalaryComponent;
 use App\Modules\Kasbon\Models\KasbonRequest;
+use App\Modules\Leave\Models\LeavePeriod;
+use App\Modules\Leave\Models\LeavePolicy;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Company;
 use App\Modules\Organization\Models\Department;
 use App\Modules\Organization\Models\Position;
+use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Schedule\Models\Holiday;
@@ -89,9 +93,13 @@ class SyncService
             'manual-detects'  => ['model' => ManualDetect::class, 'label' => 'Deteksi Manual', 'order' => 430],
 
             // Leave
+            'leave-types'     => ['model' => LeaveType::class, 'label' => 'Tipe Cuti', 'order' => 460],
+            'leave-policies'  => ['model' => LeavePolicy::class, 'label' => 'Kebijakan Cuti', 'order' => 470],
+            'leave-periods'   => ['model' => LeavePeriod::class, 'label' => 'Periode Cuti', 'order' => 480],
             'leave-requests'  => ['model' => LeaveRequest::class, 'label' => 'Cuti', 'order' => 500],
 
             // Payroll
+            'pay-periods'     => ['model' => PayPeriod::class, 'label' => 'Periode Penggajian', 'order' => 550],
             'pay-records'     => ['model' => PayRecord::class, 'label' => 'Penggajian', 'order' => 600],
 
             // Kasbon
@@ -100,19 +108,58 @@ class SyncService
     }
 
     /**
+     * Update the last_modified_at timestamp for a sync module.
+     * Called automatically by SyncTimestampable trait or manually after CRUD.
+     */
+    public static function updateModuleTimestamp(string $module): void
+    {
+        DB::table('sync_module_timestamps')->upsert(
+            [
+                'module_name' => $module,
+                'last_modified_at' => now(),
+            ],
+            ['module_name'],
+            ['last_modified_at']
+        );
+    }
+
+    /**
      * Detect changes per module since a given timestamp.
-     * Returns list of modules that have newer/updated data.
+     * Uses sync_module_timestamps cache for quick check, then queries models
+     * only for modules that have changed.
      */
     public static function detectChanges(?string $since): array
     {
         $sinceDate = $since ? Carbon::parse($since) : now()->subYear();
         $changes = [];
 
+        // Quick check: get modules with changed timestamps (1 query vs 35)
+        try {
+            $timestamps = DB::table('sync_module_timestamps')
+                ->where('last_modified_at', '>', $sinceDate)
+                ->pluck('last_modified_at', 'module_name');
+
+            $changedModules = $timestamps->toArray();
+        } catch (\Throwable) {
+            // Fallback if sync_module_timestamps table doesn't exist yet
+            $changedModules = null;
+        }
+
         foreach (self::modules() as $key => $mod) {
+            // Skip modules that haven't changed (if timestamps available)
+            if ($changedModules !== null && !isset($changedModules[$key])) {
+                continue;
+            }
+
+            // Query actual model to get exact count
             $model = $mod['model'];
-            $count = $model::where('updated_at', '>', $sinceDate)
-                ->orWhere('created_at', '>', $sinceDate)
-                ->count();
+            try {
+                $count = $model::where('updated_at', '>', $sinceDate)
+                    ->orWhere('created_at', '>', $sinceDate)
+                    ->count();
+            } catch (\Throwable) {
+                continue; // Skip models that error
+            }
 
             if ($count > 0) {
                 $changes[] = [

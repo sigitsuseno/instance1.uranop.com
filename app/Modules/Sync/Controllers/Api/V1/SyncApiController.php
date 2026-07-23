@@ -137,6 +137,48 @@ class SyncApiController extends Controller
     }
 
     /**
+     * Quick check — lightweight endpoint untuk polling desktop.
+     * Hanya return modul mana yang berubah (tanpa count query).
+     * Auth: desktop.token
+     *
+     * GET /api/sync/quick-changes?since=2026-07-01T00:00:00
+     */
+    public function quickChanges(Request $request): JsonResponse
+    {
+        $since = $request->query('since');
+
+        try {
+            $sinceDate = $since ? \Carbon\Carbon::parse($since) : now()->subYear();
+            $changed = \Illuminate\Support\Facades\DB::table('sync_module_timestamps')
+                ->where('last_modified_at', '>', $sinceDate)
+                ->pluck('last_modified_at', 'module_name');
+
+            $modules = [];
+            foreach (SyncService::modules() as $key => $mod) {
+                if (isset($changed[$key])) {
+                    $modules[] = [
+                        'module' => $key,
+                        'label'  => $mod['label'],
+                        'changed' => true,
+                    ];
+                }
+            }
+
+            return response()->json([
+                'modules' => $modules,
+                'total'   => count($modules),
+                'since'   => $since ?? 'all',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'modules' => [],
+                'total'   => 0,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * PULL data untuk modul tertentu.
      * Auth: desktop.token
      *

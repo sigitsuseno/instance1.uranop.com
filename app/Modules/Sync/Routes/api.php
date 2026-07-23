@@ -41,6 +41,7 @@ Route::prefix('sync')->middleware(['desktop.token'])->group(function () {
 
     // Generic module endpoints
     Route::get('/changes', [SyncApiController::class, 'changes']);
+    Route::get('/quick-changes', [SyncApiController::class, 'quickChanges']);
     Route::get('{module}', [SyncApiController::class, 'pull'])
         ->where('module', '[a-z-]+');
     Route::post('{module}/batch', [SyncApiController::class, 'push'])
