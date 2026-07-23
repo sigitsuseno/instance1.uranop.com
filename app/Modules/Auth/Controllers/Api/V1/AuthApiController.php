@@ -140,4 +140,26 @@ class AuthApiController extends Controller
     {
         return new AuthResource($request->user()->load('roles', 'permissions'));
     }
+
+    /**
+     * List all users for desktop sync.
+     * Returns flat array of users with roles.
+     */
+    public function listUsers(): JsonResponse
+    {
+        $users = User::with('roles')
+            ->select(['id', 'name', 'email', 'is_active', 'created_at', 'updated_at'])
+            ->get()
+            ->map(fn ($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->roles->first()?->name ?? 'user',
+                'is_active' => $user->is_active,
+                'created_at' => $user->created_at?->toDateTimeString(),
+                'updated_at' => $user->updated_at?->toDateTimeString(),
+            ]);
+
+        return response()->json($users);
+    }
 }
