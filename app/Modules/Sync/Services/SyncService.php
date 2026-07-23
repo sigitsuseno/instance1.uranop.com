@@ -10,8 +10,12 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeBpjs;
 use App\Modules\Employee\Models\EmployeeContract;
+use App\Modules\Employee\Models\EmployeeDocument;
+use App\Modules\Employee\Models\EmployeeFamily;
+use App\Modules\Employee\Models\EmployeePositionHistory;
 use App\Modules\Employee\Models\EmployeeSalary;
 use App\Modules\Employee\Models\EmployeeSalaryComponent;
+use App\Modules\Employee\Models\EmployeeTermination;
 use App\Modules\Kasbon\Models\KasbonRequest;
 use App\Modules\Leave\Models\LeavePeriod;
 use App\Modules\Leave\Models\LeavePolicy;
@@ -30,6 +34,7 @@ use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Schedule\Models\WorkPatternDetail;
 use App\Modules\Schedule\Models\WorkingCalendar;
 use App\Modules\Settings\Models\BpjsConfig;
+use App\Modules\Settings\Models\EmployeeGroup;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Modules\Settings\Models\EmployeeGroupSetting;
 use App\Modules\Settings\Models\PphConfig;
@@ -74,9 +79,15 @@ class SyncService
             // Employee
             'employees'       => ['model' => Employee::class, 'label' => 'Karyawan', 'order' => 200],
             'employee-contracts' => ['model' => EmployeeContract::class, 'label' => 'Kontrak Karyawan', 'order' => 210],
+            'employee-families' => ['model' => EmployeeFamily::class, 'label' => 'Keluarga Karyawan', 'order' => 215],
+            'employee-documents' => ['model' => EmployeeDocument::class, 'label' => 'Dokumen Karyawan', 'order' => 218],
             'employee-salaries' => ['model' => EmployeeSalary::class, 'label' => 'Gaji Karyawan', 'order' => 220],
             'employee-salary-components' => ['model' => EmployeeSalaryComponent::class, 'label' => 'Komponen Gaji Karyawan', 'order' => 230],
-            'employee-bpjs'   => ['model' => EmployeeBpjs::class, 'label' => 'BPJS Karyawan', 'order' => 240],
+            'employee-position-histories' => ['model' => EmployeePositionHistory::class, 'label' => 'Riwayat Pekerjaan', 'order' => 235],
+            'employee-terminations' => ['model' => EmployeeTermination::class, 'label' => 'PHK / Resign', 'order' => 240],
+            'employee-bpjs'   => ['model' => EmployeeBpjs::class, 'label' => 'BPJS Karyawan', 'order' => 250],
+            'employee-groups' => ['model' => EmployeeGroupMaster::class, 'label' => 'Group Karyawan', 'order' => 260],
+            'employee-group-members' => ['model' => EmployeeGroup::class, 'label' => 'Anggota Group', 'order' => 270],
 
             // Schedule
             'work-patterns'   => ['model' => WorkPattern::class, 'label' => 'Pola Kerja', 'order' => 300],

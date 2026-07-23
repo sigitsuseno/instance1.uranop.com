@@ -3,8 +3,10 @@
 namespace App\Modules\Employee\Models;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 /**
  * EmployeeSalaryComponent — komponen gaji detail per karyawan.
@@ -22,6 +24,7 @@ class EmployeeSalaryComponent extends Model
     protected $table = 'employee_salary_components';
 
     protected $fillable = [
+        'uuid',
         'employee_id',
         'gaji_pokok',
         'premi',
@@ -112,5 +115,18 @@ class EmployeeSalaryComponent extends Model
     public function getTakeHomePayAttribute(): float
     {
         return $this->total_penghasilan - $this->total_potongan + (float) $this->kompensasi_pph;
+    }
+
+    // ========== BOOT ==========
+
+    protected static function booted(): void
+    {
+        static::bootTimestampable();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
     }
 }

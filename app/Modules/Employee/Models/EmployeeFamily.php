@@ -3,16 +3,19 @@
 namespace App\Modules\Employee\Models;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class EmployeeFamily extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_families';
 
     protected $fillable = [
+        'uuid',
         'employee_id',
         'relation',
         'name',
@@ -58,5 +61,18 @@ class EmployeeFamily extends Model
     public function scopeDependents($query)
     {
         return $query->where('is_dependent', true);
+    }
+
+    // ========== BOOT ==========
+
+    protected static function booted(): void
+    {
+        static::bootTimestampable();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
     }
 }

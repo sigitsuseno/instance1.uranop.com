@@ -3,16 +3,19 @@
 namespace App\Modules\Employee\Models;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class EmployeeDocument extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_documents';
 
     protected $fillable = [
+        'uuid',
         'employee_id',
         'document_type',
         'document_number',
@@ -81,5 +84,18 @@ class EmployeeDocument extends Model
         ];
 
         return $labels[$this->document_type] ?? $this->document_type;
+    }
+
+    // ========== BOOT ==========
+
+    protected static function booted(): void
+    {
+        static::bootTimestampable();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
     }
 }

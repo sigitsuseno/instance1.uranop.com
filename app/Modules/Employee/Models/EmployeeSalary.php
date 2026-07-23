@@ -3,16 +3,19 @@
 namespace App\Modules\Employee\Models;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class EmployeeSalary extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_salaries';
 
     protected $fillable = [
+        'uuid',
         'employee_id',
         'base_salary',
         'premi',
@@ -88,5 +91,18 @@ class EmployeeSalary extends Model
             'adjustment' => 'Penyesuaian',
             default      => $this->change_type ?? '-',
         };
+    }
+
+    // ========== BOOT ==========
+
+    protected static function booted(): void
+    {
+        static::bootTimestampable();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
     }
 }
