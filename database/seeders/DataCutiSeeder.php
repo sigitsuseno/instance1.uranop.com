@@ -62,6 +62,19 @@ class DataCutiSeeder extends Seeder
     protected int $createdRequests = 0;
     protected int $createdDecrements = 0;
     protected int $employeesNotFound = 0;
+    protected int $skippedDuplicates = 0;
+
+    /**
+     * Cache untuk cek duplikasi — key: employee_id:leave_type_id:period_id:start_date:end_date
+     * Supaya baris duplikat di Excel tidak masuk dua kali, meskipun dalam satu run.
+     */
+    protected array $existingRequests = [];
+
+    /**
+     * Cache untuk mencegah decrement ganda pada EmployeeLeave yang sama.
+     * Key: employee_id:leave_type_id:period_id
+     */
+    protected array $decrementedBalances = [];
 
     public function run(): void
     {
@@ -93,6 +106,7 @@ class DataCutiSeeder extends Seeder
         echo "Leave requests dibuat : {$this->createdRequests}\n";
         echo "EmployeeLeave decrement: {$this->createdDecrements}\n";
         echo "NIP tidak ditemukan    : {$this->employeesNotFound}\n";
+        echo "Duplikat diskip        : {$this->skippedDuplicates}\n";
         echo "\n=== SEEDER COMPLETED ===\n";
     }
 
@@ -121,9 +135,17 @@ class DataCutiSeeder extends Seeder
         $dataRows = $rows['data']; // sudah tanpa header
         echo "Total baris data: " . count($dataRows) . "\n";
 
-        // Reset running balance untuk periode baru
-        // (setiap periode punya saldo awal sendiri dari employee_leaves)
+        // Reset running balance & cache untuk periode baru
         $this->runningBalance = [];
+        $this->decrementedBalances = [];
+
+        // Pre-load existing leave requests untuk deteksi duplikasi
+        $existing = LeaveRequest::where('leave_period_id', $periodId)->get();
+        foreach ($existing as $lr) {
+            $key = $this->uniqueKey($lr->employee_id, $lr->leave_type_id, $periodId, $lr->start_date, $lr->end_date);
+            $this->existingRequests[$key] = true;
+        }
+        echo "Pre-loaded " . count($existing) . " existing leave requests untuk cek duplikasi.\n";
 
         // Sort by start_date ascending biar sisa_cuti kronologis
         usort($dataRows, function ($a, $b) {
@@ -133,6 +155,7 @@ class DataCutiSeeder extends Seeder
         $periodRequests = 0;
         $periodDecrements = 0;
         $periodNotFound = 0;
+        $periodDuplicates = 0;
         $skipped = 0;
 
         foreach ($dataRows as $i => $row) {
@@ -172,12 +195,19 @@ class DataCutiSeeder extends Seeder
             $leaveTypeId    = $this->leaveTypeMap[$leaveTypeCode]['id'];
             $balanceType    = $this->leaveTypeMap[$leaveTypeCode]['balance_type'];
 
+            // CEK DUPLIKASI — skip kalau leave request sudah ada (dari DB maupun dari run saat ini)
+            $uniqueKey = $this->uniqueKey($employeeId, $leaveTypeId, $periodId, $startDate, $endDate);
+            if (isset($this->existingRequests[$uniqueKey])) {
+                $periodDuplicates++;
+                continue;
+            }
+
             // Status: semua "Disetujui" → approved
             $status = 'approved';
 
             DB::transaction(function () use (
                 $employeeId, $leaveTypeId, $periodId, $startDate, $endDate,
-                $durasi, $alasan, $status, $balanceType, &$periodRequests, &$periodDecrements
+                $durasi, $alasan, $status, $balanceType, $uniqueKey, &$periodRequests, &$periodDecrements
             ) {
                 // 1. Create leave_request
                 $leaveRequest = LeaveRequest::create([
@@ -196,10 +226,20 @@ class DataCutiSeeder extends Seeder
                 ]);
                 $periodRequests++;
 
+                // Tandai di cache supaya baris duplikat berikutnya juga diskip
+                $this->existingRequests[$uniqueKey] = true;
+
                 // 2. Jika balance_type = decrement → UPDATE employee_leave + hitung sisa_cuti
                 if ($balanceType === 'decrement') {
+                    // Cek decrement ganda — satu employee+type+period cuma boleh sekali
+                    $balanceKey = "{$employeeId}:{$leaveTypeId}:{$periodId}";
+                    if (isset($this->decrementedBalances[$balanceKey])) {
+                        // Sudah pernah di-decrement di run ini → skip
+                        return;
+                    }
+                    $this->decrementedBalances[$balanceKey] = true;
+
                     // Cari record employee_leave yang jadi "saldo berjalan"
-                    // Prioritas: cari transaction_type 'initial' atau 'increment' terbaru
                     $balanceRecord = EmployeeLeave::where('employee_id', $employeeId)
                         ->where('leave_type_id', $leaveTypeId)
                         ->where('leave_period_id', $periodId)
@@ -239,11 +279,22 @@ class DataCutiSeeder extends Seeder
         echo "  Leave requests : {$periodRequests}\n";
         echo "  Decrements     : {$periodDecrements}\n";
         echo "  NIP not found  : {$periodNotFound}\n";
+        echo "  Duplikat       : {$periodDuplicates}\n";
         echo "  Skipped        : {$skipped}\n";
 
         $this->createdRequests   += $periodRequests;
         $this->createdDecrements += $periodDecrements;
         $this->employeesNotFound += $periodNotFound;
+        $this->skippedDuplicates += $periodDuplicates;
+    }
+
+    /**
+     * Generate unique key untuk deteksi duplikasi.
+     * Kombinasi: employee_id + leave_type_id + period_id + start_date + end_date
+     */
+    protected function uniqueKey(int $employeeId, int $leaveTypeId, int $periodId, string $startDate, string $endDate): string
+    {
+        return "{$employeeId}:{$leaveTypeId}:{$periodId}:{$startDate}:{$endDate}";
     }
 
     /**

@@ -76,22 +76,22 @@ A. di AttendanceImportService
 
 6. mengisi check_in, check_out, actual_in dan actual_out dengan 3 kondisi berdasarkan sch_employee_shift_roster->work_pattern_type :
    6.1. jika sch_employee_shift_roster->work_pattern_type = FIXED,
-   a. Hari minggu dan holliday  
+   a. Hari minggu dan holliday
     - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
-   b. cuti / izin / sakit  
+      b. cuti / izin / sakit
     - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
-   c. hari kerja - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
-   d. lembur maksimal di hari kerja 3 jam,
-   6.3. jika sch_employee_shift_roster->work_pattern_type = FLEX-SHIFT,
-   a. Hari minggu dan holliday  
+      c. hari kerja - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
+      d. lembur maksimal di hari kerja 3 jam,
+      6.3. jika sch_employee_shift_roster->work_pattern_type = FLEX-SHIFT,
+      a. Hari minggu dan holliday
     - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
-   b. cuti / izin / sakit  
+      b. cuti / izin / sakit
     - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
-   c. hari kerja - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
-   d. lembur maksimal di hari kerja 3 jam,
-   6.1. jika sch_employee_shift_roster->work_pattern_type = SHIFT,
-   a. sch_employee_shift_roster->external_code = "L" - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
-   b. cuti / izin / sakit  
+      c. hari kerja - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
+      d. lembur maksimal di hari kerja 3 jam,
+      6.1. jika sch_employee_shift_roster->work_pattern_type = SHIFT,
+      a. sch_employee_shift_roster->external_code = "L" - check_in = null - check_out = null - actual_in = null - actual_out = null - status = off
+      b. cuti / izin / sakit
     - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
-   c. sch_employee_shift_roster->external_code != "L"
-   c.1 jika lembur === 4 - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
+      c. sch_employee_shift_roster->external_code != "L"
+      c.1 jika lembur === 4 - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
