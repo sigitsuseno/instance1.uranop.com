@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Supervisor\Controllers\Api\V1\SupervisorWorkScheduleController;
+use App\Modules\Supervisor\Controllers\Api\V1\SupervisorShiftController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorDashboardController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorBpjsConfigController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorPphConfigController;
