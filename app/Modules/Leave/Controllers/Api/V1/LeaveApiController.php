@@ -749,6 +749,17 @@ class LeaveApiController extends Controller
 
         $data = $query->get()->toArray();
 
+        // Deduplikasi: tiap kombinasi employee+leave_type+start_date+end_date cuma 1 record
+        $seen = [];
+        $data = array_values(array_filter($data, function ($row) use (&$seen) {
+            $key = ($row['employee_id'] ?? '') . ':' . ($row['leave_type_id'] ?? '') . ':' . ($row['start_date'] ?? '') . ':' . ($row['end_date'] ?? '');
+            if (isset($seen[$key])) {
+                return false;
+            }
+            $seen[$key] = true;
+            return true;
+        }));
+
         $periodName = '';
         if ($periodId) {
             $period = LeavePeriod::find($periodId);
