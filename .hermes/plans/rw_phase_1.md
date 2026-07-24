@@ -10,23 +10,23 @@
 
 ### Stack Teknologi
 
-| Layer | Teknologi | Auth | Keterangan |
-|-------|-----------|------|------------|
-| **Web UI** | Inertia 3 (Laravel SSR + Vue 3) | Session cookie | Server-side routing, Inertia middleware |
-| **REST API** | Laravel `Api/V1/` | Sanctum token (Bearer) | Untuk desktop & mobile |
-| **Sync API** | Laravel `Api/Sync/` | Sanctum token | Batch sync desktop → server |
-| **Desktop** | Tauri v2 (Rust + WebView) | Sanctum token (localStorage) | Offline-first, local SQLite |
-| **CSS** | Tailwind CSS v4 + CSS variables | — | NO hardcode Tailwind colors |
+| Layer        | Teknologi                       | Auth                         | Keterangan                              |
+| ------------ | ------------------------------- | ---------------------------- | --------------------------------------- |
+| **Web UI**   | Inertia 3 (Laravel SSR + Vue 3) | Session cookie               | Server-side routing, Inertia middleware |
+| **REST API** | Laravel `Api/V1/`               | Sanctum token (Bearer)       | Untuk desktop & mobile                  |
+| **Sync API** | Laravel `Api/Sync/`             | Sanctum token                | Batch sync desktop → server             |
+| **Desktop**  | Tauri v2 (Rust + WebView)       | Sanctum token (localStorage) | Offline-first, local SQLite             |
+| **CSS**      | Tailwind CSS v4 + CSS variables | —                            | NO hardcode Tailwind colors             |
 
 ### Aturan WAJIB
 
 1. **UI**: Sebelum buat UI, **WAJIB** baca `.hermes/uistyle.md`
-   - Tema: Clean Elegant Enterprise
-   - CSS variables ONLY (`bg-(--bg-main)`, `text-(--text-main)`, dll)
-   - DILARANG hardcode Tailwind color (gray-800, blue-500, etc)
-   - Spacing: `p-4` / `p-6` max. Element: `sm=h-8`, `md/lg=h-10`
-   - No double padding parent-child. `rounded-md`.
-   - Light/dark via localStorage
+    - Tema: Clean Elegant Enterprise
+    - CSS variables ONLY (`bg-(--bg-main)`, `text-(--text-main)`, dll)
+    - DILARANG hardcode Tailwind color (gray-800, blue-500, etc)
+    - Spacing: `p-4` / `p-6` max. Element: `sm=h-8`, `md/lg=h-10`
+    - No double padding parent-child. `rounded-md`.
+    - Light/dark via localStorage
 2. **Response format**: Semua API pakai `BaseApiController::success()` / `error()` / `paginated()`
 3. **Service layer**: Business logic di Service, Controller cuma I/O
 4. **Test**: TDD — test service dulu, baru controller
@@ -185,18 +185,18 @@ H:\laragon\www\hris-master\
 
 ### 2.2 `users`
 
-| Kolom         | Type                  | Keterangan   |
-| ------------- | --------------------- | ------------ |
-| id            | bigint (PK)           |              |
-| name          | varchar(100)          |              |
-| email         | varchar(100) UNIQUE   |              |
-| password      | varchar(255)          | Bcrypt       |
-| avatar        | varchar(255) nullable |              |
-| is_active     | tinyint(1) default 1  |              |
-| last_login_at | timestamp nullable    |              |
-| last_login_ip | varchar(45) nullable  |              |
-| created_at    | timestamp             |              |
-| updated_at    | timestamp             |              |
+| Kolom         | Type                  | Keterangan |
+| ------------- | --------------------- | ---------- |
+| id            | bigint (PK)           |            |
+| name          | varchar(100)          |            |
+| email         | varchar(100) UNIQUE   |            |
+| password      | varchar(255)          | Bcrypt     |
+| avatar        | varchar(255) nullable |            |
+| is_active     | tinyint(1) default 1  |            |
+| last_login_at | timestamp nullable    |            |
+| last_login_ip | varchar(45) nullable  |            |
+| created_at    | timestamp             |            |
+| updated_at    | timestamp             |            |
 
 ### 2.3 `user_preferences`
 
@@ -229,17 +229,17 @@ Tabel standar Sanctum:
 
 ### 2.6 `notifications`
 
-| Kolom       | Type                       | Keterangan                         |
-| ----------- | -------------------------- | ---------------------------------- |
-| id          | bigint (PK)                |                                    |
-| user_id     | bigint (FK→users) nullable | null = broadcast semua             |
-| type        | varchar(50)                | leave_approved, payroll_ready, etc |
-| title       | varchar(200)               |                                    |
-| body        | text                       |                                    |
-| data        | json nullable              | Payload (leave_id, payroll_id)     |
-| is_read     | tinyint(1) default 0       |                                    |
-| read_at     | timestamp nullable         |                                    |
-| created_at  | timestamp                  |                                    |
+| Kolom      | Type                       | Keterangan                         |
+| ---------- | -------------------------- | ---------------------------------- |
+| id         | bigint (PK)                |                                    |
+| user_id    | bigint (FK→users) nullable | null = broadcast semua             |
+| type       | varchar(50)                | leave_approved, payroll_ready, etc |
+| title      | varchar(200)               |                                    |
+| body       | text                       |                                    |
+| data       | json nullable              | Payload (leave_id, payroll_id)     |
+| is_read    | tinyint(1) default 0       |                                    |
+| read_at    | timestamp nullable         |                                    |
+| created_at | timestamp                  |                                    |
 
 ### 2.7 `push_subscriptions`
 
@@ -256,20 +256,20 @@ Tabel standar Sanctum:
 
 ### 2.8 `audit_logs`
 
-| Kolom       | Type                       | Keterangan                               |
-| ----------- | -------------------------- | ---------------------------------------- |
-| id          | bigint (PK)                |                                          |
-| user_id     | bigint (FK→users) nullable |                                          |
-| context     | varchar(20) default 'main' | main / shadow / cron                     |
-| module      | varchar(50)                | Auth, Employee, Attendance, dll          |
-| action      | varchar(50)                | created, updated, deleted, login, logout |
-| model_type  | varchar(100)               | App\Modules\Employee\Models\Employee     |
-| model_id    | bigint nullable            |                                          |
-| old_values  | json nullable              | Data sebelum diubah                      |
-| new_values  | json nullable              | Data setelah diubah                      |
-| ip_address  | varchar(45) nullable       |                                          |
-| user_agent  | varchar(500) nullable      |                                          |
-| created_at  | timestamp                  |                                          |
+| Kolom      | Type                       | Keterangan                               |
+| ---------- | -------------------------- | ---------------------------------------- |
+| id         | bigint (PK)                |                                          |
+| user_id    | bigint (FK→users) nullable |                                          |
+| context    | varchar(20) default 'main' | main / shadow / cron                     |
+| module     | varchar(50)                | Auth, Employee, Attendance, dll          |
+| action     | varchar(50)                | created, updated, deleted, login, logout |
+| model_type | varchar(100)               | App\Modules\Employee\Models\Employee     |
+| model_id   | bigint nullable            |                                          |
+| old_values | json nullable              | Data sebelum diubah                      |
+| new_values | json nullable              | Data setelah diubah                      |
+| ip_address | varchar(45) nullable       |                                          |
+| user_agent | varchar(500) nullable      |                                          |
+| created_at | timestamp                  |                                          |
 
 ---
 
@@ -519,6 +519,7 @@ GET    /api/v1/dashboard/stats         # statistik dashboard
 ### 7.1 Arsitektur
 
 Inertia 3 menghubungkan Laravel backend dengan Vue 3 frontend via SSR:
+
 - Laravel controller render Inertia page → Vue component di-mount di client
 - Session-based auth (cookie), tidak perlu token di localStorage
 - Routing ditangani Laravel (server-side), tidak pakai Vue Router
