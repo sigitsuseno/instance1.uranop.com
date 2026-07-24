@@ -79,8 +79,10 @@ async function fetchData() {
 }
 
 // ── Count Display ────────────────────────────
-function getCount(att) {
+function getCount(att, sectionLabel = '') {
     if (!att) return '-'
+    // Section A & B: hide OT/LM
+    if (sectionLabel.startsWith('A.') || sectionLabel.startsWith('B.')) return '-'
     const val = att.is_holiday ? att.lm : att.overtime
     if (val === null || val === undefined || val === 0) return '-'
     return (Number(val) / 60).toFixed(1)
@@ -100,8 +102,10 @@ function getStatusClass(status) {
     }
 }
 
-function getCountClass(att) {
+function getCountClass(att, sectionLabel = '') {
     if (!att) return 'text-(--text-soft) text-[10px]'
+    // Section A & B: hide OT/LM
+    if (sectionLabel.startsWith('A.') || sectionLabel.startsWith('B.')) return 'text-(--text-soft) text-[10px]'
     const val = att.is_holiday ? att.lm : att.overtime
     if (!val) return 'text-(--text-soft) text-[10px]'
     return 'text-(--text-soft) text-[10px]'
@@ -320,7 +324,7 @@ watch(selectedGroups, () => {
                                         </td>
                                         <td class="px-1 py-2 text-center text-xs border-b border-l border-(--border-soft)"
                                             :class="row.attendance[d.date]?.is_holiday ? 'bg-red-50/30 dark:bg-red-950/15' : ''">
-                                            <span :class="getCountClass(row.attendance[d.date])">{{ getCount(row.attendance[d.date]) }}</span>
+                                            <span :class="getCountClass(row.attendance[d.date], section.label)">{{ getCount(row.attendance[d.date], section.label) }}</span>
                                         </td>
                                     </template>
                                 </tr>

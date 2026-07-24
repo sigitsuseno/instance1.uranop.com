@@ -702,7 +702,7 @@ class AttendanceAutologController extends Controller
 
     /**
      * Adjustment roster: update status + leave_id di autolog berdasarkan leave_requests.
-     * HANYA update status='leave' dan leave_id — tanpa field lain, tanpa recalculate lembur.
+     * Status ditentukan dari leave_type.code: SKT→sakit, IZN→izin, lainnya→leave.
      * POST /api/v1/supervisor/attendance/roster/adjustment
      */
     public function adjustmentRoster(Request $request)
@@ -713,8 +713,9 @@ class AttendanceAutologController extends Controller
         $startDate = Carbon::parse($request->input('start_date'))->toDateString();
         $endDate = Carbon::parse($request->input('end_date'))->toDateString();
 
-        // Ambil leave_requests approved dalam range
-        $leaveRequests = LeaveRequest::where('status', 'approved')
+        // Ambil leave_requests approved dalam range (dengan relasi leaveType)
+        $leaveRequests = LeaveRequest::with('leaveType')
+            ->where('status', 'approved')
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('start_date', [$startDate, $endDate])
                     ->orWhereBetween('end_date', [$startDate, $endDate])
@@ -744,8 +745,16 @@ class AttendanceAutologController extends Controller
                     })->first();
 
                 if ($leaveForDate) {
+                    // Tentukan status berdasarkan leave type code
+                    $code = $leaveForDate->leaveType?->code;
+                    $status = match ($code) {
+                        'SKT'   => 'sakit',
+                        'IZN'   => 'izin',
+                        default => 'leave',
+                    };
+
                     $autolog->update([
-                        'status'   => 'leave',
+                        'status'   => $status,
                         'leave_id' => $leaveForDate->id,
                     ]);
                     $updatedCount++;

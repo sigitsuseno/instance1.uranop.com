@@ -85,6 +85,8 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
                 foreach ($this->sections as $section) {
                     if (empty($section['data'])) continue;
 
+                    $hideOt = str_starts_with($section['label'], 'A.') || str_starts_with($section['label'], 'B.');
+
                     // --- Section label ---
                     $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
                     $sheet->setCellValue("A{$currentRow}", $section['label'] . ' (' . count($section['data']) . ' karyawan)');
@@ -148,7 +150,7 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
                             $lm = $att['lm'] ?? null;
                             $ot = $att['overtime'] ?? null;
                             $countVal = $isHoliday ? $lm : $ot;
-                            $countDisplay = ($countVal && $countVal > 0) ? round($countVal / 60, 1) : '-';
+                            $countDisplay = $hideOt ? '-' : (($countVal && $countVal > 0) ? round($countVal / 60, 1) : '-');
 
                             $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", $status);
                             $sheet->setCellValue(self::colLetter($col + 1) . "{$currentRow}", $countDisplay);
