@@ -5,6 +5,7 @@ namespace App\Modules\Schedule\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\Schedule\Models\Shift;
 use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Schedule\Resources\ScheduleResource;
 use Illuminate\Http\Request;
