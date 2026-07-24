@@ -19,7 +19,7 @@ use Illuminate\Support\Str;
  */
 class EmployeeSalaryComponent extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_salary_components';
 
