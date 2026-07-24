@@ -47,6 +47,16 @@
           Import Excel
         </button>
 
+        <button
+          @click="updateRosterCuti"
+          :disabled="auth.isManajemen || updatingCuti"
+          class="h-10 px-4 font-semibold rounded-md flex items-center text-xs transition-colors"
+          :class="auth.isManajemen || updatingCuti ? 'bg-amber-50/50 text-amber-600/50 cursor-not-allowed dark:bg-amber-500/5 dark:text-amber-400/50' : 'bg-amber-50 text-amber-600 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400'"
+        >
+          <span v-if="updatingCuti" class="inline-block w-4 h-4 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mr-2"></span>
+          {{ updatingCuti ? 'Mengupdate...' : 'Update Cuti' }}
+        </button>
+
       </div>
 
       <!-- Search Input -->
@@ -410,6 +420,9 @@ const importYear = ref(new Date().getFullYear())
 const importing = ref(false)
 const importResult = ref(null)
 
+// ─── Update Cuti State ───────────────────────
+const updatingCuti = ref(false)
+
 const monthLabels = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
@@ -573,5 +586,27 @@ function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / 1048576).toFixed(1) + ' MB'
+}
+
+// ─── Update Cuti ─────────────────────────────
+async function updateRosterCuti() {
+  if (!confirm(`Update cuti untuk periode ${monthLabels[prevMonthIndex.value]} ${prevMonthYear.value} s/d ${monthLabels[selectedMonth.value - 1]} ${selectedYear.value}?`)) return
+
+  updatingCuti.value = true
+
+  try {
+    const { post } = useApi()
+    const response = await post('/api/schedule/roster/update-cuti', {
+      year: selectedYear.value,
+      month: selectedMonth.value,
+    })
+
+    alert(response.message || 'Update cuti berhasil!')
+    await store.fetchRosterForPeriod(selectedYear.value, selectedMonth.value)
+  } catch (error) {
+    alert('Gagal update cuti: ' + (error.message || 'Unknown error'))
+  } finally {
+    updatingCuti.value = false
+  }
 }
 </script>

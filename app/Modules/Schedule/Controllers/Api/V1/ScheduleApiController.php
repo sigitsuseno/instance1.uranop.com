@@ -3,7 +3,8 @@
 namespace App\Modules\Schedule\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Schedule\Models\Shift;
+use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Schedule\Resources\ScheduleResource;
 use Illuminate\Http\Request;
@@ -483,6 +484,71 @@ class ScheduleApiController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Jadwal berhasil diupdate'
+        ]);
+    }
+
+    /**
+     * Update roster with leave data based on approved leave requests in the period
+     */
+    public function updateRosterCuti(Request $request)
+    {
+        $request->validate([
+            'year' => 'required|integer',
+            'month' => 'required|integer|min:1|max:12',
+        ]);
+
+        $year = $request->year;
+        $month = $request->month;
+
+        $start = \Carbon\Carbon::create($year, $month, 25)->subMonth();
+        $end = \Carbon\Carbon::create($year, $month, 24);
+
+        // Ambil semua approved leave requests yang overlap dengan periode roster
+        $leaveRequests = LeaveRequest::with('leaveType')
+            ->where('status', 'approved')
+            ->where(function ($q) use ($start, $end) {
+                $q->whereBetween('start_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+                  ->orWhereBetween('end_date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+                  ->orWhere(function ($q2) use ($start, $end) {
+                      $q2->where('start_date', '<=', $start->format('Y-m-d'))
+                         ->where('end_date', '>=', $end->format('Y-m-d'));
+                  });
+            })
+            ->get();
+
+        $updatedCount = 0;
+
+        foreach ($leaveRequests as $lr) {
+            $code = $lr->leaveType?->code;
+
+            // Tentukan rentang tanggal yang overlap dengan periode roster
+            $overlapStart = max($lr->start_date->timestamp, $start->timestamp);
+            $overlapEnd = min($lr->end_date->timestamp, $end->timestamp);
+
+            $current = \Carbon\Carbon::createFromTimestamp($overlapStart);
+            $periodEnd = \Carbon\Carbon::createFromTimestamp($overlapEnd);
+
+            while ($current <= $periodEnd) {
+                $dateStr = $current->format('Y-m-d');
+
+                \App\Modules\Schedule\Models\EmployeeShiftRoster::where('employee_id', $lr->employee_id)
+                    ->where('date', $dateStr)
+                    ->update([
+                        'external_code' => $code,
+                        'leave_id' => $lr->id,
+                        'is_leave' => true,
+                        'updated_by' => auth()->id() ?? 1,
+                    ]);
+
+                $current->addDay();
+                $updatedCount++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Roster cuti berhasil diperbarui untuk {$updatedCount} jadwal.",
+            'updated' => $updatedCount,
         ]);
     }
 
