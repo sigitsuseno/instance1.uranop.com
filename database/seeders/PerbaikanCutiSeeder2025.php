@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
-class PerbaikanCutiSeeder extends Seeder
+class PerbaikanCutiSeeder2025 extends Seeder
 {
     protected int $periodId = 2;
-    protected string $filename = 'perbaikan_cuti.xlsx';
+    protected string $filename = 'data_cuti_2025-2026.xlsx';
 
     protected array $tipeCutiMapping = [
         'Cuti Tahunan'              => 'CT',

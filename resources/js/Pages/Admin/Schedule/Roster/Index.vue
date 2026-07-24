@@ -47,20 +47,6 @@
           Import Excel
         </button>
 
-        <router-link
-          v-if="!auth.isManajemen"
-          :to="{ name: 'schedule.roster.generate' }"
-          class="h-10 px-4 bg-(--primary) hover:bg-(--primary-hover) text-white font-semibold rounded-md flex items-center text-xs transition-colors"
-        >
-          Generate Roster
-        </router-link>
-        <button
-          v-else
-          disabled
-          class="h-10 px-4 bg-(--primary)/50 text-white/70 cursor-not-allowed font-semibold rounded-md flex items-center text-xs transition-colors"
-        >
-          Generate Roster
-        </button>
       </div>
 
       <!-- Search Input -->
