@@ -3,20 +3,20 @@
 namespace App\Modules\Sync\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Instance\Models\Instance;
-use App\Modules\Organization\Models\Company;
-use App\Modules\Organization\Models\Branch;
-use App\Modules\Organization\Models\Department;
-use App\Modules\Organization\Models\Position;
-use App\Modules\Settings\Models\SystemSetting;
+use App\Modules\Sync\Models\DesktopLicense;
+use App\Modules\Sync\Services\SyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class SyncApiController extends Controller
 {
     /**
-     * Activate license — called from desktop KonfigurasiScreen.
-     * No auth required.
+     * Aktivasi lisensi — dipanggil dari desktop KonfigurasiScreen.
+     * Tidak perlu auth.
+     *
+     * Request: { license_key: "hsk_..." }
+     * Response: { valid, instance_name, licensed_until, token }
      */
     public function activate(Request $request): JsonResponse
     {
@@ -26,62 +26,236 @@ class SyncApiController extends Controller
 
         $key = $validated['license_key'];
 
-        // Simple validation: must start with "hsk_"
-        if (!str_starts_with($key, 'hsk_')) {
+        // Validasi format: hsk_ + 48 karakter (total 52)
+        if (!str_starts_with($key, 'hsk_') || strlen($key) !== 52) {
             return response()->json([
-                'valid' => false,
-                'message' => 'License key tidak valid. Format: hsk_...',
+                'valid'    => false,
+                'message'  => 'License key tidak valid. Format: hsk_ diikuti 48 karakter (total 52).',
             ], 422);
         }
 
-        // Find instance by license key (stored as code or password hash)
-        $instance = Instance::first();
+        // Cek apakah license key sudah dipakai
+        $existing = DesktopLicense::where('license_key', $key)->first();
+        if ($existing && $existing->status === 'active') {
+            // Sudah aktif, kembalikan token yang ada
+            return response()->json([
+                'valid'           => true,
+                'instance_name'   => $existing->instance_name,
+                'licensed_until'  => $existing->licensed_until?->toDateString(),
+                'token'           => $existing->token,
+                'message'         => 'Lisensi sudah aktif.',
+            ]);
+        }
 
-        // For now, accept any hsk_ key
+        // Generate token untuk desktop
+        $token = Str::random(80);
+
+        // Simpan atau update license
+        $license = DesktopLicense::updateOrCreate(
+            ['license_key' => $key],
+            [
+                'instance_name'  => 'HRIS Desktop',
+                'activated_at'   => now(),
+                'licensed_until' => now()->addYear()->toDateString(),
+                'status'         => 'active',
+                'last_sync_ip'   => $request->ip(),
+                'token'          => $token,
+            ]
+        );
+
         return response()->json([
-            'valid' => true,
-            'instance_name' => $instance?->name ?? 'HRIS',
-            'licensed_until' => now()->addYear()->toDateString(),
+            'valid'           => true,
+            'instance_name'   => $license->instance_name,
+            'licensed_until'  => $license->licensed_until->toDateString(),
+            'token'           => $token,
         ]);
     }
 
     /**
-     * Check license status — called on startup and before sync.
-     * No auth required.
+     * Cek status lisensi — dipanggil saat startup dan sebelum sync.
+     * Tidak perlu auth.
      */
     public function licenseStatus(Request $request): JsonResponse
     {
-        $instance = Instance::first();
+        // Cari license aktif
+        $license = DesktopLicense::active()->first();
+        // Fallback: cari license dengan status apapun
+        if (!$license) {
+            $license = DesktopLicense::first();
+        }
+
+        if (!$license) {
+            return response()->json([
+                'status'          => 'inactive',
+                'instance_name'   => 'Belum diaktivasi',
+                'licensed_until'  => null,
+            ]);
+        }
+
+        // Auto-expire jika sudah lewat
+        if ($license->licensed_until && $license->licensed_until < now()->toDateString()) {
+            $license->update(['status' => 'expired']);
+            return response()->json([
+                'status'          => 'expired',
+                'instance_name'   => $license->instance_name,
+                'licensed_until'  => $license->licensed_until->toDateString(),
+            ]);
+        }
+
+        // Update last sync time
+        $license->update([
+            'last_sync_at' => now(),
+            'last_sync_ip' => $request->ip(),
+        ]);
 
         return response()->json([
-            'status' => 'active',
-            'instance_name' => $instance?->name ?? 'HRIS',
-            'licensed_until' => now()->addYear()->toDateString(),
+            'status'          => $license->status,
+            'instance_name'   => $license->instance_name,
+            'licensed_until'  => $license->licensed_until?->toDateString(),
+            'activated_at'    => $license->activated_at?->toDateTimeString(),
+            'last_sync_at'    => $license->last_sync_at?->toDateTimeString(),
         ]);
     }
 
     /**
-     * Sync organization data — flat arrays for desktop bulk upsert.
-     * Auth required (Sanctum).
+     * Daftar perubahan per modul sejak timestamp tertentu.
+     * Auth: desktop.token
+     *
+     * GET /api/sync/changes?since=2026-07-01T00:00:00
+     */
+    public function changes(Request $request): JsonResponse
+    {
+        $since = $request->query('since');
+
+        $changes = SyncService::detectChanges($since);
+
+        return response()->json([
+            'changes' => $changes,
+            'total'   => count($changes),
+            'since'   => $since ?? 'all',
+        ]);
+    }
+
+    /**
+     * Quick check — lightweight endpoint untuk polling desktop.
+     * Hanya return modul mana yang berubah (tanpa count query).
+     * Auth: desktop.token
+     *
+     * GET /api/sync/quick-changes?since=2026-07-01T00:00:00
+     */
+    public function quickChanges(Request $request): JsonResponse
+    {
+        $since = $request->query('since');
+
+        try {
+            $sinceDate = $since ? \Carbon\Carbon::parse($since) : now()->subYear();
+            $changed = \Illuminate\Support\Facades\DB::table('sync_module_timestamps')
+                ->where('last_modified_at', '>', $sinceDate)
+                ->pluck('last_modified_at', 'module_name');
+
+            $modules = [];
+            foreach (SyncService::modules() as $key => $mod) {
+                if (isset($changed[$key])) {
+                    $modules[] = [
+                        'module' => $key,
+                        'label'  => $mod['label'],
+                        'changed' => true,
+                    ];
+                }
+            }
+
+            return response()->json([
+                'modules' => $modules,
+                'total'   => count($modules),
+                'since'   => $since ?? 'all',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'modules' => [],
+                'total'   => 0,
+                'error'   => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * PULL data untuk modul tertentu.
+     * Auth: desktop.token
+     *
+     * GET /api/sync/{module}?since=2026-07-01T00:00:00
+     */
+    public function pull(Request $request, string $module): JsonResponse
+    {
+        $since = $request->query('since');
+
+        $result = SyncService::pullModule($module, $since);
+
+        if (isset($result['error'])) {
+            return response()->json($result, 404);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * PUSH data dari desktop ke server.
+     * Auth: desktop.token
+     *
+     * POST /api/sync/{module}/batch
+     * Body: [{ uuid, server_id, data, action }, ...]
+     */
+    public function push(Request $request, string $module): JsonResponse
+    {
+        $validated = $request->validate([
+            'batch' => 'required|array',
+            'batch.*.uuid'       => 'required|string',
+            'batch.*.server_id'  => 'nullable|integer',
+            'batch.*.action'     => 'required|string|in:created,updated,deleted',
+            'batch.*.data'       => 'required|array',
+        ]);
+
+        $result = SyncService::pushModule($module, $validated['batch']);
+
+        if (isset($result['error'])) {
+            return response()->json($result, 404);
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Sync data organisasi — flat arrays.
+     * Auth: desktop.token
      */
     public function organization(): JsonResponse
     {
-        return response()->json([
-            'companies' => Company::orderBy('name')->get()->toArray(),
-            'branches' => Branch::orderBy('name')->get()->toArray(),
-            'departments' => Department::orderBy('name')->get()->toArray(),
-            'positions' => Position::orderBy('name')->get()->toArray(),
-        ]);
+        return response()->json(SyncService::pullModule('organization', null));
     }
 
     /**
-     * Sync settings data — flat arrays for desktop bulk upsert.
-     * Auth required (Sanctum).
+     * Sync data setting.
+     * Auth: desktop.token
      */
     public function settings(): JsonResponse
     {
-        return response()->json([
-            'settings' => SystemSetting::orderBy('key')->get()->toArray(),
-        ]);
+        return response()->json(SyncService::pullModule('settings', null));
+    }
+
+    /**
+     * Sync data users.
+     * Auth: desktop.token
+     */
+    public function users(): JsonResponse
+    {
+        return response()->json(SyncService::pullModule('users', null));
+    }
+
+    /**
+     * Sync data permissions.
+     * Auth: desktop.token
+     */
+    public function permissions(): JsonResponse
+    {
+        return response()->json(SyncService::pullModule('permissions', null));
     }
 }

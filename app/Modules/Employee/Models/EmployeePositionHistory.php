@@ -6,12 +6,14 @@ use App\Modules\Auth\Models\User;
 use App\Modules\Organization\Models\Department;
 use App\Modules\Organization\Models\Position;
 use App\Modules\Settings\Models\SalaryGrade;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class EmployeePositionHistory extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_position_histories';
 
@@ -116,5 +118,18 @@ class EmployeePositionHistory extends Model
         }
 
         return (float) $this->new_salary - (float) $this->old_salary;
+    }
+
+    // ========== BOOT ==========
+
+    protected static function booted(): void
+    {
+        static::bootTimestampable();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
     }
 }

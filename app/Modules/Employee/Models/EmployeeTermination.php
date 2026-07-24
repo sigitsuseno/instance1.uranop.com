@@ -3,16 +3,19 @@
 namespace App\Modules\Employee\Models;
 
 use App\Modules\Auth\Models\User;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class EmployeeTermination extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_terminations';
 
     protected $fillable = [
+        'uuid',
         'employee_id',
         'termination_type',
         'termination_date',
@@ -102,6 +105,14 @@ class EmployeeTermination extends Model
 
     protected static function booted(): void
     {
+        static::bootTimestampable();
+
+        static::creating(function ($model) {
+            if (empty($model->uuid)) {
+                $model->uuid = (string) Str::uuid();
+            }
+        });
+
         static::updated(function (EmployeeTermination $termination) {
             // Update employee status saat terminasi disetujui
             if ($termination->wasChanged('approval_status') && $termination->approval_status === 'approved') {

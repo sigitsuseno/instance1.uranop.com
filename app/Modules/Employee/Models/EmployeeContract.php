@@ -4,17 +4,20 @@ namespace App\Modules\Employee\Models;
 
 use App\Modules\Auth\Models\User;
 use App\Modules\Shared\Traits\HasAuditLog;
+use App\Modules\Sync\Traits\SyncTimestampable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class EmployeeContract extends Model
 {
-    use HasAuditLog, HasFactory, SoftDeletes;
+    use HasAuditLog, HasFactory, SoftDeletes, SyncTimestampable;
 
     protected $table = 'employee_contracts';
 
     protected $fillable = [
+        'uuid',
         'employee_id',
         'contract_number',
         'contract_type',
@@ -138,7 +141,12 @@ class EmployeeContract extends Model
 
     protected static function booted(): void
     {
+        static::bootTimestampable();
+
         static::creating(function (EmployeeContract $contract) {
+            if (empty($contract->uuid)) {
+                $contract->uuid = (string) Str::uuid();
+            }
             if ($contract->start_date && $contract->end_date) {
                 $contract->duration_months = $contract->start_date->diffInMonths($contract->end_date);
             }
