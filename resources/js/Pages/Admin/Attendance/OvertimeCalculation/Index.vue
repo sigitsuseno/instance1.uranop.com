@@ -49,6 +49,16 @@
           <i class="bx bx-loader-alt bx-spin text-lg" v-else></i>
           <span class="hidden sm:inline">Export Excel</span>
         </button>
+
+        <button 
+          @click="handleExportRoster"
+          :disabled="isExportingRoster"
+          class="h-10 px-4 text-sm font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+        >
+          <i class="bx bx-table text-lg" v-if="!isExportingRoster"></i>
+          <i class="bx bx-loader-alt bx-spin text-lg" v-else></i>
+          <span class="hidden sm:inline">Export Roster</span>
+        </button>
       </div>
     </div>
 
@@ -381,6 +391,7 @@ const notification = useNotificationStore()
 const isCalculating = ref(false)
 const isLoading = ref(true)
 const isExporting = ref(false)
+const isExportingRoster = ref(false)
 const calculateResult = ref(null)
 
 const startDate = ref(route.query.start_date || new Date().toISOString().split('T')[0].slice(0, 8) + '01')
@@ -537,6 +548,38 @@ async function handleExport() {
     alert('Gagal export Excel: ' + e.message)
   } finally {
     isExporting.value = false
+  }
+}
+
+async function handleExportRoster() {
+  isExportingRoster.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const params = new URLSearchParams({ 
+      start_date: startDate.value,
+      end_date: endDate.value
+    })
+    if (searchQuery.value) params.set('search', searchQuery.value)
+
+    const response = await fetch(`/api/v1/attendance/prepare/overtime-roster/export?${params}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    })
+
+    if (!response.ok) throw new Error('Gagal export roster')
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `Roster_Absensi_Lembur_${startDate.value}_${endDate.value}.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('Gagal export Roster: ' + e.message)
+  } finally {
+    isExportingRoster.value = false
   }
 }
 

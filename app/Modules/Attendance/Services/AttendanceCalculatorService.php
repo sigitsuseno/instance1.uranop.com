@@ -186,24 +186,36 @@ class AttendanceCalculatorService
         // Hari kerja biasa (FIXED & FLEX-SHIFT):
         // ═══════════════════════════════════════════════════════
         
-        // Lookup work pattern code untuk jam kerja spesifik (contoh: PL, PL2)
-        $workPatternCode = null;
+        // ── Tentukan baseline jam kerja (deduction) ──
+        // Prioritas 1: Dari tabel WorkPattern (work_day_hours — sudah termasuk istirahat)
+        $deduction = null;
+        $workPattern = null;
         if ($workPatternId) {
-            $workPatternCode = \App\Modules\Schedule\Models\WorkPattern::find($workPatternId)?->code;
+            $workPattern = \App\Modules\Schedule\Models\WorkPattern::find($workPatternId);
+            if ($workPattern && $workPattern->work_day_hours !== null) {
+                if ($isSaturday && $workPattern->sat_type === 'half') {
+                    $deduction = ($workPattern->half_day_hours ?? 0) * 60;
+                } else {
+                    $deduction = $workPattern->work_day_hours * 60;
+                }
+            }
         }
 
-        $patternKey = $workPatternType ?? 'FIXED';
+        // Prioritas 2: Fallback ke setting modal / config kalo WorkPattern null
+        if ($deduction === null) {
+            $workPatternCode = $workPattern?->code;
+            $patternKey = $workPatternType ?? 'FIXED';
 
-        // Prioritaskan lookup by work pattern code, baru fallback ke type
-        if ($workPatternCode && isset($workHoursConfig[$workPatternCode])) {
-            $patternHours = $workHoursConfig[$workPatternCode];
-        } else {
-            $patternHours = $workHoursConfig[$patternKey] ?? $workHoursConfig['FIXED'];
+            if ($workPatternCode && isset($workHoursConfig[$workPatternCode])) {
+                $patternHours = $workHoursConfig[$workPatternCode];
+            } else {
+                $patternHours = $workHoursConfig[$patternKey] ?? $workHoursConfig['FIXED'];
+            }
+
+            $deduction = $isSaturday
+                ? ($patternHours['saturday'] ?? ($config->saturday_work_minutes ?? 360))
+                : ($patternHours['weekday'] ?? ($config->normal_work_minutes ?? 480));
         }
-
-        $deduction = $isSaturday
-            ? ($patternHours['saturday'] ?? ($config->saturday_work_minutes ?? 360))
-            : ($patternHours['weekday'] ?? ($config->normal_work_minutes ?? 480));
 
         // Tentukan Rumus (Strategy)
         $formulaToUse = 'rumus_1';

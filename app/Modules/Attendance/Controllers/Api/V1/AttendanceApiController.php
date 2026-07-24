@@ -708,8 +708,84 @@ class AttendanceApiController extends Controller
         return Excel::download(new \App\Modules\Attendance\Exports\OvertimeDetailExport($days, $employee->name, $periodLabel), $filename);
     }
 
-    // =================================================================
-    // CONSECUTIVE DAYS — CRUD (mirip leave_request)
+    /**
+     * GET /api/v1/attendance/prepare/overtime-roster/export
+     * Export roster absensi + overtime per tanggal (dynamic columns).
+     */
+    public function prepareRosterExport(Request $request)
+    {
+        $startDate = $request->input('start_date', Carbon::now()->startOfMonth()->toDateString());
+        $endDate   = $request->input('end_date', Carbon::now()->endOfMonth()->toDateString());
+        $search    = $request->input('search');
+
+        // Generate date range
+        $start = Carbon::parse($startDate);
+        $end   = Carbon::parse($endDate);
+        $dates = [];
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            $dates[] = $current->toDateString();
+            $current->addDay();
+        }
+
+        // Query employees with attendancePrepares in range
+        $employees = \App\Modules\Employee\Models\Employee::with([
+            'attendancePrepares' => function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('date', [$startDate, $endDate]);
+            },
+        ])
+            ->where('is_active', true)
+            ->where(function ($q) use ($startDate) {
+                $q->whereNull('resign_date')
+                    ->orWhere('resign_date', '>=', $startDate);
+            })
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('employee_code', 'like', "%{$search}%")
+                        ->orWhere('name', 'like', "%{$search}%");
+                });
+            })
+            ->orderBy('employee_code')
+            ->get();
+
+        // Build rows
+        $rows = [];
+        foreach ($employees as $employee) {
+            $row = [
+                $employee->name,
+                $employee->nip,
+            ];
+
+            $preparesByDate = $employee->attendancePrepares->keyBy(function ($item) {
+                return $item->date instanceof Carbon
+                    ? $item->date->toDateString()
+                    : (is_string($item->date) ? $item->date : $item->date);
+            });
+
+            foreach ($dates as $date) {
+                $prepare = $preparesByDate->get($date);
+                if ($prepare) {
+                    $status = \App\Modules\Attendance\Exports\AttendanceRosterExport::shortStatus($prepare->status);
+                    $otMinutes = $prepare->overtime ?? 0;
+                    $row[] = $status;
+                    $row[] = round($otMinutes / 60, 1);
+                } else {
+                    $row[] = 'A';
+                    $row[] = 0;
+                }
+            }
+
+            $rows[] = $row;
+        }
+
+        $periodLabel = Carbon::parse($startDate)->format('d M Y') . ' - ' . Carbon::parse($endDate)->format('d M Y');
+        $filename = 'Roster_Absensi_Lembur_' . Carbon::parse($startDate)->format('Ymd') . '_' . Carbon::parse($endDate)->format('Ymd') . '.xlsx';
+
+        return Excel::download(
+            new \App\Modules\Attendance\Exports\AttendanceRosterExport($rows, $dates, $periodLabel),
+            $filename
+        );
+    }
     // =================================================================
 
     /**
