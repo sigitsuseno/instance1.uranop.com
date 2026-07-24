@@ -766,7 +766,11 @@ class AttendanceApiController extends Controller
                 $prepare = $preparesByDate->get($date);
                 if ($prepare) {
                     $status = \App\Modules\Attendance\Exports\AttendanceRosterExport::shortStatus($prepare->status);
-                    $otMinutes = $prepare->overtime ?? 0;
+                    $isSunday = \Carbon\Carbon::parse($date)->isSunday();
+                    $isHoliday = in_array($prepare->status, ['libur', 'off']);
+                    $otMinutes = ($isSunday || $isHoliday)
+                        ? ($prepare->lm ?? 0)
+                        : ($prepare->overtime ?? 0);
                     $row[] = $status;
                     $row[] = round($otMinutes / 60, 1);
                 } else {

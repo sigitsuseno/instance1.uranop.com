@@ -149,19 +149,24 @@ class AttendanceCalculatorService
         ];
 
         if ($workPatternType === 'SHIFT') {
+            // Holiday: 8 jam fix (prioritas, meskipun jatuh di Minggu)
             if ($isHoliday) {
-                return $this->roundUp(min($totalMinutes, $config->holiday_max_minutes ?? 480), $config, $roundingThreshold, $roundingInterval);
+                return 480;
             }
+            // Sabtu: 2 jam fix
             if ($isSaturday) {
-                // Sabtu: jarak check_in→check_out dikurangi jam sabtu
-                $shiftSat = $workHoursConfig['SHIFT']['saturday'] ?? ($config->saturday_work_minutes ?? 360);
-                $overtime = max(0, $totalMinutes - $shiftSat);
-                return $overtime > 0 ? $this->roundUp($overtime, $config, $roundingThreshold, $roundingInterval) : 0;
+                return 120;
             }
-            // Weekday: jarak check_in→check_out dikurangi jam weekday
+            // Weekday (Sen-Jum) & Minggu (non-holiday):
+            // Hitung raw overtime dulu (total - jam kerja normal 8 jam)
             $shiftWd = $workHoursConfig['SHIFT']['weekday'] ?? ($config->normal_work_minutes ?? 480);
-            $overtime = max(0, $totalMinutes - $shiftWd);
-            return $overtime > 0 ? $this->roundUp($overtime, $config, $roundingThreshold, $roundingInterval) : 0;
+            $rawOvertime = max(0, $totalMinutes - $shiftWd);
+            // Kalau 3-5 jam (180-300 menit) → 4 jam fix
+            // Kalau < 3 jam atau > 5 jam → 0 (ngakomodir yg jaga tambahan karena rekan cuti)
+            if ($rawOvertime >= 180 && $rawOvertime <= 300) {
+                return 240;
+            }
+            return 0;
         }
 
         // ═══════════════════════════════════════════════════════
