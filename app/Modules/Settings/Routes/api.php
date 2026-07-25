@@ -9,10 +9,18 @@ use App\Modules\Settings\Controllers\Api\V1\BpjsConfigController;
 use App\Modules\Settings\Controllers\Api\V1\ReportConfigApiController;
 use App\Modules\Settings\Controllers\Api\V1\CekJadwalController;
 use App\Modules\Settings\Controllers\Api\V1\ExtraEmployeeController;
+use App\Modules\Settings\Controllers\Api\V1\EmployeeReserveController;
 
 Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     // Extra Employees (Karyawan Titipan)
     Route::apiResource('extra-employees', ExtraEmployeeController::class);
+
+    // Employee Reserves (Data Insentif)
+    Route::get('employee-reserves', [EmployeeReserveController::class, 'index']);
+    Route::post('employee-reserves', [EmployeeReserveController::class, 'store']);
+    Route::get('employee-reserves/{id}', [EmployeeReserveController::class, 'show']);
+    Route::put('employee-reserves/{id}', [EmployeeReserveController::class, 'update']);
+    Route::delete('employee-reserves/{id}', [EmployeeReserveController::class, 'destroy']);
     Route::get('/general', [SettingsApiController::class, 'getSystemSettings']);
     Route::post('/general', [SettingsApiController::class, 'updateSystemSettings']);
     

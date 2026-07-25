@@ -377,10 +377,224 @@
       </div>
     </div>
   </div>
-</template>
+
+  <!-- E. DATA INSENTIF (EMPLOYEE RESERVES) -->
+  <hr class="border-(--border-soft) my-5" />
+
+  <div>
+    <h4 class="text-sm font-semibold mb-3 text-(--text-main)">
+      💰 E. DATA INSENTIF (EMPLOYEE RESERVES)
+    </h4>
+    <p class="text-xs text-(--text-muted) mb-3">
+      Atur data insentif / bonus untuk sopir atau karyawan lain per periode payroll.
+    </p>
+
+    <!-- Period Selector -->
+    <div class="mb-4">
+      <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+        Pilih Periode Payroll
+      </label>
+      <div class="flex items-center gap-2">
+        <select
+          v-model="selectedReservePeriod"
+          class="w-full max-w-sm px-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+        >
+          <option value="">-- Pilih Periode --</option>
+          <option
+            v-for="p in sortedPeriods"
+            :key="p.id"
+            :value="p.id"
+          >
+            {{ p.name }} ({{ p.start_date }} - {{ p.end_date }})
+          </option>
+        </select>
+        <button
+          @click="loadReserves"
+          class="px-3 py-2 text-sm rounded-lg border border-(--border-soft) hover:bg-(--bg-hover) transition-colors flex items-center gap-1"
+        >
+          <i class="bx bx-refresh"></i> Muat
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div v-if="loadingReserves" class="text-center py-4 text-(--text-muted) text-sm">
+      <i class="bx bx-loader-alt animate-spin"></i> Memuat data...
+    </div>
+
+    <!-- Reserve Table -->
+    <template v-if="!loadingReserves && selectedReservePeriod">
+      <div v-if="reserves.length === 0" class="text-xs text-(--text-muted) italic py-3">
+        Belum ada data insentif untuk periode ini.
+      </div>
+
+      <div v-else class="overflow-x-auto rounded-lg border border-(--border-soft)">
+        <table class="w-full text-xs">
+          <thead>
+            <tr class="bg-(--bg-soft)">
+              <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">NIP</th>
+              <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">Nama</th>
+              <th class="text-left px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">Komponen</th>
+              <th class="text-right px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft)">Total</th>
+              <th class="text-center px-2 py-1.5 font-medium text-(--text-muted) border-b border-(--border-soft) w-20">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="item in reserves"
+              :key="item.id"
+              class="border-b border-(--border-soft) hover:bg-(--bg-hover)"
+            >
+              <td class="px-2 py-1.5 text-(--text-main)">{{ item.employee?.nip || '-' }}</td>
+              <td class="px-2 py-1.5 text-(--text-main)">{{ item.employee?.name || '-' }}</td>
+              <td class="px-2 py-1.5 text-(--text-muted)">
+                <span v-if="item.komponen?.length">
+                  {{ item.komponen.map(k => k.nama).join(', ') }}
+                </span>
+                <span v-else class="italic">-</span>
+              </td>
+              <td class="px-2 py-1.5 text-right font-medium text-(--text-main)">
+                {{ formatRupiah(item.komponen?.reduce((sum, k) => sum + (Number(k.nilai) || 0), 0) || 0) }}
+              </td>
+              <td class="px-2 py-1.5 text-center">
+                <div class="flex items-center justify-center gap-1">
+                  <button
+                    @click="editReserve(item)"
+                    class="p-1 rounded hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 transition-colors"
+                    title="Edit"
+                  >
+                    <i class="bx bx-edit-alt"></i>
+                  </button>
+                  <button
+                    @click="deleteReserve(item)"
+                    class="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-500 transition-colors"
+                    title="Hapus"
+                  >
+                    <i class="bx bx-trash"></i>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Tombol Tambah -->
+      <button
+        @click="openReserveForm()"
+        class="mt-3 px-3 py-1.5 text-xs rounded-lg border border-dashed border-(--border-soft) text-(--text-muted) hover:text-(--primary) hover:border-(--primary) transition-colors flex items-center gap-1"
+      >
+        <i class="bx bx-plus"></i> Tambah Data Insentif
+      </button>
+    </template>
+
+    <!-- Form Tambah/Edit -->
+    <div v-if="showReserveForm && selectedReservePeriod" class="mt-4 border border-(--border-soft) rounded-lg p-4 bg-(--bg-soft)">
+      <h5 class="text-xs font-semibold mb-3 text-(--text-main)">
+        {{ editingReserve ? 'Edit Data Insentif' : 'Tambah Data Insentif' }}
+      </h5>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+        <div>
+          <label class="block text-xs font-medium text-(--text-muted) mb-1">Karyawan</label>
+          <select
+            v-model="reserveForm.employee_id"
+            class="w-full px-2 py-1.5 rounded border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-xs focus:outline-none focus:ring-1 focus:ring-(--primary)"
+            :disabled="!!editingReserve"
+          >
+            <option value="">-- Pilih Karyawan --</option>
+            <option
+              v-for="emp in allEmployees"
+              :key="emp.id"
+              :value="emp.id"
+            >
+              {{ emp.name }} ({{ emp.nip }})
+            </option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-(--text-muted) mb-1">Periode</label>
+          <input
+            :value="selectedPeriodName"
+            class="w-full px-2 py-1.5 rounded border border-(--border-soft) bg-(--bg-soft) text-(--text-muted) text-xs cursor-not-allowed"
+            disabled
+          />
+        </div>
+      </div>
+
+      <!-- Komponen Items -->
+      <div>
+        <label class="block text-xs font-medium text-(--text-muted) mb-1.5">
+          Komponen Insentif
+        </label>
+        <div class="space-y-2">
+          <div
+            v-for="(komp, idx) in reserveForm.komponen"
+            :key="idx"
+            class="flex items-start gap-2 bg-(--bg-elevated) p-2 rounded border border-(--border-soft)"
+          >
+            <div class="flex-1">
+              <input
+                v-model="komp.nama"
+                placeholder="Nama komponen (mis: Insentif Sopir)"
+                class="w-full px-2 py-1 rounded border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-xs focus:outline-none focus:ring-1 focus:ring-(--primary) mb-1"
+              />
+              <div class="flex gap-2">
+                <input
+                  v-model.number="komp.nilai"
+                  type="number"
+                  placeholder="Nilai (Rp)"
+                  class="flex-1 px-2 py-1 rounded border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-xs focus:outline-none focus:ring-1 focus:ring-(--primary)"
+                  min="0"
+                />
+                <input
+                  v-model="komp.keterangan"
+                  placeholder="Ket (opsional)"
+                  class="flex-1 px-2 py-1 rounded border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-xs focus:outline-none focus:ring-1 focus:ring-(--primary)"
+                />
+              </div>
+            </div>
+            <button
+              @click="removeKomponen(idx)"
+              class="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-red-400 transition-colors mt-1"
+              title="Hapus komponen"
+            >
+              <i class="bx bx-x"></i>
+            </button>
+          </div>
+        </div>
+        <button
+          @click="addKomponen"
+          class="mt-2 px-2 py-1 text-xs rounded border border-dashed border-(--border-soft) text-(--text-muted) hover:text-(--primary) hover:border-(--primary) transition-colors"
+        >
+          + Tambah Komponen
+        </button>
+      </div>
+
+      <!-- Form Actions -->
+      <div class="flex items-center gap-2 mt-4 pt-3 border-t border-(--border-soft)">
+        <button
+          @click="saveReserve"
+          class="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center gap-1"
+          :disabled="savingReserve || !reserveForm.employee_id || reserveForm.komponen.length === 0"
+        >
+          <i v-if="savingReserve" class="bx bx-loader-alt animate-spin"></i>
+          {{ savingReserve ? 'Menyimpan...' : '💾 Simpan' }}
+        </button>
+        <button
+          @click="cancelReserveForm"
+          class="px-3 py-1.5 text-xs rounded-lg border border-(--border-soft) hover:bg-(--bg-hover) transition-colors"
+        >
+          Batal
+        </button>
+      </div>
+    </div>
+  </div>
+  </template>
 
 <script setup>
-import { reactive, computed, watch } from 'vue';
+import { reactive, computed, watch, ref } from 'vue';
+import { useApi } from '@/composables/useApi';
 
 const props = defineProps({
   config: { type: Object, default: () => ({}) },
@@ -405,7 +619,137 @@ delete localRates.tkn_holiday_rate;
 // Expose only the group rate entries
 const groupRates = computed(() => localRates);
 
-const periods = computed(() => props.extraData?.periods || []);
+const { get, post, put, del } = useApi();
+
+// ─── Employee Reserves ───
+
+const reserves = ref([]);
+const selectedReservePeriod = ref('');
+const loadingReserves = ref(false);
+const showReserveForm = ref(false);
+const editingReserve = ref(null);
+const savingReserve = ref(false);
+const reserveForm = reactive({
+  employee_id: '',
+  komponen: [{ nama: '', nilai: 0, keterangan: '' }],
+});
+
+const allEmployees = computed(() => {
+  const all = [
+    ...(props.extraData?.spcEmployees || []),
+    ...(props.extraData?.jktEmployees || []),
+    ...(props.extraData?.allinEmployees || []),
+    ...(props.extraData?.tknEmployees || []),
+  ];
+  const seen = new Set();
+  return all.filter(e => {
+    if (seen.has(e.id)) return false;
+    seen.add(e.id);
+    return true;
+  });
+});
+
+const selectedPeriodName = computed(() => {
+  const periods = props.extraData?.periods || [];
+  const p = periods.find(p => p.id === selectedReservePeriod.value);
+  return p ? `${p.name} (${p.start_date} - ${p.end_date})` : '-';
+});
+
+async function loadReserves() {
+  if (!selectedReservePeriod.value) return;
+  loadingReserves.value = true;
+  try {
+    const res = await get(`/api/v1/settings/employee-reserves?pay_periode_id=${selectedReservePeriod.value}`);
+    reserves.value = res.data || [];
+  } catch (err) {
+    console.error('Gagal muat data insentif:', err);
+    reserves.value = [];
+  } finally {
+    loadingReserves.value = false;
+  }
+}
+
+function openReserveForm() {
+  editingReserve.value = null;
+  reserveForm.employee_id = '';
+  reserveForm.komponen = [{ nama: '', nilai: 0, keterangan: '' }];
+  showReserveForm.value = true;
+}
+
+function editReserve(item) {
+  editingReserve.value = item;
+  reserveForm.employee_id = item.employee_id;
+  reserveForm.komponen = (item.komponen || []).map(k => ({
+    nama: k.nama,
+    nilai: k.nilai,
+    keterangan: k.keterangan || '',
+  }));
+  showReserveForm.value = true;
+}
+
+function addKomponen() {
+  reserveForm.komponen.push({ nama: '', nilai: 0, keterangan: '' });
+}
+
+function removeKomponen(idx) {
+  reserveForm.komponen.splice(idx, 1);
+}
+
+function cancelReserveForm() {
+  showReserveForm.value = false;
+  editingReserve.value = null;
+}
+
+async function saveReserve() {
+  if (!reserveForm.employee_id || reserveForm.komponen.length === 0) return;
+  savingReserve.value = true;
+  try {
+    const payload = {
+      pay_periode_id: Number(selectedReservePeriod.value),
+      employee_id: reserveForm.employee_id,
+      komponen: reserveForm.komponen.map(k => ({
+        nama: k.nama,
+        nilai: Number(k.nilai) || 0,
+        keterangan: k.keterangan || '',
+      })),
+    };
+
+    if (editingReserve.value) {
+      await put(`/api/v1/settings/employee-reserves/${editingReserve.value.id}`, payload);
+    } else {
+      await post('/api/v1/settings/employee-reserves', payload);
+    }
+
+    showReserveForm.value = false;
+    editingReserve.value = null;
+    await loadReserves();
+  } catch (err) {
+    console.error('Gagal simpan data insentif:', err);
+    if (err.response?.data?.message) {
+      alert(err.response.data.message);
+    } else {
+      alert('Gagal menyimpan data insentif. Silakan coba lagi.');
+    }
+  } finally {
+    savingReserve.value = false;
+  }
+}
+
+async function deleteReserve(item) {
+  if (!confirm(`Yakin ingin menghapus data insentif ${item.employee?.name || ''}?`)) return;
+  try {
+    await del(`/api/v1/settings/employee-reserves/${item.id}`);
+    await loadReserves();
+  } catch (err) {
+    console.error('Gagal hapus data insentif:', err);
+    alert('Gagal menghapus data insentif.');
+  }
+}
+
+function formatRupiah(value) {
+  return new Intl.NumberFormat('id-ID').format(value);
+}
+
 const spcEmployees = computed(() => props.extraData?.spcEmployees || []);
 const jktEmployees = computed(() => props.extraData?.jktEmployees || []);
 const allinEmployees = computed(() => props.extraData?.allinEmployees || []);
@@ -415,9 +759,10 @@ const allinDrivers = computed(() =>
   )
 );
 const tknEmployees = computed(() => props.extraData?.tknEmployees || []);
-const sortedPeriods = computed(() =>
-  [...periods.value].sort((a, b) => b.start_date.localeCompare(a.start_date))
-);
+const sortedPeriods = computed(() => {
+  const periods = props.extraData?.periods || [];
+  return [...periods].sort((a, b) => b.start_date.localeCompare(a.start_date));
+});
 
 // Sync parent → local
 watch(() => props.config, (val) => {

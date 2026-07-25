@@ -5,6 +5,7 @@ namespace App\Modules\Reports\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Employee\Models\EmployeeReserve;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
@@ -883,6 +884,14 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
+        // Employee Reserves (insentif)
+        $employeeReserves = collect();
+        if ($period) {
+            $employeeReserves = EmployeeReserve::where('pay_periode_id', $period->id)
+                ->get()
+                ->keyBy('employee_id');
+        }
+
         // ── Config ─────────────────────────────────────────────────
         $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
 
@@ -963,6 +972,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             } elseif (PrintingHelper::matches($employee)) {
                 $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $printingEmployees->push($item);
+            } elseif ($employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPR')) {
+                // GRP-SPR: section ALL IN (B), hitungan lembur pake formula Printing
+                $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
+                $allInEmployees->push($item);
             } else {
                 $item = $allInHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $allInEmployees->push($item);
@@ -1028,6 +1041,28 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $emp['total_terima'] = round($emp['total_overtime'] + $emp['total_uang_makan'], 2);
             return $emp;
         });
+
+        // ── Employee Reserves: tambah insentif ke total_uang_makan ─
+        if ($employeeReserves->isNotEmpty()) {
+            $addReserve = function ($emp) use ($employeeReserves) {
+                $reserve = $employeeReserves->get($emp['id']);
+                if ($reserve && !empty($reserve->komponen)) {
+                    $insentif = (float) collect($reserve->komponen)->sum('nilai');
+                    $emp['total_uang_makan'] = round(($emp['total_uang_makan'] ?? 0) + $insentif, 2);
+                    $emp['total_terima'] = round(
+                        ($emp['total_hari_kerja'] ?? 0) + ($emp['total_overtime'] ?? 0) + $emp['total_uang_makan'], 2
+                    );
+                }
+                return $emp;
+            };
+
+            $jakartaEmployees    = $jakartaEmployees->map($addReserve);
+            $allInEmployees      = $allInEmployees->map($addReserve);
+            $printingEmployees   = $printingEmployees->map($addReserve);
+            $spcEmployees        = $spcEmployees->map($addReserve);
+            $spcJakartaEmployees = $spcJakartaEmployees->map($addReserve);
+            $spcUngaranEmployees = $spcUngaranEmployees->map($addReserve);
+        }
 
         // ── Assemble sections ──────────────────────────────────────
         $sections = [

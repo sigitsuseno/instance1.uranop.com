@@ -116,17 +116,23 @@ onMounted(async () => {
 
   // 3. Load periods + employees (for settings modal)
   try {
-    const [periodsRes, spcRes, jktRes, allinRes, tknRes] = await Promise.all([
+    const [periodsRes, spcRes, jktRes, allinRes, sprRes, gdRes, tknRes] = await Promise.all([
       get('/api/v1/settings/employee-data/pay-periods'),
       get('/api/v1/settings/employee-data/by-group/KRY-SPC'),
       get('/api/v1/settings/employee-data/by-group/GRP-JKT'),
       get('/api/v1/settings/employee-data/by-group/GRP-ALLIN'),
+      get('/api/v1/settings/employee-data/by-group/GRP-SPR'),
+      get('/api/v1/settings/employee-data/by-group/GRP-GD'),
       get('/api/v1/settings/employee-data/by-group/KRY-TKN'),
     ])
     periods.value = periodsRes.data || []
     spcEmployees.value = spcRes.data || []
     jktEmployees.value = jktRes.data || []
-    allinEmployees.value = allinRes.data || []
+    allinEmployees.value = [
+      ...(allinRes.data || []),
+      ...(sprRes.data || []),
+      ...(gdRes.data || []),
+    ]
     tknEmployees.value = tknRes.data || []
   } catch (err) {
     console.error('Gagal fetch extra data:', err)
