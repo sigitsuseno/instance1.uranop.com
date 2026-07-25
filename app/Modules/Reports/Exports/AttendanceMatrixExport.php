@@ -52,28 +52,28 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
 
                 $currentRow = 1;
 
-                // Fixed cols: NIP (A), Nama (B)
-                // Per-date: Status (C,D,...), OT/LM
                 $totalDates = count($this->dates);
-                $totalCols = 2 + ($totalDates * 2);
-                $lastCol = self::colLetter($totalCols);
+
+                // Max layout: 2 + (totalDates * 2) untuk merges full-width
+                $maxCols = 2 + ($totalDates * 2);
+                $maxColLetter = self::colLetter($maxCols);
 
                 // --- Company name ---
-                $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
+                $sheet->mergeCells("A{$currentRow}:{$maxColLetter}{$currentRow}");
                 $sheet->setCellValue("A{$currentRow}", $this->companyName);
                 $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(14);
                 $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $currentRow++;
 
                 // --- Report title ---
-                $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
+                $sheet->mergeCells("A{$currentRow}:{$maxColLetter}{$currentRow}");
                 $sheet->setCellValue("A{$currentRow}", 'LAPORAN KEHADIRAN');
                 $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(12);
                 $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $currentRow++;
 
                 // --- Period ---
-                $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
+                $sheet->mergeCells("A{$currentRow}:{$maxColLetter}{$currentRow}");
                 $sheet->setCellValue("A{$currentRow}", 'PERIODE: ' . strtoupper($this->label));
                 $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(11);
                 $sheet->getStyle("A{$currentRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -82,14 +82,36 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
                 $dataStartRow = $currentRow;
                 $lastDataRow = $currentRow;
 
+                // ─── Pre-compute section layouts ─────────────────────
+                $sectionLayouts = [];
                 foreach ($this->sections as $section) {
                     if (empty($section['data'])) continue;
 
-                    $hideOt = str_starts_with($section['label'], 'A.') || str_starts_with($section['label'], 'B.');
+                    $isSectionA = str_starts_with($section['label'], 'A.');
+                    // Section A: 1 col per date + Uang Makan col
+                    // Section B/C: 2 cols per date (Status + OT/LM)
+                    $colsPerDate = $isSectionA ? 1 : 2;
+                    $totalSectionCols = 2 + ($totalDates * $colsPerDate) + ($isSectionA ? 1 : 0);
+                    $colLetter = self::colLetter($totalSectionCols);
+
+                    $sectionLayouts[] = [
+                        'label'          => $section['label'],
+                        'data'           => $section['data'],
+                        'isSectionA'     => $isSectionA,
+                        'colsPerDate'    => $colsPerDate,
+                        'totalCols'      => $totalSectionCols,
+                        'lastColLetter'  => $colLetter,
+                    ];
+                }
+
+                foreach ($sectionLayouts as $layout) {
+                    $isA = $layout['isSectionA'];
+                    $colsPerDate = $layout['colsPerDate'];
+                    $lsCol = $layout['lastColLetter'];
 
                     // --- Section label ---
-                    $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
-                    $sheet->setCellValue("A{$currentRow}", $section['label'] . ' (' . count($section['data']) . ' karyawan)');
+                    $sheet->mergeCells("A{$currentRow}:{$maxColLetter}{$currentRow}");
+                    $sheet->setCellValue("A{$currentRow}", $layout['label'] . ' (' . count($layout['data']) . ' karyawan)');
                     $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(10);
                     $sheet->getStyle("A{$currentRow}")->getFill()
                         ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFF0FDF4');
@@ -105,40 +127,58 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
 
                     $col = 3;
                     foreach ($this->dates as $d) {
-                        $endCol = self::colLetter($col + 1);
-                        $formatted = Carbon::parse($d['date'])->translatedFormat('D, d/m');
-                        $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", strtoupper($formatted));
-                        $sheet->mergeCells(self::colLetter($col) . "{$currentRow}:{$endCol}{$currentRow}");
+                        if ($colsPerDate === 1) {
+                            // 1 col: Status
+                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", strtoupper(Carbon::parse($d['date'])->translatedFormat('D, d/m')));
+                            $endCol = self::colLetter($col);
+                            $col++;
+                        } else {
+                            // 2 cols: Status + OT/LM
+                            $endCol = self::colLetter($col + 1);
+                            $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", strtoupper(Carbon::parse($d['date'])->translatedFormat('D, d/m')));
+                            $sheet->mergeCells(self::colLetter($col) . "{$currentRow}:{$endCol}{$currentRow}");
+                            $col += 2;
+                        }
                         // Weekend highlight
                         if (!empty($d['is_weekend'])) {
-                            $sheet->getStyle(self::colLetter($col) . "{$currentRow}:{$endCol}{$currentRow}")->getFill()
+                            $sheet->getStyle(self::colLetter($col - $colsPerDate) . "{$currentRow}:{$endCol}{$currentRow}")->getFill()
                                 ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEF2F2');
                         }
-                        $col += 2;
+                    }
+
+                    // Uang Makan header (Section A only)
+                    if ($isA) {
+                        $umCol = self::colLetter($col);
+                        $sheet->setCellValue("{$umCol}{$currentRow}", 'Uang Makan');
+                        $sheet->mergeCells("{$umCol}{$currentRow}:{$umCol}" . ($currentRow + 1));
                     }
 
                     $currentRow++;
 
-                    // --- Header Row 2: St / OT-LM ---
+                    // --- Header Row 2: Sub-headers ---
                     $col = 3;
                     foreach ($this->dates as $d) {
                         $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", 'St');
-                        $sheet->setCellValue(self::colLetter($col + 1) . "{$currentRow}", $d['is_weekend'] ? 'LM' : 'OT');
-                        $col += 2;
+                        if ($colsPerDate === 2) {
+                            $sheet->setCellValue(self::colLetter($col + 1) . "{$currentRow}", $d['is_weekend'] ? 'LM' : 'OT');
+                            $col += 2;
+                        } else {
+                            $col++;
+                        }
                     }
 
                     // Style headers
-                    $sheet->getStyle("A{$headerStart}:{$lastCol}{$currentRow}")->getFont()->setBold(true)->setSize(8);
-                    $sheet->getStyle("A{$headerStart}:{$lastCol}{$currentRow}")->getFill()
+                    $sheet->getStyle("A{$headerStart}:{$lsCol}{$currentRow}")->getFont()->setBold(true)->setSize(8);
+                    $sheet->getStyle("A{$headerStart}:{$lsCol}{$currentRow}")->getFill()
                         ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE8EAED');
-                    $sheet->getStyle("A{$headerStart}:{$lastCol}{$currentRow}")->getAlignment()
+                    $sheet->getStyle("A{$headerStart}:{$lsCol}{$currentRow}")->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                         ->setVertical(Alignment::VERTICAL_CENTER);
 
                     $currentRow++;
 
                     // --- Data Rows ---
-                    foreach ($section['data'] as $row) {
+                    foreach ($layout['data'] as $row) {
                         $sheet->setCellValue("A{$currentRow}", $row['employee_code']);
                         $sheet->setCellValue("B{$currentRow}", $row['name']);
 
@@ -146,21 +186,37 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
                         foreach ($this->dates as $d) {
                             $att = $row['attendance'][$d['date']] ?? null;
                             $status = $att['status'] ?? '-';
-                            $isHoliday = $att['is_holiday'] ?? false;
-                            $lm = $att['lm'] ?? null;
-                            $ot = $att['overtime'] ?? null;
-                            $countVal = $isHoliday ? $lm : $ot;
-                            $countDisplay = $hideOt ? '-' : (($countVal && $countVal > 0) ? round($countVal / 60, 1) : '-');
 
                             $sheet->setCellValue(self::colLetter($col) . "{$currentRow}", $status);
-                            $sheet->setCellValue(self::colLetter($col + 1) . "{$currentRow}", $countDisplay);
 
-                            // Weekend background
-                            if ($isHoliday) {
-                                $sheet->getStyle(self::colLetter($col) . "{$currentRow}:" . self::colLetter($col + 1) . "{$currentRow}")->getFill()
-                                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEF2F2');
+                            if ($colsPerDate === 2) {
+                                $isHoliday = $att['is_holiday'] ?? false;
+                                $lm = $att['lm'] ?? null;
+                                $ot = $att['overtime'] ?? null;
+                                $countVal = $isHoliday ? $lm : $ot;
+                                $countDisplay = ($countVal && $countVal > 0) ? round($countVal / 60, 1) : '-';
+                                $sheet->setCellValue(self::colLetter($col + 1) . "{$currentRow}", $countDisplay);
+
+                                if ($isHoliday) {
+                                    $sheet->getStyle(self::colLetter($col) . "{$currentRow}:" . self::colLetter($col + 1) . "{$currentRow}")->getFill()
+                                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEF2F2');
+                                }
+                                $col += 2;
+                            } else {
+                                // Section A: highlight weekend
+                                if (!empty($d['is_weekend'])) {
+                                    $sheet->getStyle(self::colLetter($col) . "{$currentRow}")->getFill()
+                                        ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEF2F2');
+                                }
+                                $col++;
                             }
-                            $col += 2;
+                        }
+
+                        // Uang Makan value (Section A only)
+                        if ($isA) {
+                            $umCol = self::colLetter($col);
+                            $uangMakan = $row['total_uang_makan'] ?? 0;
+                            $sheet->setCellValue("{$umCol}{$currentRow}", $uangMakan > 0 ? $uangMakan : '-');
                         }
 
                         $currentRow++;
@@ -170,8 +226,8 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
                     $currentRow++; // Spacer
                 }
 
-                // --- Borders ---
-                $sheet->getStyle("A{$dataStartRow}:{$lastCol}{$lastDataRow}")->getBorders()
+                // --- Borders (use maxColLetter for full table width) ---
+                $sheet->getStyle("A{$dataStartRow}:{$maxColLetter}{$lastDataRow}")->getBorders()
                     ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
                 // --- Alignment ---
@@ -180,7 +236,7 @@ class AttendanceMatrixExport implements FromArray, WithStyles, WithColumnWidths,
                 // --- Column Widths ---
                 $sheet->getColumnDimension('A')->setWidth(12);
                 $sheet->getColumnDimension('B')->setWidth(28);
-                for ($i = 3; $i <= $totalCols; $i++) {
+                for ($i = 3; $i <= $maxCols; $i++) {
                     $sheet->getColumnDimension(self::colLetter($i))->setWidth(7);
                 }
 
