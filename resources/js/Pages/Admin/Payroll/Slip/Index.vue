@@ -110,10 +110,10 @@
       </div>
 
       <!-- Table Content -->
-      <div class="overflow-x-auto">
-        <table class="w-full text-xs">
+      <div class="overflow-auto max-h-[520px] relative">
+        <table class="w-full text-xs min-w-[960px]">
           <thead>
-            <tr class="bg-(--bg-elevated) text-(--text-main)">
+            <tr class="bg-(--bg-elevated) text-(--text-main) sticky top-0 z-10">
               <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-10">No</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-20">ID No</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-left font-semibold min-w-[160px]">Nama Karyawan</th>
@@ -125,7 +125,7 @@
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[100px]">Gaji Kotor</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold text-red-600 min-w-[90px]">Potongan</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-extrabold text-(--primary) bg-(--primary)/5 min-w-[110px]">Take Home</th>
-              <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-16">Cetak</th>
+              <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-16 sticky-col-header">Cetak</th>
             </tr>
           </thead>
           <tbody>
@@ -169,7 +169,7 @@
               <td class="border border-(--border-soft) px-2.5 py-2 text-right font-mono font-extrabold text-(--primary) bg-(--primary)/5">
                 {{ formatCurrency(record.gaji_bersih) }}
               </td>
-              <td class="border border-(--border-soft) px-2 py-2 text-center">
+              <td class="border border-(--border-soft) px-2 py-2 text-center sticky-col">
                 <button
                   @click="printSingle(record)"
                   class="w-8 h-8 flex items-center justify-center rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-muted) hover:text-(--primary) hover:border-(--primary)/40 transition-colors mx-auto cursor-pointer"
@@ -190,7 +190,7 @@
               <td class="border border-(--border-soft) px-2.5 py-3.5 text-right font-mono font-bold">{{ formatCurrency(totals.gaji_kotor, true) }}</td>
               <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono text-red-600">{{ formatCurrency(totals.potongan, true) }}</td>
               <td class="border border-(--border-soft) px-2.5 py-3.5 text-right font-mono text-(--primary) bg-(--primary)/5">{{ formatCurrency(totals.gaji_bersih, true) }}</td>
-              <td class="border border-(--border-soft) px-2 py-3.5"></td>
+              <td class="border border-(--border-soft) px-2 py-3.5 sticky-col-footer"></td>
             </tr>
           </tfoot>
         </table>
@@ -592,5 +592,26 @@ onMounted(() => {
 <style scoped>
 .hover-row:hover {
   background-color: rgba(var(--primary-glow), 0.05) !important;
+}
+
+/* Sticky Cetak column — always visible on horizontal scroll */
+.sticky-col {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: inherit;
+}
+
+.sticky-col-header {
+  position: sticky;
+  right: 0;
+  z-index: 12;
+}
+
+.sticky-col-footer {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--bg-elevated);
 }
 </style>
