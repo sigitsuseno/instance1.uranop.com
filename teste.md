@@ -95,3 +95,5 @@ A. di AttendanceImportService
     - check_in = null - check_out = null - actual_in = null - actual_out = null - status = sesuai leave_type->code
       c. sch_employee_shift_roster->external_code != "L"
       c.1 jika lembur === 4 - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
+
+jo, buat tabel baru karyawan_titipan yang isi kolomnya : id, uuid, nama, employee_code

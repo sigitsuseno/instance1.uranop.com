@@ -973,8 +973,37 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
                 $printingEmployees->push($item);
             } elseif ($employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPR')) {
-                // GRP-SPR: section ALL IN (B), hitungan lembur pake formula Printing
-                $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
+                // GRP-SPR: section ALL IN (B)
+                // - Uang Makan + Overtime: hanya hari Minggu & Holiday
+                // - Senin - Sabtu: default 0
+                $item = $allInHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
+                
+                // Filter: hanya hari Minggu (0) & Holiday, sisanya 0
+                foreach ($item['days'] as $dateStr => &$day) {
+                    $roster = $empRosters->get($dateStr);
+                    $isHoliday = $roster && $roster->is_holiday;
+                    $dayOfWeek = Carbon::parse($dateStr)->dayOfWeek;
+                    
+                    if ($dayOfWeek !== 0 && !$isHoliday) {
+                        $day['uang_makan'] = 0;
+                        $day['overtime_nominal'] = 0;
+                        $day['nominal'] = 0;
+                        $day['lm'] = '';
+                        $day['lembur'] = '';
+                    }
+                }
+                unset($day);
+                
+                // Recalculate totals from filtered days
+                $totalUangMakan = 0;
+                $overtimeFromDays = 0;
+                foreach ($item['days'] as $day) {
+                    $totalUangMakan += $day['uang_makan'] ?? 0;
+                    $overtimeFromDays += $day['overtime_nominal'] ?? 0;
+                }
+                $item['total_uang_makan'] = round($totalUangMakan, 2);
+                $item['total_overtime'] = round($overtimeFromDays, 2);
+                $item['total_terima'] = round($item['total_hari_kerja'] + $item['total_overtime'] + $item['total_uang_makan'], 2);
                 $allInEmployees->push($item);
             } else {
                 $item = $allInHelper->processEmployee($employee, $empPrepares, $empRosters, $payRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
