@@ -135,36 +135,36 @@ class RekapGajiController extends Controller
 
         $periodMonth = $period->start_date->format('Y-m');
 
-        // Preload BPJS untuk periode ini
-        $bpjsData = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
+        // Preload BPJS — cari per period dulu, fallback ke yg terbaru
+        $bpjsByPeriod = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_period_id', $periodId)
             ->get()
             ->keyBy('employee_id');
 
+        // Cari BPJS terbaru buat karyawan yg belum punya data period ini
+        $employeeIdsWithoutBpjs = $employees->pluck('id')->diff($bpjsByPeriod->keys());
+        $bpjsFallback = collect();
+        if ($employeeIdsWithoutBpjs->isNotEmpty()) {
+            $bpjsFallback = EmployeeBpjs::whereIn('employee_id', $employeeIdsWithoutBpjs)
+                ->orderBy('pay_period_id', 'desc')
+                ->orderBy('id', 'desc')
+                ->get()
+                ->groupBy('employee_id')
+                ->map->first();
+        }
+
         // Build response
-        $data = $employees->map(function ($emp) use ($periodMonth, $bpjsData) {
+        $data = $employees->map(function ($emp) use ($periodMonth, $bpjsByPeriod, $bpjsFallback) {
             $salary = $emp->activeSalary($periodMonth);
-            $bpjs   = $bpjsData->get($emp->id);
+            $bpjs   = $bpjsByPeriod->get($emp->id) ?? $bpjsFallback->get($emp->id);
 
             $groupCodes = $emp->groups->pluck('reference_code')->toArray();
 
-            // Status label
-            $maritalStatus = $emp->marital_status ?? '';
-            $children = $emp->families()
-                ->where('is_dependent', true)
-                ->count();
-            $statusLabel = '-';
-            if ($maritalStatus === 'single') {
-                $statusLabel = "TK/{$children}";
-            } elseif ($maritalStatus === 'married') {
-                $statusLabel = "K/{$children}";
-            }
-
-            // BPJS TK = JHT + JKK + JKM (employee portion)
+            // BPJS TK = employer JHT + JKK + JKM
             $bpjsTk = 0;
             $bpjsKs = 0;
             if ($bpjs) {
-                $bpjsTk = (float)($bpjs->employee_jht ?? 0) + (float)($bpjs->employee_jkk ?? 0) + (float)($bpjs->employee_jkm ?? 0);
+                $bpjsTk = (float)($bpjs->employer_jht ?? 0) + (float)($bpjs->employer_jkk ?? 0) + (float)($bpjs->employer_jkm ?? 0);
                 $bpjsKs = (float)($bpjs->employee_kesehatan ?? 0);
             }
 
@@ -177,8 +177,8 @@ class RekapGajiController extends Controller
                 'id'           => $emp->id,
                 'name'         => $emp->name,
                 'account_no'   => $emp->bank_account_number ?? '-',
-                'status_label' => $statusLabel,
-                'gender'       => $emp->gender === 'male' ? 'L' : ($emp->gender === 'female' ? 'P' : '-'),
+                'status_label' => $emp->ptkp ?? '-',
+                'gender'       => in_array($emp->gender, ['L', 'P']) ? $emp->gender : '-',
                 'gaji'         => $baseSalary,
                 'total_gaji'   => $totalGaji,
                 'bpjs_tk'      => $bpjsTk,

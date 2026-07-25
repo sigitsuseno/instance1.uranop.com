@@ -12,7 +12,7 @@ import Badge from '../../../../Components/Badge.vue'
 const router = useRouter()
 const notification = useNotificationStore()
 const permission = usePermissionStore()
-const { get, patch } = useApi()
+const { get, patch, post } = useApi()
 
 // State
 const loading = ref(false)
@@ -67,6 +67,11 @@ const showConfirmDialog = ref(false)
 const dialogAction = ref('') // 'mark-paid' or 'mark-unpaid'
 const selectedContract = ref(null)
 
+// Bulk State
+const selectedIds = ref(new Set())
+const bulkLoading = ref(false)
+const selectAllRef = ref(null)
+
 // Print State
 const showPrintModal = ref(false)
 const printLoading = ref(false)
@@ -75,6 +80,17 @@ const printData = ref({ company: null, bulan: '', hrd: '', slips: [] })
 // Computed
 const paidCount = computed(() => contracts.value.filter(c => c.is_compensation_paid).length)
 const unpaidCount = computed(() => contracts.value.filter(c => !c.is_compensation_paid).length)
+
+const allSelected = computed(() => {
+    const unpaid = contracts.value.filter(c => !c.is_compensation_paid)
+    return unpaid.length > 0 && unpaid.every(c => selectedIds.value.has(c.id))
+})
+
+const someSelected = computed(() => {
+    return selectedIds.value.size > 0 && !allSelected.value
+})
+
+const selectedCount = computed(() => selectedIds.value.size)
 
 // ========== API CALLS ==========
 async function fetchData() {
@@ -102,7 +118,44 @@ async function fetchData() {
 
 // ========== ACTIONS ==========
 function applyFilter() {
+    selectedIds.value = new Set()
     fetchData()
+}
+
+function toggleSelectAll() {
+    if (allSelected.value) {
+        selectedIds.value = new Set()
+    } else {
+        const unpaid = contracts.value.filter(c => !c.is_compensation_paid)
+        selectedIds.value = new Set(unpaid.map(c => c.id))
+    }
+}
+
+function toggleSelect(id) {
+    const next = new Set(selectedIds.value)
+    if (next.has(id)) {
+        next.delete(id)
+    } else {
+        next.add(id)
+    }
+    selectedIds.value = next
+}
+
+async function bulkMarkPaid() {
+    if (selectedIds.value.size === 0) return
+
+    bulkLoading.value = true
+    try {
+        const ids = Array.from(selectedIds.value)
+        const res = await post('/api/v1/employees/compensation/bulk-mark-paid', { ids })
+        notification.addNotification(res.message || 'Kompensasi berhasil ditandai dibayar.', 'success')
+        selectedIds.value = new Set()
+        fetchData()
+    } catch (e) {
+        notification.addNotification('Gagal memperbarui status kompensasi.', 'error')
+    } finally {
+        bulkLoading.value = false
+    }
 }
 
 function confirmMarkPaid(contract) {
@@ -360,6 +413,25 @@ onMounted(() => {
             </div>
         </BaseCard>
 
+        <!-- Bulk Action Bar -->
+        <div v-if="selectedIds.size > 0"
+            class="flex items-center gap-3 px-4 py-2 rounded-lg bg-(--primary)/5 border border-(--primary)/20">
+            <i class="bx bx-check-square text-(--primary) text-lg"></i>
+            <span class="text-sm font-medium text-(--text-main)">
+                {{ selectedCount }} kontrak dipilih
+            </span>
+            <div class="flex-1"></div>
+            <BaseButton variant="ghost" @click="selectedIds = new Set()"
+                class="h-8 px-3 text-xs text-(--text-muted) hover:text-(--text-main)">
+                <i class="bx bx-x mr-1"></i>Batal
+            </BaseButton>
+            <BaseButton variant="primary" @click="bulkMarkPaid" :disabled="bulkLoading"
+                class="h-8 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white">
+                <i :class="bulkLoading ? 'bx bx-loader-alt bx-spin mr-1' : 'bx bx-check-double mr-1'"></i>
+                {{ bulkLoading ? 'Memproses...' : `Tandai ${selectedCount} Kontrak Dibayar` }}
+            </BaseButton>
+        </div>
+
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <BaseCard class="border-(--border-soft) shadow-sm relative overflow-hidden group">
@@ -431,6 +503,13 @@ onMounted(() => {
                 <table class="min-w-full divide-y divide-(--border-soft)">
                     <thead class="bg-(--bg-elevated)">
                         <tr>
+                            <th class="px-4 py-3 text-left w-10">
+                                <input type="checkbox"
+                                    :checked="allSelected"
+                                    :indeterminate="someSelected"
+                                    @change="toggleSelectAll"
+                                    class="w-4 h-4 rounded border-(--border-soft) text-(--primary) focus:ring-(--primary-glow) cursor-pointer">
+                            </th>
                             <th
                                 class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
                                 Karyawan</th>
@@ -460,7 +539,7 @@ onMounted(() => {
                     </thead>
                     <tbody class="bg-(--bg-card) divide-y divide-(--border-soft)">
                         <tr v-if="loading">
-                            <td colspan="7" class="px-4 py-12 text-center">
+                            <td colspan="8" class="px-4 py-12 text-center">
                                 <div
                                     class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mx-auto mb-2">
                                 </div>
@@ -468,13 +547,22 @@ onMounted(() => {
                             </td>
                         </tr>
                         <tr v-else-if="contracts.length === 0">
-                            <td colspan="7" class="px-4 py-12 text-center text-(--text-muted)">
+                            <td colspan="8" class="px-4 py-12 text-center text-(--text-muted)">
                                 <i class="bx bx-check-circle text-4xl mb-2 block"></i>
                                 Tidak ada kontrak yang jatuh tempo di periode ini.
                             </td>
                         </tr>
                         <tr v-for="contract in contracts" :key="contract.id"
                             class="hover:bg-(--bg-elevated) transition-colors">
+                            <!-- Checkbox -->
+                            <td class="px-4 py-3 whitespace-nowrap w-10">
+                                <input type="checkbox"
+                                    :checked="selectedIds.has(contract.id)"
+                                    :disabled="contract.is_compensation_paid"
+                                    @change="toggleSelect(contract.id)"
+                                    class="w-4 h-4 rounded border-(--border-soft) text-(--primary) focus:ring-(--primary-glow) cursor-pointer"
+                                    :class="{ 'opacity-40': contract.is_compensation_paid }">
+                            </td>
                             <!-- Karyawan -->
                             <td class="px-4 py-3 whitespace-nowrap">
                                 <div class="flex items-center space-x-3">

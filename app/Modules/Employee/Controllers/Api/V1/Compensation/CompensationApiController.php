@@ -104,6 +104,27 @@ class CompensationApiController extends Controller
     }
 
     /**
+     * POST /api/v1/employees/compensation/bulk-mark-paid
+     */
+    public function bulkMarkPaid(Request $request): JsonResponse
+    {
+        $ids = $request->input('ids', []);
+
+        if (empty($ids) || !is_array($ids)) {
+            return response()->json(['message' => 'Pilih minimal satu kontrak.'], 400);
+        }
+
+        $updated = EmployeeContract::whereIn('id', $ids)
+            ->whereNull('compensation_paid_at')
+            ->update(['compensation_paid_at' => now()]);
+
+        return response()->json([
+            'message' => "$updated kontrak berhasil ditandai sudah dibayar.",
+            'data'    => ['updated' => $updated],
+        ]);
+    }
+
+    /**
      * GET /api/v1/employees/compensation/export
      */
     public function export(Request $request)
