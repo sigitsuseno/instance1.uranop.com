@@ -506,6 +506,43 @@
           </div>
         </div>
 
+        <hr class="border-(--border-soft)" />
+
+        <!-- Cash Bon Field -->
+        <div>
+          <label class="block text-xs font-medium text-(--text-muted) mb-1">
+            Cash Bon <span class="text-(--danger)">(potongan)</span>
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm text-(--text-muted) pointer-events-none">Rp</span>
+            <input
+              v-model.number="editCashbon"
+              type="number"
+              min="0"
+              step="1"
+              class="w-full pl-10 pr-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+              placeholder="0"
+            />
+          </div>
+          <p class="text-xs text-(--text-soft) mt-1">Nilai ini akan mengurangi gaji bersih (TRIMA).</p>
+        </div>
+
+        <!-- Preview perhitungan -->
+        <div v-if="editingRecord" class="bg-(--bg-soft) rounded-lg p-3 text-xs space-y-1 text-(--text-muted)">
+          <div class="flex justify-between">
+            <span>Gaji Kotor</span>
+            <span class="font-mono">Rp {{ formatCurrency(editingRecord.total, true) }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Cash Bon</span>
+            <span class="font-mono text-(--danger)">- Rp {{ formatCurrency(editCashbon, true) }}</span>
+          </div>
+          <div class="flex justify-between pt-1 border-t border-(--border-soft) font-bold text-(--text-main)">
+            <span>Perkiraan TRIMA</span>
+            <span class="font-mono">Rp {{ formatCurrency(hitungPerkiraanTrima, true) }}</span>
+          </div>
+        </div>
+
         <p class="text-xs text-(--text-muted) italic">
           💡 Upah lembur akan dikalkulasi ulang: <code>(Gapok + TJ MK + Tunjangan) / 173 × ((LM Count + LBR Count) / 60)</code> dibulatkan 100.
         </p>
@@ -564,7 +601,20 @@ const editingRecord = ref(null)
 const editLm = ref(0)
 const editLmCount = ref(0)
 const editLemburCount = ref(0)
+const editCashbon = ref(0)
 const savingUpahLembur = ref(false)
+
+const hitungPerkiraanTrima = computed(() => {
+  if (!editingRecord.value) return 0
+  const total = parseFloat(editingRecord.value.total) || 0
+  const bpjsTk = parseFloat(editingRecord.value.bpjs_tk) || 0
+  const bpjsKs = parseFloat(editingRecord.value.bpjs_ks) || 0
+  const bpjsPen = parseFloat(editingRecord.value.bpjs_pen) || 0
+  const pph = parseFloat(editingRecord.value.pph) || 0
+  const cashbon = parseFloat(editCashbon.value) || 0
+  const beforeRound = total - bpjsTk - bpjsKs - bpjsPen - cashbon - pph
+  return Math.ceil(beforeRound / 100) * 100
+})
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
@@ -862,6 +912,7 @@ function openEditModal(record) {
   editLm.value = record.lm || 0
   editLmCount.value = (record.lm_count ?? record.lm) || 0
   editLemburCount.value = record.lembur_count || 0
+  editCashbon.value = record.cashbon || 0
   isEditModalOpen.value = true
 }
 
@@ -871,6 +922,7 @@ function closeEditModal() {
   editLm.value = 0
   editLmCount.value = 0
   editLemburCount.value = 0
+  editCashbon.value = 0
 }
 
 async function saveUpahLembur() {
@@ -881,6 +933,7 @@ async function saveUpahLembur() {
       lm: editLm.value || 0,
       lm_count: editLmCount.value || 0,
       lembur_count: editLemburCount.value || 0,
+      cashbon: editCashbon.value || 0,
     })
     
     // Update local record
@@ -889,13 +942,14 @@ async function saveUpahLembur() {
       records.value[idx].lm = res.data.lm
       records.value[idx].lm_count = res.data.lm_count
       records.value[idx].lembur_count = res.data.lembur_count
+      records.value[idx].cashbon = res.data.cashbon
       records.value[idx].upah_lembur = res.data.upah_lembur
       records.value[idx].pblt = res.data.pblt
       records.value[idx].total = res.data.total
       records.value[idx].gaji_bersih = res.data.gaji_bersih
     }
     
-    notification.success(res.message || 'Data lembur berhasil diupdate.')
+    notification.success(res.message || 'Data lembur & cashbon berhasil diupdate.')
     closeEditModal()
   } catch (error) {
     console.error('Error updating lembur', error)
