@@ -79,10 +79,14 @@ async function fetchData() {
 }
 
 // ── Count Display ────────────────────────────
+function isSectionA(label) {
+    return label?.startsWith('A.')
+}
+
 function getCount(att, sectionLabel = '') {
     if (!att) return '-'
-    // Section A & B: hide OT/LM
-    if (sectionLabel.startsWith('A.') || sectionLabel.startsWith('B.')) return '-'
+    // Section B: hide OT/LM
+    if (sectionLabel.startsWith('B.')) return '-'
     const val = att.is_holiday ? att.lm : att.overtime
     if (val === null || val === undefined || val === 0) return '-'
     return (Number(val) / 60).toFixed(1)
@@ -104,11 +108,16 @@ function getStatusClass(status) {
 
 function getCountClass(att, sectionLabel = '') {
     if (!att) return 'text-(--text-soft) text-[10px]'
-    // Section A & B: hide OT/LM
-    if (sectionLabel.startsWith('A.') || sectionLabel.startsWith('B.')) return 'text-(--text-soft) text-[10px]'
+    // Section B: hide OT/LM
+    if (sectionLabel.startsWith('B.')) return 'text-(--text-soft) text-[10px]'
     const val = att.is_holiday ? att.lm : att.overtime
     if (!val) return 'text-(--text-soft) text-[10px]'
     return 'text-(--text-soft) text-[10px]'
+}
+
+function formatUangMakan(val) {
+    if (!val || val === 0) return '-'
+    return 'Rp ' + Number(val).toLocaleString('id-ID')
 }
 
 // ── Print / Export ───────────────────────────
@@ -204,8 +213,14 @@ watch(selectedGroups, () => {
         description="Rekapitulasi kehadiran harian — Matrix Roster"
         @openSettings="showSettings = true"
     >
-        <!-- Actions: Print + Export -->
+        <!-- Actions: Print + Export + Karyawan Titipan -->
         <template #actions>
+            <button
+                @click="$router.push('/admin/reports/karyawan-titipan')"
+                class="print-hide flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-sm font-medium transition-colors"
+            >
+                <i class="bx bx-group text-lg"></i> Karyawan Titipan
+            </button>
             <button
                 :disabled="!records.length"
                 @click="handlePrint"
@@ -295,7 +310,7 @@ watch(selectedGroups, () => {
                                     <th class="sticky left-0 z-30 bg-(--bg-elevated) px-3 py-2.5 text-left text-xs font-semibold text-(--text-muted) uppercase border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)] w-20" rowspan="2">NIP</th>
                                     <th class="sticky z-30 bg-(--bg-elevated) px-3 py-2.5 text-left text-xs font-semibold text-(--text-muted) uppercase border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)]" style="left:100px;width:180px;" rowspan="2">Nama</th>
                                     <th v-for="d in dates" :key="d.date"
-                                        :colspan="2"
+                                        :colspan="isSectionA(section.label) ? 1 : 2"
                                         class="px-1.5 py-2 text-center text-[10px] font-bold uppercase border-b border-l border-(--border-soft)"
                                         :class="d.is_weekend ? 'bg-red-50 dark:bg-red-950/30 text-red-600' : 'text-(--text-muted)'"
                                         :title="d.day_name + ', ' + d.date">
@@ -307,9 +322,10 @@ watch(selectedGroups, () => {
                                     <template v-for="d in dates" :key="'sub-' + section.label + '-' + d.date">
                                         <th class="px-1 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted)"
                                             :class="d.is_weekend ? 'bg-red-50 dark:bg-red-950/30' : ''">St</th>
-                                        <th class="px-1 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted)"
+                                        <th v-if="!isSectionA(section.label)" class="px-1 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted)"
                                             :class="d.is_weekend ? 'bg-red-50 dark:bg-red-950/30' : ''">{{ d.is_weekend ? 'LM' : 'OT' }}</th>
                                     </template>
+                                    <th v-if="isSectionA(section.label)" class="px-2 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted) bg-(--bg-elevated) sticky right-0 z-20 min-w-[80px]">Uang Makan</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-(--border-soft)">
@@ -322,11 +338,14 @@ watch(selectedGroups, () => {
                                             :title="d.day_name + ', ' + d.date + (row.attendance[d.date]?.holiday_name ? ' — ' + row.attendance[d.date].holiday_name : '')">
                                             <span :class="getStatusClass(row.attendance[d.date]?.status)">{{ row.attendance[d.date]?.status || '-' }}</span>
                                         </td>
-                                        <td class="px-1 py-2 text-center text-xs border-b border-l border-(--border-soft)"
+                                        <td v-if="!isSectionA(section.label)" class="px-1 py-2 text-center text-xs border-b border-l border-(--border-soft)"
                                             :class="row.attendance[d.date]?.is_holiday ? 'bg-red-50/30 dark:bg-red-950/15' : ''">
                                             <span :class="getCountClass(row.attendance[d.date], section.label)">{{ getCount(row.attendance[d.date], section.label) }}</span>
                                         </td>
                                     </template>
+                                    <td v-if="isSectionA(section.label)" class="px-2 py-2 text-center text-xs font-semibold text-(--text-main) border-b border-l border-(--border-soft) bg-(--bg-card) sticky right-0 z-10">
+                                        {{ formatUangMakan(row.total_uang_makan) }}
+                                    </td>
                                 </tr>
                             </tbody>
                         </table>

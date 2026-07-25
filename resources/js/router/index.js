@@ -68,6 +68,7 @@ const KasbonRequests = () => import('../Pages/Admin/Kasbon/Requests.vue')
 const KasbonApprovals = () => import('../Pages/Admin/Kasbon/Approvals.vue')
 const KasbonRepayments = () => import('../Pages/Admin/Kasbon/Repayments.vue')
 const KasbonHistory = () => import('../Pages/Admin/Kasbon/History.vue')
+const KaryawanTitipanIndex = () => import('../Pages/Admin/Reports/KaryawanTitipan/Index.vue')
 const UangMakanReport = () => import('../Pages/Admin/Reports/UangMakan/Index.vue')
 const LaporanLemburIndex = () => import('../Pages/Admin/Reports/Lembur/Index.vue')
 const LaporanLemburUangMakan = () => import('../Pages/Admin/Reports/LemburUangMakan/Index.vue')
@@ -213,6 +214,7 @@ const routes = [
       { path: 'reports/rekap-gaji', name: 'reports.rekap-gaji', component: RekapGajiIndex, meta: { title: 'Rekap Gaji' } },
       { path: 'reports/rekap-kerja', name: 'reports.rekap-kerja', component: RekapKerjaIndex, meta: { title: 'Rekap Kerja' } },
       { path: 'reports/rekap-pph-kompensasi', name: 'reports.rekap-pph-kompensasi', component: RekapPphKompensasiIndex, meta: { title: 'Rekap PPH & Kompensasi' } },
+      { path: 'reports/karyawan-titipan', name: 'reports.karyawan-titipan', component: KaryawanTitipanIndex, meta: { title: 'Karyawan Titipan' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],
