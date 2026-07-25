@@ -116,8 +116,8 @@ class GajiKaryawanExport implements FromArray, WithHeadings, WithStyles, WithEve
             $r['gaji_pokok'] ?? 0,         // K
             $r['tj_masa_kerja'] ?? 0,      // L
             $r['hari_kerja'] ?? 0,         // M
-            ($r['lm'] ?? 0) ? round($r['lm'] / 60, 1) : 0,                  // N (L/M dalam jam)
-            ($r['lembur_count'] ?? 0) ? round($r['lembur_count'], 1) : 0, // O (LBR JAM — sudah jam)
+            ($r['lm'] ?? 0) ? round($r['lm'] / 480, 1) : 0,                  // N (LM dalam hari — 1 hari = 8 jam = 480 menit)
+            ($r['lembur_count'] ?? 0) ? round($r['lembur_count'] / 60, 1) : 0, // O (LBR JAM dalam jam)
             $r['gaji'] ?? 0,               // P
             $r['upah_lembur'] ?? 0,        // Q
             $r['revisi'] ?? 0,             // R
@@ -154,8 +154,8 @@ class GajiKaryawanExport implements FromArray, WithHeadings, WithStyles, WithEve
             $sum('gaji_pokok'),                   // K
             $sum('tj_masa_kerja'),                // L
             $sum('hari_kerja'),                   // M
-            $sum('lm'),                           // N
-            $sum('lembur_count'),                 // O
+            $sum('lm') ? round($sum('lm') / 480, 1) : 0,             // N
+            $sum('lembur_count') ? round($sum('lembur_count') / 60, 1) : 0, // O
             $sum('gaji'),                         // P
             $sum('upah_lembur'),                  // Q
             $sum('revisi'),                       // R

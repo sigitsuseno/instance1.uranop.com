@@ -376,7 +376,7 @@ function buildNormalSlipData(r) {
     tjMasaKerja: r.tj_masa_kerja,
     tunjangan: r.tunjangan,
     premiHadir: r.premi_hadir,
-    overtimeHours: (r.lm_count || 0) + (r.lembur_count || 0),
+    overtimeHours: ((r.lm_count || 0) + (r.lembur_count || 0)) / 60,
     overtimeAmount: r.upah_lembur,
     revisi: r.revisi || 0,
     subTotalEarnings: Math.round(subTotalEarnings),
@@ -411,7 +411,7 @@ function buildSplitPartData(r, part) {
     tjMasaKerja: r.tj_masa_kerja,
     tunjangan: r.tunjangan,
     premiHadir: r.premi_hadir,
-    overtimeHours: (r.lm_count || 0) + (r.lembur_count || 0),
+    overtimeHours: ((r.lm_count || 0) + (r.lembur_count || 0)) / 60,
     overtimeAmount: r.upah_lembur,
     revisi: r.revisi || 0,
     subTotalEarnings: Math.round(subTotalEarnings),
@@ -476,7 +476,7 @@ function generateBulkPrintHtml(slips, isSplitMode) {
 <div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(s.tjMasaKerja)}</div>
 <div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(s.tunjangan)}</div>
 <div class="row"><span class="lbl">PREMI HADIR</span><span></span>${amt(s.premiHadir)}</div>
-<div class="row"><span class="lbl">LEMBURAN</span><span>${s.overtimeHours} JAM</span>${amt(s.overtimeAmount)}</div>
+<div class="row"><span class="lbl">LEMBURAN</span><span>${(s.overtimeHours).toFixed(1).replace('.', ',')} JAM</span>${amt(s.overtimeAmount)}</div>
 <div class="row"><span class="lbl">REVISI</span><span></span>${amt(s.revisi)}</div>
 <div class="row"><span></span><span></span>${amt(s.subTotalEarnings, {bt: true})}</div>
 <div class="sp"></div>
@@ -502,7 +502,7 @@ function generateBulkPrintHtml(slips, isSplitMode) {
 <div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(p.tjMasaKerja)}</div>
 <div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(p.tunjangan)}</div>
 <div class="row"><span class="lbl">PREMI HADIR</span><span></span>${amt(p.premiHadir)}</div>
-<div class="row"><span class="lbl">LEMBURAN</span><span>${p.overtimeHours} JAM</span>${amt(p.overtimeAmount)}</div>
+<div class="row"><span class="lbl">LEMBURAN</span><span>${(p.overtimeHours).toFixed(1).replace('.', ',')} JAM</span>${amt(p.overtimeAmount)}</div>
 <div class="row"><span class="lbl">REVISI</span><span></span>${amt(p.revisi)}</div>
 <div class="row"><span></span><span></span>${amt(p.subTotalEarnings, {bt: true})}</div>
 <div class="sp"></div>
