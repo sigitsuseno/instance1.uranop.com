@@ -6,26 +6,13 @@
   >
     <!-- Tombol Update Data -->
     <template #actions>
-      <select
-        v-model="updatePeriodId"
-        class="px-3 py-2 text-sm rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) min-w-[200px]"
-        :disabled="updating"
-      >
-        <option :value="null" disabled>-- Pilih Periode --</option>
-        <option v-for="p in periods" :key="p.id" :value="p.id">
-          {{ p.name }} ({{ formatPeriodDate(p) }})
-        </option>
-      </select>
       <button
-        @click="updateData"
-        :disabled="updating || !updatePeriodId"
+        @click="showUpdateModal = true"
         class="px-3 py-2 text-sm rounded-lg border border-(--border-soft) hover:bg-(--bg-hover) flex items-center gap-1.5 transition-colors"
-        :class="{ 'opacity-50 cursor-not-allowed': updating || !updatePeriodId }"
-        title="Update Data Lembur & Uang Makan — ambil dari att_prepare ke employee_overtime"
+        title="Update Data Lembur & Uang Makan — simpan ke employee_overtime"
       >
-        <i v-if="updating" class="bx bx-loader-alt text-lg animate-spin"></i>
-        <i v-else class="bx bx-refresh text-lg"></i>
-        <span class="hidden sm:inline">{{ updating ? 'Mengupdate...' : 'Update Data' }}</span>
+        <i class="bx bx-refresh text-lg"></i>
+        <span class="hidden sm:inline">Update Data</span>
       </button>
     </template>
 
@@ -73,6 +60,18 @@
     <TabDetailPre v-if="activeTab === 'detail_pre'" :groups="selectedGroups" />
     <TabResume v-if="activeTab === 'resume'" :groups="selectedGroups" />
 
+    <!-- Update Data Modal -->
+    <UpdateDataModal
+      :show="showUpdateModal"
+      :periods="periods"
+      :allEmployees="allEmployees"
+      :initialEmpTanpa="initialEmpTanpa"
+      :initialPositionRules="initialPositionRules"
+      :initialTechnicianRules="initialTechnicianRules"
+      @close="showUpdateModal = false"
+      @saved="onDataUpdated"
+    />
+
     <!-- Settings Modal -->
     <ReportSettingsModal
       v-if="showSettings"
@@ -97,25 +96,31 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
-import { useNotificationStore } from '@/Stores/notification'
 import ReportPageLayout from '@/Components/ReportPage/ReportPageLayout.vue'
 import ReportSettingsModal from '@/Components/ReportPage/ReportSettingsModal.vue'
 import LemburUangMakanSettingsTable from '@/Components/ReportPage/settings/LemburUangMakanSettingsTable.vue'
 import TabDetail from './TabDetail.vue'
 import TabDetailPre from './TabDetailPre.vue'
 import TabResume from './TabResume.vue'
+import UpdateDataModal from './UpdateDataModal.vue'
 
-const { get, post } = useApi()
+const { get } = useApi()
 
 const activeTab = ref('detail')
 const selectedGroups = ref([])
 const availableGroups = ref([])
 const showSettings = ref(false)
+const showUpdateModal = ref(false)
 const spcEmployees = ref([])
 const jktEmployees = ref([])
 const allinEmployees = ref([])
 const tknEmployees = ref([])
 const periods = ref([])
+
+// Data awal untuk modal UpdateData (dari config)
+const initialEmpTanpa = ref([])
+const initialPositionRules = ref(null)
+const initialTechnicianRules = ref(null)
 
 const groupCodes = computed(() => availableGroups.value.map(g => g.code))
 const extraData = computed(() => ({
@@ -125,6 +130,25 @@ const extraData = computed(() => ({
   allinEmployees: allinEmployees.value,
   tknEmployees: tknEmployees.value,
 }))
+
+// Gabungan semua karyawan untuk modal UpdateData
+const allEmployees = computed(() => {
+  const seen = new Set()
+  const result = []
+  const all = [
+    ...spcEmployees.value,
+    ...jktEmployees.value,
+    ...allinEmployees.value,
+    ...tknEmployees.value,
+  ]
+  for (const e of all) {
+    if (!seen.has(e.id)) {
+      seen.add(e.id)
+      result.push({ id: e.id, name: e.name || e.nama })
+    }
+  }
+  return result.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+})
 
 onMounted(async () => {
   // 1. Load all available groups (for modal checkboxes)
@@ -148,12 +172,32 @@ onMounted(async () => {
     } else {
       selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'KRY-SPC', 'KRY-TKN']
     }
+
+    // Load initial config untuk modal UpdateData
+    const cfg = configRes.config || configRes.data?.config || {}
+    initialEmpTanpa.value = cfg.jkt_no_overtime_employees || []
+    // Position rules dari config (jika ada), kalau tidak pakai null → modal pakai default
+    if (cfg.KABAG || cfg.KASHIFT || cfg['ALL IN']) {
+      initialPositionRules.value = {
+        KABAG: cfg.KABAG || null,
+        KASHIFT: cfg.KASHIFT || null,
+        ALLIN: cfg['ALL IN'] || cfg.ALLIN || null,
+      }
+    }
+    // Technician rules dari config
+    if (cfg.tkn_weekday_flat !== undefined || cfg.tkn_saturday_rate !== undefined || cfg.tkn_holiday_rate !== undefined) {
+      initialTechnicianRules.value = {
+        weekday: cfg.tkn_weekday_flat ?? 15000,
+        saturday: cfg.tkn_saturday_rate ?? 100000,
+        holiday: cfg.tkn_holiday_rate ?? 200000,
+      }
+    }
   } catch (err) {
     console.error('Gagal fetch report config:', err)
     selectedGroups.value = ['GRP-JKT', 'GRP-PS1', 'GRP-ALLIN', 'KRY-SPC', 'KRY-TKN']
   }
 
-  // 3. Load periods + employees (for settings modal)
+  // 3. Load periods + employees (for settings modal & update modal)
   try {
     const [periodsRes, spcRes, jktRes, allinRes, sprRes, gdRes, tknRes] = await Promise.all([
       get('/api/v1/settings/employee-data/pay-periods'),
@@ -178,46 +222,14 @@ onMounted(async () => {
   }
 })
 
-const updating = ref(false)
-const updatePeriodId = ref(null)
-const notification = useNotificationStore()
-
-function formatPeriodDate(p) {
-  if (!p.start_date || !p.end_date) return ''
-  const fmt = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
-  return fmt.format(new Date(p.start_date)) + ' - ' + fmt.format(new Date(p.end_date))
-}
-
-async function updateData() {
-  if (!updatePeriodId.value) {
-    notification.addNotification('Pilih periode terlebih dahulu', 'warning')
-    return
-  }
-
-  // Cari nama periode yang dipilih
-  const selectedPeriod = periods.value.find(p => p.id === updatePeriodId.value)
-  const periodName = selectedPeriod?.name || 'periode ini'
-
-  if (!confirm(`Update data lembur & uang makan untuk periode "${periodName}"?\n\nData akan diambil dari att_prepare → dihitung per karyawan → disimpan ke employee_overtime.\n\nLanjutkan?`)) return
-
-  updating.value = true
-  try {
-    const res = await post('/api/v1/reports/lembur/update-data', {
-      period_id: updatePeriodId.value
-    })
-    notification.addNotification(res.message || 'Data berhasil diupdate', 'success')
-  } catch (err) {
-    console.error('Gagal update data:', err)
-    const msg = err?.response?.data?.message || 'Gagal update data lembur & uang makan'
-    notification.addNotification(msg, 'error')
-  } finally {
-    updating.value = false
-  }
-}
-
 function onSettingsSaved(payload) {
   if (payload.employee_groups && payload.employee_groups.length > 0) {
     selectedGroups.value = payload.employee_groups
   }
+}
+
+function onDataUpdated(result) {
+  // Data sudah tersimpan, Tab "Detail Pre" akan menampilkan data baru
+  console.log('Update selesai:', result)
 }
 </script>

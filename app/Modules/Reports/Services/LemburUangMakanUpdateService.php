@@ -5,16 +5,9 @@ namespace App\Modules\Reports\Services;
 use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
-use App\Modules\Employee\Models\EmployeeReserve;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
-use App\Modules\Reports\Helpers\Lembur\AllInHelper;
-use App\Modules\Reports\Helpers\Lembur\JakartaHelper;
-use App\Modules\Reports\Helpers\Lembur\PrintingHelper;
-use App\Modules\Reports\Helpers\Lembur\SpcHelper;
-use App\Modules\Reports\Helpers\Lembur\TknHelper;
-use App\Modules\Settings\Services\ReportConfigService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -22,11 +15,21 @@ class LemburUangMakanUpdateService
 {
     /**
      * Update data lembur & uang makan untuk periode tertentu.
-     * Baca dari att_prepares → proses per helper → 1 record per tanggal per karyawan.
+     *
+     * Aturan per group (prioritas: TKN > SPC > group-based):
+     *   1. GRP-JKT   — uang makan (UM weekdays, 2/FULL sabtu, HALF/FULL minggu)
+     *   2. GRP-ALLIN, GRP-GD — uang makan (mirip JKT, tanpa pengecualian minggu)
+     *   3. GRP-SPR   — lembur (weekday-sabtu=0, minggu=lm_count)
+     *   4. GRP-PS1, GRP-SS — lembur (overtime_count weekday-sabtu, lm_count minggu)
+     *   5. KRY-TKN   — uang makan (overwrite, aturan teknisi sendiri)
+     *   6. KRY-SPC   — lembur (overwrite, overtime_count/lm_count)
+     *
+     * @param int   $periodId
+     * @param array $params  { emp_tanpa_sabtu_minggu_holiday, position_rules, technician_rules }
      */
-    public function update(int $periodId): array
+    public function update(int $periodId, array $params = []): array
     {
-        $period = PayPeriod::findOrFail($periodId);
+        $period    = PayPeriod::findOrFail($periodId);
         $startDate = Carbon::parse($period->start_date);
         $endDate   = Carbon::parse($period->end_date);
         $today     = Carbon::today();
@@ -35,7 +38,24 @@ class LemburUangMakanUpdateService
             $endDate = $today;
         }
 
-        // ── Generate date list ────────────────────────────────────
+        // ── Parameter dari modal ────────────────────────────────────
+        $empTanpaSabtuMingguHoliday = $params['emp_tanpa_sabtu_minggu_holiday'] ?? [];
+        $positionRules              = $params['position_rules'] ?? [];
+        $technicianRules            = $params['technician_rules'] ?? [];
+
+        // Default fallback
+        if (empty($positionRules)) {
+            $positionRules = [
+                'KABAG'   => ['weekday' => 15000, 'sabtu_dua' => 55000, 'sabtu_full' => 110000, 'minggu_half' => 110000, 'minggu_full' => 220000],
+                'KASHIFT' => ['weekday' => 15000, 'sabtu_dua' => 52522, 'sabtu_full' => 105000, 'minggu_half' => 105000, 'minggu_full' => 210000],
+                'ALLIN'   => ['weekday' => 15000, 'sabtu_dua' => 50000, 'sabtu_full' => 100000, 'minggu_half' => 100000, 'minggu_full' => 200000],
+            ];
+        }
+        if (empty($technicianRules)) {
+            $technicianRules = ['weekday' => 15000, 'saturday' => 100000, 'holiday' => 200000];
+        }
+
+        // ── Generate date list ──────────────────────────────────────
         $dates = [];
         $d = $startDate->copy();
         while ($d->lte($endDate)) {
@@ -43,15 +63,9 @@ class LemburUangMakanUpdateService
             $d->addDay();
         }
 
-        // ── Config ─────────────────────────────────────────────────
-        $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
-
-        // ── Fetch data ─────────────────────────────────────────────
+        // ── Fetch data ──────────────────────────────────────────────
         $employees = Employee::query()
             ->whereHas('shiftRosters', fn($q) => $q->whereBetween('date', [$startDate, $endDate]))
-            ->when(!empty($config['employee_groups'] ?? []), fn($q) =>
-                $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $config['employee_groups']))
-            )
             ->with(['position', 'groups', 'groups.master'])
             ->get();
 
@@ -64,27 +78,17 @@ class LemburUangMakanUpdateService
         $payRecords = PayRecord::where('pay_period_id', $period->id)
             ->get()->groupBy('employee_id');
 
-        $employeeReserves = EmployeeReserve::where('pay_periode_id', $period->id)
-            ->get()->keyBy('employee_id');
-
-        // ── Helpers ────────────────────────────────────────────────
-        $jakartaHelper  = new JakartaHelper();
-        $allInHelper    = new AllInHelper();
-        $printingHelper = new PrintingHelper();
-        $spcHelper      = new SpcHelper();
-        $tknHelper      = new TknHelper();
-
-        // ── Process & save dalam transaction ──────────────────────
+        // ── Process ─────────────────────────────────────────────────
         $inserts = [];
-        $now = now();
+        $now     = now();
+        $userId  = auth()->id();
 
         foreach ($employees as $employee) {
-            $empPrepares  = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
-            $empRosters   = $rosters->get($employee->id, collect())->keyBy(fn($r) => $r->date->format('Y-m-d'));
+            $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
+            $empRosters  = $rosters->get($employee->id, collect())->keyBy(fn($r) => $r->date->format('Y-m-d'));
             $empPayRecord = $payRecords->get($employee->id)?->first();
-            $reserve      = $employeeReserves->get($employee->id);
 
-            // ── Salary data ────────────────────────────────────────
+            // ── Salary ──────────────────────────────────────────────
             $gaji      = $empPayRecord ? (float)($empPayRecord->gaji_pokok ?? 0) : $employee->baseSalary();
             $tjMk      = $empPayRecord ? (float)($empPayRecord->tj_masa_kerja ?? 0)
                 : (float)($employee->salaryComponents()->latest('effective_date')->first()?->tunjangan_masa_kerja ?? 0);
@@ -94,117 +98,90 @@ class LemburUangMakanUpdateService
             $tunjangan = $empPayRecord ? (float)($empPayRecord->tunjangan ?? 0)
                 : (float)($employee->activeSalary()?->tunjangan ?? 0);
 
-            // ── Klasifikasi & proses ──────────────────────────────
-            $item = null;
+            $upahLemburPerJam = ($gaji + $tjMk + $tunjangan) > 0
+                ? round(($gaji + $tjMk + $tunjangan) / 173, 2)
+                : 0;
 
-            // SPC: cek shouldShow dengan period ID
-            $showSpc = false;
-            try {
-                $showSpc = SpcHelper::shouldShow($period->id);
-            } catch (\Exception $e) {
-                $showSpc = false;
-            }
+            // ── Classify employee ───────────────────────────────────
+            $empGroupCodes = $employee->groups->pluck('reference_code')->toArray();
 
-            if (TknHelper::matches($employee)) {
-                $item = $tknHelper->processEmployee($employee, $empPrepares, $empRosters, $empPayRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
-            } elseif ($showSpc && SpcHelper::matches($employee)) {
-                $item = $spcHelper->processEmployee($employee, $empPrepares, $empRosters, $empPayRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
-            } elseif (JakartaHelper::matches($employee)) {
-                $item = $jakartaHelper->processEmployee($employee, $empPrepares, $empRosters, $empPayRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
-            } elseif (PrintingHelper::matches($employee)) {
-                $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $empPayRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
-            } elseif ($employee->groups->contains(fn($g) => $g->reference_code === 'GRP-SPR')) {
-                // SOPIR — perlakuan khusus
-                $item = $printingHelper->processEmployee($employee, $empPrepares, $empRosters, $empPayRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
-                foreach ($item['days'] as $dateStr => &$day) {
-                    $roster = $empRosters->get($dateStr);
-                    $isHoliday = $roster && $roster->is_holiday;
-                    $dayOfWeek = Carbon::parse($dateStr)->dayOfWeek;
-                    if ($dayOfWeek !== 0 && !$isHoliday) {
-                        $day['kode'] = '';
-                        $day['ha'] = '-';
-                        $day['upah_per_hari'] = 0;
-                        $day['lm'] = '';
-                        $day['lembur'] = '';
-                        $day['nominal'] = 0;
-                        $day['overtime_nominal'] = 0;
-                        $day['uang_makan'] = 0;
-                    } else {
-                        $day['uang_makan'] = 0;
+            $isTkn = in_array('KRY-TKN', $empGroupCodes);
+            $isSpc = in_array('KRY-SPC', $empGroupCodes);
+            $isJkt = in_array('GRP-JKT', $empGroupCodes);
+            $isAllIn = !empty(array_intersect(['GRP-ALLIN', 'GRP-GD'], $empGroupCodes));
+            $isSpr = in_array('GRP-SPR', $empGroupCodes);
+            $isPrinting = !empty(array_intersect(['GRP-PS1', 'GRP-SS'], $empGroupCodes));
+
+            // Resolve position group untuk UM rates
+            $umGroupName = $this->resolveUangMakanGroupName($employee);
+
+            foreach ($dates as $dateStr) {
+                $prep   = $empPrepares->get($dateStr);
+                $roster = $empRosters->get($dateStr);
+                $parsedDate = Carbon::parse($dateStr);
+                $dayOfWeek  = $parsedDate->dayOfWeek; // 0=Minggu, 6=Sabtu
+                $isHoliday  = $roster && $roster->is_holiday;
+                $isMingguHoliday = ($dayOfWeek == 0 || $isHoliday);
+
+                $status = $prep ? $prep->status : '-';
+
+                // Raw values (menit → jam)
+                $ovtRaw    = $prep ? (int)$prep->overtime : 0;
+                $lmRaw     = $prep ? (int)$prep->lm : 0;
+                $ovtCount  = $prep ? (int)$prep->overtime_count : 0;
+                $lmCount   = $prep ? (int)$prep->lm_count : 0;
+                $ovtHours  = round($ovtRaw / 60, 2);
+                $lmHours   = round($lmRaw / 60, 2);
+
+                // ── Apply rules based on group ──────────────────────
+                if ($isTkn) {
+                    $record = $this->applyTknRules(
+                        $ovtHours, $lmHours, $ovtCount, $lmCount,
+                        $dayOfWeek, $isHoliday, $isMingguHoliday,
+                        $status, $technicianRules, $upahLemburPerJam
+                    );
+                } elseif ($isSpc) {
+                    $record = $this->applySpcRules(
+                        $ovtHours, $lmHours, $ovtCount, $lmCount,
+                        $dayOfWeek, $isMingguHoliday, $status, $upahLemburPerJam
+                    );
+                } elseif ($isJkt) {
+                    $record = $this->applyJktRules(
+                        $ovtHours, $lmHours, $dayOfWeek, $isHoliday, $isMingguHoliday,
+                        $status, $positionRules, $umGroupName,
+                        $empTanpaSabtuMingguHoliday, $employee->id
+                    );
+                } elseif ($isAllIn) {
+                    $record = $this->applyAllInRules(
+                        $ovtHours, $lmHours, $dayOfWeek, $isHoliday, $isMingguHoliday,
+                        $status, $positionRules, $umGroupName
+                    );
+                } elseif ($isSpr) {
+                    $record = $this->applySprRules(
+                        $ovtHours, $lmHours, $ovtCount, $lmCount,
+                        $dayOfWeek, $isMingguHoliday, $status, $upahLemburPerJam
+                    );
+                } elseif ($isPrinting) {
+                    $record = $this->applyPrintingRules(
+                        $ovtHours, $lmHours, $ovtCount, $lmCount,
+                        $dayOfWeek, $isMingguHoliday, $status, $upahLemburPerJam
+                    );
+                } else {
+                    // Fallback: treat as AllIn
+                    $record = $this->applyAllInRules(
+                        $ovtHours, $lmHours, $dayOfWeek, $isHoliday, $isMingguHoliday,
+                        $status, $positionRules, $umGroupName
+                    );
+                }
+
+                // Skip kalau tidak ada data
+                if ($record['lembur'] == 0 && $record['um_code'] === '' && $record['nominal'] == 0) {
+                    // Tetap insert agar 1 record per tanggal (untuk tracking)
+                    // Tapi skip kalau status = '-' (tidak ada data sama sekali)
+                    if ($status === '-') {
+                        continue;
                     }
                 }
-                unset($day);
-                $item['_is_spr'] = true;
-            } else {
-                $item = $allInHelper->processEmployee($employee, $empPrepares, $empRosters, $empPayRecord, $dates, $gaji, $tjMk, $tunjangan, $config);
-            }
-
-            if (!$item) continue;
-
-            // Insentif dari EmployeeReserves (per-period, disimpan di komponen hari pertama)
-            $insentifDetail = [];
-            $totalInsentif = 0;
-            if ($reserve && $reserve->komponen) {
-                $insentifDetail = $reserve->komponen;
-                $totalInsentif = collect($insentifDetail)->sum(fn($k) => (float)($k['nilai'] ?? 0));
-            }
-
-            // ── 1 record per tanggal ───────────────────────────────
-            $insentifAlreadyAdded = false;
-
-            foreach ($item['days'] as $dateStr => $day) {
-                $ha         = $day['ha'] ?? '-';
-                $kode       = $day['kode'] ?? '';
-                $lmRaw      = $day['lm'] ?? 0;
-                $lemburRaw  = $day['lembur'] ?? 0;
-                $nominalDay = (float)($day['nominal'] ?? 0);
-                $umDay      = (float)($day['uang_makan'] ?? 0);
-                $upahHarian = (float)($day['upah_per_hari'] ?? 0);
-
-                // UM Code: deteksi string SEBELUM cast ke float
-                // Jakarta/AllIn helper return string code: 'FULL','HALF','UM','2','TKN'
-                // Printing/SPC helper return angka float
-                $umCode = null;
-                if (is_string($lmRaw) && $lmRaw !== '') {
-                    $umCode = $lmRaw;
-                } elseif (is_string($lemburRaw) && $lemburRaw !== '') {
-                    $umCode = $lemburRaw;
-                }
-
-                // Total jam lembur: kalau string → 0 (kode UM bukan jam), kalau angka → nilai
-                $lmJam     = is_numeric($lmRaw) ? (float)$lmRaw : 0;
-                $lemburJam = is_numeric($lemburRaw) ? (float)$lemburRaw : 0;
-                $totalJam  = $lmJam + $lemburJam;
-
-                // Simpan raw string di komponen (bukan hasil cast)
-                $lmKomponen     = is_string($lmRaw) ? $lmRaw : (float)$lmRaw;
-                $lemburKomponen = is_string($lemburRaw) ? $lemburRaw : (float)$lemburRaw;
-
-                // Overtime nominal dari helper (uang lembur berdasarkan jam)
-                $overtimeNominalDay = (float)($day['overtime_nominal'] ?? 0);
-
-                // Insentif: taruh di tanggal pertama aja yg ada data
-                $insentifDay = 0;
-                $insentifAdded = false;
-                if (!$insentifAlreadyAdded && $totalInsentif > 0) {
-                    $insentifDay = $totalInsentif;
-                    $insentifAlreadyAdded = true;
-                    $insentifAdded = true;
-                }
-
-                // Komponen JSON: detail hari ini
-                $komponen = [
-                    'kode'              => $kode,
-                    'ha'                => $ha,
-                    'upah_harian'       => $upahHarian,
-                    'lm'                => $lmKomponen,
-                    'lembur'            => $lemburKomponen,
-                    'nominal'           => $nominalDay,
-                    'uang_makan'        => $umDay,
-                    'overtime_nominal'  => $overtimeNominalDay,
-                    'insentif'          => $insentifDetail,
-                    'insentif_ditambahkan' => $insentifAdded,
-                ];
 
                 $inserts[] = [
                     'uuid'           => (string) \Illuminate\Support\Str::uuid(),
@@ -212,26 +189,24 @@ class LemburUangMakanUpdateService
                     'employee_id'    => $employee->id,
                     'pay_periode_id' => $period->id,
                     'date'           => $dateStr,
-                    'lembur'         => round($totalJam, 2),
-                    'lembur_hitung'  => round($nominalDay, 2),
-                    'um_code'        => $umCode,
-                    'nominal'        => round($umDay, 2),
-                    'insentif'       => round($insentifDay, 2),
-                    'komponen'       => json_encode($komponen),
-                    'created_by'     => auth()->id(),
-                    'updated_by'     => auth()->id(),
+                    'lembur'         => $record['lembur'],
+                    'lembur_hitung'  => $record['lembur_hitung'],
+                    'um_code'        => $record['um_code'] ?: null,
+                    'nominal'        => $record['nominal'],
+                    'insentif'       => $record['insentif'],
+                    'komponen'       => $record['komponen'],
+                    'created_by'     => $userId,
+                    'updated_by'     => $userId,
                     'created_at'     => $now,
                     'updated_at'     => $now,
                 ];
             }
         }
 
-        // ── Simpan ────────────────────────────────────────────────
+        // ── Simpan ──────────────────────────────────────────────────
         DB::transaction(function () use ($period, $inserts) {
-            // Hapus data lama untuk periode ini (hard delete — biar unique index ga bentrok)
             EmployeeOvertime::where('pay_periode_id', $period->id)->forceDelete();
 
-            // Insert batch
             if (!empty($inserts)) {
                 foreach (array_chunk($inserts, 500) as $chunk) {
                     EmployeeOvertime::insert($chunk);
@@ -246,5 +221,281 @@ class LemburUangMakanUpdateService
             'total_rows' => count($inserts),
             'message'    => "Data lembur & uang makan periode {$period->name} berhasil diupdate (" . count($inserts) . " baris)",
         ];
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 1. GRP-JKT
+    // ═══════════════════════════════════════════════════════════════
+    private function applyJktRules(
+        float $ovtHours, float $lmHours,
+        int $dayOfWeek, bool $isHoliday, bool $isMingguHoliday,
+        string $status, array $positionRules, string $umGroupName,
+        array $empTanpa, int $employeeId
+    ): array {
+        $record = $this->emptyRecord($status);
+
+        if ($dayOfWeek >= 1 && $dayOfWeek <= 5) {
+            // a. Senin-Jumat: overtime >= 2 jam
+            if ($ovtHours >= 2) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = 'UM';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'weekday');
+            }
+        } elseif ($dayOfWeek == 6) {
+            // b. Sabtu
+            if ($ovtHours >= 4) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = 'FULL';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'sabtu_full');
+            } elseif ($ovtHours >= 2 && $ovtHours <= 3.5) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = '2';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'sabtu_dua');
+            }
+        } else {
+            // c. Minggu & Holiday
+            if (in_array($employeeId, $empTanpa)) {
+                // c1. Dikecualikan → semua 0
+                return $this->emptyRecord($status);
+            }
+            // c2. Normal
+            if ($lmHours >= 8) {
+                $record['lembur']  = $lmHours;
+                $record['um_code'] = 'FULL';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'minggu_full');
+            } elseif ($lmHours >= 4 && $lmHours <= 7.5) {
+                $record['lembur']  = $lmHours;
+                $record['um_code'] = 'HALF';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'minggu_half');
+            }
+        }
+
+        return $record;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 2. GRP-ALLIN, GRP-GD
+    // ═══════════════════════════════════════════════════════════════
+    private function applyAllInRules(
+        float $ovtHours, float $lmHours,
+        int $dayOfWeek, bool $isHoliday, bool $isMingguHoliday,
+        string $status, array $positionRules, string $umGroupName
+    ): array {
+        $record = $this->emptyRecord($status);
+
+        if ($dayOfWeek >= 1 && $dayOfWeek <= 5) {
+            // a. Senin-Jumat: overtime >= 2 jam
+            if ($ovtHours >= 2) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = 'UM';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'weekday');
+            }
+        } elseif ($dayOfWeek == 6) {
+            // b. Sabtu
+            if ($ovtHours >= 4) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = 'FULL';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'sabtu_full');
+            } elseif ($ovtHours >= 2 && $ovtHours <= 3.5) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = '2';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'sabtu_dua');
+            }
+        } else {
+            // c. Minggu & Holiday (tanpa pengecualian)
+            if ($lmHours >= 8) {
+                $record['lembur']  = $lmHours;
+                $record['um_code'] = 'FULL';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'minggu_full');
+            } elseif ($lmHours >= 4 && $lmHours <= 7.5) {
+                $record['lembur']  = $lmHours;
+                $record['um_code'] = 'HALF';
+                $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'minggu_half');
+            }
+        }
+
+        return $record;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 3. GRP-SPR
+    //   a. Senin-Sabtu → semua 0
+    //   b. Minggu/Holiday → lembur=lm, hitung=lm_count, nominal=lm_count × upah
+    // ═══════════════════════════════════════════════════════════════
+    private function applySprRules(
+        float $ovtHours, float $lmHours,
+        int $ovtCount, int $lmCount,
+        int $dayOfWeek, bool $isMingguHoliday,
+        string $status, float $upahLemburPerJam
+    ): array {
+        $record = $this->emptyRecord($status);
+
+        if ($isMingguHoliday) {
+            // b. Minggu & Holiday
+            $lmCountHours = round($lmCount / 60, 2);
+            $record['lembur']        = $lmHours;
+            $record['lembur_hitung'] = $lmCountHours;
+            $record['um_code']       = '';
+            $record['nominal']       = round($lmCountHours * $upahLemburPerJam, 2);
+        }
+        // a. Senin-Sabtu → semua 0 (default empty record)
+
+        return $record;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 4. GRP-PS1, GRP-SS
+    //   a. Senin-Sabtu → lembur=overtime, hitung=overtime_count, nominal=count × upah
+    //   b. Minggu/Holiday → lembur=lm, hitung=lm_count, nominal=count × upah
+    // ═══════════════════════════════════════════════════════════════
+    private function applyPrintingRules(
+        float $ovtHours, float $lmHours,
+        int $ovtCount, int $lmCount,
+        int $dayOfWeek, bool $isMingguHoliday,
+        string $status, float $upahLemburPerJam
+    ): array {
+        $record = $this->emptyRecord($status);
+
+        if ($isMingguHoliday) {
+            // b. Minggu & Holiday → lm / lm_count
+            $lmCountHours = round($lmCount / 60, 2);
+            $record['lembur']        = $lmHours;
+            $record['lembur_hitung'] = $lmCountHours;
+            $record['um_code']       = '';
+            $record['nominal']       = round($lmCountHours * $upahLemburPerJam, 2);
+        } else {
+            // a. Senin-Sabtu → overtime / overtime_count
+            $ovtCountHours = round($ovtCount / 60, 2);
+            $record['lembur']        = $ovtHours;
+            $record['lembur_hitung'] = $ovtCountHours;
+            $record['um_code']       = '';
+            $record['nominal']       = round($ovtCountHours * $upahLemburPerJam, 2);
+        }
+
+        return $record;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 5. KRY-TKN (overwrite — uang_makan, rate teknisi)
+    //   a. Senin-Jumat: overtime > 2 jam → UM, nominal = flat teknisi weekday
+    //   b. Sabtu: TANPA batas minimal → nominal = overtime × (rate / 7)
+    //   c. Minggu/Holiday: TANPA batas minimal → nominal = lm × (rate / 7)
+    // ═══════════════════════════════════════════════════════════════
+    private function applyTknRules(
+        float $ovtHours, float $lmHours,
+        int $ovtCount, int $lmCount,
+        int $dayOfWeek, bool $isHoliday, bool $isMingguHoliday,
+        string $status, array $technicianRules, float $upahLemburPerJam
+    ): array {
+        $record = $this->emptyRecord($status);
+
+        if ($dayOfWeek >= 1 && $dayOfWeek <= 5) {
+            // a. Senin-Jumat: overtime > 2 jam → flat
+            if ($ovtHours > 2) {
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = 'UM';
+                $record['nominal'] = (int)($technicianRules['weekday'] ?? 15000);
+            }
+        } elseif ($dayOfWeek == 6) {
+            // b. Sabtu: TANPA minimal → overtime × (rate / 7)
+            if ($ovtHours > 0) {
+                $rate = (int)($technicianRules['saturday'] ?? 100000);
+                $record['lembur']  = $ovtHours;
+                $record['um_code'] = 'TKN';
+                $record['nominal'] = round($ovtHours * ($rate / 7), 2);
+            }
+        } else {
+            // c. Minggu & Holiday: TANPA minimal → lm × (rate / 7)
+            if ($lmHours > 0) {
+                $rate = (int)($technicianRules['holiday'] ?? 200000);
+                $record['lembur']  = $lmHours;
+                $record['um_code'] = 'TKN';
+                $record['nominal'] = round($lmHours * ($rate / 7), 2);
+            }
+        }
+
+        return $record;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 6. KRY-SPC (overwrite)
+    //   a. Senin-Sabtu → lembur=overtime, hitung=overtime_count, nominal=count × upah
+    //   b. Minggu/Holiday → lembur=lm, hitung=lm_count, nominal=count × upah
+    // ═══════════════════════════════════════════════════════════════
+    private function applySpcRules(
+        float $ovtHours, float $lmHours,
+        int $ovtCount, int $lmCount,
+        int $dayOfWeek, bool $isMingguHoliday,
+        string $status, float $upahLemburPerJam
+    ): array {
+        $record = $this->emptyRecord($status);
+
+        if ($isMingguHoliday) {
+            // b. Minggu & Holiday → lm / lm_count
+            $lmCountHours = round($lmCount / 60, 2);
+            $record['lembur']        = $lmHours;
+            $record['lembur_hitung'] = $lmCountHours;
+            $record['um_code']       = '';
+            $record['nominal']       = round($lmCountHours * $upahLemburPerJam, 2);
+        } else {
+            // a. Senin-Sabtu → overtime / overtime_count
+            $ovtCountHours = round($ovtCount / 60, 2);
+            $record['lembur']        = $ovtHours;
+            $record['lembur_hitung'] = $ovtCountHours;
+            $record['um_code']       = '';
+            $record['nominal']       = round($ovtCountHours * $upahLemburPerJam, 2);
+        }
+
+        return $record;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // Helpers
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Record kosong sebagai baseline.
+     */
+    private function emptyRecord(string $status): array
+    {
+        return [
+            'lembur'        => 0,
+            'lembur_hitung' => 0,
+            'um_code'       => '',
+            'nominal'       => 0,
+            'insentif'      => 0,
+            'komponen'      => json_encode(['status' => $status]),
+        ];
+    }
+
+    /**
+     * Resolve nama group Uang Makan untuk employee (KABAG / KASHIFT / ALLIN).
+     */
+    private function resolveUangMakanGroupName($employee): string
+    {
+        $umGroup = $employee->groups->first(fn($g) =>
+            $g->master && strtoupper($g->master->group_label ?? '') === 'UANG MAKAN'
+        );
+        return $umGroup ? strtoupper($umGroup->master->name ?? '') : '';
+    }
+
+    /**
+     * Ambil rate dari position rules berdasarkan nama group UM.
+     * Matching: KABAG → KABAG rules, KASHIFT/KEPALA SHIFT → KASHIFT rules,
+     *           lainnya → ALLIN rules.
+     */
+    private function getPositionRate(string $umGroupName, array $positionRules, string $rateKey): float
+    {
+        $upper = strtoupper($umGroupName);
+
+        if (str_contains($upper, 'KABAG')) {
+            $ruleKey = 'KABAG';
+        } elseif (str_contains($upper, 'KASHIFT') || str_contains($upper, 'KEPALA SHIFT')) {
+            $ruleKey = 'KASHIFT';
+        } else {
+            $ruleKey = 'ALLIN';
+        }
+
+        return (float)($positionRules[$ruleKey][$rateKey] ?? 0);
     }
 }

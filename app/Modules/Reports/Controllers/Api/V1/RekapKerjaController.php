@@ -11,7 +11,6 @@ use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Models\ExtraEmployee;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
 
 class RekapKerjaController extends Controller
 {
@@ -121,8 +120,6 @@ class RekapKerjaController extends Controller
             return [];
         }
 
-        $periodMonth = Carbon::parse($startDate)->format('Y-m');
-
         $payRecords = PayRecord::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_period_id', $periodId)
             ->get()
@@ -155,11 +152,9 @@ class RekapKerjaController extends Controller
             $bpjsKs = 0;
 
             foreach ($emps as $emp) {
-                $salary = $emp->activeSalary($periodMonth);
-                $baseSalary = $salary ? (float)$salary->base_salary : (float)($emp->base_salary ?? 0);
-
                 $pr = $payRecords->get($emp->id);
-                $overtimePay = $pr ? (float)($pr->upah_lembur ?? 0) : 0;
+                $gajiKotor   = $pr ? (float) $pr->gaji_kotor : 0;
+                $overtimePay = $pr ? (float) ($pr->upah_lembur ?? 0) : 0;
 
                 $bpjs = $bpjsData->get($emp->id);
                 if ($bpjs) {
@@ -167,7 +162,7 @@ class RekapKerjaController extends Controller
                     $bpjsKs += (float)($bpjs->employee_kesehatan ?? 0);
                 }
 
-                $gaji += $baseSalary;
+                $gaji += $gajiKotor;
                 $lembur += $overtimePay;
             }
 

@@ -33,6 +33,7 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
 
         // Update Data
         Route::post('/update-data', [LaporanLemburController::class, 'updateData']);
+        Route::post('/combined-detail-pre/insentif', [LaporanLemburController::class, 'saveInsentif']);
     });
 
     // --- Uang Makan ---

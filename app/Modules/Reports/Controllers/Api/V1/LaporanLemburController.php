@@ -881,6 +881,12 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         // Group by employee
         $byEmployee = $overtimeRecords->groupBy('employee_id');
 
+        // ── Pay Records ────────────────────────────────────────────
+        $payRecords = collect();
+        if ($period) {
+            $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
+        }
+
         // ── Helpers ────────────────────────────────────────────────
         $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
 
@@ -895,8 +901,27 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $employee = $records->first()->employee;
             if (!$employee) continue;
 
+            // ── Salary / Tunjangan ────────────────────────────────────
+            $empPayRecords = $payRecords->get($employee->id);
+            $payRecord = null;
+            if ($empPayRecords && $empPayRecords->isNotEmpty()) {
+                $payRecord = $empPayRecords->first();
+            }
+            $gaji      = $payRecord ? (float)($payRecord->gaji_pokok ?? 0) : $employee->baseSalary();
+            $tjMk      = $payRecord ? (float)($payRecord->tj_masa_kerja ?? 0)
+                : (float)($employee->salaryComponents()->latest('effective_date')->first()?->tunjangan_masa_kerja ?? 0);
+            if ($tjMk == 0) {
+                $tjMk = $employee->tunjangan_masa_kerja($startDate->format('Y-m'));
+            }
+            $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0)
+                : (float)($employee->activeSalary()?->tunjangan ?? 0);
+
+            $upahPerHari = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
+            $upahLemburPerJam = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
+
             // Build days map from each per-date record
             $days = [];
+            $activeDayCount = 0;
             $totalHariKerja = 0;
             $totalOvertime  = 0;
             $totalUangMakan = 0;
@@ -905,14 +930,48 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
             foreach ($records as $rec) {
                 $komponen = $rec->komponen ?? [];
-                $ha = $komponen['ha'] ?? '-';
-                $upahHarian = (float)($komponen['upah_harian'] ?? 0);
-                $lmVal  = $komponen['lm'] ?? 0;
-                $lemburVal = $komponen['lembur'] ?? 0;
-                $nominalDay = (float)($komponen['nominal'] ?? 0);
-                $umDay      = (float)($komponen['uang_makan'] ?? 0);
-                $overtimeNominalDay = (float)($komponen['overtime_nominal'] ?? 0);
-                $kode       = $komponen['kode'] ?? '';
+                $status   = $komponen['status'] ?? '-';
+
+                // ── Derive HA dari status ────────────────────────────
+                $ha = match (true) {
+                    $status === 'hadir'          => 'H',
+                    $status === 'absent'         => 'A',
+                    $status === 'libur',
+                    $status === 'off'            => 'OFF',
+                    $status === 'skt'            => 'S',
+                    str_starts_with($status, 'c') => 'C',
+                    $status === 'imt',
+                    $status === 'ipa'            => 'H',
+                    str_starts_with($status, 'i') => 'I',
+                    default                      => $status === '-' ? '-' : 'I',
+                };
+
+                // ── Kode: L / SG ─────────────────────────────────────
+                $isSG = $employee->groups->contains('reference_code', 'SG');
+                if (in_array($status, ['absent', 'libur', 'off', 'itm', 'izn', '-'])) {
+                    $kode = '';
+                } else {
+                    $kode = $isSG ? 'SG' : 'L';
+                }
+
+                // ── Baca langsung dari kolom employee_overtime ───────
+                $hours         = (float)$rec->lembur;
+                $nominalAmount = (float)$rec->nominal;
+                $hasUmCode     = !empty($rec->um_code);
+
+                if ($hasUmCode) {
+                    // Uang Makan type: nominal = uang_makan, LM kosong, Lembur = um_code
+                    $lmDisplay   = '';
+                    $lemburDisplay = $rec->um_code;  // UM / FULL / HALF / 2 / TKN
+                    $uangMakanDay = $nominalAmount;
+                    $overtimeNominalDay = 0;
+                } else {
+                    // Lembur type: nominal = overtime, tampilkan hours
+                    $lmDisplay   = $hours > 0 ? $hours : '';
+                    $lemburDisplay = '';
+                    $uangMakanDay = 0;
+                    $overtimeNominalDay = $nominalAmount;
+                }
 
                 $dateStr = $rec->date instanceof Carbon
                     ? $rec->date->format('Y-m-d')
@@ -921,20 +980,32 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $days[$dateStr] = [
                     'kode'             => $kode,
                     'ha'               => $ha,
-                    'upah_per_hari'    => $upahHarian,
-                    'lm'               => (float)$rec->lembur <= 0 && is_string($lmVal) ? $lmVal : $lmVal,
-                    'lembur'           => is_string($lemburVal) ? $lemburVal : $lemburVal,
-                    'nominal'          => $nominalDay,
-                    'uang_makan'       => $umDay,
+                    'upah_per_hari'    => in_array($ha, ['A', 'I', 'OFF']) ? 0 : $upahPerHari,
+                    'lm'               => $lmDisplay,
+                    'lembur'           => $lemburDisplay,
+                    'nominal'          => $nominalAmount,
+                    'uang_makan'       => $uangMakanDay,
                     'overtime_nominal' => $overtimeNominalDay,
                 ];
 
-                // Day-level totals: upah_harian masuk ke hari_kerja
-                $totalHariKerja += $upahHarian;
+                // Day-level totals
+                $totalUangMakan += $uangMakanDay;
                 $totalOvertime  += $overtimeNominalDay;
-                $totalUangMakan += $umDay;
+                if (!in_array($status, ['izn', 'absent', 'off'])) {
+                    $activeDayCount++;
+                }
                 $totalInsentif  += (float)$rec->insentif;
             }
+
+            // ── Hitung total_hari_kerja: min(activeDays, 25) × (gaji / 25) ─
+            $effectiveDays = min($activeDayCount, 25);
+            $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
+
+            // ── Cari nilai insentif dari record terakhir (kronologis) ──
+            $lastRecord = $records->sortByDesc(fn($r) => $r->date instanceof Carbon
+                ? $r->date->format('Y-m-d')
+                : ($r->date ?? ''))->first();
+            $endDateInsentif = $lastRecord ? (float)$lastRecord->insentif : 0;
 
             // ── Tentukan tipe: uang_makan vs lembur (mutually exclusive) ─
             // Uang_makan type: dapat meal allowance, TIDAK dapat overtime money
@@ -958,15 +1029,17 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'jabatan'           => $employee->position?->name ?? '',
                 'gender'            => $employee->gender === 'Pria' ? 'L' : 'P',
                 'nip'               => $employee->nip ?? '',
-                'gaji'              => 0,
-                'tj_mk'             => 0,
-                'tunjangan'         => 0,
-                'upah_per_hari'     => $totalHariKerja > 0 ? round($totalHariKerja / max(count($records), 1), 0) : 0,
-                'upah_lembur_per_jam' => 0,
+                'gaji'              => $gaji,
+                'tj_mk'             => $tjMk,
+                'tunjangan'         => $tunjangan,
+                'upah_per_hari'     => $upahPerHari,
+                'upah_lembur_per_jam' => $upahLemburPerJam,
                 'days'              => $days,
+                'insentif'          => $endDateInsentif,
                 'total_hari_kerja'  => round($totalHariKerja, 2),
                 'total_overtime'    => round($totalOvertime, 2),
                 'total_uang_makan'  => round($totalUangMakan, 2),
+                'total_insentif'    => round($totalInsentif, 2),
                 'total_terima'      => round($totalTerima, 2),
                 '_is_spr'           => false,
             ];
@@ -1004,13 +1077,25 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         }
 
         // ── Sort employees ─────────────────────────────────────────
-        $jakartaEmployees  = $jakartaEmployees->sortBy('name')->values();
-        $allInEmployees    = $allInEmployees->sortBy('name')->values();
-        $printingEmployees = $printingEmployees->sortBy('name')->values();
+        $jakartaEmployees    = $jakartaEmployees->sortBy('name')->values();
+        $allInEmployees      = $allInEmployees->sortBy('name')->values();
+        $printingEmployees   = $printingEmployees->sortBy('name')->values();
+        $spcJakartaEmployees = $spcJakartaEmployees->sortBy('name')->values();
+        $spcUngaranEmployees = $spcUngaranEmployees->sortBy('name')->values();
 
-        // ── Build sections ─────────────────────────────────────────
+        // ── Jakarta: total_hari_kerja = 0 ────────────────────────────
+        if ($jakartaEmployees->isNotEmpty()) {
+            $jakartaEmployees = $jakartaEmployees->map(function ($emp) {
+                $emp['total_hari_kerja'] = 0;
+                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                return $emp;
+            });
+        }
+
+        // ── Build sections (A=uang_makan, B=uang_makan, C=lembur, D=lembur, E=lembur) ──
         $sections = [];
 
+        // ── A. KARYAWAN JAKARTA (uang_makan) ────────────────────────
         if ($jakartaEmployees->isNotEmpty()) {
             $sections[] = [
                 'key'    => 'jakarta',
@@ -1021,37 +1106,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             ];
         }
 
-        if ($spcJakartaEmployees->isNotEmpty()) {
-            $allSpc = $spcJakartaEmployees->merge($spcUngaranEmployees)->sortBy('name')->values();
-            $sections[] = [
-                'key'    => 'spc',
-                'label'  => 'D. KARYAWAN SPESIFIK',
-                'type'   => 'lembur',
-                'data'   => $allSpc,
-                'totals' => $this->calcSectionTotals($allSpc),
-            ];
-        } else {
-            // SPC split kalo ga butuh digabung
-            if ($spcJakartaEmployees->isNotEmpty()) {
-                $sections[] = [
-                    'key'    => 'spc_jakarta',
-                    'label'  => 'D1. SPESIFIK JAKARTA',
-                    'type'   => 'lembur',
-                    'data'   => $spcJakartaEmployees,
-                    'totals' => $this->calcSectionTotals($spcJakartaEmployees),
-                ];
-            }
-            if ($spcUngaranEmployees->isNotEmpty()) {
-                $sections[] = [
-                    'key'    => 'spc_ungaran',
-                    'label'  => 'D2. SPESIFIK UNGARAN',
-                    'type'   => 'lembur',
-                    'data'   => $spcUngaranEmployees,
-                    'totals' => $this->calcSectionTotals($spcUngaranEmployees),
-                ];
-            }
-        }
-
+        // ── B. KARYAWAN ALL IN (uang_makan) ─────────────────────────
         if ($allInEmployees->isNotEmpty()) {
             $sections[] = [
                 'key'    => 'all_in',
@@ -1062,6 +1117,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             ];
         }
 
+        // ── C. KARYAWAN BULANAN PRINTING (lembur) ──────────────────
         if ($printingEmployees->isNotEmpty()) {
             $sections[] = [
                 'key'    => 'printing',
@@ -1072,16 +1128,41 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             ];
         }
 
-        // ── Grand totals ───────────────────────────────────────────
-        $grandTotals = null;
-        if (!empty($sections)) {
-            $grandTotals = [
-                'total_hari_kerja' => round(collect($sections)->sum(fn($s) => $s['totals']['total_hari_kerja'] ?? 0), 2),
-                'total_overtime'   => round(collect($sections)->sum(fn($s) => $s['totals']['total_overtime'] ?? 0), 2),
-                'total_uang_makan' => round(collect($sections)->sum(fn($s) => $s['totals']['total_uang_makan'] ?? 0), 2),
-                'total_terima'     => round(collect($sections)->sum(fn($s) => $s['totals']['total_terima'] ?? 0), 2),
-            ];
+        // ── D & E. KARYAWAN SPESIFIK (lembur, conditional) ──────────
+        $showSpc = SpcHelper::shouldShow($period?->id);
+        if ($showSpc) {
+            if ($spcJakartaEmployees->isNotEmpty()) {
+                $sections[] = [
+                    'key'    => 'spc_jakarta',
+                    'label'  => 'D. KARYAWAN SPESIFIK JAKARTA',
+                    'type'   => 'lembur',
+                    'data'   => $spcJakartaEmployees,
+                    'totals' => $this->calcSectionTotals($spcJakartaEmployees),
+                ];
+            }
+            if ($spcUngaranEmployees->isNotEmpty()) {
+                $sections[] = [
+                    'key'    => 'spc_ungaran',
+                    'label'  => 'E. KARYAWAN SPESIFIK UNGARAN',
+                    'type'   => 'lembur',
+                    'data'   => $spcUngaranEmployees,
+                    'totals' => $this->calcSectionTotals($spcUngaranEmployees),
+                ];
+            }
         }
+
+        // ── Grand totals (hanya dari section yang aktif) ────────────
+        $allDataForTotals = $jakartaEmployees
+            ->concat($allInEmployees)
+            ->concat($printingEmployees);
+        if ($showSpc) {
+            $allDataForTotals = $allDataForTotals
+                ->concat($spcJakartaEmployees)
+                ->concat($spcUngaranEmployees);
+        }
+        $grandTotals = $allDataForTotals->isNotEmpty()
+            ? $this->calcSectionTotals($allDataForTotals)
+            : null;
 
         return [
             'sections'     => $sections,
@@ -1110,8 +1191,14 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             'period_id' => 'required|integer|exists:pay_periods,id',
         ]);
 
+        $params = [
+            'emp_tanpa_sabtu_minggu_holiday' => $request->input('emp_tanpa_sabtu_minggu_holiday', []),
+            'position_rules'                 => $request->input('position_rules', []),
+            'technician_rules'               => $request->input('technician_rules', []),
+        ];
+
         $service = app(LemburUangMakanUpdateService::class);
-        $result = $service->update((int) $request->input('period_id'));
+        $result = $service->update((int) $request->input('period_id'), $params);
 
         return response()->json($result);
     }
@@ -1634,5 +1721,40 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             'minggu_half'  => 0,
             'minggu_full'  => 0,
         ];
+    }
+
+    // ─── Save Insentif (Detail Pre) ─────────────────────────────────────
+
+    public function saveInsentif(Request $request)
+    {
+        $request->validate([
+            'period_id' => 'required|integer|exists:pay_periods,id',
+            'insentif'  => 'required|array',
+            'insentif.*.employee_id' => 'required|integer|exists:employees,id',
+            'insentif.*.value'       => 'required|numeric|min:0',
+        ]);
+
+        $period = \App\Modules\Payroll\Models\PayPeriod::findOrFail($request->period_id);
+
+        $updated = 0;
+        foreach ($request->insentif as $item) {
+            // Cari record terakhir (kronologis) untuk employee ini di periode tsb
+            $overtime = \App\Modules\Attendance\Models\EmployeeOvertime::where('pay_periode_id', $period->id)
+                ->where('employee_id', $item['employee_id'])
+                ->orderBy('date', 'desc')
+                ->first();
+
+            if ($overtime) {
+                $overtime->insentif = (float)$item['value'];
+                $overtime->save();
+                $updated++;
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Insentif berhasil disimpan untuk {$updated} karyawan.",
+            'updated' => $updated,
+        ]);
     }
 }

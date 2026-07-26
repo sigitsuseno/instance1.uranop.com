@@ -77,22 +77,18 @@
               <table class="w-full text-xs border-collapse">
                 <thead>
                   <tr class="bg-blue-50 border-b border-(--border-soft)">
-                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:40px">No</th>
-                    <th class="px-3 py-2 text-left font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:140px">BAGIAN</th>
-                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:60px">JML</th>
-                    <th class="px-3 py-2 text-center font-bold text-(--primary) bg-(--primary)/5" :colspan="4">
+                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:40px" rowspan="2">No</th>
+                    <th class="px-3 py-2 text-left font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:140px" rowspan="2">BAGIAN</th>
+                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:60px" rowspan="2">JML</th>
+                    <th class="px-3 py-2 text-center font-bold text-(--primary) bg-(--primary)/5" colspan="2">
                       {{ periodLabel }}
                     </th>
-                    <th class="px-3 py-2 text-center font-bold text-(--text-main) border-l border-(--border-soft)" style="min-width:110px">BPJS<br/><span class="text-[9px] font-normal text-(--text-muted)">(TK + KS)</span></th>
+                    <th class="px-3 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:110px" rowspan="2">TOTAL</th>
+                    <th class="px-3 py-2 text-center font-bold text-(--text-main)" style="min-width:110px" rowspan="2">BPJS<br/><span class="text-[9px] font-normal text-(--text-muted)">(TK + KS)</span></th>
                   </tr>
                   <tr class="bg-blue-50/50 border-b-2 border-(--border-soft)">
-                    <th class="px-2.5 py-1.5 border-r border-(--border-soft)"></th>
-                    <th class="px-3 py-1.5 border-r border-(--border-soft)"></th>
-                    <th class="px-2.5 py-1.5 border-r border-(--border-soft)"></th>
                     <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[120px]">GAJI</th>
-                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[110px]">LEMBUR</th>
-                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[110px]">TOTAL</th>
-                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) whitespace-nowrap min-w-[110px]"></th>
+                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) whitespace-nowrap min-w-[110px]">LEMBUR</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-(--border-soft)">
@@ -141,22 +137,18 @@
               <table class="w-full text-xs border-collapse">
                 <thead>
                   <tr class="bg-green-50 border-b border-(--border-soft)">
-                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:40px">No</th>
-                    <th class="px-3 py-2 text-left font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:140px">BAGIAN</th>
-                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:60px">JML</th>
-                    <th class="px-3 py-2 text-center font-bold text-(--primary) bg-(--primary)/5" :colspan="4">
+                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:40px" rowspan="2">No</th>
+                    <th class="px-3 py-2 text-left font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:140px" rowspan="2">BAGIAN</th>
+                    <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:60px" rowspan="2">JML</th>
+                    <th class="px-3 py-2 text-center font-bold text-(--primary) bg-(--primary)/5" colspan="2">
                       {{ periodLabel }}
                     </th>
-                    <th class="px-3 py-2 text-center font-bold text-(--text-main) border-l border-(--border-soft)" style="min-width:110px">BPJS<br/><span class="text-[9px] font-normal text-(--text-muted)">(TK + KS)</span></th>
+                    <th class="px-3 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:110px" rowspan="2">TOTAL</th>
+                    <th class="px-3 py-2 text-center font-bold text-(--text-main)" style="min-width:110px" rowspan="2">BPJS<br/><span class="text-[9px] font-normal text-(--text-muted)">(TK + KS)</span></th>
                   </tr>
                   <tr class="bg-green-50/50 border-b-2 border-(--border-soft)">
-                    <th class="px-2.5 py-1.5 border-r border-(--border-soft)"></th>
-                    <th class="px-3 py-1.5 border-r border-(--border-soft)"></th>
-                    <th class="px-2.5 py-1.5 border-r border-(--border-soft)"></th>
                     <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[120px]">GAJI</th>
-                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[110px]">LEMBUR</th>
-                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[110px]">TOTAL</th>
-                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) whitespace-nowrap min-w-[110px]"></th>
+                    <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) whitespace-nowrap min-w-[110px]">LEMBUR</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-(--border-soft)">

@@ -230,6 +230,76 @@
         </div>
       </div>
     </BaseCard>
+
+    <!-- ── Edit Insentif ──────────────────────────────────────────────── -->
+    <div v-if="hasData" class="mt-6">
+      <button
+        @click="showInsentifEditor = !showInsentifEditor"
+        class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-(--primary) bg-(--bg-elevated) border border-(--border-soft) rounded-lg hover:bg-(--primary)/5 transition-colors"
+      >
+        <svg :class="['w-4 h-4 transition-transform', showInsentifEditor ? 'rotate-90' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+        {{ showInsentifEditor ? 'Tutup' : 'Edit' }} Insentif (Tanggal {{ insentifDateLabel }})
+      </button>
+
+      <transition name="slide">
+        <div v-if="showInsentifEditor" class="mt-2 border border-(--border-soft) rounded-lg overflow-hidden">
+          <div class="max-h-[400px] overflow-auto">
+            <table class="min-w-full divide-y divide-(--border-soft) text-xs">
+              <thead class="bg-(--bg-elevated) sticky top-0 z-10">
+                <tr>
+                  <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase">No</th>
+                  <th class="px-2 py-2 text-left font-bold text-(--text-muted) uppercase">Bagian</th>
+                  <th class="px-3 py-2 text-left font-bold text-(--text-muted) uppercase">Nama</th>
+                  <th class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase">Insentif</th>
+                  <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-(--border-soft)">
+                <template v-for="(section, si) in sections" :key="'ins-' + section.key">
+                  <tr
+                    v-for="(item, index) in section.data"
+                    :key="item.id"
+                    class="hover:bg-(--bg-elevated) transition-colors"
+                  >
+                    <td class="px-2 py-2 text-center text-(--text-muted)">{{ index + 1 }}</td>
+                    <td class="px-2 py-2 text-(--text-muted)">{{ section.label.replace(/^[A-Z]\.\s*/, '') }}</td>
+                    <td class="px-3 py-2 font-medium text-(--text-main)">{{ item.name }}</td>
+                    <td class="px-3 py-2 text-right">
+                      <input
+                        type="number"
+                        :value="item.insentif"
+                        @input="updateInsentif(item.id, $event.target.value)"
+                        class="w-28 px-2 py-1 text-right text-sm border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary) focus:border-(--primary)"
+                        min="0"
+                        step="1000"
+                        placeholder="0"
+                      />
+                    </td>
+                    <td class="px-2 py-2 text-center">
+                      <span
+                        v-if="savedInsentif[item.id] !== undefined && parseFloat(savedInsentif[item.id]) === parseFloat(insentifDraft[item.id] || 0)"
+                        class="text-green-600 text-xs"
+                      >✓ Tersimpan</span>
+                      <span
+                        v-else-if="savingInsentif[item.id]"
+                        class="text-blue-600 text-xs"
+                      >Menyimpan...</span>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <div class="px-4 py-3 bg-(--bg-elevated) border-t border-(--border-soft) flex justify-end gap-2">
+            <BaseButton variant="primary" size="sm" @click="saveAllInsentif" :disabled="savingAll">
+              {{ savingAll ? 'Menyimpan...' : 'Simpan Semua' }}
+            </BaseButton>
+          </div>
+        </div>
+      </transition>
+    </div>
   </div>
 </template>
 
@@ -244,7 +314,7 @@ const props = defineProps({
   groups: { type: Array, default: () => [] }
 })
 
-const { get } = useApi()
+const { get, post } = useApi()
 const notification = useNotificationStore()
 
 const dateMode = ref('period')
@@ -258,6 +328,13 @@ const monthLabel = ref('')
 const grandTotals = ref(null)
 const loading = ref(false)
 
+// Insentif editor state
+const showInsentifEditor = ref(false)
+const insentifDraft = ref({})
+const savedInsentif = ref({})
+const savingInsentif = ref({})
+const savingAll = ref(false)
+
 const hasFilter = computed(() => {
   if (dateMode.value === 'period') return !!selectedPeriodId.value
   return !!(startDate.value && endDate.value)
@@ -265,6 +342,13 @@ const hasFilter = computed(() => {
 
 const hasData = computed(() => {
   return sections.value.some(s => s.data && s.data.length > 0)
+})
+
+const insentifDateLabel = computed(() => {
+  if (dates.value.length > 0) {
+    return dates.value[dates.value.length - 1]
+  }
+  return ''
 })
 
 onMounted(async () => {
@@ -326,10 +410,57 @@ async function fetchData() {
     dates.value = res.dates || []
     monthLabel.value = res.month_label || ''
     grandTotals.value = res.grand_totals || null
+    // Init insentif drafts from response data
+    initInsentifDrafts()
   } catch (err) {
     notification.addNotification('Gagal mengambil data laporan', 'error')
   } finally {
     loading.value = false
+  }
+}
+
+function initInsentifDrafts() {
+  const drafts = {}
+  const saved = {}
+  for (const section of sections.value) {
+    for (const emp of (section.data || [])) {
+      drafts[emp.id] = emp.insentif ?? 0
+      saved[emp.id] = emp.insentif ?? 0
+    }
+  }
+  insentifDraft.value = drafts
+  savedInsentif.value = saved
+}
+
+function updateInsentif(employeeId, value) {
+  insentifDraft.value[employeeId] = parseFloat(value) || 0
+}
+
+async function saveAllInsentif() {
+  const periodId = dateMode.value === 'period' ? selectedPeriodId.value : null
+  if (!periodId) {
+    notification.addNotification('Pilih periode terlebih dahulu', 'error')
+    return
+  }
+
+  savingAll.value = true
+  try {
+    const payload = {
+      period_id: periodId,
+      insentif: Object.entries(insentifDraft.value).map(([employeeId, value]) => ({
+        employee_id: parseInt(employeeId),
+        value: parseFloat(value) || 0,
+      })),
+    }
+    await post('/api/v1/reports/lembur/combined-detail-pre/insentif', payload)
+    savedInsentif.value = { ...insentifDraft.value }
+    notification.addNotification('Insentif berhasil disimpan', 'success')
+    // Refresh data
+    await fetchData()
+  } catch (err) {
+    notification.addNotification('Gagal menyimpan insentif', 'error')
+  } finally {
+    savingAll.value = false
   }
 }
 
