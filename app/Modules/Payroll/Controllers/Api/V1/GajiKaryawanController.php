@@ -6,6 +6,8 @@ use App\Modules\Employee\Models\Employee;
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
+use App\Modules\Payroll\Exports\KirimAllExport;
+use App\Modules\Payroll\Models\PayrollConfig;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -350,6 +352,79 @@ class GajiKaryawanController extends Controller
 
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Modules\Reports\Exports\GajiKaryawanExport($secAData, $secBData, $periodName),
+            $filename
+        );
+    }
+
+    /**
+     * Export Kirim ALL (multi-sheet Excel: A=ALLIN, B=PRINT).
+     * GET /api/v1/payroll/gaji-karyawan/export-kirim-all?period_id=...&segment=...
+     */
+    public function exportKirimAll(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment' => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = PayRecord::with(['employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*');
+
+        if ($period->is_split) {
+            if (!$segment) {
+                $segment = 'A';
+            }
+            $query->where('segment', $segment);
+        }
+
+        $records = $query->get()->map(function ($record) {
+            $emp = $record->employee;
+            return [
+                'id' => $record->id,
+                'name' => $emp?->name ?? '-',
+                'bank_name' => $emp?->bank_name ?? '-',
+                'bank_account_number' => $emp?->bank_account_number ?? '-',
+                'bank_account_name' => $emp?->bank_account_name ?? '-',
+                'bank_cabang' => $emp?->bank_cabang ?? '',
+                'gaji_bersih' => (float) $record->gaji_bersih,
+                'notes' => $record->notes ?? '',
+                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
+            ];
+        });
+
+        // Group by section from payroll config
+        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
+        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+
+        $dataAllIn = [];
+        $dataPrint = [];
+
+        foreach ($records as $r) {
+            $groups = $r['groups'] ?? [];
+            if (array_intersect($groups, $sectionA)) {
+                $dataAllIn[] = $r;
+            } elseif (array_intersect($groups, $sectionB)) {
+                $dataPrint[] = $r;
+            }
+        }
+
+        $periodName = $period->name;
+        if ($period->is_split && $segment) {
+            $periodName .= " (Segmen {$segment})";
+        }
+
+        $filename = 'Kirim_ALL_' . str_replace(' ', '_', $periodName) . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new KirimAllExport($dataAllIn, $dataPrint, $period->tanggal_penggajian?->format('Y-m-d')),
             $filename
         );
     }

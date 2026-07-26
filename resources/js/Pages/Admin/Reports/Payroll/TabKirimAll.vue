@@ -253,8 +253,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import ExcelJS from 'exceljs'
-import { saveAs } from 'file-saver'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import { useApi } from '../../../../composables/useApi'
@@ -403,182 +401,41 @@ async function bulkFillCabang() {
   }
 }
 
-function addSheetWithStyle(workbook, data, total, title, sheetName) {
-  const ws = workbook.addWorksheet(sheetName)
-
-  // Column widths
-  ws.getColumn(1).width = 30  // Penerima
-  ws.getColumn(2).width = 20  // Norek
-  ws.getColumn(3).width = 20  // Bank
-  ws.getColumn(4).width = 15  // Cabang
-  ws.getColumn(5).width = 18  // Nominal
-  ws.getColumn(6).width = 18  // Tanggal
-  ws.getColumn(7).width = 25  // Keterangan
-
-  // Colors
-  const primaryColor = '1F4E79'
-  const accentColor = '2E75B6'
-  const borderColor = 'B0B0B0'
-
-  const borderStyle = {
-    top: { style: 'thin', color: { argb: borderColor } },
-    left: { style: 'thin', color: { argb: borderColor } },
-    bottom: { style: 'thin', color: { argb: borderColor } },
-    right: { style: 'thin', color: { argb: borderColor } },
-  }
-
-  const headerFill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: primaryColor },
-  }
-
-  const headerFont = {
-    name: 'Calibri',
-    size: 11,
-    bold: true,
-    color: { argb: 'FFFFFF' },
-  }
-
-  const titleFont = {
-    name: 'Calibri',
-    size: 14,
-    bold: true,
-    color: { argb: primaryColor },
-  }
-
-  const totalFill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'D6E4F0' },
-  }
-
-  const totalFont = {
-    name: 'Calibri',
-    size: 11,
-    bold: true,
-    color: { argb: primaryColor },
-  }
-
-  // Row 1: Title
-  ws.mergeCells(1, 1, 1, 7)
-  const titleCell = ws.getCell(1, 1)
-  titleCell.value = title
-  titleCell.font = titleFont
-  titleCell.alignment = { vertical: 'middle', horizontal: 'left' }
-  ws.getRow(1).height = 30
-
-  // Row 2: Header
-  const headers = ['PENERIMA', 'NOREK', 'SINGKATAN NAMA BANK', 'CABANG', 'NOMINAL', 'TANGGAL TRANSAKSI', 'KETERANGAN']
-  const headerRow = ws.getRow(2)
-  headerRow.height = 22
-  headers.forEach((h, i) => {
-    const cell = headerRow.getCell(i + 1)
-    cell.value = h
-    cell.font = headerFont
-    cell.fill = headerFill
-    cell.alignment = { vertical: 'middle', horizontal: 'center' }
-    cell.border = borderStyle
-  })
-
-  // Data rows
-  data.forEach((item, idx) => {
-    const row = ws.getRow(idx + 3)
-    row.height = 20
-
-    const values = [
-      item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name,
-      item.bank_account_number,
-      item.bank_name,
-      item.bank_cabang || '',
-      item.gaji_bersih,
-      '',
-      '',
-    ]
-
-    values.forEach((v, i) => {
-      const cell = row.getCell(i + 1)
-      cell.value = v
-      cell.border = borderStyle
-      cell.font = { name: 'Calibri', size: 10, color: { argb: '333333' } }
-
-      if (i === 4) {
-        // Nominal: right align with number format
-        cell.alignment = { vertical: 'middle', horizontal: 'right' }
-        cell.numFmt = '#,##0.00'
-      } else if (i === 1) {
-        // Norek: monospace
-        cell.alignment = { vertical: 'middle', horizontal: 'left' }
-        cell.font = { name: 'Consolas', size: 10, color: { argb: '333333' } }
-      } else {
-        cell.alignment = { vertical: 'middle', horizontal: 'left' }
-      }
-
-      // Zebra striping
-      if (idx % 2 === 1) {
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F7FB' } }
-      }
-    })
-  })
-
-  // Total row
-  const totalRowNum = data.length + 3
-  const totalRow = ws.getRow(totalRowNum)
-  totalRow.height = 24
-
-  // Merge label cells
-  ws.mergeCells(totalRowNum, 1, totalRowNum, 4)
-  const labelCell = totalRow.getCell(1)
-  labelCell.value = 'TOTAL'
-  labelCell.font = totalFont
-  labelCell.fill = totalFill
-  labelCell.alignment = { vertical: 'middle', horizontal: 'right' }
-  labelCell.border = borderStyle
-
-  // Fill merged area border
-  for (let c = 2; c <= 4; c++) {
-    totalRow.getCell(c).border = borderStyle
-    totalRow.getCell(c).fill = totalFill
-  }
-
-  const totalValueCell = totalRow.getCell(5)
-  totalValueCell.value = total
-  totalValueCell.font = { ...totalFont, size: 11 }
-  totalValueCell.fill = totalFill
-  totalValueCell.alignment = { vertical: 'middle', horizontal: 'right' }
-  totalValueCell.numFmt = '#,##0.00'
-  totalValueCell.border = borderStyle
-
-  for (let c = 6; c <= 7; c++) {
-    totalRow.getCell(c).border = borderStyle
-    totalRow.getCell(c).fill = totalFill
-  }
-}
-
 async function exportExcel() {
   if (dataAllIn.value.length === 0 && dataPrint.value.length === 0) {
     notification.error('Tidak ada data untuk di-export')
     return
   }
 
-  const workbook = new ExcelJS.Workbook()
-  workbook.creator = 'Payroll System'
-  workbook.created = new Date()
-
-  if (dataAllIn.value.length > 0) {
-    addSheetWithStyle(workbook, dataAllIn.value, totalAllIn.value, 'A - KARYAWAN ALLIN', 'All In')
-  }
-
-  if (dataPrint.value.length > 0) {
-    addSheetWithStyle(workbook, dataPrint.value, totalPrint.value, 'B - KARYAWAN BULANAN PRINT', 'Print')
-  }
+  const params = new URLSearchParams({ period_id: selectedPeriodId.value })
+  if (activeSegment.value) params.append('segment', activeSegment.value)
 
   const periodName = selectedPeriod.value?.name || 'Periode'
   const segName = activeSegment.value ? `_Segmen_${activeSegment.value}` : ''
   const fileName = `Kirim_ALL_${periodName}${segName}.xlsx`
 
-  const buffer = await workbook.xlsx.writeBuffer()
-  saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
+  try {
+    const response = await fetch(`/api/v1/payroll/gaji-karyawan/export-kirim-all?${params.toString()}`, {
+      credentials: 'include',
+      headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+    })
+    if (!response.ok) {
+      notification.error('Gagal mengunduh file Excel')
+      return
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    notification.error('Gagal mengunduh file Excel')
+    console.error(e)
+  }
 }
 
 onMounted(() => {
