@@ -415,6 +415,7 @@ const selectedPeriodId = ref('')
 const records = ref([])
 const activeSegment = ref(null)
 const searchQuery = ref('')
+const extraEmployees = ref([])
 
 // Settings state
 const showSettings = ref(false)
@@ -467,6 +468,39 @@ const sections = computed(() => {
       secB.data.push(record)
     }
     // Skip if not in any section
+  }
+
+  // Merge extra employees into Section A
+  for (const emp of extraEmployees.value) {
+    const g = emp.komponen_gaji || {}
+    secA.data.push({
+      id: 'ext-' + emp.id,
+      employee_code: emp.kode || '-',
+      name: emp.nama,
+      gender: emp.gender || '-',
+      department: '-',
+      position: '-',
+      join_year: '-',
+      premi: parseFloat(g.premi) || 0,
+      gaji_pokok: parseFloat(g.gaji_pokok) || 0,
+      tj_masa_kerja: parseFloat(g.tj_mk) || 0,
+      hari_kerja: 0,
+      lm: 0,
+      lembur_count: 0,
+      gaji: 0,
+      upah_lembur: 0,
+      revisi: 0,
+      tunjangan: parseFloat(g.tunjangan) || 0,
+      premi_hadir: 0,
+      pblt: 0,
+      total: parseFloat(g.total_gaji) || 0,
+      bpjs_tk: 0,
+      bpjs_ks: 0,
+      bpjs_pen: 0,
+      cashbon: parseFloat(g.cashbon) || 0,
+      pph: parseFloat(g.ttl_pph) || 0,
+      gaji_bersih: parseFloat(g.total_terima) || 0,
+    })
   }
 
   // Apply search to each section
@@ -641,9 +675,19 @@ function handleExport() {
     })
 }
 
+async function fetchExtraEmployees() {
+  try {
+    const res = await get('/api/v1/settings/extra-employees')
+    extraEmployees.value = res.data || []
+  } catch (error) {
+    console.error('Error fetching extra employees', error)
+  }
+}
+
 onMounted(() => {
   fetchPeriods()
   fetchPayrollConfig()
+  fetchExtraEmployees()
 })
 </script>
 
