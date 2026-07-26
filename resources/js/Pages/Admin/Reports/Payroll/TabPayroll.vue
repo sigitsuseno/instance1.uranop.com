@@ -229,7 +229,7 @@
           </div>
 
           <!-- Table -->
-          <div class="overflow-x-auto">
+          <div class="overflow-x-auto max-h-96 overflow-y-auto">
             <table class="w-full text-xs">
               <thead>
                 <tr class="bg-(--bg-elevated) text-(--text-main)">
