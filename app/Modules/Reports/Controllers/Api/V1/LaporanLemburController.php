@@ -826,6 +826,20 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         return response()->json($result);
     }
 
+    public function exportCombinedDetailPre(Request $request)
+    {
+        $result = $this->buildCombinedDetailPreData($request);
+        $periodId = $request->input('period_id');
+        $period = PayPeriod::find($periodId);
+        $label = $period ? $period->name : ($result['month_label'] ?? 'Laporan');
+        $companyName = $request->input('company_name', 'PT. KEMILAU UNGARAN SUKSES');
+        $filename = 'Rincian_Gaji_Overtime_Pre_' . str_replace(' ', '_', $label) . '.xlsx';
+        return Excel::download(
+            new LemburUangMakanDetailExport($result['sections'], $result['dates'], $label, $companyName),
+            $filename
+        );
+    }
+
     private function buildCombinedDetailPreData(Request $request)
     {
         $periodId   = $request->input('period_id');

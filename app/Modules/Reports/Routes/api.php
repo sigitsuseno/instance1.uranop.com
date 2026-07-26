@@ -28,6 +28,7 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
         Route::get('/combined-detail', [LaporanLemburController::class, 'combinedDetail']);
         Route::get('/combined-detail/export', [LaporanLemburController::class, 'exportCombinedDetail']);
         Route::get('/combined-detail-pre', [LaporanLemburController::class, 'combinedDetailPre']);
+        Route::get('/combined-detail-pre/export', [LaporanLemburController::class, 'exportCombinedDetailPre']);
         Route::get('/combined-resume', [LaporanLemburController::class, 'combinedResume']);
         Route::get('/combined-resume/export', [LaporanLemburController::class, 'exportCombinedResume']);
 

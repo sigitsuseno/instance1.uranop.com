@@ -22,7 +22,7 @@ class LemburUangMakanUpdateService
      *   3. GRP-SPR   — lembur (weekday-sabtu=0, minggu=lm_count)
      *   4. GRP-PS1, GRP-SS — lembur (overtime_count weekday-sabtu, lm_count minggu)
      *   5. KRY-TKN   — uang makan (overwrite, aturan teknisi sendiri)
-     *   6. KRY-SPC   — lembur (overwrite, overtime_count/lm_count)
+     *   6. KRY-SPC   — lembur (overwrite, overtime_count/lm_count, pake gaji_pokok/173)
      *
      * @param int   $periodId
      * @param array $params  { emp_tanpa_sabtu_minggu_holiday, position_rules, technician_rules }
@@ -419,8 +419,8 @@ class LemburUangMakanUpdateService
 
     // ═══════════════════════════════════════════════════════════════
     // 6. KRY-SPC (overwrite)
-    //   a. Senin-Sabtu → lembur=overtime, hitung=overtime_count, nominal=count × upah
-    //   b. Minggu/Holiday → lembur=lm, hitung=lm_count, nominal=count × upah
+    //   a. Senin-Sabtu → lembur=overtime, hitung=overtime_count, nominal=count × (gaji/173)
+    //   b. Minggu/Holiday → lembur=lm, hitung=lm_count, nominal=count × (gaji/173)
     // ═══════════════════════════════════════════════════════════════
     private function applySpcRules(
         float $ovtHours, float $lmHours,
@@ -428,6 +428,9 @@ class LemburUangMakanUpdateService
         int $dayOfWeek, bool $isMingguHoliday,
         string $status, float $upahLemburPerJam
     ): array {
+        // KRY-SPC pake gaji_pokok hardcode 2940088 / 173
+        $spcUpahPerJam = round(2940088 / 173, 2);
+
         $record = $this->emptyRecord($status);
 
         if ($isMingguHoliday) {
@@ -436,14 +439,14 @@ class LemburUangMakanUpdateService
             $record['lembur']        = $lmHours;
             $record['lembur_hitung'] = $lmCountHours;
             $record['um_code']       = '';
-            $record['nominal']       = round($lmCountHours * $upahLemburPerJam, 2);
+            $record['nominal']       = round($lmCountHours * $spcUpahPerJam, 2);
         } else {
             // a. Senin-Sabtu → overtime / overtime_count
             $ovtCountHours = round($ovtCount / 60, 2);
             $record['lembur']        = $ovtHours;
             $record['lembur_hitung'] = $ovtCountHours;
             $record['um_code']       = '';
-            $record['nominal']       = round($ovtCountHours * $upahLemburPerJam, 2);
+            $record['nominal']       = round($ovtCountHours * $spcUpahPerJam, 2);
         }
 
         return $record;

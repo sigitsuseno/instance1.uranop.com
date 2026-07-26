@@ -264,3 +264,7 @@ perubahan dalam mengambil data.
 - $uangMakan = employee_overtime->sum(nominal), hanya untuk Section A. KARYAWAN ALLIN dengan filter kecuali karyawan group GRP-SPR (grp spr tidak dapat uang makan)
 
 Kalau kurang faham tolong tanyakan
+
+jais 196.000
+miftah 313.000
+suyono 188.000
