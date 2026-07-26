@@ -26,6 +26,22 @@
             <option value="B">Segment 2</option>
           </select>
         </template>
+
+        <!-- Export Button -->
+        <BaseButton
+          variant="success"
+          :disabled="dataAllIn.length === 0 && dataPrint.length === 0"
+          @click="exportExcel"
+        >
+          <template #icon-left>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+          </template>
+          Export Excel
+        </BaseButton>
       </div>
     </div>
 
@@ -39,16 +55,6 @@
               Total {{ dataAllIn.length }} Data Transfer
             </p>
           </div>
-          <BaseButton variant="success" :disabled="dataAllIn.length === 0" @click="exportExcel('all-in')">
-            <template #icon-left>
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-            </template>
-            Export Excel
-          </BaseButton>
         </div>
 
         <div class="overflow-x-auto max-h-[50vh]">
@@ -100,16 +106,6 @@
               Total {{ dataPrint.length }} Data Transfer
             </p>
           </div>
-          <BaseButton variant="success" :disabled="dataPrint.length === 0" @click="exportExcel('print')">
-            <template #icon-left>
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-            </template>
-            Export Excel
-          </BaseButton>
         </div>
 
         <div class="overflow-x-auto max-h-[50vh]">
@@ -191,7 +187,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
+import { saveAs } from 'file-saver'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import { useApi } from '../../../../composables/useApi'
@@ -275,42 +272,182 @@ async function onPeriodChange() {
   await fetchRecords()
 }
 
-function exportExcel(type) {
-  const data = type === 'all-in' ? dataAllIn.value : dataPrint.value
-  if (data.length === 0) {
-    notification.error('Tidak ada data untuk di-export')
-    return
+function addSheetWithStyle(workbook, data, total, title, sheetName) {
+  const ws = workbook.addWorksheet(sheetName)
+
+  // Column widths
+  ws.getColumn(1).width = 30  // Penerima
+  ws.getColumn(2).width = 20  // Norek
+  ws.getColumn(3).width = 20  // Bank
+  ws.getColumn(4).width = 15  // Cabang
+  ws.getColumn(5).width = 18  // Nominal
+  ws.getColumn(6).width = 18  // Tanggal
+  ws.getColumn(7).width = 25  // Keterangan
+
+  // Colors
+  const primaryColor = '1F4E79'
+  const accentColor = '2E75B6'
+  const borderColor = 'B0B0B0'
+
+  const borderStyle = {
+    top: { style: 'thin', color: { argb: borderColor } },
+    left: { style: 'thin', color: { argb: borderColor } },
+    bottom: { style: 'thin', color: { argb: borderColor } },
+    right: { style: 'thin', color: { argb: borderColor } },
   }
 
-  const sectionLabel = type === 'all-in' ? 'A - KARYAWAN ALLIN' : 'B - KARYAWAN BULANAN PRINT'
+  const headerFill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: primaryColor },
+  }
 
-  const dataToExport = [
-    [sectionLabel],
-    ['PENERIMA', 'NOREK', 'SINGKATAN NAMA BANK', 'CABANG', 'NOMINAL', 'TANGGAL TRANSAKSI', 'KETERANGAN'],
-    ...data.map(item => [
+  const headerFont = {
+    name: 'Calibri',
+    size: 11,
+    bold: true,
+    color: { argb: 'FFFFFF' },
+  }
+
+  const titleFont = {
+    name: 'Calibri',
+    size: 14,
+    bold: true,
+    color: { argb: primaryColor },
+  }
+
+  const totalFill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'D6E4F0' },
+  }
+
+  const totalFont = {
+    name: 'Calibri',
+    size: 11,
+    bold: true,
+    color: { argb: primaryColor },
+  }
+
+  // Row 1: Title
+  ws.mergeCells(1, 1, 1, 7)
+  const titleCell = ws.getCell(1, 1)
+  titleCell.value = title
+  titleCell.font = titleFont
+  titleCell.alignment = { vertical: 'middle', horizontal: 'left' }
+  ws.getRow(1).height = 30
+
+  // Row 2: Header
+  const headers = ['PENERIMA', 'NOREK', 'SINGKATAN NAMA BANK', 'CABANG', 'NOMINAL', 'TANGGAL TRANSAKSI', 'KETERANGAN']
+  const headerRow = ws.getRow(2)
+  headerRow.height = 22
+  headers.forEach((h, i) => {
+    const cell = headerRow.getCell(i + 1)
+    cell.value = h
+    cell.font = headerFont
+    cell.fill = headerFill
+    cell.alignment = { vertical: 'middle', horizontal: 'center' }
+    cell.border = borderStyle
+  })
+
+  // Data rows
+  data.forEach((item, idx) => {
+    const row = ws.getRow(idx + 3)
+    row.height = 20
+
+    const values = [
       item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name,
       item.bank_account_number,
       item.bank_name,
       item.bank_cabang || '',
       item.gaji_bersih,
       '',
-      ''
-    ])
-  ]
+      '',
+    ]
 
-  const totalVal = type === 'all-in' ? totalAllIn.value : totalPrint.value
-  dataToExport.push(['', '', '', 'TOTAL', totalVal, '', ''])
+    values.forEach((v, i) => {
+      const cell = row.getCell(i + 1)
+      cell.value = v
+      cell.border = borderStyle
+      cell.font = { name: 'Calibri', size: 10, color: { argb: '333333' } }
 
-  const worksheet = XLSX.utils.aoa_to_sheet(dataToExport)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan_Bank')
+      if (i === 4) {
+        // Nominal: right align with number format
+        cell.alignment = { vertical: 'middle', horizontal: 'right' }
+        cell.numFmt = '#,##0.00'
+      } else if (i === 1) {
+        // Norek: monospace
+        cell.alignment = { vertical: 'middle', horizontal: 'left' }
+        cell.font = { name: 'Consolas', size: 10, color: { argb: '333333' } }
+      } else {
+        cell.alignment = { vertical: 'middle', horizontal: 'left' }
+      }
+
+      // Zebra striping
+      if (idx % 2 === 1) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F7FB' } }
+      }
+    })
+  })
+
+  // Total row
+  const totalRowNum = data.length + 3
+  const totalRow = ws.getRow(totalRowNum)
+  totalRow.height = 24
+
+  // Merge label cells
+  ws.mergeCells(totalRowNum, 1, totalRowNum, 4)
+  const labelCell = totalRow.getCell(1)
+  labelCell.value = 'TOTAL'
+  labelCell.font = totalFont
+  labelCell.fill = totalFill
+  labelCell.alignment = { vertical: 'middle', horizontal: 'right' }
+  labelCell.border = borderStyle
+
+  // Fill merged area border
+  for (let c = 2; c <= 4; c++) {
+    totalRow.getCell(c).border = borderStyle
+    totalRow.getCell(c).fill = totalFill
+  }
+
+  const totalValueCell = totalRow.getCell(5)
+  totalValueCell.value = total
+  totalValueCell.font = { ...totalFont, size: 11 }
+  totalValueCell.fill = totalFill
+  totalValueCell.alignment = { vertical: 'middle', horizontal: 'right' }
+  totalValueCell.numFmt = '#,##0.00'
+  totalValueCell.border = borderStyle
+
+  for (let c = 6; c <= 7; c++) {
+    totalRow.getCell(c).border = borderStyle
+    totalRow.getCell(c).fill = totalFill
+  }
+}
+
+async function exportExcel() {
+  if (dataAllIn.value.length === 0 && dataPrint.value.length === 0) {
+    notification.error('Tidak ada data untuk di-export')
+    return
+  }
+
+  const workbook = new ExcelJS.Workbook()
+  workbook.creator = 'Payroll System'
+  workbook.created = new Date()
+
+  if (dataAllIn.value.length > 0) {
+    addSheetWithStyle(workbook, dataAllIn.value, totalAllIn.value, 'A - KARYAWAN ALLIN', 'All In')
+  }
+
+  if (dataPrint.value.length > 0) {
+    addSheetWithStyle(workbook, dataPrint.value, totalPrint.value, 'B - KARYAWAN BULANAN PRINT', 'Print')
+  }
 
   const periodName = selectedPeriod.value?.name || 'Periode'
   const segName = activeSegment.value ? `_Segmen_${activeSegment.value}` : ''
-  const typeName = type === 'all-in' ? 'AllIn' : 'Print'
-  const fileName = `Kirim_ALL_${typeName}_${periodName}${segName}.xlsx`
+  const fileName = `Kirim_ALL_${periodName}${segName}.xlsx`
 
-  XLSX.writeFile(workbook, fileName)
+  const buffer = await workbook.xlsx.writeBuffer()
+  saveAs(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileName)
 }
 
 onMounted(() => {

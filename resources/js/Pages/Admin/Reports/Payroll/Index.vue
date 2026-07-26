@@ -35,6 +35,17 @@
         <button
           :class="[
             'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
+            activeTab === 'kirim-all'
+              ? 'text-(--primary) border-(--primary)'
+              : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
+          ]"
+          @click="activeTab = 'kirim-all'"
+        >
+          Kirim ALL
+        </button>
+        <button
+          :class="[
+            'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
             activeTab === 'kirim-all-in'
               ? 'text-(--primary) border-(--primary)'
               : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
@@ -54,7 +65,7 @@
         >
           Kirim Print
         </button>
-        <button
+        <!-- <button
           :class="[
             'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
             activeTab === 'kirim-all'
@@ -64,16 +75,16 @@
           @click="activeTab = 'kirim-all'"
         >
           Kirim ALL
-        </button>
+        </button> -->
       </nav>
     </div>
 
     <!-- Tab Content -->
     <TabPayroll v-if="activeTab === 'payroll'" />
     <TabResume v-if="activeTab === 'resume'" />
+    <TabKirimAll v-if="activeTab === 'kirim-all'" />
     <TabKirimBank v-if="activeTab === 'kirim-all-in'" group="all-in" />
     <TabKirimBank v-if="activeTab === 'kirim-print'" group="print" />
-    <TabKirimAll v-if="activeTab === 'kirim-all'" />
   </div>
 </template>
 
