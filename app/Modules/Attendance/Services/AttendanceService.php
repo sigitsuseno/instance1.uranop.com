@@ -136,6 +136,14 @@ class AttendanceService
                     $updateData['lm'] = (int) $item['lm'];
                 }
 
+                if (isset($item['overtime_count'])) {
+                    $updateData['overtime_count'] = (int) $item['overtime_count'];
+                }
+
+                if (isset($item['lm_count'])) {
+                    $updateData['lm_count'] = (int) $item['lm_count'];
+                }
+
                 if (!empty($updateData)) {
                     $updateData['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
                 }

@@ -373,6 +373,21 @@
               :disabled="editForm.isLocked" />
           </div>
         </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Lembur Count (setelah multiplier)</label>
+            <input v-model.number="editForm.overtimeCount" type="number" min="0" step="1"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              :disabled="editForm.isLocked" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">LM Count (setelah multiplier)</label>
+            <input v-model.number="editForm.lmCount" type="number" min="0" step="1"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+              :disabled="editForm.isLocked" />
+          </div>
+        </div>
       </div>
 
       <template #footer>
@@ -537,6 +552,8 @@ const editForm = ref({
   lateMinutes: 0,
   overtime: 0,
   lm: 0,
+  overtimeCount: 0,
+  lmCount: 0,
   notes: '',
   isLocked: false,
 })
@@ -1028,6 +1045,8 @@ function openEdit(emp, dateObj) {
     lateMinutes: dayData.lateMinutes || 0,
     overtime: dayData.overtimeRaw || 0,
     lm: dayData.lmRaw || 0,
+    overtimeCount: dayData.overtimeCount || 0,
+    lmCount: dayData.lmCount || 0,
     notes: dayData.notes || '',
     isLocked: dayData.isLocked || false,
   }
@@ -1050,6 +1069,8 @@ async function handleSaveEdit() {
       notes: editForm.value.notes,
       overtime: editForm.value.overtime,
       lm: editForm.value.lm,
+      overtime_count: editForm.value.overtimeCount,
+      lm_count: editForm.value.lmCount,
     }
 
     // Kalau record baru (belum ada id), kirim employee_id + date
@@ -1088,6 +1109,8 @@ async function handleSaveEdit() {
         overtime: overtimeStr,
         overtimeRaw: editForm.value.overtime || 0,
         lmRaw: editForm.value.lm || 0,
+        overtimeCount: editForm.value.overtimeCount || 0,
+        lmCount: editForm.value.lmCount || 0,
         notes: editForm.value.notes,
       }
       closeEdit()
