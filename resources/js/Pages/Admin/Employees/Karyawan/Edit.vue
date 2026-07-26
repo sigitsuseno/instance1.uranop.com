@@ -37,6 +37,7 @@ const form = ref({
   bank_name: '',
   bank_account_number: '',
   bank_account_name: '',
+  bank_cabang: '',
   ptkp: '',
 })
 
@@ -229,6 +230,7 @@ onMounted(async () => {
                 <TextInput v-model="form.bank_name" label="Nama Bank" placeholder="BCA, BRI, Mandiri..." />
                 <TextInput v-model="form.bank_account_number" label="No. Rekening" placeholder="Nomor rekening" />
                 <TextInput v-model="form.bank_account_name" label="Nama Pemilik Rekening" placeholder="Nama sesuai rekening" />
+                <TextInput v-model="form.bank_cabang" label="Cabang Bank" placeholder="Cabang bank" />
               </div>
             </div>
           </div>

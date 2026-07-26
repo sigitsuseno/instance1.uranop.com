@@ -137,10 +137,10 @@ FILTER BERDASARKAN GROUP
     - employee_overtime->insentif = 0
     - employee_overtime->komponen = {status: att_prepare->status}
       c. hari minggu dan holiday.
-      c1. jika $empTanpaSabtuMingguHoliday - employee_overtime->lembur = 0 - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = 0  
-       - employee_overtime->nominal = 0 - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
-      c2. jika bukan $empTanpaSabtuMingguHoliday - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->lm >= 8 = FULL, att_prepare->overtime lebih dari >= 4 kurang dari <= 7.5 = 1/2 (HALF)  
-       - employee_overtime->nominal = aturan spesifik berdasarkan jabatan - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+      c1. jika $empTanpaSabtuMingguHoliday - employee_overtime->lembur = 0 - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = 0
+        - employee_overtime->nominal = 0 - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+          c2. jika bukan $empTanpaSabtuMingguHoliday - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->lm >= 8 = FULL, att_prepare->overtime lebih dari >= 4 kurang dari <= 7.5 = 1/2 (HALF)
+        - employee_overtime->nominal = aturan spesifik berdasarkan jabatan - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
 2. GRP-ALLIN, GRP-GD
    a. hari senin sampai jumat : jika overtime lebih dari 2 jam
     - employee_overtime->lembur = att_prepare->overtime
@@ -156,30 +156,31 @@ FILTER BERDASARKAN GROUP
     - employee_overtime->nominal = aturan spesifik berdasarkan jabatan
     - employee_overtime->insentif = 0
     - employee_overtime->komponen = {status: att_prepare->status}
-      c. hari minggu dan holiday. - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->lm >= 8 = FULL, att_prepare->overtime lebih dari >= 4 kurang dari <= 7.5 = 1/2 (HALF)  
-       - employee_overtime->nominal = aturan spesifik berdasarkan jabatan - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+      c. hari minggu dan holiday. - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->lm >= 8 = FULL, att_prepare->overtime lebih dari >= 4 kurang dari <= 7.5 = 1/2 (HALF)
+        - employee_overtime->nominal = aturan spesifik berdasarkan jabatan - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
 
 3. GRP-SPR
-   a. hari senin sampai sabtu - employee_overtime->lembur = 0 - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = ''  
+   a. hari senin sampai sabtu - employee_overtime->lembur = 0 - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = ''
     - employee_overtime->nominal = 0 - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
-   b. hari minggu, - employee_overtime->lembur = att_prepare->lm_count - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = ""  
+      b. hari minggu, - employee_overtime->lembur = att_prepare->lm_count - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = ""
     - employee_overtime->nominal = lm_count \* $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
 4. GRP-PS1, GRP-SS,
-   a. hari senin sampai sabtu - employee_overtime->lembur = att_prepare->overtime - employee_overtime->lembur_hitung = att_prepare->overtime_count - employee_overtime->um_code = ""  
-    - employee_overtime->nominal = att_prepare->overtime_count _ $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
-   b. hari minggu, - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = att_prepare->lm_count - employee_overtime->um_code = "" - employee_overtime->nominal = lm_count _ $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+   a. hari senin sampai sabtu - employee_overtime->lembur = att_prepare->overtime - employee_overtime->lembur_hitung = att_prepare->overtime_count - employee_overtime->um_code = ""
+    - employee*overtime->nominal = att_prepare->overtime_count * $upahLemburPerJam - employee*overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+      b. hari minggu, - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = att_prepare->lm_count - employee_overtime->um_code = "" - employee_overtime->nominal = lm_count * $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
 
 **(dua group dibawah ini (KRY-TKN,) sifatnya overwrite jadi harus dikerjakan terakhir)** 5. KRY-TKN (ini punya aturan spesifik teknisi sendiri)
 a. hari senin sampai jumat : jika overtime lebih dari 2 jam - employee_overtime->lembur = att_prepare->overtime - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = UM - employee_overtime->nominal = aturan spesifik teknisi senin - jumat - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
-b. hari sabtu - employee_overtime->lembur = att_prepare->overtime - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->overtime >= 4 = FULL, att_prepare->overtime lebih dari >= 2 kurang dari <= 3.5 = 2(dua)  
- - employee_overtime->nominal = aturan spesifik teknisi sabtu - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
-c. hari minggu dan holiday. - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->lm >= 8 = FULL, att_prepare->overtime lebih dari >= 4 kurang dari <= 7.5 = 1/2 (HALF)  
- - employee_overtime->nominal = aturan spesifik teknisi minggu dan holiday - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+b. hari sabtu - employee_overtime->lembur = att_prepare->overtime - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->overtime >= 4 = FULL, att_prepare->overtime lebih dari >= 2 kurang dari <= 3.5 = 2(dua)
+
+- employee_overtime->nominal = aturan spesifik teknisi sabtu - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+  c. hari minggu dan holiday. - employee_overtime->lembur = att_prepare->lm - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = att_prepare->lm >= 8 = FULL, att_prepare->overtime lebih dari >= 4 kurang dari <= 7.5 = 1/2 (HALF)
+- employee_overtime->nominal = aturan spesifik teknisi minggu dan holiday - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
 
 6. KRY-SPC
-   a. hari senin sampai sabtu - employee_overtime->lembur = att_prepare->overtime_count - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = ""  
-    - employee_overtime->nominal = att_prepare->overtime_count _ $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
-   b. hari minggu, - employee_overtime->lembur = att_prepare->lm_count - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = "" - employee_overtime->nominal = lm_count _ $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+   a. hari senin sampai sabtu - employee_overtime->lembur = att_prepare->overtime_count - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = ""
+    - employee*overtime->nominal = att_prepare->overtime_count * $upahLemburPerJam - employee*overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
+      b. hari minggu, - employee_overtime->lembur = att_prepare->lm_count - employee_overtime->lembur_hitung = 0 - employee_overtime->um_code = "" - employee_overtime->nominal = lm_count * $upahLemburPerJam - employee_overtime->insentif = 0 - employee_overtime->komponen = {status: att_prepare->status}
 
 masih salah itu, menghitung ada berapa jumlah uang makan dalam 1 periode, (contoh dalam satu periode di setiap hari senin sampai jumat lembur lebih dari 2 jam = 12 hari maka di um di tulis 12 hari)
 

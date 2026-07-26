@@ -53,6 +53,7 @@ class Employee extends Model
         'bank_name',
         'bank_account_number',
         'bank_account_name',
+        'bank_cabang',
         'base_salary',
         'premi',
         'tunjangan',
