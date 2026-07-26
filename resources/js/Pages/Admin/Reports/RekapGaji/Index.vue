@@ -263,38 +263,11 @@ async function fetchData() {
     const data = res.data || []
 
     records.value = data.map(r => mapRecord(r))
-
-    await fetchUangMakan()
   } catch (e) {
     console.error('Gagal fetch rekap gaji:', e)
     records.value = []
   } finally {
     loading.value = false
-  }
-}
-
-async function fetchUangMakan() {
-  if (!selectedPeriod.value) return
-  try {
-    const start = new Date(selectedPeriod.value.date_start)
-    const month = String(start.getMonth() + 1).padStart(2, '0')
-    const year = start.getFullYear()
-
-    const res = await get(`/api/v1/reports/uang-makan/rekab?month=${month}&year=${year}`)
-    const umData = res.data?.data || res.data || []
-
-    const umMap = {}
-    for (const item of umData) {
-      umMap[item.id] = (item.nominals?.uang_makan || 0) + (item.nominals?.lembur_sabtu || 0) + (item.nominals?.lembur_minggu || 0)
-    }
-
-    for (const record of records.value) {
-      if (umMap[record.id]) {
-        record.uang_makan = umMap[record.id]
-      }
-    }
-  } catch (e) {
-    console.warn('Uang makan data tidak tersedia:', e.message)
   }
 }
 

@@ -6,12 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeBpjs;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Payroll\Models\PayRecord;
+use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Reports\Exports\RekapGajiExport;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Models\ExtraEmployee;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
 class RekapGajiController extends Controller
@@ -43,9 +44,6 @@ class RekapGajiController extends Controller
         if ($result instanceof \Illuminate\Http\JsonResponse) {
             return $result; // error response
         }
-
-        // Merge uang makan dari rekab endpoint
-        $result = $this->mergeUangMakan($result, $request);
 
         $rows    = $result['data'] instanceof \Illuminate\Support\Collection
             ? $result['data']->toArray()
@@ -133,8 +131,6 @@ class RekapGajiController extends Controller
 
         $employees = $query->orderBy('name')->get();
 
-        $periodMonth = $period->start_date->format('Y-m');
-
         // Preload BPJS — cari per period dulu, fallback ke yg terbaru
         $bpjsByPeriod = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_period_id', $periodId)
@@ -153,9 +149,21 @@ class RekapGajiController extends Controller
                 ->map->first();
         }
 
+        // Preload PayRecord per period
+        $payRecords = PayRecord::whereIn('employee_id', $employees->pluck('id'))
+            ->where('pay_period_id', $periodId)
+            ->get()
+            ->keyBy('employee_id');
+
+        // Preload EmployeeOvertime sum nominal per employee in period
+        $overtimeSums = EmployeeOvertime::whereIn('employee_id', $employees->pluck('id'))
+            ->where('pay_periode_id', $periodId)
+            ->groupBy('employee_id')
+            ->selectRaw('employee_id, SUM(nominal) as total_nominal')
+            ->pluck('total_nominal', 'employee_id');
+
         // Build response
-        $data = $employees->map(function ($emp) use ($periodMonth, $bpjsByPeriod, $bpjsFallback) {
-            $salary = $emp->activeSalary($periodMonth);
+        $data = $employees->map(function ($emp) use ($bpjsByPeriod, $bpjsFallback, $payRecords, $overtimeSums) {
             $bpjs   = $bpjsByPeriod->get($emp->id) ?? $bpjsFallback->get($emp->id);
 
             $groupCodes = $emp->groups->pluck('reference_code')->toArray();
@@ -168,10 +176,10 @@ class RekapGajiController extends Controller
                 $bpjsKs = (float)($bpjs->employee_kesehatan ?? 0);
             }
 
-            $baseSalary = $salary ? (float)$salary->base_salary : (float)($emp->base_salary ?? 0);
-            $premi      = $salary ? (float)$salary->premi : (float)($emp->premi ?? 0);
-            $tunjangan  = $salary ? (float)$salary->tunjangan : (float)($emp->tunjangan ?? 0);
-            $totalGaji = $baseSalary + $tunjangan + $premi;
+            $payRecord = $payRecords->get($emp->id);
+            $gajiKotor = $payRecord ? (float) $payRecord->gaji_kotor : 0;
+            $um        = (float) ($overtimeSums->get($emp->id) ?? 0);
+            $totalGaji = $gajiKotor + $um;
 
             return [
                 'id'           => $emp->id,
@@ -179,11 +187,11 @@ class RekapGajiController extends Controller
                 'account_no'   => $emp->bank_account_number ?? '-',
                 'status_label' => $emp->ptkp ?? '-',
                 'gender'       => in_array($emp->gender, ['L', 'P']) ? $emp->gender : '-',
-                'gaji'         => $baseSalary,
+                'gaji'         => $gajiKotor,
                 'total_gaji'   => $totalGaji,
                 'bpjs_tk'      => $bpjsTk,
                 'bpjs_ks'      => $bpjsKs,
-                'uang_makan'   => 0,
+                'uang_makan'   => $um,
                 'groups'       => $groupCodes,
                 'department'   => $emp->department?->name ?? '-',
                 'position'     => $emp->position?->name ?? '-',
@@ -226,58 +234,4 @@ class RekapGajiController extends Controller
         ];
     }
 
-    /**
-     * Merge uang_makan data from rekab endpoint into rekap gaji rows.
-     */
-    private function mergeUangMakan(array $result, Request $request): array
-    {
-        try {
-            $periodId  = $request->input('period_id');
-            $period    = PayPeriod::find($periodId);
-            $startDate = $period ? $period->start_date : null;
-
-            if (!$startDate) {
-                return $result;
-            }
-
-            $month = $startDate->format('m');
-            $year  = $startDate->format('Y');
-
-            // Call UangMakanReportController's rekab internally
-            $uangMakanCtrl = app(UangMakanReportController::class);
-            $rekabRequest  = Request::create(
-                "/api/v1/reports/uang-makan/rekab?month={$month}&year={$year}",
-                'GET'
-            );
-            $rekabResponse = $uangMakanCtrl->rekab($rekabRequest);
-            $rekabData     = json_decode($rekabResponse->getContent(), true);
-            $umItems       = $rekabData['data'] ?? [];
-
-            // Build map: employee_id => total uang_makan
-            $umMap = [];
-            foreach ($umItems as $item) {
-                $nominals = $item['nominals'] ?? [];
-                $total = (float)($nominals['uang_makan'] ?? 0)
-                       + (float)($nominals['lembur_sabtu'] ?? 0)
-                       + (float)($nominals['lembur_minggu'] ?? 0);
-                $umMap[$item['id']] = $total;
-            }
-
-            // Merge into data
-            $data = $result['data'];
-            if ($data instanceof \Illuminate\Support\Collection) {
-                $data = $data->map(function ($row) use ($umMap) {
-                    if (isset($umMap[$row['id']])) {
-                        $row['uang_makan'] = $umMap[$row['id']];
-                    }
-                    return $row;
-                });
-                $result['data'] = $data;
-            }
-        } catch (\Throwable $e) {
-            // Uang makan not critical — skip silently
-        }
-
-        return $result;
-    }
 }
