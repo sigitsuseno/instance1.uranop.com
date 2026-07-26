@@ -3,9 +3,11 @@
 namespace App\Modules\Reports\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
+use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -45,6 +47,135 @@ class PayrollReportController extends Controller
             new \App\Modules\Reports\Exports\PayrollResumeExport($result['data'], $result['period_name']),
             $filename
         );
+    }
+
+    /**
+     * GET /api/v1/laporan/payroll/kirim-audit
+     * Data untuk laporan Kirim Audit.
+     *
+     * NOMINAL = (pay_records.gaji_bersih - supervisor_breakdowns.gaji_bersih)
+     *         + uangMakan + insentif
+     */
+    public function kirimAudit(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = SupervisorBreakdown::with(['employee.department', 'employee.position', 'employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'supervisor_breakdowns.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('supervisor_breakdowns.*');
+
+        if ($period->is_split) {
+            if (!$segment) {
+                $segment = 'A';
+            }
+            $query->where('segment', $segment);
+        }
+
+        $records = $query->get();
+
+        // Batch query pay records: gaji_bersih & notes per employee
+        $employeeIds = $records->pluck('employee_id')->unique()->values();
+        $payRecordData = collect();
+        if ($employeeIds->isNotEmpty()) {
+            $payRecordData = PayRecord::where('pay_period_id', $period->id)
+                ->whereIn('employee_id', $employeeIds->toArray())
+                ->select('employee_id', 'gaji_bersih', 'notes')
+                ->get()
+                ->keyBy('employee_id');
+        }
+
+        // Batch query overtime: insentif & uangMakan per employee
+        $overtimeData = collect();
+        if ($employeeIds->isNotEmpty()) {
+            $overtimeData = EmployeeOvertime::where('pay_periode_id', $period->id)
+                ->whereIn('employee_id', $employeeIds->toArray())
+                ->selectRaw('employee_id, SUM(insentif) as total_insentif, SUM(nominal) as total_nominal')
+                ->groupBy('employee_id')
+                ->get()
+                ->keyBy('employee_id');
+        }
+
+        $data = $records->map(function ($record) use ($overtimeData, $payRecordData) {
+            $emp       = $record->employee;
+            $payRecord = $payRecordData->get($record->employee_id);
+            $joinDate  = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+
+            // NOMINAL = (gajiKus - gajiAudit) + uangMakan + insentif
+            $gajiKus   = (float) ($payRecord?->gaji_bersih ?? 0);
+            $gajiAudit = (float) $record->gaji_bersih;
+
+            $overtimeRow = $overtimeData->get($record->employee_id);
+            $insentif    = (float) ($overtimeRow->total_insentif ?? 0);
+
+            // uangMakan hanya Section A (ALLIN), kecuali GRP-SPR
+            $uangMakan  = 0;
+            $groupCodes = $record->group_codes
+                ?? $emp?->groups?->pluck('reference_code')->toArray()
+                ?? [];
+            if ($record->section === 'A' && !in_array('GRP-SPR', $groupCodes)) {
+                $uangMakan = (float) ($overtimeRow->total_nominal ?? 0);
+            }
+
+            $nominal = ($gajiKus - $gajiAudit) + $uangMakan + $insentif;
+
+            return [
+                'id'                  => $record->id,
+                'employee_id'         => $emp?->id,
+                'employee_code'       => $emp?->nip ?? $record->employee_code ?? '-',
+                'name'                => $record->employee_name ?? $emp?->name ?? '-',
+                'department'          => $record->department_name ?? $emp?->department?->name ?? '-',
+                'position'            => $record->position_name ?? $emp?->position?->name ?? '-',
+                'gender'              => $record->gender ?? $emp?->gender ?? '-',
+                'join_year'           => $joinDate ? $joinDate->format('d-M-Y') : '-',
+                'groups'              => $groupCodes,
+                'bank_name'           => $record->bank_name ?? $emp?->bank_name ?? '-',
+                'bank_account_number' => $record->bank_account_number ?? $emp?->bank_account_number ?? '-',
+                'bank_account_name'   => $record->bank_account_name ?? $emp?->bank_account_name ?? '-',
+                'bank_cabang'         => $emp?->bank_cabang ?? '-',
+                'notes'               => $payRecord?->notes ?? $record->notes ?? '',
+                'section'             => $record->section,
+                'gaji_pokok'    => (float) $record->gaji_pokok,
+                'premi'         => (float) $record->premi,
+                'tj_masa_kerja' => (float) $record->tj_masa_kerja,
+                'tunjangan'     => (float) $record->tunjangan,
+                'hari_kerja'    => (int) $record->hari_kerja,
+                'lm'            => round((float) $record->lm / 8, 1),
+                'lm_count'      => (float) $record->lm_count,
+                'lembur_count'  => (float) $record->lembur_count,
+                'gaji'         => (float) $record->gaji,
+                'upah_lembur'  => (float) $record->upah_lembur,
+                'revisi'       => (float) $record->revisi,
+                'premi_hadir'  => (float) $record->premi_hadir,
+                'pblt'         => (float) $record->pblt,
+                'total'        => (float) $record->gaji_kotor,
+                'bpjs_tk'      => (float) $record->bpjs_tk,
+                'bpjs_ks'      => (float) $record->bpjs_ks,
+                'bpjs_pen'     => (float) $record->bpjs_pen,
+                'cashbon'      => (float) $record->cashbon,
+                'pph'          => (float) $record->pph,
+                'gaji_bersih'  => $nominal,
+            ];
+        });
+
+        return response()->json([
+            'data'   => $data,
+            'period' => [
+                'id'                  => $period->id,
+                'name'                => $period->name,
+                'is_split'            => $period->is_split,
+                'segment'             => $segment,
+                'tanggal_penggajian'  => $period->tanggal_penggajian?->format('Y-m-d'),
+            ],
+        ]);
     }
 
     private function buildPayrollData(Request $request)

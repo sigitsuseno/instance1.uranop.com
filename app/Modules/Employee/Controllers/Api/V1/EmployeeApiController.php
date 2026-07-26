@@ -119,6 +119,8 @@ class EmployeeApiController extends Controller
     public function update(Request $request, Employee $employee): JsonResponse
     {
         $data = $request->validate([
+            'employee_code'          => "nullable|string|max:50|unique:employees,employee_code,{$employee->id}",
+            'nip'                    => "nullable|string|max:50|unique:employees,nip,{$employee->id}",
             'nik'                    => "nullable|string|max:50|unique:employees,nik,{$employee->id}",
             'name'                   => 'required|string|max:200',
             'photo'                  => 'nullable|image|max:2048',

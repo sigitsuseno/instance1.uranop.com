@@ -80,10 +80,12 @@
                 <td class="px-4 py-2 text-(--text-main) font-medium">{{ item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name }}</td>
                 <td class="px-4 py-2 text-(--text-main) font-mono">{{ item.bank_account_number }}</td>
                 <td class="px-4 py-2 text-(--text-main)">{{ item.bank_name }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-(--text-main)">{{ item.bank_cabang || '-' }}</td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600">{{ formatNumber(item.gaji_bersih) }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-sm text-(--text-muted)">
+                  {{ tanggalPenggajian ? formatDate(tanggalPenggajian) : '-' }}
+                </td>
+                <td class="px-4 py-2 text-(--text-muted)">{{ item.notes || '-' }}</td>
               </tr>
             </tbody>
             <tfoot v-if="sectionAData.length > 0">
@@ -131,10 +133,12 @@
                 <td class="px-4 py-2 text-(--text-main) font-medium">{{ item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name }}</td>
                 <td class="px-4 py-2 text-(--text-main) font-mono">{{ item.bank_account_number }}</td>
                 <td class="px-4 py-2 text-(--text-main)">{{ item.bank_name }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-(--text-main)">{{ item.bank_cabang || '-' }}</td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600">{{ formatNumber(item.gaji_bersih) }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-sm text-(--text-muted)">
+                  {{ tanggalPenggajian ? formatDate(tanggalPenggajian) : '-' }}
+                </td>
+                <td class="px-4 py-2 text-(--text-muted)">{{ item.notes || '-' }}</td>
               </tr>
             </tbody>
             <tfoot v-if="sectionBData.length > 0">
@@ -207,22 +211,18 @@ const periods = ref([])
 const selectedPeriodId = ref('')
 const records = ref([])
 const activeSegment = ref(null)
-const payrollConfig = ref({ sections: { A: ['GRP-ALLIN', 'GRP-SPR'], B: ['GRP-GD', 'GRP-SS', 'GRP-PS1'] } })
+const tanggalPenggajian = ref('')
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
 })
 
 const sectionAData = computed(() => {
-  const mapping = payrollConfig.value?.sections || {}
-  const groups = mapping.A || ['GRP-ALLIN', 'GRP-SPR']
-  return records.value.filter(r => (r.groups || []).some(g => groups.includes(g)))
+  return records.value.filter(r => r.section === 'A')
 })
 
 const sectionBData = computed(() => {
-  const mapping = payrollConfig.value?.sections || {}
-  const groups = mapping.B || ['GRP-GD', 'GRP-SS', 'GRP-PS1']
-  return records.value.filter(r => (r.groups || []).some(g => groups.includes(g)))
+  return records.value.filter(r => r.section === 'B')
 })
 
 const totalA = computed(() => {
@@ -238,6 +238,12 @@ function formatNumber(value) {
   return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 async function fetchPeriods() {
   try {
     const res = await get('/api/v1/payroll/periods')
@@ -247,30 +253,23 @@ async function fetchPeriods() {
   }
 }
 
-async function fetchPayrollConfig() {
-  try {
-    const res = await get('/api/v1/payroll/configs/gaji_karyawan')
-    payrollConfig.value = res.config || { sections: { A: ['GRP-ALLIN', 'GRP-SPR'], B: ['GRP-GD', 'GRP-SS', 'GRP-PS1'] } }
-  } catch (error) {
-    console.error('Error fetching payroll config', error)
-  }
-}
-
 async function fetchRecords() {
   if (!selectedPeriodId.value) {
     records.value = []
     return
   }
   try {
-    let url = `/api/v1/payroll/gaji-karyawan?period_id=${selectedPeriodId.value}`
+    let url = `/api/v1/laporan/payroll/kirim-audit?period_id=${selectedPeriodId.value}`
     if (activeSegment.value) {
       url += `&segment=${activeSegment.value}`
     }
     const res = await get(url)
     records.value = res.data || []
+    tanggalPenggajian.value = res.period?.tanggal_penggajian || ''
   } catch (error) {
     console.error('Error fetching records', error)
     records.value = []
+    tanggalPenggajian.value = ''
   }
 }
 
@@ -292,20 +291,20 @@ function exportExcel() {
       'PENERIMA': item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name,
       'NOREK': item.bank_account_number,
       'SINGKATAN NAMA BANK': item.bank_name,
-      'CABANG': '',
+      'CABANG': item.bank_cabang || '',
       'NOMINAL': item.gaji_bersih,
-      'TANGGAL TRANSAKSI': '',
-      'KETERANGAN': ''
+      'TANGGAL TRANSAKSI': tanggalPenggajian.value || '',
+      'KETERANGAN': item.notes || ''
     })),
     ...sectionBData.value.map(item => ({
       'SECTION': 'B',
       'PENERIMA': item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name,
       'NOREK': item.bank_account_number,
       'SINGKATAN NAMA BANK': item.bank_name,
-      'CABANG': '',
+      'CABANG': item.bank_cabang || '',
       'NOMINAL': item.gaji_bersih,
-      'TANGGAL TRANSAKSI': '',
-      'KETERANGAN': ''
+      'TANGGAL TRANSAKSI': tanggalPenggajian.value || '',
+      'KETERANGAN': item.notes || ''
     }))
   ]
 
@@ -336,6 +335,5 @@ function exportExcel() {
 
 onMounted(() => {
   fetchPeriods()
-  fetchPayrollConfig()
 })
 </script>

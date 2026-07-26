@@ -206,3 +206,61 @@ kemudian
    uang makan hitungan khusus
 6. KRY-SPC
    hanya dapat uang lembur
+    1. Ambil supervisor_breakdowns yang dipilih
+    2. Untuk setiap record:
+
+        a. Tentukan Segmen
+        - Normal → 1 segmen (null)
+        - Split → 2 segmen (A & B), data attendance dihitung ulang langsung dari
+          attendance_prepares per rentang segmen
+
+        b. Skip non-group-gaji (karyawan tanpa GRP-\*)
+
+        c. Rumus:
+        Komponen: Gaji
+        Formula: (gajiPokok / fixedDays) × hariKerja
+        ────────────────────────────────────────
+        Komponen: Upah Lembur
+        Formula: ceil((gapok + TJMK + tunjangan) / 173 × totalLemburJam / 100) × 100
+        ────────────────────────────────────────
+        Komponen: Premi Hadir
+        Formula: (premi / fixedDays) × hariKerja
+        ────────────────────────────────────────
+        Komponen: Revisi
+        Formula: Seg-A: −TJMK / Seg-B: 0
+        ────────────────────────────────────────
+        Komponen: BPJS
+        Formula: Seg-A: 0 / Seg-B: dari employee->bpjs
+        ────────────────────────────────────────
+        Komponen: Gaji Kotor
+        Formula: gaji + TJMK + upahLembur + revisi + premiHadir + tunjangan
+        ────────────────────────────────────────
+        Komponen: Gaji Bersih
+        Formula: ceil((gajiKotor − potongan) / 100) × 100
+        ────────────────────────────────────────
+        Komponen: PBLT
+        Formula: selisih pembulatan ke atas
+
+        d. Overtime Rules:
+        | Group | Lembur? |
+        |-----------------|-------------------------------------------|
+        | GRP-ALLIN | ❌ Zero semua (LM=0, LBR=0) |
+        | GRP-SPR | ⚠️ Hanya LM (LBR JAM = 0, upah = LM saja) |
+        | GRP-GD, SS, PS1 | ✅ Full overtime (LM + LBR) |
+
+        e. Simpan ke pay_records (via updateOrCreate)
+
+tolong fokus di modul report, di /admin/reports/payroll
+perubahan dalam mengambil data.
+
+1. kolom CABANG ambil data dari employee->bank_cabang,
+2. kolom TANGGAL TRANSAKSI ambil data dari pay_periode->tanggal_penggajian,
+3. kolom KETERANGAN ambil data dari pay_record->notes
+4. Kolom NOMINAL = ($gajiKus - $GajiAudit) + $uangMakan + $insentif
+
+- $gajiKus = pay_records->gaji_bersih
+- $gajiAudit = supervisor_breakdown->gaji_bersih
+- $insentif = employee->overtime->sum(insentif).
+- $uangMakan = employee_overtime->sum(nominal), hanya untuk Section A. KARYAWAN ALLIN dengan filter kecuali karyawan group GRP-SPR (grp spr tidak dapat uang makan)
+
+Kalau kurang faham tolong tanyakan

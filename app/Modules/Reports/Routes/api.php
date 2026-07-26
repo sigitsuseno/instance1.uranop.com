@@ -82,6 +82,7 @@ Route::prefix('v1/laporan')->name('api.laporan.')->group(function () {
         ->name('kehadiran.export');
 
     Route::prefix('payroll')->name('payroll.')->group(function () {
+        Route::get('/kirim-audit', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'kirimAudit'])->name('kirim-audit');
         Route::get('/detail', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'payroll'])->name('detail');
         Route::get('/detail/export', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'exportPayroll'])->name('detail.export');
         Route::get('/resume', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'resume'])->name('resume');

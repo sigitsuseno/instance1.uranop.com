@@ -9,6 +9,7 @@ use App\Modules\Payroll\Models\PayrollConfig;
 use App\Modules\Settings\Models\SystemSetting;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Supervisor\Models\SupervisorEmployeeGroup;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use Carbon\Carbon;
@@ -64,6 +65,8 @@ class SupervisorBreakdownController extends Controller
                 'bank_name'           => $record->bank_name ?? $emp?->bank_name ?? '-',
                 'bank_account_number' => $record->bank_account_number ?? $emp?->bank_account_number ?? '-',
                 'bank_account_name'   => $record->bank_account_name ?? $emp?->bank_account_name ?? '-',
+                'bank_cabang'         => $emp?->bank_cabang ?? '-',
+                'notes'               => $record->notes ?? '',
                 // Masukan
                 'gaji_pokok'    => (float) $record->gaji_pokok,
                 'premi'         => (float) $record->premi,
@@ -95,10 +98,11 @@ class SupervisorBreakdownController extends Controller
         return response()->json([
             'data'   => $records,
             'period' => [
-                'id'       => $period->id,
-                'name'     => $period->name,
-                'is_split' => $period->is_split,
-                'segment'  => $segment,
+                'id'                  => $period->id,
+                'name'                => $period->name,
+                'is_split'            => $period->is_split,
+                'segment'             => $segment,
+                'tanggal_penggajian'  => $period->tanggal_penggajian?->format('Y-m-d'),
             ],
         ]);
     }
@@ -213,13 +217,41 @@ class SupervisorBreakdownController extends Controller
                     $segEnd    = $seg['end'];
                     $hkSegment = $seg['hk'];
 
+                    // ── Query leave (izin/cuti/sakit) ──
+                    $leaves = LeaveRequest::where('employee_id', $employee->id)
+                        ->where('status', 'approved')
+                        ->where(function ($q) use ($segStart, $segEnd) {
+                            $q->whereBetween('start_date', [$segStart, $segEnd])
+                              ->orWhereBetween('end_date', [$segStart, $segEnd])
+                              ->orWhere(function ($q2) use ($segStart, $segEnd) {
+                                  $q2->where('start_date', '<=', $segStart)
+                                     ->where('end_date', '>=', $segEnd);
+                              });
+                        })
+                        ->with('leaveType')
+                        ->get();
+
+                    $leaveIzin = 0;
+                    $leaveCuti = 0;
+                    $leaveSakit = 0;
+                    foreach ($leaves as $l) {
+                        $lStart = Carbon::parse(max($l->start_date->toDateString(), $segStart));
+                        $lEnd   = Carbon::parse(min($l->end_date->toDateString(), $segEnd));
+                        $dur    = max(0, $lStart->diffInDays($lEnd) + 1);
+
+                        $cat = optional($l->leaveType)->category;
+                        if ($cat === 'leave') $leaveCuti += $dur;
+                        elseif ($cat === 'permit') $leaveIzin += $dur;
+                        elseif ($cat === 'sick') $leaveSakit += $dur;
+                    }
+
                     // Untuk normal (non-split), ambil langsung dari snapshot
                     if ($segCode === null) {
-                        $hariKerja = (int) $snapshot->hari_kerja;
-                        $deductDay = (float) $snapshot->deduct_day;
-                        $lm        = (float) $snapshot->lm;
-                        $lmCount   = (float) $snapshot->lm_count;
+                        $lm          = (float) $snapshot->lm;
+                        $lmCount     = (float) $snapshot->lm_count;
                         $lemburCount = (float) $snapshot->lembur_count;
+                        $deductDay   = (float) $snapshot->deduct_day + $leaveIzin;
+                        $hariKerja   = max(0, $hkSegment - $deductDay);
                     } else {
                         // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
                         // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
@@ -227,11 +259,11 @@ class SupervisorBreakdownController extends Controller
                             ->whereBetween('date', [$segStart, $segEnd])
                             ->get();
 
-                        $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count();
-                        $hariKerja   = $hkSegment - $deductDay;
                         $lm          = $segLogs->sum('lm') / 60;
                         $lmCount     = (float) $segLogs->sum('lm_calc');
                         $lemburCount = (float) $segLogs->sum('lembur_calc');
+                        $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count() + $leaveIzin;
+                        $hariKerja   = max(0, $hkSegment - $deductDay);
                     }
 
                     // ── Data masukan (salary lookup) ──

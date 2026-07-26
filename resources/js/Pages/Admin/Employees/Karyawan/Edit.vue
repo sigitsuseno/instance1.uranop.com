@@ -195,7 +195,8 @@ onMounted(async () => {
           <template #title>Data Pribadi</template>
           <div class="space-y-4">
             <div class="grid grid-cols-2 gap-4">
-              <TextInput v-model="form.employee_code" label="Kode Karyawan" disabled />
+              <TextInput v-model="form.employee_code" label="Kode Karyawan" placeholder="Kode unik karyawan" />
+              <TextInput v-model="form.nip" label="NIP" placeholder="Nomor Induk Pegawai" />
               <TextInput v-model="form.nik" label="NIK" placeholder="16 digit NIK KTP" />
               <TextInput v-model="form.name" label="Nama Lengkap" placeholder="Masukkan nama lengkap" required />
               <SelectInput v-model="form.gender" label="Jenis Kelamin" :options="genderOptions" placeholder="Pilih jenis kelamin" required />
