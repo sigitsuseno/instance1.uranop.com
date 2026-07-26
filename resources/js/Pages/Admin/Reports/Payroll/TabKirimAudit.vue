@@ -3,8 +3,8 @@
     <!-- Header Section -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
       <div>
-        <h1 class="text-2xl font-bold text-(--text-main)">Laporan Kirim Bank ({{ group === 'all-in' ? 'All In' : 'Print' }})</h1>
-        <p class="text-sm text-(--text-muted) mt-1">Daftar transfer gaji karyawan ke rekening bank</p>
+        <h1 class="text-2xl font-bold text-(--text-main)">Laporan Kirim Audit</h1>
+        <p class="text-sm text-(--text-muted) mt-1">Daftar transfer gaji karyawan (Supervisor Breakdown)</p>
       </div>
 
       <!-- Actions Toolbar -->
@@ -193,13 +193,6 @@ import BaseCard from '../../../../Components/BaseCard.vue'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 
-const props = defineProps({
-  group: {
-    type: String,
-    required: true // 'all-in' or 'print'
-  }
-})
-
 const { get } = useApi()
 const notification = useNotificationStore()
 
@@ -207,22 +200,17 @@ const periods = ref([])
 const selectedPeriodId = ref('')
 const records = ref([])
 const activeSegment = ref(null)
-const payrollConfig = ref({ sections: { A: ['GRP-ALLIN', 'GRP-SPR'], B: ['GRP-GD', 'GRP-SS', 'GRP-PS1'] } })
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
 })
 
 const sectionAData = computed(() => {
-  const mapping = payrollConfig.value?.sections || {}
-  const groups = mapping.A || ['GRP-ALLIN', 'GRP-SPR']
-  return records.value.filter(r => (r.groups || []).some(g => groups.includes(g)))
+  return records.value.filter(r => r.section === 'A')
 })
 
 const sectionBData = computed(() => {
-  const mapping = payrollConfig.value?.sections || {}
-  const groups = mapping.B || ['GRP-GD', 'GRP-SS', 'GRP-PS1']
-  return records.value.filter(r => (r.groups || []).some(g => groups.includes(g)))
+  return records.value.filter(r => r.section === 'B')
 })
 
 const totalA = computed(() => {
@@ -247,22 +235,13 @@ async function fetchPeriods() {
   }
 }
 
-async function fetchPayrollConfig() {
-  try {
-    const res = await get('/api/v1/payroll/configs/gaji_karyawan')
-    payrollConfig.value = res.config || { sections: { A: ['GRP-ALLIN', 'GRP-SPR'], B: ['GRP-GD', 'GRP-SS', 'GRP-PS1'] } }
-  } catch (error) {
-    console.error('Error fetching payroll config', error)
-  }
-}
-
 async function fetchRecords() {
   if (!selectedPeriodId.value) {
     records.value = []
     return
   }
   try {
-    let url = `/api/v1/payroll/gaji-karyawan?period_id=${selectedPeriodId.value}`
+    let url = `/api/v1/supervisor/payroll/breakdown?period_id=${selectedPeriodId.value}`
     if (activeSegment.value) {
       url += `&segment=${activeSegment.value}`
     }
@@ -325,17 +304,15 @@ function exportExcel() {
   const worksheet = XLSX.utils.json_to_sheet(dataToExport)
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan_Bank')
-  
+
   const periodName = selectedPeriod.value?.name || 'Periode'
   const segName = activeSegment.value ? `_Segmen_${activeSegment.value}` : ''
-  const typeName = props.group === 'all-in' ? 'AllIn' : 'Print'
-  const fileName = `Kirim_Bank_${typeName}_${periodName}${segName}.xlsx`
-  
+  const fileName = `Kirim_Audit_${periodName}${segName}.xlsx`
+
   XLSX.writeFile(workbook, fileName)
 }
 
 onMounted(() => {
   fetchPeriods()
-  fetchPayrollConfig()
 })
 </script>

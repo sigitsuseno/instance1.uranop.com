@@ -52,7 +52,7 @@
           ]"
           @click="activeTab = 'kirim-all-in'"
         >
-          Kirim All In
+          Kirim Audit
         </button>
         <button
           :class="[
@@ -63,7 +63,7 @@
           ]"
           @click="activeTab = 'kirim-print'"
         >
-          Kirim Print
+          Kirim Kemilau
         </button>
         <!-- <button
           :class="[
@@ -83,7 +83,7 @@
     <TabPayroll v-if="activeTab === 'payroll'" />
     <TabResume v-if="activeTab === 'resume'" />
     <TabKirimAll v-if="activeTab === 'kirim-all'" />
-    <TabKirimBank v-if="activeTab === 'kirim-all-in'" group="all-in" />
+    <TabKirimAudit v-if="activeTab === 'kirim-all-in'" />
     <TabKirimBank v-if="activeTab === 'kirim-print'" group="print" />
   </div>
 </template>
@@ -92,6 +92,7 @@
 import { ref } from 'vue'
 import TabPayroll from './TabPayroll.vue'
 import TabResume from './TabResume.vue'
+import TabKirimAudit from './TabKirimAudit.vue'
 import TabKirimBank from './TabKirimBank.vue'
 import TabKirimAll from './TabKirimAll.vue'
 
