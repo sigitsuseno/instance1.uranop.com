@@ -11,6 +11,8 @@ Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::get('gaji-karyawan', [GajiKaryawanController::class, 'index']);
     Route::get('gaji-karyawan/export', [GajiKaryawanController::class, 'export']);
     Route::put('gaji-karyawan/{id}/upah-lembur', [GajiKaryawanController::class, 'updateUpahLembur']);
+    Route::put('gaji-karyawan/{id}/transfer-info', [GajiKaryawanController::class, 'updateTransferInfo']);
+    Route::put('gaji-karyawan/bulk-update-cabang', [GajiKaryawanController::class, 'bulkUpdateCabang']);
 
     // Konfigurasi Payroll
     Route::get('configs/{type}', [PayrollConfigApiController::class, 'show']);

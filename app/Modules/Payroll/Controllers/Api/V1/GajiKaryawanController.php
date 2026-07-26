@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Controllers\Api\V1;
 
+use App\Modules\Employee\Models\Employee;
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
@@ -41,6 +42,7 @@ class GajiKaryawanController extends Controller
 
             return [
                 'id' => $record->id,
+                'employee_id' => $emp?->id,
                 'employee_code' => $emp?->employee_code ?? $emp?->nip ?? '-',
                 'name' => $emp?->name ?? '-',
                 'department' => $emp?->department?->name ?? '-',
@@ -51,6 +53,8 @@ class GajiKaryawanController extends Controller
                 'bank_name' => $emp?->bank_name ?? '-',
                 'bank_account_number' => $emp?->bank_account_number ?? '-',
                 'bank_account_name' => $emp?->bank_account_name ?? '-',
+                'bank_cabang' => $emp?->bank_cabang ?? '',
+                'notes' => $record->notes ?? '',
                 // Data masukan
                 'gaji_pokok' => (float) $record->gaji_pokok,
                 'premi' => (float) $record->premi,
@@ -84,7 +88,74 @@ class GajiKaryawanController extends Controller
                 'name' => $period->name,
                 'is_split' => $period->is_split,
                 'segment' => $segment,
+                'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
             ],
+        ]);
+    }
+
+    /**
+     * Update transfer info: bank_cabang (employee) & notes (pay_record).
+     * PUT /api/v1/payroll/gaji-karyawan/{id}/transfer-info
+     */
+    public function updateTransferInfo(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'bank_cabang' => 'nullable|string|max:100',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $record = PayRecord::with('employee')->findOrFail($id);
+
+        if (array_key_exists('bank_cabang', $validated) && $record->employee) {
+            $record->employee->bank_cabang = $validated['bank_cabang'];
+            $record->employee->save();
+        }
+
+        if (array_key_exists('notes', $validated)) {
+            $record->notes = $validated['notes'];
+            $record->save();
+        }
+
+        $emp = $record->employee;
+
+        return response()->json([
+            'message' => 'Data transfer berhasil diupdate.',
+            'data' => [
+                'id' => $record->id,
+                'employee_id' => $emp?->id,
+                'bank_cabang' => $emp?->bank_cabang ?? '',
+                'notes' => $record->notes ?? '',
+            ],
+        ]);
+    }
+
+    /**
+     * Bulk update bank_cabang untuk semua employee di periode tertentu.
+     * PUT /api/v1/payroll/gaji-karyawan/bulk-update-cabang
+     */
+    public function bulkUpdateCabang(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment' => 'nullable|in:A,B',
+            'bank_cabang' => 'required|string|max:100',
+        ]);
+
+        $query = PayRecord::where('pay_period_id', $validated['period_id']);
+
+        if (!empty($validated['segment'])) {
+            $query->where('segment', $validated['segment']);
+        }
+
+        $employeeIds = $query->pluck('employee_id');
+
+        $updated = Employee::whereIn('id', $employeeIds)->update([
+            'bank_cabang' => $validated['bank_cabang'],
+        ]);
+
+        return response()->json([
+            'message' => "Cabang berhasil diupdate untuk {$updated} karyawan.",
+            'updated_count' => $updated,
         ]);
     }
 

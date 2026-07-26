@@ -27,6 +27,36 @@
           </select>
         </template>
 
+        <!-- Tanggal Transaksi -->
+        <div v-if="selectedPeriod" class="flex items-center gap-2">
+          <label class="text-xs font-medium text-(--text-muted) whitespace-nowrap">Tgl. Transaksi</label>
+          <input
+            type="date"
+            :value="tanggalPenggajian"
+            @change="updateTanggalPenggajian"
+            class="h-10 px-3 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-(--primary) focus:border-transparent outline-none transition-all cursor-pointer"
+          />
+        </div>
+
+        <!-- Bulk Fill Cabang -->
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="!selectedPeriod || (dataAllIn.length === 0 && dataPrint.length === 0)"
+          @click="bulkFillCabang"
+          title="Isi semua cabang dengan SALATIGA"
+        >
+          <template #icon-left>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <line x1="19" y1="8" x2="19" y2="14"></line>
+              <line x1="22" y1="11" x2="16" y2="11"></line>
+            </svg>
+          </template>
+          Isi Semua Cabang
+        </BaseButton>
+
         <!-- Export Button -->
         <BaseButton
           variant="success"
@@ -80,10 +110,28 @@
                 <td class="px-4 py-2 text-(--text-main) font-medium">{{ item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name }}</td>
                 <td class="px-4 py-2 text-(--text-main) font-mono">{{ item.bank_account_number }}</td>
                 <td class="px-4 py-2 text-(--text-main)">{{ item.bank_name }}</td>
-                <td class="px-4 py-2 text-(--text-muted)">{{ item.bank_cabang || '-' }}</td>
+                <td class="px-4 py-2">
+                  <input
+                    type="text"
+                    v-model="item.bank_cabang"
+                    @blur="saveCabang(item)"
+                    class="w-full px-2 py-1 text-sm border border-transparent hover:border-(--border-soft) focus:border-(--primary) rounded bg-transparent focus:bg-(--bg-card) outline-none transition-colors"
+                    placeholder="-"
+                  />
+                </td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600">{{ formatNumber(item.gaji_bersih) }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-sm text-(--text-muted)">
+                  {{ tanggalPenggajian ? formatDate(tanggalPenggajian) : '-' }}
+                </td>
+                <td class="px-4 py-2">
+                  <input
+                    type="text"
+                    v-model="item.notes"
+                    @blur="saveNotes(item)"
+                    class="w-full px-2 py-1 text-sm border border-transparent hover:border-(--border-soft) focus:border-(--primary) rounded bg-transparent focus:bg-(--bg-card) outline-none transition-colors"
+                    placeholder="-"
+                  />
+                </td>
               </tr>
             </tbody>
             <tfoot v-if="dataAllIn.length > 0">
@@ -131,10 +179,28 @@
                 <td class="px-4 py-2 text-(--text-main) font-medium">{{ item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name }}</td>
                 <td class="px-4 py-2 text-(--text-main) font-mono">{{ item.bank_account_number }}</td>
                 <td class="px-4 py-2 text-(--text-main)">{{ item.bank_name }}</td>
-                <td class="px-4 py-2 text-(--text-muted)">{{ item.bank_cabang || '-' }}</td>
+                <td class="px-4 py-2">
+                  <input
+                    type="text"
+                    v-model="item.bank_cabang"
+                    @blur="saveCabang(item)"
+                    class="w-full px-2 py-1 text-sm border border-transparent hover:border-(--border-soft) focus:border-(--primary) rounded bg-transparent focus:bg-(--bg-card) outline-none transition-colors"
+                    placeholder="-"
+                  />
+                </td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600">{{ formatNumber(item.gaji_bersih) }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-sm text-(--text-muted)">
+                  {{ tanggalPenggajian ? formatDate(tanggalPenggajian) : '-' }}
+                </td>
+                <td class="px-4 py-2">
+                  <input
+                    type="text"
+                    v-model="item.notes"
+                    @blur="saveNotes(item)"
+                    class="w-full px-2 py-1 text-sm border border-transparent hover:border-(--border-soft) focus:border-(--primary) rounded bg-transparent focus:bg-(--bg-card) outline-none transition-colors"
+                    placeholder="-"
+                  />
+                </td>
               </tr>
             </tbody>
             <tfoot v-if="dataPrint.length > 0">
@@ -194,7 +260,7 @@ import BaseCard from '../../../../Components/BaseCard.vue'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 
-const { get } = useApi()
+const { get, put } = useApi()
 const notification = useNotificationStore()
 
 const periods = ref([])
@@ -202,6 +268,7 @@ const selectedPeriodId = ref('')
 const records = ref([])
 const activeSegment = ref(null)
 const payrollConfig = ref({ sections: { A: ['GRP-ALLIN', 'GRP-SPR'], B: ['GRP-GD', 'GRP-SS', 'GRP-PS1'] } })
+const tanggalPenggajian = ref('')
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
@@ -230,6 +297,12 @@ function formatNumber(value) {
   return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return d.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })
+}
+
 async function fetchPeriods() {
   try {
     const res = await get('/api/v1/payroll/periods')
@@ -251,6 +324,7 @@ async function fetchPayrollConfig() {
 async function fetchRecords() {
   if (!selectedPeriodId.value) {
     records.value = []
+    tanggalPenggajian.value = ''
     return
   }
   try {
@@ -260,9 +334,11 @@ async function fetchRecords() {
     }
     const res = await get(url)
     records.value = res.data || []
+    tanggalPenggajian.value = res.period?.tanggal_penggajian || ''
   } catch (error) {
     console.error('Error fetching records', error)
     records.value = []
+    tanggalPenggajian.value = ''
   }
 }
 
@@ -270,6 +346,61 @@ async function onPeriodChange() {
   const period = periods.value.find(p => p.id === selectedPeriodId.value)
   activeSegment.value = period?.is_split ? 'A' : null
   await fetchRecords()
+}
+
+async function saveCabang(item) {
+  try {
+    await put(`/api/v1/payroll/gaji-karyawan/${item.id}/transfer-info`, { bank_cabang: item.bank_cabang })
+  } catch (e) {
+    notification.error('Gagal menyimpan cabang')
+    console.error(e)
+  }
+}
+
+async function saveNotes(item) {
+  try {
+    await put(`/api/v1/payroll/gaji-karyawan/${item.id}/transfer-info`, { notes: item.notes })
+  } catch (e) {
+    notification.error('Gagal menyimpan keterangan')
+    console.error(e)
+  }
+}
+
+async function updateTanggalPenggajian(e) {
+  const value = e.target.value
+  if (!selectedPeriodId.value) return
+  try {
+    await put(`/api/v1/payroll/periods/${selectedPeriodId.value}`, { tanggal_penggajian: value || null })
+    tanggalPenggajian.value = value
+    notification.success('Tanggal transaksi berhasil diupdate')
+  } catch (e) {
+    notification.error('Gagal mengupdate tanggal transaksi')
+    console.error(e)
+  }
+}
+
+async function bulkFillCabang() {
+  if (!selectedPeriodId.value) return
+  if (!confirm('Isi semua cabang dengan SALATIGA?')) return
+
+  try {
+    const payload = {
+      period_id: selectedPeriodId.value,
+      bank_cabang: 'SALATIGA',
+    }
+    if (activeSegment.value) {
+      payload.segment = activeSegment.value
+    }
+
+    const res = await put('/api/v1/payroll/gaji-karyawan/bulk-update-cabang', payload)
+    notification.success(res.message || 'Cabang berhasil diupdate')
+
+    // Update local data
+    records.value.forEach(r => { r.bank_cabang = 'SALATIGA' })
+  } catch (e) {
+    notification.error('Gagal update cabang')
+    console.error(e)
+  }
 }
 
 function addSheetWithStyle(workbook, data, total, title, sheetName) {
