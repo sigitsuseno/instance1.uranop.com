@@ -170,6 +170,7 @@ class BpjsReportExport implements FromArray, WithEvents
             $sheet->setCellValue("B{$row}", $r['employee']['name'] ?? '-');
             $sheet->setCellValue("C{$row}", $r['join_year'] ?? '-');
             $sheet->setCellValue("D{$row}", $r['masa_kerja'] ?? 0);
+            $sheet->getStyle("D{$row}")->getNumberFormat()->setFormatCode('#,##0');
             $sheet->setCellValue("E{$row}", (float)($r['gaji_pokok'] ?? 0));
             $sheet->setCellValue("F{$row}", (float)($r['tj_masa_kerja'] ?? 0));
             $sheet->setCellValue("G{$row}", (float)($r['tunjangan'] ?? 0));
@@ -256,7 +257,7 @@ class BpjsReportExport implements FromArray, WithEvents
             'A' => 'No',
             'B' => 'NAMA KARYAWAN',
             'C' => "THN\nMASUK",
-            'D' => "MASA\nKERJA",
+            'D' => "MASA\nKERJA\n(bln)",
             'E' => "GAJI\nPOKOK",
             'F' => "TUNJ.\nMK",
             'G' => 'TUNJANGAN',

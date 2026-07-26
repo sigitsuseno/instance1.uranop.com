@@ -113,7 +113,42 @@ class UangMakanReportController extends Controller
         $result = $this->buildBulananData($request);
 
         $employees = $result['data']->map(function ($item) {
-            $counts = ['2' => 0, 'FULL' => 0, 'HALF' => 0, 'L' => 0];
+            // Determine employee eligibility based on employment_status and group codes
+            $empStatus = strtoupper($item['employment_status'] ?? '');
+            $groupCodes = $item['group_codes'] ?? [];
+
+            $isKrySpc = str_contains($empStatus, 'SPC');
+            $isKryTkn = str_contains($empStatus, 'TKN');
+
+            $inSpr = in_array('GRP-SPR', $groupCodes);
+            $inPs1 = in_array('GRP-PS1', $groupCodes);
+            $inSs  = in_array('GRP-SS', $groupCodes);
+
+            // Eligibility flags
+            if ($isKrySpc) {
+                $getsUangMakan = false;
+                $getsOvertime  = true;
+                $getsInsentif  = false;
+            } elseif ($isKryTkn) {
+                $getsUangMakan = true;
+                $getsOvertime  = false;
+                $getsInsentif  = false;
+            } elseif ($inSpr) {
+                $getsUangMakan = true;
+                $getsOvertime  = true;
+                $getsInsentif  = true;
+            } elseif ($inPs1 || $inSs) {
+                $getsUangMakan = false;
+                $getsOvertime  = true;
+                $getsInsentif  = false;
+            } else {
+                // Default: GRP-JKT, GRP-ALLIN, GRP-GD
+                $getsUangMakan = true;
+                $getsOvertime  = false;
+                $getsInsentif  = false;
+            }
+
+            $counts = ['UM' => 0, '2' => 0, 'FULL' => 0, 'HALF' => 0, 'FULL_D' => 0];
             $nominals = [
                 'uang_makan'     => 0,
                 'lembur_sabtu'   => 0,
@@ -130,22 +165,34 @@ class UangMakanReportController extends Controller
                 $lmVal     = $day['lm'] ?? '';
                 $nominal   = (float)($day['nominal'] ?? 0);
 
-                if ($lemburVal === '2') {
-                    $counts['2']++;
-                    $nominals['lembur_sabtu'] += $nominal;
-                } elseif ($lemburVal === 'FULL') {
-                    $counts['FULL']++;
-                    $nominals['lembur_sabtu'] += $nominal;
-                } elseif ($lemburVal === 'UM') {
+                // Overtime counts & nominals — only for eligible employees
+                if ($getsOvertime) {
+                    if ($lemburVal === '2') {
+                        $counts['2']++;
+                        $nominals['lembur_sabtu'] += $nominal;
+                    } elseif ($lemburVal === 'FULL') {
+                        $counts['FULL']++;
+                        $nominals['lembur_sabtu'] += $nominal;
+                    }
+
+                    if ($lmVal === 'HALF') {
+                        $counts['HALF']++;
+                        $nominals['lembur_minggu'] += $nominal;
+                    } elseif ($lmVal === 'FULL') {
+                        $counts['FULL_D']++;
+                        $nominals['lembur_minggu'] += $nominal;
+                    }
+                }
+
+                // Uang makan — only for eligible employees
+                if ($getsUangMakan && $lemburVal === 'UM') {
+                    $counts['UM']++;
                     $nominals['uang_makan'] += $nominal;
                 }
 
-                if ($lmVal === 'HALF') {
-                    $counts['HALF']++;
-                    $nominals['lembur_minggu'] += $nominal;
-                } elseif ($lmVal === 'FULL') {
-                    $counts['L']++;
-                    $nominals['lembur_minggu'] += $nominal;
+                // Incentive — only for eligible employees (e.g. GRP-SPR)
+                if ($getsInsentif) {
+                    // Incentive logic here if needed
                 }
             }
 
@@ -506,6 +553,8 @@ class UangMakanReportController extends Controller
                 'tunjangan'           => $tunjangan,
                 'upah_lembur_per_jam' => $hourlyRate,
                 'group_name'          => $groupName,
+                'employment_status'   => $employee->employment_status ?? '',
+                'group_codes'         => $employee->groups->pluck('reference_code')->toArray(),
                 'days'                => $days,
             ];
         })->values();
@@ -741,20 +790,20 @@ class UangMakanReportController extends Controller
             $kode = 'L';
 
             if ($isMingguHoliday) {
-                // Minggu / Libur — Upah/Hari tetap 0
+                // Minggu / Libur — Upah/Hari tetap 0, no minimum threshold
                 if ($lembur >= 8) {
                     $nominal = $rates['minggu_full'];
                     $lm = 'FULL';
-                } elseif ($lembur >= 4) {
+                } elseif ($lembur > 0) {
                     $nominal = $rates['minggu_half'];
                     $lm = 'HALF';
                 }
             } elseif ($dayOfWeek == 6) {
-                // Sabtu
+                // Sabtu — no minimum threshold
                 if ($lembur >= 4) {
                     $nominal = $rates['sabtu_full'];
                     $lemburStr = 'FULL';
-                } elseif ($lembur >= 2) {
+                } elseif ($lembur > 0) {
                     $nominal = $rates['sabtu_dua'];
                     $lemburStr = '2';
                 }
@@ -983,8 +1032,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
     {
         $rows = '';
         $i = 0;
-        $totalDua = $totalFull = $totalHalf = $totalL = 0;
-        $totalUm = $totalLbrSabtu = $totalLbrMinggu = 0;
+        $totalDua = $totalFull = $totalHalf = $totalFullD = $totalUm = 0;
+        $totalUmNominal = $totalLbrSabtu = $totalLbrMinggu = 0;
         $totalInsentif = $totalPblt = $totalRevisi = 0;
         $grandTotal = 0;
 
@@ -997,8 +1046,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $totalDua   += $c['2'] ?? 0;
             $totalFull  += $c['FULL'] ?? 0;
             $totalHalf  += $c['HALF'] ?? 0;
-            $totalL     += $c['L'] ?? 0;
-            $totalUm    += $n['uang_makan'] ?? 0;
+            $totalFullD     += $c['FULL_D'] ?? 0;
+            $totalUm    += $c['UM'] ?? 0;
+            $totalUmNominal    += $n['uang_makan'] ?? 0;
             $totalLbrSabtu  += $n['lembur_sabtu'] ?? 0;
             $totalLbrMinggu += $n['lembur_minggu'] ?? 0;
             $totalInsentif   += $n['insentif'] ?? 0;
@@ -1006,10 +1056,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $totalRevisi     += $n['revisi'] ?? 0;
             $grandTotal      += $t;
 
+            $umCnt = ($c['UM'] ?? 0) ?: '-';
             $dua   = ($c['2'] ?? 0) ?: '-';
             $full  = ($c['FULL'] ?? 0) ?: '-';
             $half  = ($c['HALF'] ?? 0) ?: '-';
-            $l     = ($c['L'] ?? 0) ?: '-';
+            $fulld = ($c['FULL_D'] ?? 0) ?: '-';
             $um    = ($n['uang_makan'] ?? 0) ? number_format($n['uang_makan'], 0, ',', '.') : '-';
             $ls    = ($n['lembur_sabtu'] ?? 0) ? number_format($n['lembur_sabtu'], 0, ',', '.') : '-';
             $lm    = ($n['lembur_minggu'] ?? 0) ? number_format($n['lembur_minggu'], 0, ',', '.') : '-';
@@ -1023,10 +1074,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 <td>{$item['name']}</td>
                 <td class='text-center'>" . ($item['group_name'] ?? '-') . "</td>
                 <td>" . ($item['jabatan'] ?? '-') . "</td>
+                <td class='text-center'>{$umCnt}</td>
                 <td class='text-center'>{$dua}</td>
                 <td class='text-center'>{$full}</td>
                 <td class='text-center'>{$half}</td>
-                <td class='text-center'>{$l}</td>
+                <td class='text-center'>{$fulld}</td>
                 <td class='text-right'>{$um}</td>
                 <td class='text-right'>{$ls}</td>
                 <td class='text-right'>{$lm}</td>
@@ -1041,11 +1093,12 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
         $totalRow = "<tr style='background:#f3f4f6;font-weight:bold;border-top:2px solid #6366f1'>
             <td colspan='4' class='text-right'>TOTAL</td>
+            <td class='text-center'>{$totalUm}</td>
             <td class='text-center'>{$totalDua}</td>
             <td class='text-center'>{$totalFull}</td>
             <td class='text-center'>{$totalHalf}</td>
-            <td class='text-center'>{$totalL}</td>
-            <td class='text-right'>" . number_format($totalUm, 0, ',', '.') . "</td>
+            <td class='text-center'>{$totalFullD}</td>
+            <td class='text-right'>" . number_format($totalUmNominal, 0, ',', '.') . "</td>
             <td class='text-right'>" . number_format($totalLbrSabtu, 0, ',', '.') . "</td>
             <td class='text-right'>" . number_format($totalLbrMinggu, 0, ',', '.') . "</td>
             <td class='text-right'>" . number_format($totalInsentif, 0, ',', '.') . "</td>
@@ -1073,7 +1126,7 @@ tr:nth-child(even){background:#f9fafb}
 <thead>
 <tr>
 <th rowspan="2">No</th><th rowspan="2">Nama</th><th rowspan="2">Group</th><th rowspan="2">Jabatan</th>
-<th colspan="4" style="background:#fef3c7">LEMBUR SABTU</th>
+<th colspan="5" style="background:#fef3c7">LEMBUR</th>
 <th rowspan="2" style="background:#dcfce7">Uang Makan</th>
 <th rowspan="2" style="background:#dbeafe">Lembur<br>Sabtu</th>
 <th rowspan="2" style="background:#fee2e2">Lembur<br>Minggu</th>
@@ -1081,8 +1134,9 @@ tr:nth-child(even){background:#f9fafb}
 <th rowspan="2" style="background:#e0e7ff">TOTAL</th>
 </tr>
 <tr>
+<th style="background:#fef3c7">UM</th>
 <th style="background:#fef3c7">DUA</th><th style="background:#fef3c7">FULL</th>
-<th style="background:#fef3c7">1/2 HK</th><th style="background:#fef3c7">L</th>
+<th style="background:#fef3c7">1/2 HK</th><th style="background:#fef3c7">FULL D</th>
 </tr>
 </thead>
 <tbody>' . $rows . $totalRow . '</tbody>

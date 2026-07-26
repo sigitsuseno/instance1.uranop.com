@@ -511,7 +511,7 @@ class SupervisorBpjsMembershipController extends Controller
 
             // Masa kerja (bulan)
             $masaKerja = $emp->join_date
-                ? $emp->join_date->diffInMonths($payPeriod->end_date)
+                ? (int) $emp->join_date->diffInMonths($payPeriod->end_date)
                 : 0;
 
             // Group BPJS name
@@ -644,7 +644,7 @@ class SupervisorBpjsMembershipController extends Controller
             $dasar     = $gajiPokok + $tjMk + $tunjangan;
 
             $masaKerja = $emp->join_date
-                ? $emp->join_date->diffInMonths($payPeriod->end_date)
+                ? (int) $emp->join_date->diffInMonths($payPeriod->end_date)
                 : 0;
 
             $bpjsGroup = $emp->groups()

@@ -96,4 +96,62 @@ A. di AttendanceImportService
       c. sch_employee_shift_roster->external_code != "L"
       c.1 jika lembur === 4 - check_in = $check_in - check_out = $check_out - actual_in = $schedul_in - actual_out = $schedul_out
 
-jo, buat tabel baru karyawan_titipan yang isi kolomnya : id, uuid, nama, employee_code, start_date, end_date, status
+jo, buat tabel baru employee_overtime
+
+kolomnya :
+
+1. id
+2. uuid
+3. autolog_id
+4. lembur,
+5. lembur_hitung,
+6. um_code
+7. um_nominal
+8. insentif
+9. komponen (json)
+
+gini aja, saat buka tombol update data itu memunculkan modal, isinya
+
+1. dropdown pay_period,
+2. field $empTanpaSabtuMingguHoliday (isinya id karyawan)
+3. pengaturan spesifik.
+
+4. GRP-JKT
+   a. hari senin sampai jumat
+   att_record->lembur & lembur_count => employee_overtime
+   b. hari sabtu
+   c. hari minggu dan holiday.
+5. GRP-ALLIN, GRP-GD
+   a. hari senin sampai jumat
+   b. hari sabtu
+   c. hari minggu dan holiday.
+6. GRP-SPR
+7. GRP-PS1, GRP-SS,
+   (dua group ini (KRY-TKN,) sifatnya overwrite jadi harus dikerjakan terakhir)
+8. KRY-TKN
+9. KRY-SPC
+
+masih salah itu, menghitung ada berapa jumlah uang makan dalam 1 periode, (contoh dalam satu periode di setiap hari senin sampai jumat lembur lebih dari 2 jam = 12 hari maka di um di tulis 12 hari)
+
+1. UM = jam lembur setiap senin sampai jumat lebih dari 2 jam.
+2. 2 = jam lembur setiap sabtu lebih dari 2 - 3 jam,
+3. FULL (Sab) = jam lembur setiap sabtu lebih dari 4 jam,
+4. 1/2 HK = jam lembur hari minggu/holiday lebih dari 4 jam
+5. L (tolong ganti jadi FULL D) = jam lembur hari minggu/holida lebih dari 8 jam.
+
+** yang dapat uang lembur tidak ada batasan minimal **
+
+kemudian
+
+1. GRP-JKT
+   hanya dapat UANG MAKAN (kecuali yang 1 3 orang yang masuk KRY-SPC, dan 2 orang KRY-TKN)
+2. GRP-ALLIN, GRP-GD
+   hanya dapat UANG MAKAN (kecuali yang 1 1 orang yang masuk KRY-SPC, dan 1 orang KRY-TKN)
+3. GRP-SPR
+   dapat uang lembur dan insentif
+4. GRP-PS1, GRP-SS,
+   hanya dapat uang lembur
+5. KRY-TKN
+   uang makan hitungan khusus
+6. KRY-SPC
+   hanya dapat uang lembur

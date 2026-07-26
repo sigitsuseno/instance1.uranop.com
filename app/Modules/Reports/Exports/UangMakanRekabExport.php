@@ -20,9 +20,9 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
     protected $label;
     protected $rowNumber = 0;
 
-    // Fixed 14 columns: No, Nama, Group, Jabatan, 2, FULL, HALF, L, UM, Lbr Sabtu, Lbr Minggu, Insentif, PBLT, Revisi, TOTAL
-    protected const COL_COUNT = 15;
-    protected const LAST_COL = 'O';
+    // Fixed 16 columns: No, Nama, Group, Jabatan, UM, 2, FULL, HALF, L, UM, Lbr Sabtu, Lbr Minggu, Insentif, PBLT, Revisi, TOTAL
+    protected const COL_COUNT = 16;
+    protected const LAST_COL = 'P';
 
     public function __construct($data, $label)
     {
@@ -46,10 +46,11 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
             $row['name'] ?? '',
             $row['group_name'] ?? '-',
             $row['jabatan'] ?? '-',
+            $c['UM'] ?? 0,
             $c['2'] ?? 0,
             $c['FULL'] ?? 0,
             $c['HALF'] ?? 0,
-            $c['L'] ?? 0,
+            $c['FULL_D'] ?? 0,
             $n['uang_makan'] ?? 0,
             $n['lembur_sabtu'] ?? 0,
             $n['lembur_minggu'] ?? 0,
@@ -67,14 +68,14 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
 
         $row3 = [
             'No', 'Nama', 'Group', 'Jabatan',
-            'LEMBUR SABTU', '', '', '',
+            'LEMBUR', '', '', '', '',
             'UANG MAKAN', 'LEMBUR SABTU', 'LEMBUR MINGGU',
             'INSENTIF', 'PBLT', 'REVISI', 'TOTAL',
         ];
 
         $row4 = [
             '', '', '', '',
-            '2', 'FULL', '1/2 HK', 'L',
+            'UM', '2', 'FULL', '1/2 HK', 'FULL D',
             '', '', '', '', '', '', '',
         ];
 
@@ -88,17 +89,18 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
             'B' => 30,  // Nama
             'C' => 14,  // Group
             'D' => 22,  // Jabatan
-            'E' => 8,   // 2
-            'F' => 8,   // FULL
-            'G' => 8,   // 1/2 HK
-            'H' => 8,   // L
-            'I' => 16,  // Uang Makan
-            'J' => 16,  // Lembur Sabtu
-            'K' => 16,  // Lembur Minggu
-            'L' => 14,  // Insentif
-            'M' => 14,  // PBLT
-            'N' => 14,  // Revisi
-            'O' => 16,  // TOTAL
+            'E' => 8,   // UM
+            'F' => 8,   // 2
+            'G' => 8,   // FULL
+            'H' => 8,   // 1/2 HK
+            'I' => 8,   // L
+            'J' => 16,  // Uang Makan
+            'K' => 16,  // Lembur Sabtu
+            'L' => 16,  // Lembur Minggu
+            'M' => 14,  // Insentif
+            'N' => 14,  // PBLT
+            'O' => 14,  // Revisi
+            'P' => 16,  // TOTAL
         ];
     }
 
@@ -124,8 +126,8 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
                 $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-                // Merge "LEMBUR SABTU" header in row 3 (E3:H3)
-                $sheet->mergeCells('E3:H3');
+                // Merge "LEMBUR" header in row 3 (E3:I3)
+                $sheet->mergeCells('E3:I3');
 
                 // Style row 3 & 4 headers
                 $sheet->getStyle("A3:{$lastCol}4")->getFont()->setBold(true)->setSize(9);
@@ -135,18 +137,18 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                     ->setVertical(Alignment::VERTICAL_CENTER);
 
-                // "LEMBUR SABTU" header bg amber
-                $sheet->getStyle('E3:H4')->getFill()
+                // "LEMBUR" header bg amber
+                $sheet->getStyle('E3:J4')->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEF3C7');
 
                 // Nominal headers bg green/blue/red
-                $sheet->getStyle('I3:I4')->getFill()
-                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDCFCE7');
                 $sheet->getStyle('J3:J4')->getFill()
-                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDCFCE7');
                 $sheet->getStyle('K3:K4')->getFill()
+                    ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFDBEAFE');
+                $sheet->getStyle('L3:L4')->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFFEE2E2');
-                $sheet->getStyle('O3:O4')->getFill()
+                $sheet->getStyle('P3:P4')->getFill()
                     ->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB('FFE0E7FF');
 
                 // Borders all
@@ -154,14 +156,14 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
                     ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
 
                 // Number format for nominal columns
-                $nominalCols = ['I', 'J', 'K', 'L', 'M', 'N', 'O'];
+                $nominalCols = ['J', 'K', 'L', 'M', 'N', 'O', 'P'];
                 foreach ($nominalCols as $col) {
                     $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
                         ->getNumberFormat()->setFormatCode('#,##0');
                 }
 
                 // Center alignment
-                $centerCols = ['A', 'C', 'E', 'F', 'G', 'H'];
+                $centerCols = ['A', 'C', 'E', 'F', 'G', 'H', 'I'];
                 foreach ($centerCols as $col) {
                     $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
                         ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
@@ -181,7 +183,7 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
                 $sheet->getStyle("A{$totalRow}:D{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                 // SUM formulas for each column
-                $countCols = ['E', 'F', 'G', 'H'];
+                $countCols = ['E', 'F', 'G', 'H', 'I'];
                 foreach ($countCols as $col) {
                     $sheet->setCellValue("{$col}{$totalRow}", "=SUM({$col}{$dataStartRow}:{$col}{$lastRow})");
                     $sheet->getStyle("{$col}{$totalRow}")->getFont()->setBold(true);

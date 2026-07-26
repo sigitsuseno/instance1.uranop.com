@@ -108,7 +108,7 @@
                     <th class="px-2 py-1.5 text-center font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">No</th>
                     <th class="px-2 py-1.5 text-left font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">NAMA KARYAWAN</th>
                     <th class="px-2 py-1.5 text-center font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">THN<br/>MASUK</th>
-                    <th class="px-2 py-1.5 text-center font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">MASA<br/>KERJA</th>
+                    <th class="px-2 py-1.5 text-center font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">MASA<br/>KERJA<br/><span class="text-[9px]">(bln)</span></th>
                     <th class="px-2 py-1.5 text-right font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">GAJI<br/>POKOK</th>
                     <th class="px-2 py-1.5 text-right font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">TUNJ.<br/>MK</th>
                     <th class="px-2 py-1.5 text-right font-semibold text-(--text-muted) border-r border-(--border-soft)" rowspan="2">TUNJANGAN</th>
@@ -150,7 +150,7 @@
                       <div class="text-[10px] text-(--text-muted)">{{ r.employee?.nip || r.employee?.employee_code }}</div>
                     </td>
                     <td class="px-2 py-1.5 text-center border-r border-(--border-soft) text-(--text-muted)">{{ r.join_year || '-' }}</td>
-                    <td class="px-2 py-1.5 text-center border-r border-(--border-soft) text-(--text-muted)">{{ r.masa_kerja || 0 }}</td>
+                    <td class="px-2 py-1.5 text-center border-r border-(--border-soft) text-(--text-muted)">{{ fmtMasaKerja(r.masa_kerja) }}</td>
                     <td class="px-2 py-1.5 text-right border-r border-(--border-soft)">{{ fmtNum(r.gaji_pokok) }}</td>
                     <td class="px-2 py-1.5 text-right border-r border-(--border-soft)">{{ fmtNum(r.tj_masa_kerja) }}</td>
                     <td class="px-2 py-1.5 text-right border-r border-(--border-soft)">{{ fmtNum(r.tunjangan) }}</td>
@@ -391,6 +391,11 @@ function sumTotalKs(recs) {
 function fmtNum(v) {
   if (v === null || v === undefined || v === 0) return '-'
   return new Intl.NumberFormat('id-ID').format(Math.round(v))
+}
+
+function fmtMasaKerja(v) {
+  if (v === null || v === undefined || v === '') return '0'
+  return Math.round(Number(v))
 }
 
 function fmt(v) {
