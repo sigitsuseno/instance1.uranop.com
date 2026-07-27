@@ -270,7 +270,7 @@ class PayrollReportController extends Controller
                 'no_id' => $emp->employee_id,
                 'name' => $emp->name,
                 'bagian' => $emp->position->name ?? '-',
-                'gender' => $emp->gender === 'male' ? 'L' : ($emp->gender === 'female' ? 'P' : '-'),
+                'gender' => $emp->gender,
                 'join_date' => $emp->join_date ? Carbon::parse($emp->join_date)->format('d/m/Y') : '-',
                 'masa_kerja' => $record->hari_kerja,
                 'status' => $emp->marital_status === 'single' ? 'TK' : 'K',
@@ -357,8 +357,8 @@ class PayrollReportController extends Controller
 
         $data = [];
         foreach ($grouped as $position => $groupRecords) {
-            $maleCount = $groupRecords->filter(fn($r) => $r->employee->gender === 'male')->count();
-            $femaleCount = $groupRecords->filter(fn($r) => $r->employee->gender === 'female')->count();
+            $maleCount = $groupRecords->filter(fn($r) => $r->employee->gender === 'L')->count();
+            $femaleCount = $groupRecords->filter(fn($r) => $r->employee->gender === 'P')->count();
 
             $data[] = [
                 'bagian' => $position,
