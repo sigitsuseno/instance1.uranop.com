@@ -178,7 +178,7 @@ class RekapGajiController extends Controller
 
             $payRecord = $payRecords->get($emp->id);
             $gajiKotor = $payRecord ? (float) $payRecord->gaji_kotor : 0;
-            $um        = (float) ($overtimeSums->get($emp->id) ?? 0);
+            $um        = (float) (in_array('GRP-PS1', $groupCodes) || in_array('GRP-SS', $groupCodes) ? 0 : ($overtimeSums->get($emp->id) ?? 0));
             $totalGaji = $gajiKotor + $um;
 
             return [

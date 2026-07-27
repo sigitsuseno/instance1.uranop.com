@@ -65,7 +65,9 @@
       :show="showUpdateModal"
       :periods="periods"
       :allEmployees="allEmployees"
+      :allinEmployees="allinEmployees"
       :initialEmpTanpa="initialEmpTanpa"
+      :initialEmpTanpaAllin="initialEmpTanpaAllin"
       :initialPositionRules="initialPositionRules"
       :initialTechnicianRules="initialTechnicianRules"
       @close="showUpdateModal = false"
@@ -119,6 +121,7 @@ const periods = ref([])
 
 // Data awal untuk modal UpdateData (dari config)
 const initialEmpTanpa = ref([])
+const initialEmpTanpaAllin = ref([])
 const initialPositionRules = ref(null)
 const initialTechnicianRules = ref(null)
 
@@ -176,6 +179,7 @@ onMounted(async () => {
     // Load initial config untuk modal UpdateData
     const cfg = configRes.config || configRes.data?.config || {}
     initialEmpTanpa.value = cfg.jkt_no_overtime_employees || []
+    initialEmpTanpaAllin.value = cfg.allin_no_overtime_employees || []
     // Position rules dari config (jika ada), kalau tidak pakai null → modal pakai default
     if (cfg.KABAG || cfg.KASHIFT || cfg['ALL IN']) {
       initialPositionRules.value = {

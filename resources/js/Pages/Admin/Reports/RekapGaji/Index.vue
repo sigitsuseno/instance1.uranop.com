@@ -211,7 +211,7 @@ const totals = computed(() => {
 
 function fmtNum(v, force) {
   if (!force && (v === null || v === undefined || v === 0)) return '-'
-  return new Intl.NumberFormat('id-ID').format(Math.round(v || 0))
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(v || 0)
 }
 
 // ─── API Calls ───

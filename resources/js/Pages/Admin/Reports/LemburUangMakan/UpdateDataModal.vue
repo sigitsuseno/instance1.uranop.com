@@ -19,13 +19,13 @@
         </select>
       </div>
 
-      <!-- 2. Karyawan Tanpa Sabtu/Minggu/Holiday -->
+      <!-- 2. Karyawan Tanpa Sabtu/Minggu/Holiday — GRP-JKT -->
       <div>
         <label class="block font-medium text-(--text-main) mb-1">
-          Karyawan TANPA Uang Lembur Sabtu / Minggu / Holiday
+          A. Karyawan GRP-JKT TANPA Uang Lembur Sabtu / Minggu / Holiday
         </label>
         <p class="text-xs text-(--text-muted) mb-2">
-          Hanya berlaku untuk <strong>GRP-JKT</strong>. Karyawan yang dipilih tidak akan mendapat uang lembur di hari Sabtu, Minggu, dan Holiday.
+          Karyawan <strong>GRP-JKT</strong> yang dipilih tidak akan mendapat uang lembur di hari Sabtu, Minggu, dan Holiday.
         </p>
 
         <!-- Search -->
@@ -65,6 +65,45 @@
           <div v-if="filteredEmployees.length === 0" class="px-3 py-2 text-xs text-(--text-muted)">
             Tidak ada karyawan yang cocok.
           </div>
+        </div>
+      </div>
+
+      <!-- 2b. Karyawan Tanpa Sabtu/Minggu/Holiday — GRP-ALLIN -->
+      <div>
+        <label class="block font-medium text-(--text-main) mb-1">
+          B. Karyawan GRP-ALLIN / GRP-GD TANPA Uang Lembur Sabtu / Minggu / Holiday
+        </label>
+        <p class="text-xs text-(--text-muted) mb-2">
+          Karyawan <strong>GRP-ALLIN / GRP-GD</strong> yang dipilih tidak akan mendapat uang lembur di hari Sabtu, Minggu, dan Holiday.
+        </p>
+
+        <div class="text-xs text-(--text-muted) mb-2">
+          Terpilih: <strong>{{ form.emp_tanpa_allin_sabtu_minggu_holiday.length }}</strong> karyawan
+          <button
+            v-if="form.emp_tanpa_allin_sabtu_minggu_holiday.length > 0"
+            @click="form.emp_tanpa_allin_sabtu_minggu_holiday = []"
+            class="ml-2 text-red-500 hover:underline"
+          >Hapus semua</button>
+        </div>
+
+        <div class="border border-(--border-soft) rounded-lg max-h-48 overflow-y-auto">
+          <div v-if="allinEmployees.length === 0" class="px-3 py-2 text-xs text-(--text-muted) italic">
+            Tidak ada karyawan GRP-ALLIN / GRP-GD / GRP-SPR.
+          </div>
+          <label
+            v-for="emp in allinEmployees"
+            :key="emp.id"
+            class="flex items-center gap-2 px-3 py-1.5 hover:bg-(--bg-hover) cursor-pointer text-xs"
+          >
+            <input
+              type="checkbox"
+              :checked="form.emp_tanpa_allin_sabtu_minggu_holiday.includes(emp.id)"
+              @change="toggleAllinEmployee(emp.id)"
+              class="rounded"
+            />
+            <span>{{ emp.name }}</span>
+            <span class="text-(--text-muted) ml-auto">ID: {{ emp.id }}</span>
+          </label>
         </div>
       </div>
 
@@ -166,7 +205,9 @@ const props = defineProps({
   show: { type: Boolean, default: false },
   periods: { type: Array, default: () => [] },
   allEmployees: { type: Array, default: () => [] },
+  allinEmployees: { type: Array, default: () => [] },
   initialEmpTanpa: { type: Array, default: () => [] },
+  initialEmpTanpaAllin: { type: Array, default: () => [] },
   initialPositionRules: { type: Object, default: null },
   initialTechnicianRules: { type: Object, default: null },
 })
@@ -195,6 +236,7 @@ const defaultTechnicianRules = { weekday: 15000, saturday: 100000, holiday: 2000
 const form = reactive({
   period_id: null,
   emp_tanpa_sabtu_minggu_holiday: [],
+  emp_tanpa_allin_sabtu_minggu_holiday: [],
   position_rules: { ...JSON.parse(JSON.stringify(defaultPositionRules)) },
   technician_rules: { ...defaultTechnicianRules },
 })
@@ -218,6 +260,15 @@ function toggleEmployee(id) {
   }
 }
 
+function toggleAllinEmployee(id) {
+  const idx = form.emp_tanpa_allin_sabtu_minggu_holiday.indexOf(id)
+  if (idx >= 0) {
+    form.emp_tanpa_allin_sabtu_minggu_holiday.splice(idx, 1)
+  } else {
+    form.emp_tanpa_allin_sabtu_minggu_holiday.push(id)
+  }
+}
+
 function formatPeriodRange(start, end) {
   if (!start || !end) return ''
   const fmt = new Intl.DateTimeFormat('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
@@ -228,6 +279,7 @@ function initForm() {
   employeeSearch.value = ''
   form.period_id = null
   form.emp_tanpa_sabtu_minggu_holiday = [...props.initialEmpTanpa]
+  form.emp_tanpa_allin_sabtu_minggu_holiday = [...props.initialEmpTanpaAllin]
   form.position_rules = props.initialPositionRules
     ? { ...JSON.parse(JSON.stringify(props.initialPositionRules)) }
     : { ...JSON.parse(JSON.stringify(defaultPositionRules)) }
@@ -256,6 +308,7 @@ async function submit() {
     const res = await post('/api/v1/reports/lembur/update-data', {
       period_id: form.period_id,
       emp_tanpa_sabtu_minggu_holiday: form.emp_tanpa_sabtu_minggu_holiday,
+      emp_tanpa_allin_sabtu_minggu_holiday: form.emp_tanpa_allin_sabtu_minggu_holiday,
       position_rules: form.position_rules,
       technician_rules: form.technician_rules,
     })

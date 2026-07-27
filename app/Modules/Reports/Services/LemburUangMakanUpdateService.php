@@ -25,7 +25,7 @@ class LemburUangMakanUpdateService
      *   6. KRY-SPC   — lembur (overwrite, overtime_count/lm_count, pake gaji_pokok/173)
      *
      * @param int   $periodId
-     * @param array $params  { emp_tanpa_sabtu_minggu_holiday, position_rules, technician_rules }
+     * @param array $params  { emp_tanpa_sabtu_minggu_holiday, emp_tanpa_allin_sabtu_minggu_holiday, position_rules, technician_rules }
      */
     public function update(int $periodId, array $params = []): array
     {
@@ -40,6 +40,7 @@ class LemburUangMakanUpdateService
 
         // ── Parameter dari modal ────────────────────────────────────
         $empTanpaSabtuMingguHoliday = $params['emp_tanpa_sabtu_minggu_holiday'] ?? [];
+        $empTanpaAllinSabtuMingguHoliday = $params['emp_tanpa_allin_sabtu_minggu_holiday'] ?? [];
         $positionRules              = $params['position_rules'] ?? [];
         $technicianRules            = $params['technician_rules'] ?? [];
 
@@ -154,7 +155,8 @@ class LemburUangMakanUpdateService
                 } elseif ($isAllIn) {
                     $record = $this->applyAllInRules(
                         $ovtHours, $lmHours, $dayOfWeek, $isHoliday, $isMingguHoliday,
-                        $status, $positionRules, $umGroupName
+                        $status, $positionRules, $umGroupName,
+                        $empTanpaAllinSabtuMingguHoliday, $employee->id
                     );
                 } elseif ($isSpr) {
                     $record = $this->applySprRules(
@@ -170,7 +172,8 @@ class LemburUangMakanUpdateService
                     // Fallback: treat as AllIn
                     $record = $this->applyAllInRules(
                         $ovtHours, $lmHours, $dayOfWeek, $isHoliday, $isMingguHoliday,
-                        $status, $positionRules, $umGroupName
+                        $status, $positionRules, $umGroupName,
+                        $empTanpaAllinSabtuMingguHoliday, $employee->id
                     );
                 }
 
@@ -243,6 +246,10 @@ class LemburUangMakanUpdateService
             }
         } elseif ($dayOfWeek == 6) {
             // b. Sabtu
+            // Cek exclusion: karyawan yang dipilih → tidak dapat uang lembur Sabtu
+            if (in_array($employeeId, $empTanpa)) {
+                return $this->emptyRecord($status);
+            }
             if ($ovtHours >= 4) {
                 $record['lembur']  = $ovtHours;
                 $record['um_code'] = 'FULL';
@@ -279,7 +286,8 @@ class LemburUangMakanUpdateService
     private function applyAllInRules(
         float $ovtHours, float $lmHours,
         int $dayOfWeek, bool $isHoliday, bool $isMingguHoliday,
-        string $status, array $positionRules, string $umGroupName
+        string $status, array $positionRules, string $umGroupName,
+        array $empTanpa = [], int $employeeId = 0
     ): array {
         $record = $this->emptyRecord($status);
 
@@ -292,6 +300,10 @@ class LemburUangMakanUpdateService
             }
         } elseif ($dayOfWeek == 6) {
             // b. Sabtu
+            // Cek exclusion: karyawan yang dipilih → tidak dapat uang lembur Sabtu
+            if (in_array($employeeId, $empTanpa)) {
+                return $this->emptyRecord($status);
+            }
             if ($ovtHours >= 4) {
                 $record['lembur']  = $ovtHours;
                 $record['um_code'] = 'FULL';
@@ -302,7 +314,11 @@ class LemburUangMakanUpdateService
                 $record['nominal'] = $this->getPositionRate($umGroupName, $positionRules, 'sabtu_dua');
             }
         } else {
-            // c. Minggu & Holiday (tanpa pengecualian)
+            // c. Minggu & Holiday
+            // Cek exclusion: karyawan yang dipilih → tidak dapat uang lembur Minggu/Holiday
+            if (in_array($employeeId, $empTanpa)) {
+                return $this->emptyRecord($status);
+            }
             if ($lmHours >= 8) {
                 $record['lembur']  = $lmHours;
                 $record['um_code'] = 'FULL';

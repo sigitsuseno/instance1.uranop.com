@@ -1216,9 +1216,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         ]);
 
         $params = [
-            'emp_tanpa_sabtu_minggu_holiday' => $request->input('emp_tanpa_sabtu_minggu_holiday', []),
-            'position_rules'                 => $request->input('position_rules', []),
-            'technician_rules'               => $request->input('technician_rules', []),
+            'emp_tanpa_sabtu_minggu_holiday'       => $request->input('emp_tanpa_sabtu_minggu_holiday', []),
+            'emp_tanpa_allin_sabtu_minggu_holiday'  => $request->input('emp_tanpa_allin_sabtu_minggu_holiday', []),
+            'position_rules'                       => $request->input('position_rules', []),
+            'technician_rules'                     => $request->input('technician_rules', []),
         ];
 
         $service = app(LemburUangMakanUpdateService::class);
