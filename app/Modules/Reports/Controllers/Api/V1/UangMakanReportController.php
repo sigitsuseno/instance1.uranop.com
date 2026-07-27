@@ -118,8 +118,8 @@ class UangMakanReportController extends Controller
             $empStatus = strtoupper($item['employment_status'] ?? '');
             $groupCodes = $item['group_codes'] ?? [];
 
-            $isKrySpc = str_contains($empStatus, 'SPC');
-            $isKryTkn = str_contains($empStatus, 'TKN');
+            $isKrySpc = str_contains($empStatus, 'SPC') || in_array('KRY-SPC', $groupCodes);
+            $isKryTkn = str_contains($empStatus, 'TKN') || in_array('KRY-TKN', $groupCodes);
 
             $inSpr = in_array('GRP-SPR', $groupCodes);
             $inPs1 = in_array('GRP-PS1', $groupCodes);
@@ -180,11 +180,16 @@ class UangMakanReportController extends Controller
                     $nominals['uang_makan'] += $nominal;
                 }
 
-                // Incentive — from end_date record
+                // KRY-SPC: semua nominal masuk ke insentif
+                if ($isKrySpc && $nominal > 0) {
+                    $nominals['insentif'] += $nominal;
+                }
             }
 
-            // Insentif dari employee_overtime pada end_date periode
-            $nominals['insentif'] = (float)($item['insentif_end'] ?? 0);
+            // Insentif dari employee_overtime pada end_date periode (non-SPC)
+            if (!$isKrySpc) {
+                $nominals['insentif'] = (float)($item['insentif_end'] ?? 0);
+            }
 
             $total = $nominals['uang_makan'] + $nominals['lembur_sabtu']
                    + $nominals['lembur_minggu'] + $nominals['insentif']
