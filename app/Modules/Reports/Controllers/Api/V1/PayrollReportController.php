@@ -167,6 +167,49 @@ class PayrollReportController extends Controller
             ];
         });
 
+        // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke Section A ──
+        $extraEmployees = ExtraEmployee::all();
+        foreach ($extraEmployees as $emp) {
+            $g = $emp->komponen_gaji ?? [];
+            $data->push([
+                'id'                  => 'ext-' . $emp->id,
+                'employee_id'         => null,
+                'employee_code'       => $emp->kode ?? '-',
+                'name'                => $emp->nama ?? '-',
+                'department'          => '-',
+                'position'            => '-',
+                'gender'              => $emp->gender ?? '-',
+                'join_year'           => '-',
+                'groups'              => [],
+                'bank_name'           => '-',
+                'bank_account_number' => $emp->account ?? '-',
+                'bank_account_name'   => $emp->nama ?? '-',
+                'bank_cabang'         => '-',
+                'notes'               => '',
+                'section'             => 'A',
+                'gaji_pokok'    => (float) ($g['gaji_pokok'] ?? 0),
+                'premi'         => (float) ($g['premi'] ?? 0),
+                'tj_masa_kerja' => (float) ($g['tj_mk'] ?? 0),
+                'tunjangan'     => (float) ($g['tunjangan'] ?? 0),
+                'hari_kerja'    => 0,
+                'lm'            => 0,
+                'lm_count'      => 0,
+                'lembur_count'  => 0,
+                'gaji'          => 0,
+                'upah_lembur'   => 0,
+                'revisi'        => 0,
+                'premi_hadir'   => 0,
+                'pblt'          => 0,
+                'total'         => (float) ($g['total_gaji'] ?? 0),
+                'bpjs_tk'       => 0,
+                'bpjs_ks'       => 0,
+                'bpjs_pen'      => 0,
+                'cashbon'       => (float) ($g['cashbon'] ?? 0),
+                'pph'           => (float) ($g['ttl_pph'] ?? 0),
+                'gaji_bersih'   => (float) ($g['total_terima'] ?? 0),
+            ]);
+        }
+
         return response()->json([
             'data'   => $data,
             'period' => [

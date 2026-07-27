@@ -273,7 +273,7 @@ const selectedPeriod = computed(() => {
 })
 
 const dataAllIn = computed(() => {
-  const groups = payrollConfig.value?.sections?.A || ['GRP-ALLIN', 'GRP-SPR']
+  const groups = (payrollConfig.value?.sections?.A || ['GRP-ALLIN', 'GRP-SPR']).concat(['GRP-EXTRA'])
   return records.value.filter(r => (r.groups || []).some(g => groups.includes(g)))
 })
 
