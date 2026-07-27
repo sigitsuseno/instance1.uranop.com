@@ -4,6 +4,7 @@ namespace App\Modules\Reports\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Attendance\Models\AttendancePrepare;
+use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
@@ -110,7 +111,7 @@ class UangMakanReportController extends Controller
 
     public function rekab(Request $request)
     {
-        $result = $this->buildBulananData($request);
+        $result = $this->buildRekabData($request);
 
         $employees = $result['data']->map(function ($item) {
             // Determine employee eligibility based on employment_status and group codes
@@ -127,25 +128,15 @@ class UangMakanReportController extends Controller
             // Eligibility flags
             if ($isKrySpc) {
                 $getsUangMakan = false;
-                $getsOvertime  = true;
-                $getsInsentif  = false;
             } elseif ($isKryTkn) {
                 $getsUangMakan = true;
-                $getsOvertime  = false;
-                $getsInsentif  = false;
             } elseif ($inSpr) {
                 $getsUangMakan = true;
-                $getsOvertime  = true;
-                $getsInsentif  = true;
             } elseif ($inPs1 || $inSs) {
                 $getsUangMakan = false;
-                $getsOvertime  = true;
-                $getsInsentif  = false;
             } else {
                 // Default: GRP-JKT, GRP-ALLIN, GRP-GD
                 $getsUangMakan = true;
-                $getsOvertime  = false;
-                $getsInsentif  = false;
             }
 
             $counts = ['UM' => 0, '2' => 0, 'FULL' => 0, 'HALF' => 0, 'FULL_D' => 0];
@@ -165,36 +156,35 @@ class UangMakanReportController extends Controller
                 $lmVal     = $day['lm'] ?? '';
                 $nominal   = (float)($day['nominal'] ?? 0);
 
-                // Overtime counts & nominals — only for eligible employees
-                if ($getsOvertime) {
-                    if ($lemburVal === '2') {
-                        $counts['2']++;
-                        $nominals['lembur_sabtu'] += $nominal;
-                    } elseif ($lemburVal === 'FULL') {
-                        $counts['FULL']++;
-                        $nominals['lembur_sabtu'] += $nominal;
-                    }
-
-                    if ($lmVal === 'HALF') {
-                        $counts['HALF']++;
-                        $nominals['lembur_minggu'] += $nominal;
-                    } elseif ($lmVal === 'FULL') {
-                        $counts['FULL_D']++;
-                        $nominals['lembur_minggu'] += $nominal;
-                    }
+                // Overtime counts & nominals — berdasarkan data, bukan eligibility
+                // (um_code='' untuk SPR/PS1/SS/SPC, jadi tidak akan masuk hitungan)
+                if ($lemburVal === '2') {
+                    $counts['2']++;
+                    $nominals['lembur_sabtu'] += $nominal;
+                } elseif ($lemburVal === 'FULL') {
+                    $counts['FULL']++;
+                    $nominals['lembur_sabtu'] += $nominal;
                 }
 
-                // Uang makan — only for eligible employees
+                if ($lmVal === 'HALF') {
+                    $counts['HALF']++;
+                    $nominals['lembur_minggu'] += $nominal;
+                } elseif ($lmVal === 'FULL') {
+                    $counts['FULL_D']++;
+                    $nominals['lembur_minggu'] += $nominal;
+                }
+
+                // Uang makan — for eligible employees only
                 if ($getsUangMakan && $lemburVal === 'UM') {
                     $counts['UM']++;
                     $nominals['uang_makan'] += $nominal;
                 }
 
-                // Incentive — only for eligible employees (e.g. GRP-SPR)
-                if ($getsInsentif) {
-                    // Incentive logic here if needed
-                }
+                // Incentive — from end_date record
             }
+
+            // Insentif dari employee_overtime pada end_date periode
+            $nominals['insentif'] = (float)($item['insentif_end'] ?? 0);
 
             $total = $nominals['uang_makan'] + $nominals['lembur_sabtu']
                    + $nominals['lembur_minggu'] + $nominals['insentif']
@@ -555,6 +545,133 @@ class UangMakanReportController extends Controller
                 'group_name'          => $groupName,
                 'employment_status'   => $employee->employment_status ?? '',
                 'group_codes'         => $employee->groups->pluck('reference_code')->toArray(),
+                'days'                => $days,
+            ];
+        })->values();
+
+        return [
+            'data'         => $data,
+            'dates'        => $dates,
+            'month_label'  => $label,
+        ];
+    }
+
+    /**
+     * Build data for Rekab Uang Makan from employee_overtime table.
+     */
+    private function buildRekabData(Request $request): array
+    {
+        $periodId = $request->input('period_id');
+        $groups   = $request->input('groups', []);
+
+        $period = PayPeriod::find($periodId);
+
+        if ($period) {
+            $startDate = Carbon::parse($period->start_date);
+            $endDate   = Carbon::parse($period->end_date);
+            $label     = $period->name . ' (' . $startDate->translatedFormat('d M') . ' - ' . $endDate->translatedFormat('d M Y') . ')';
+        } else {
+            $startDate = Carbon::now()->startOfMonth();
+            $endDate   = Carbon::now()->endOfMonth();
+            $label     = $startDate->translatedFormat('F Y');
+        }
+
+        $today = Carbon::today();
+        if ($endDate->gt($today)) {
+            $endDate = $today;
+        }
+
+        $dates = [];
+        $d = $startDate->copy();
+        while ($d->lte($endDate)) {
+            $dates[] = $d->format('Y-m-d');
+            $d->addDay();
+        }
+
+        // Query employee_overtime by period
+        $overtimes = EmployeeOvertime::where('pay_periode_id', $periodId)
+            ->get()
+            ->groupBy('employee_id');
+
+        // Employees that have shift roster in this period (same filter as buildBulananData)
+        $employees = Employee::query()
+            ->whereHas('shiftRosters', fn($q) => $q->whereBetween('date', [$startDate, $endDate]))
+            ->when(!empty($groups), fn($q) => $q->whereHas('groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
+            ->with(['position', 'groups.master'])
+            ->get();
+
+        $data = $employees->map(function ($employee) use ($overtimes, $dates, $endDate) {
+            $empOvertimes = $overtimes->get($employee->id, collect())->keyBy(fn($o) => $o->date->format('Y-m-d'));
+
+            $groupName = $this->getGroupName($employee);
+
+            // Insentif dari record end_date periode
+            $endDateStr = $endDate instanceof Carbon ? $endDate->format('Y-m-d') : $endDate;
+            $insentifEnd = 0;
+            $endOvt = $empOvertimes->get($endDateStr);
+            if ($endOvt) {
+                $insentifEnd = (float)($endOvt->insentif ?? 0);
+            }
+
+            $days = [];
+            foreach ($dates as $dateStr) {
+                $ovt = $empOvertimes->get($dateStr);
+                $parsedDate = Carbon::parse($dateStr);
+                $dayOfWeek = $parsedDate->dayOfWeek; // 0=Minggu, 6=Sabtu
+
+                $lemburStr = '';
+                $lmStr = '';
+                $nominal = 0;
+
+                if ($ovt) {
+                    $umCode = $ovt->um_code ?? '';
+                    $nominal = (float)($ovt->nominal ?? 0);
+
+                    switch ($umCode) {
+                        case 'UM':
+                            $lemburStr = 'UM';
+                            break;
+                        case '2':
+                            $lemburStr = '2';
+                            break;
+                        case 'FULL':
+                            // Sabtu (6) → lemburStr, Minggu/Holiday (0) → lmStr
+                            if ($dayOfWeek == 6) {
+                                $lemburStr = 'FULL';
+                            } else {
+                                $lmStr = 'FULL';
+                            }
+                            break;
+                        case 'HALF':
+                            $lmStr = 'HALF';
+                            break;
+                        // TKN, SPR, PS1, SS, SPC — um_code empty or 'TKN', no count
+                        // matches existing rekab() behaviour (not counted as UM/2/FULL/HALF)
+                    }
+                }
+
+                $days[$dateStr] = [
+                    'kode'          => $lemburStr !== '' ? 'L' : '',
+                    'ha'            => '-',
+                    'upah_per_hari' => 0,
+                    'lm'            => $lmStr,
+                    'lembur'        => $lemburStr,
+                    'nominal'       => $nominal,
+                ];
+            }
+
+            return [
+                'id'                  => $employee->id,
+                'name'                => $employee->name,
+                'jabatan'             => $employee->position->name ?? '-',
+                'gender'              => $employee->gender ?? '',
+                'tj_mk'               => 0,
+                'tunjangan'           => 0,
+                'upah_lembur_per_jam' => 0,
+                'group_name'          => $groupName,
+                'employment_status'   => $employee->employment_status ?? '',
+                'group_codes'         => $employee->groups->pluck('reference_code')->toArray(),
+                'insentif_end'        => $insentifEnd,
                 'days'                => $days,
             ];
         })->values();

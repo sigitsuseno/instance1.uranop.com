@@ -1015,11 +1015,21 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $effectiveDays = min($activeDayCount, 25);
             $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
 
-            // ── Cari nilai insentif dari record terakhir (kronologis) ──
-            $lastRecord = $records->sortByDesc(fn($r) => $r->date instanceof Carbon
-                ? $r->date->format('Y-m-d')
-                : ($r->date ?? ''))->first();
-            $endDateInsentif = $lastRecord ? (float)$lastRecord->insentif : 0;
+            // ── Cari nilai insentif dari record yg date = end_date periode ──
+            $endDateStr = $period?->end_date?->format('Y-m-d');
+            $targetRecord = $endDateStr
+                ? $records->first(fn($r) => ($r->date instanceof Carbon
+                    ? $r->date->format('Y-m-d')
+                    : ($r->date ?? '')) === $endDateStr)
+                : null;
+
+            // Fallback ke record terakhir (kronologis) jika tidak ada yg cocok
+            if (!$targetRecord) {
+                $targetRecord = $records->sortByDesc(fn($r) => $r->date instanceof Carbon
+                    ? $r->date->format('Y-m-d')
+                    : ($r->date ?? ''))->first();
+            }
+            $endDateInsentif = $targetRecord ? (float)$targetRecord->insentif : 0;
 
             // ── Tentukan tipe: uang_makan vs lembur (mutually exclusive) ─
             // Uang_makan type: dapat meal allowance, TIDAK dapat overtime money
@@ -1191,7 +1201,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         return [
             'total_hari_kerja' => round($employees->sum('total_hari_kerja'), 2),
             'total_overtime'   => round($employees->sum('total_overtime'), 2),
-            'total_uang_makan' => round($employees->sum('total_uang_makan'), 2),
+            'total_uang_makan' => round($employees->sum('total_uang_makan') + $employees->sum('total_insentif'), 2),
             'total_terima'     => round($employees->sum('total_terima'), 2),
             'count'            => $employees->count(),
         ];
@@ -1752,11 +1762,18 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
         $updated = 0;
         foreach ($request->insentif as $item) {
-            // Cari record terakhir (kronologis) untuk employee ini di periode tsb
+            // Cari record yg date = end_date periode; fallback ke record terakhir
             $overtime = \App\Modules\Attendance\Models\EmployeeOvertime::where('pay_periode_id', $period->id)
                 ->where('employee_id', $item['employee_id'])
-                ->orderBy('date', 'desc')
+                ->whereDate('date', $period->end_date)
                 ->first();
+
+            if (!$overtime) {
+                $overtime = \App\Modules\Attendance\Models\EmployeeOvertime::where('pay_periode_id', $period->id)
+                    ->where('employee_id', $item['employee_id'])
+                    ->orderBy('date', 'desc')
+                    ->first();
+            }
 
             if ($overtime) {
                 $overtime->insentif = (float)$item['value'];

@@ -100,7 +100,7 @@
                 </th>
                 <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>Hari Kerja</th>
                 <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>Overtime</th>
-                <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>U.Makan</th>
+                <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total<br>U.Mkn+Ins</th>
                 <th rowspan="2" class="px-3 py-2 text-right font-bold text-(--text-muted) uppercase">Total<br>Terima</th>
               </tr>
 
@@ -199,7 +199,7 @@
                 <!-- Employee Totals -->
                 <td class="px-3 py-3 text-right font-bold text-emerald-600 border-r border-(--border-soft)">{{ item.total_hari_kerja != null ? formatNumber(item.total_hari_kerja) : '-' }}</td>
                 <td class="px-3 py-3 text-right font-bold text-green-600 border-r border-(--border-soft)">{{ item.total_overtime ? formatNumber(item.total_overtime) : '-' }}</td>
-                <td class="px-3 py-3 text-right font-bold text-amber-600 border-r border-(--border-soft)">{{ item.total_uang_makan ? formatNumber(item.total_uang_makan) : '-' }}</td>
+                <td class="px-3 py-3 text-right font-bold text-amber-600 border-r border-(--border-soft)">{{ formatNumber((item.total_uang_makan || 0) + (item.insentif || 0)) }}</td>
                 <td class="px-3 py-3 text-right font-bold text-(--primary)">{{ item.total_terima ? formatNumber(item.total_terima) : '-' }}</td>
               </tr>
 
@@ -231,24 +231,41 @@
       </div>
     </BaseCard>
 
-    <!-- ── Edit Insentif ──────────────────────────────────────────────── -->
+    <!-- ── Edit Insentif (Modal) ─────────────────────────────────────── -->
     <div v-if="hasData" class="mt-6">
       <button
-        @click="showInsentifEditor = !showInsentifEditor"
+        @click="openInsentifModal"
         class="flex items-center gap-2 px-4 py-2 text-sm font-medium text-(--primary) bg-(--bg-elevated) border border-(--border-soft) rounded-lg hover:bg-(--primary)/5 transition-colors"
       >
-        <svg :class="['w-4 h-4 transition-transform', showInsentifEditor ? 'rotate-90' : '']" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
         </svg>
-        {{ showInsentifEditor ? 'Tutup' : 'Edit' }} Insentif (Tanggal {{ insentifDateLabel }})
+        Edit Insentif
       </button>
 
-      <transition name="slide">
-        <div v-if="showInsentifEditor" class="mt-2 border border-(--border-soft) rounded-lg overflow-hidden">
-          <div class="max-h-[400px] overflow-auto">
+      <!-- Modal -->
+      <BaseModal :show="showInsentifModal" title="Edit Insentif" size="lg" @close="showInsentifModal = false">
+        <div v-if="!selectedPeriodId && dateMode === 'range'" class="py-8 text-center text-(--text-muted)">
+          Edit insentif hanya tersedia pada mode Periode.
+        </div>
+
+        <template v-else>
+          <div class="text-sm text-(--text-muted) mb-4">
+            Insentif akan disimpan ke record tanggal <strong>{{ endDateLabel }}</strong> (end_date periode).
+          </div>
+
+          <div class="overflow-auto max-h-[55vh] border border-(--border-soft) rounded-lg">
             <table class="min-w-full divide-y divide-(--border-soft) text-xs">
               <thead class="bg-(--bg-elevated) sticky top-0 z-10">
                 <tr>
+                  <th class="px-2 py-2 text-center w-10">
+                    <input
+                      type="checkbox"
+                      @change="toggleSelectAll"
+                      :checked="allSelected"
+                      class="rounded border-(--border-soft)"
+                    />
+                  </th>
                   <th class="px-2 py-2 text-center font-bold text-(--text-muted) uppercase">No</th>
                   <th class="px-2 py-2 text-left font-bold text-(--text-muted) uppercase">Bagian</th>
                   <th class="px-3 py-2 text-left font-bold text-(--text-muted) uppercase">Nama</th>
@@ -257,48 +274,60 @@
                 </tr>
               </thead>
               <tbody class="divide-y divide-(--border-soft)">
-                <template v-for="(section, si) in sections" :key="'ins-' + section.key">
-                  <tr
-                    v-for="(item, index) in section.data"
-                    :key="item.id"
-                    class="hover:bg-(--bg-elevated) transition-colors"
-                  >
-                    <td class="px-2 py-2 text-center text-(--text-muted)">{{ index + 1 }}</td>
-                    <td class="px-2 py-2 text-(--text-muted)">{{ section.label.replace(/^[A-Z]\.\s*/, '') }}</td>
-                    <td class="px-3 py-2 font-medium text-(--text-main)">{{ item.name }}</td>
-                    <td class="px-3 py-2 text-right">
-                      <input
-                        type="number"
-                        :value="item.insentif"
-                        @input="updateInsentif(item.id, $event.target.value)"
-                        class="w-28 px-2 py-1 text-right text-sm border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary) focus:border-(--primary)"
-                        min="0"
-                        step="1000"
-                        placeholder="0"
-                      />
-                    </td>
-                    <td class="px-2 py-2 text-center">
-                      <span
-                        v-if="savedInsentif[item.id] !== undefined && parseFloat(savedInsentif[item.id]) === parseFloat(insentifDraft[item.id] || 0)"
-                        class="text-green-600 text-xs"
-                      >✓ Tersimpan</span>
-                      <span
-                        v-else-if="savingInsentif[item.id]"
-                        class="text-blue-600 text-xs"
-                      >Menyimpan...</span>
-                    </td>
-                  </tr>
-                </template>
+                <tr
+                  v-for="(emp, index) in flattenedEmployees"
+                  :key="emp.id"
+                  class="hover:bg-(--bg-elevated) transition-colors"
+                  :class="{ 'bg-(--primary)/5': selectedIds.includes(emp.id) }"
+                >
+                  <td class="px-2 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      :value="emp.id"
+                      v-model="selectedIds"
+                      class="rounded border-(--border-soft)"
+                    />
+                  </td>
+                  <td class="px-2 py-2 text-center text-(--text-muted)">{{ index + 1 }}</td>
+                  <td class="px-2 py-2 text-(--text-muted)">{{ emp.bagian }}</td>
+                  <td class="px-3 py-2 font-medium text-(--text-main)">{{ emp.name }}</td>
+                  <td class="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      v-model.number="insentifDraft[emp.id]"
+                      @click.stop
+                      class="w-28 px-2 py-1 text-right text-sm border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-2 focus:ring-(--primary) focus:border-(--primary)"
+                      min="0"
+                      step="1000"
+                      placeholder="0"
+                    />
+                  </td>
+                  <td class="px-2 py-2 text-center">
+                    <span
+                      v-if="savedInsentif[emp.id] !== undefined && parseFloat(savedInsentif[emp.id]) === parseFloat(insentifDraft[emp.id] || 0)"
+                      class="text-green-600 text-xs"
+                    >✓ Tersimpan</span>
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
-          <div class="px-4 py-3 bg-(--bg-elevated) border-t border-(--border-soft) flex justify-end gap-2">
-            <BaseButton variant="primary" size="sm" @click="saveAllInsentif" :disabled="savingAll">
-              {{ savingAll ? 'Menyimpan...' : 'Simpan Semua' }}
-            </BaseButton>
-          </div>
-        </div>
-      </transition>
+        </template>
+
+        <template #footer>
+          <BaseButton variant="secondary" size="sm" @click="showInsentifModal = false">
+            Batal
+          </BaseButton>
+          <BaseButton
+            variant="primary"
+            size="sm"
+            @click="saveSelectedInsentif"
+            :disabled="savingAll || selectedIds.length === 0"
+          >
+            {{ savingAll ? 'Menyimpan...' : `Simpan (${selectedIds.length})` }}
+          </BaseButton>
+        </template>
+      </BaseModal>
     </div>
   </div>
 </template>
@@ -309,6 +338,7 @@ import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
+import BaseModal from '../../../../Components/BaseModal.vue'
 
 const props = defineProps({
   groups: { type: Array, default: () => [] }
@@ -329,10 +359,10 @@ const grandTotals = ref(null)
 const loading = ref(false)
 
 // Insentif editor state
-const showInsentifEditor = ref(false)
+const showInsentifModal = ref(false)
+const selectedIds = ref([])
 const insentifDraft = ref({})
 const savedInsentif = ref({})
-const savingInsentif = ref({})
 const savingAll = ref(false)
 
 const hasFilter = computed(() => {
@@ -344,11 +374,32 @@ const hasData = computed(() => {
   return sections.value.some(s => s.data && s.data.length > 0)
 })
 
-const insentifDateLabel = computed(() => {
-  if (dates.value.length > 0) {
-    return dates.value[dates.value.length - 1]
+const flattenedEmployees = computed(() => {
+  const result = []
+  for (const section of sections.value) {
+    const bagian = section.label.replace(/^[A-Z]\.\s*/, '')
+    for (const emp of (section.data || [])) {
+      result.push({ ...emp, bagian })
+    }
   }
-  return ''
+  return result
+})
+
+const allSelected = computed(() => {
+  return flattenedEmployees.value.length > 0
+    && selectedIds.value.length === flattenedEmployees.value.length
+})
+
+const endDateLabel = computed(() => {
+  if (dateMode.value === 'period' && selectedPeriodId.value) {
+    const p = periods.value.find(p => p.id === selectedPeriodId.value)
+    return p?.end_date || (dates.value.length > 0 ? dates.value[dates.value.length - 1] : '')
+  }
+  return dates.value.length > 0 ? dates.value[dates.value.length - 1] : ''
+})
+
+const selectedPeriod = computed(() => {
+  return periods.value.find(p => p.id === selectedPeriodId.value) || null
 })
 
 onMounted(async () => {
@@ -432,14 +483,29 @@ function initInsentifDrafts() {
   savedInsentif.value = saved
 }
 
-function updateInsentif(employeeId, value) {
-  insentifDraft.value[employeeId] = parseFloat(value) || 0
+function openInsentifModal() {
+  // Reset selection, semua terpilih by default
+  selectedIds.value = flattenedEmployees.value.map(e => e.id)
+  showInsentifModal.value = true
 }
 
-async function saveAllInsentif() {
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedIds.value = []
+  } else {
+    selectedIds.value = flattenedEmployees.value.map(e => e.id)
+  }
+}
+
+async function saveSelectedInsentif() {
   const periodId = dateMode.value === 'period' ? selectedPeriodId.value : null
   if (!periodId) {
     notification.addNotification('Pilih periode terlebih dahulu', 'error')
+    return
+  }
+
+  if (selectedIds.value.length === 0) {
+    notification.addNotification('Pilih minimal 1 karyawan', 'error')
     return
   }
 
@@ -447,14 +513,15 @@ async function saveAllInsentif() {
   try {
     const payload = {
       period_id: periodId,
-      insentif: Object.entries(insentifDraft.value).map(([employeeId, value]) => ({
-        employee_id: parseInt(employeeId),
-        value: parseFloat(value) || 0,
+      insentif: selectedIds.value.map(id => ({
+        employee_id: parseInt(id),
+        value: parseFloat(insentifDraft.value[id]) || 0,
       })),
     }
     await post('/api/v1/reports/lembur/combined-detail-pre/insentif', payload)
     savedInsentif.value = { ...insentifDraft.value }
-    notification.addNotification('Insentif berhasil disimpan', 'success')
+    notification.addNotification(`Insentif berhasil disimpan untuk ${selectedIds.value.length} karyawan`, 'success')
+    showInsentifModal.value = false
     // Refresh data
     await fetchData()
   } catch (err) {
