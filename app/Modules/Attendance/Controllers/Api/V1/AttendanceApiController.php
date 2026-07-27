@@ -1131,6 +1131,7 @@ class AttendanceApiController extends Controller
                     $cuti = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'leave')->sum('days_requested');
                     $izin = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'permit')->sum('days_requested');
                     $sakit = $leaves->filter(fn($l) => optional($l->leaveType)->category === 'sick')->sum('days_requested');
+                    $unpaid = $leaves->filter(fn($l) => optional($l->leaveType)->is_paid === false)->sum('days_requested');
 
                     // 2. Aggregate att_prepares dalam rentang segmen
                     $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)
@@ -1145,7 +1146,7 @@ class AttendanceApiController extends Controller
                     $lemburCount = $prepares->sum('overtime_count');
 
                     // 3. Hitung
-                    $deductDay = $izin + $absen;   // hari pemotongan
+                    $deductDay = $unpaid + $absen;   // hari pemotongan — hanya leave yg unpaid + absent
                     $hariKerja = max(0, $hk - $deductDay);
 
                     // 4. Upsert per segment
@@ -1291,7 +1292,7 @@ class AttendanceApiController extends Controller
                         $lmCount = $prepares->sum('lm_count');
                         $lemburCount = $prepares->sum('overtime_count');
 
-                        $cuti = 0; $izin = 0; $sakit = 0;
+                        $cuti = 0; $izin = 0; $sakit = 0; $unpaid = 0;
                         foreach ($leaves as $l) {
                             // Hitung durasi irisan cuti di dalam segmen ini (karena bisa menyeberang)
                             $lStart = \Carbon\Carbon::parse(max($l->start_date->toDateString(), $segStart));
@@ -1299,19 +1300,52 @@ class AttendanceApiController extends Controller
                             $dur = max(0, $lStart->diffInDays($lEnd) + 1);
 
                             $cat = optional($l->leaveType)->category;
+                            $isPaid = optional($l->leaveType)->is_paid;
                             if ($cat === 'leave') $cuti += $dur;
                             elseif ($cat === 'permit') $izin += $dur;
                             elseif ($cat === 'sick') $sakit += $dur;
+                            if ($isPaid === false) $unpaid += $dur;
                         }
 
-                        $deductDay = $izin + $absen;
+                        $deductDay = $unpaid + $absen;
                         $hariKerja = max(0, $hkSegment - $deductDay);
                     } else {
-                        $hariKerja = $record->hari_kerja;
-                        $deductDay = $record->deduct_day;
-                        $lm = $record->lm;
-                        $lmCount = $record->lm_count;
-                        $lemburCount = $record->lembur_count;
+                        // HITUNG ULANG UNTUK NON-SPLIT — dari att_prepares & leave_requests langsung, bukan dari att_record
+                        $prepares = \App\Modules\Attendance\Models\AttendancePrepare::where('employee_id', $employee->id)
+                            ->whereBetween('date', [$segStart, $segEnd])
+                            ->get();
+
+                        $leaves = \App\Modules\Leave\Models\LeaveRequest::where('employee_id', $employee->id)
+                            ->where('status', 'approved')
+                            ->where(function ($q) use ($segStart, $segEnd) {
+                                $q->whereBetween('start_date', [$segStart, $segEnd])
+                                  ->orWhereBetween('end_date', [$segStart, $segEnd])
+                                  ->orWhere(function ($q2) use ($segStart, $segEnd) {
+                                      $q2->where('start_date', '<=', $segStart)
+                                         ->where('end_date', '>=', $segEnd);
+                                  });
+                            })->get();
+
+                        $absen = $prepares->where('status', 'absent')->count();
+                        $lm = $prepares->sum('lm');
+                        $lmCount = $prepares->sum('lm_count');
+                        $lemburCount = $prepares->sum('overtime_count');
+
+                        $cuti = 0; $izin = 0; $sakit = 0; $unpaid = 0;
+                        foreach ($leaves as $l) {
+                            $lStart = \Carbon\Carbon::parse(max($l->start_date->toDateString(), $segStart));
+                            $lEnd = \Carbon\Carbon::parse(min($l->end_date->toDateString(), $segEnd));
+                            $dur = max(0, $lStart->diffInDays($lEnd) + 1);
+                            $cat = optional($l->leaveType)->category;
+                            $isPaid = optional($l->leaveType)->is_paid;
+                            if ($cat === 'leave') $cuti += $dur;
+                            elseif ($cat === 'permit') $izin += $dur;
+                            elseif ($cat === 'sick') $sakit += $dur;
+                            if ($isPaid === false) $unpaid += $dur;
+                        }
+
+                        $deductDay = $unpaid + $absen;
+                        $hariKerja = max(0, $hkSegment - $deductDay);
                     }
 
                     // ── DATA MASUKAN ──
