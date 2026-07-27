@@ -92,6 +92,7 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                 // Data rows
                 $colKeys = ['bagian', 'jml_karyawan_l', 'jml_karyawan_p', 'jml_karyawan_total', 'gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
 
+                $totals = [];
                 foreach ($this->data as $idx => $row) {
                     $r = $firstDataRow + $idx;
 
@@ -107,15 +108,44 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                     $financialKeys = ['gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
                     foreach ($financialKeys as $fi => $key) {
                         $col = chr(70 + $fi); // F=70
-                        $sheet->setCellValue("{$col}{$r}", (float) ($row[$key] ?? 0));
+                        $val = (float) ($row[$key] ?? 0);
+                        $sheet->setCellValue("{$col}{$r}", $val);
+                        $totals[$key] = ($totals[$key] ?? 0) + $val;
                     }
+
+                    // Collect totals for count columns
+                    $totals['jml_karyawan_l'] = ($totals['jml_karyawan_l'] ?? 0) + (int) ($row['jml_karyawan_l'] ?? 0);
+                    $totals['jml_karyawan_p'] = ($totals['jml_karyawan_p'] ?? 0) + (int) ($row['jml_karyawan_p'] ?? 0);
+                    $totals['jml_karyawan_total'] = ($totals['jml_karyawan_total'] ?? 0) + (int) ($row['jml_karyawan_total'] ?? 0);
 
                     $sheet->getRowDimension($r)->setRowHeight(18);
                 }
 
-                // Borders
+                // ── Total row ──
                 if ($rowCount > 0) {
-                    $sheet->getStyle("A6:{$lastCol}{$lastDataRow}")->getBorders()
+                    $totalRow = $lastDataRow + 1;
+                    $sheet->setCellValue("A{$totalRow}", '');
+                    $sheet->setCellValue("B{$totalRow}", 'TOTAL ' . strtoupper($this->sectionLabel));
+                    $sheet->setCellValue("C{$totalRow}", $totals['jml_karyawan_l'] ?? 0);
+                    $sheet->setCellValue("D{$totalRow}", $totals['jml_karyawan_p'] ?? 0);
+                    $sheet->setCellValue("E{$totalRow}", $totals['jml_karyawan_total'] ?? 0);
+
+                    $financialKeys = ['gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
+                    foreach ($financialKeys as $fi => $key) {
+                        $col = chr(70 + $fi);
+                        $sheet->setCellValue("{$col}{$totalRow}", $totals[$key] ?? 0);
+                    }
+
+                    // Style total row
+                    $sheet->getStyle("B{$totalRow}")->getFont()->setBold(true);
+                    $sheet->getStyle("A{$totalRow}:{$lastCol}{$totalRow}")->getFont()->setBold(true);
+                    $sheet->getStyle("A{$totalRow}:{$lastCol}{$totalRow}")->getNumberFormat()->setFormatCode('#,##0.00');
+                    $sheet->getStyle("A{$totalRow}:E{$totalRow}")->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getRowDimension($totalRow)->setRowHeight(20);
+
+                    // Extend borders to include total row
+                    $sheet->getStyle("A6:{$lastCol}{$totalRow}")->getBorders()
                         ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
                 }
 
