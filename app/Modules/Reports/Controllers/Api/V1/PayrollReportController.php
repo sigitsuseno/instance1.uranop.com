@@ -332,8 +332,8 @@ class PayrollReportController extends Controller
         $tab = $request->input('tab', 'all-in'); 
 
         $groupCodes = $tab === 'all-in'
-            ? ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR']
-            : ['GRP-SS', 'GRP-PS1'];
+            ? ['GRP-ALLIN', 'GRP-SPR']
+            : ['GRP-SS', 'GRP-PS1', 'GRP-GD'];
 
         $segment = $request->input('segment');
 
