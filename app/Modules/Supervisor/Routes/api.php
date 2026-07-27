@@ -188,4 +188,10 @@ Route::prefix('v1/supervisor')
                 Route::delete('/{id}', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'destroy']);
             });
         });
+
+        // Reports
+        Route::prefix('reports')->group(function () {
+            Route::get('absensi', [\App\Modules\Supervisor\Reports\Controllers\Api\V1\AttendanceReportController::class, 'index']);
+            Route::get('absensi/export', [\App\Modules\Supervisor\Reports\Controllers\Api\V1\AttendanceReportController::class, 'export']);
+        });
     });
