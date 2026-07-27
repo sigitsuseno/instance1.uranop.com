@@ -3,6 +3,7 @@
 namespace App\Modules\Reports\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\ExtraEmployee;
 use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
@@ -336,6 +337,57 @@ class PayrollReportController extends Controller
                 'revisi_pph' => $groupRecords->sum('pph'),
                 'total_terima' => $groupRecords->sum('gaji_bersih'),
             ];
+        }
+
+        // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke tab all-in (Section A) ──
+        if ($tab === 'all-in') {
+            $extras = ExtraEmployee::all();
+            if ($extras->isNotEmpty()) {
+                $maleCount = 0;
+                $femaleCount = 0;
+                $sumTjMk = 0;
+                $sumTunjangan = 0;
+                $sumTotalGaji = 0;
+                $sumCashbon = 0;
+                $sumPph = 0;
+                $sumTotalTerima = 0;
+
+                foreach ($extras as $emp) {
+                    $g = $emp->komponen_gaji ?? [];
+                    if ($emp->gender === 'male' || $emp->gender === 'L') {
+                        $maleCount++;
+                    } else {
+                        $femaleCount++;
+                    }
+                    $sumTjMk        += (float) ($g['tj_mk'] ?? 0);
+                    $sumTunjangan   += (float) ($g['tunjangan'] ?? 0);
+                    $sumTotalGaji   += (float) ($g['total_gaji'] ?? 0);
+                    $sumCashbon     += (float) ($g['cashbon'] ?? 0);
+                    $sumPph         += (float) ($g['ttl_pph'] ?? 0);
+                    $sumTotalTerima += (float) ($g['total_terima'] ?? 0);
+                }
+
+                $data[] = [
+                    'bagian'             => 'Karyawan Tambahan',
+                    'jml_karyawan_l'     => $maleCount,
+                    'jml_karyawan_p'     => $femaleCount,
+                    'jml_karyawan_total' => $maleCount + $femaleCount,
+                    'gaji'               => 0,
+                    'lembur'             => 0,
+                    'revisi'             => 0,
+                    'tj_masa_kerja'      => $sumTjMk,
+                    'tunjangan'          => $sumTunjangan,
+                    'premi_hadir'        => 0,
+                    'pblt'               => 0,
+                    'total'              => $sumTotalGaji,
+                    'bpjs_tk'            => 0,
+                    'bpjs_ks'            => 0,
+                    'bpjs_pen'           => 0,
+                    'cashbon'            => $sumCashbon,
+                    'revisi_pph'         => $sumPph,
+                    'total_terima'       => $sumTotalTerima,
+                ];
+            }
         }
 
         $periodName = $period ? $period->name : 'Unknown Period';
