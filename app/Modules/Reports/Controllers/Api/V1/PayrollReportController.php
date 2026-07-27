@@ -239,13 +239,13 @@ class PayrollReportController extends Controller
         $periodId = $request->input('period_id');
         $period = PayPeriod::find($periodId);
         
-        // Tab All In: group code GRP-ALLIN, GRP-GD, GRP-SPR
-        // Karyawan Bulanan Print: GRP-SS, GRP-PS1
+        // Tab All In: group code GRP-ALLIN, GRP-SPR
+        // Karyawan Bulanan Print: GRP-SS, GRP-PS1, GRP-GD
         $tab = $request->input('tab', 'all-in'); // 'all-in' or 'print'
 
         $groupCodes = $tab === 'all-in'
-            ? ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR']
-            : ['GRP-SS', 'GRP-PS1'];
+            ? ['GRP-ALLIN', 'GRP-SPR']
+            : ['GRP-SS', 'GRP-PS1', 'GRP-GD'];
 
         $segment = $request->input('segment');
 
