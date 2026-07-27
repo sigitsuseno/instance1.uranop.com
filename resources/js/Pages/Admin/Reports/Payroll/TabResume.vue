@@ -26,11 +26,8 @@
           Terapkan
         </BaseButton>
 
-        <BaseButton variant="secondary" size="sm" @click="exportExcel('all-in')" :disabled="loading || sections.length === 0">
-          Export All-In
-        </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="exportExcel('print')" :disabled="loading || sections.length === 0">
-          Export Print
+        <BaseButton variant="secondary" size="sm" @click="exportExcel()" :disabled="loading || sections.length === 0">
+          Export Excel
         </BaseButton>
       </div>
     </div>
@@ -210,22 +207,21 @@ async function fetchData() {
   }
 }
 
-function exportExcel(tab) {
+function exportExcel() {
   const token = localStorage.getItem('token')
   const params = new URLSearchParams()
   if (selectedPeriod.value) params.append('period_id', selectedPeriod.value)
   if (isSplitPeriod.value && selectedSegment.value) params.append('segment', selectedSegment.value)
-  params.append('tab', tab)
 
   const url = `/api/v1/laporan/payroll/resume/export?${params.toString()}`
-  
+
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => r.blob())
     .then(blob => {
       const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.setAttribute('download', `Laporan_Resume_${tab}.xlsx`)
+      link.setAttribute('download', 'Laporan_Resume.xlsx')
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

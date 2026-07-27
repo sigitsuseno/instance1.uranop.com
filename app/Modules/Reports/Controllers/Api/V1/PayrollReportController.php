@@ -40,12 +40,24 @@ class PayrollReportController extends Controller
 
     public function exportResume(Request $request)
     {
-        $result = $this->buildResumeData($request);
-        $tab = $request->input('tab', 'all-in');
-        $filename = 'Laporan_Resume_' . $tab . '_' . str_replace(' ', '_', $result['period_name']) . '.xlsx';
-        
+        // Build data untuk All-In
+        $reqAllIn = clone $request;
+        $reqAllIn->merge(['tab' => 'all-in']);
+        $resultAllIn = $this->buildResumeData($reqAllIn);
+
+        // Build data untuk Print
+        $reqPrint = clone $request;
+        $reqPrint->merge(['tab' => 'print']);
+        $resultPrint = $this->buildResumeData($reqPrint);
+
+        $periodName = $resultAllIn['period_name'] ?: $resultPrint['period_name'];
+        $dataAllIn = ($resultAllIn['data'] ?? collect())->toArray();
+        $dataPrint = ($resultPrint['data'] ?? collect())->toArray();
+
+        $filename = 'Laporan_Resume_' . str_replace(' ', '_', $periodName) . '.xlsx';
+
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Reports\Exports\PayrollResumeExport($result['data'], $result['period_name']),
+            new \App\Modules\Reports\Exports\PayrollResumeExport($dataAllIn, $dataPrint, $periodName),
             $filename
         );
     }

@@ -1066,7 +1066,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'id'                => $employee->id,
                 'name'              => $employee->name ?? '',
                 'jabatan'           => $employee->position?->name ?? '',
-                'gender'            => $employee->gender === 'Pria' ? 'L' : 'P',
+                'gender'            => $employee->gender === 'L' ? 'L' : 'P',
                 'nip'               => $employee->nip ?? '',
                 'gaji'              => $gaji,
                 'tj_mk'             => $tjMk,

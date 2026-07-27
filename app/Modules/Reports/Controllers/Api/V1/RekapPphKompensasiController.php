@@ -197,7 +197,7 @@ class RekapPphKompensasiController extends Controller
                 'name'             => $emp->name,
                 'nik'              => $nik,
                 'nik_tku'          => $nikTku,
-                'gender'           => $emp->gender === 'male' ? 'L' : ($emp->gender === 'female' ? 'P' : '-'),
+                'gender'           => $emp->gender === 'L' ? 'L' : ($emp->gender === 'P' ? 'P' : '-'),
                 'status_label'     => $emp->ptkp ?? '-',
                 'total_kompensasi' => $monthlyKompensasi,
             ];
