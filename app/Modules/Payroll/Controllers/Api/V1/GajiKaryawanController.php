@@ -2,6 +2,7 @@
 
 namespace App\Modules\Payroll\Controllers\Api\V1;
 
+use App\Models\ExtraEmployee;
 use App\Modules\Employee\Models\Employee;
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Models\PayPeriod;
@@ -341,6 +342,41 @@ class GajiKaryawanController extends Controller
             } elseif (array_intersect($groups, $sectionB)) {
                 $secBData[] = $r;
             }
+        }
+
+        // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke Section A ──
+        $extraEmployees = ExtraEmployee::all();
+        foreach ($extraEmployees as $emp) {
+            $g = $emp->komponen_gaji ?? [];
+            $secAData[] = [
+                'employee_code' => $emp->kode ?? '-',
+                'name'          => $emp->nama ?? '-',
+                'department'    => '-',
+                'position'      => '-',
+                'gender'        => $emp->gender ?? '-',
+                'join_year'     => '-',
+                'masa_kerja'    => 0,
+                'ptkp'          => $emp->status_ptkp ?? '-',
+                'premi'         => (float) ($g['premi'] ?? 0),
+                'gaji_pokok'    => (float) ($g['gaji_pokok'] ?? 0),
+                'tj_masa_kerja' => (float) ($g['tj_mk'] ?? 0),
+                'tunjangan'     => (float) ($g['tunjangan'] ?? 0),
+                'hari_kerja'    => 0,
+                'lm'            => 0,
+                'lembur_count'  => 0,
+                'gaji'          => 0,
+                'upah_lembur'   => 0,
+                'revisi'        => 0,
+                'premi_hadir'   => 0,
+                'pblt'          => 0,
+                'total'         => (float) ($g['total_gaji'] ?? 0),
+                'bpjs_tk'       => 0,
+                'bpjs_ks'       => 0,
+                'bpjs_pen'      => 0,
+                'cashbon'       => (float) ($g['cashbon'] ?? 0),
+                'pph'           => (float) ($g['ttl_pph'] ?? 0),
+                'gaji_bersih'   => (float) ($g['total_terima'] ?? 0),
+            ];
         }
 
         $periodName = $period->name;

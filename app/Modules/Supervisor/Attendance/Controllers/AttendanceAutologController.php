@@ -1084,16 +1084,16 @@ class AttendanceAutologController extends Controller
             ], 422);
         }
 
-        $autolog->update([
-            'check_in'        => $validated['check_in'] ?? $autolog->check_in,
-            'check_out'       => $validated['check_out'] ?? $autolog->check_out,
-            'lembur'          => $validated['lembur'] ?? $autolog->lembur,
-            'lm'              => $validated['lm'] ?? $autolog->lm,
-            'status'          => $validated['status'] ?? $autolog->status,
-            'is_manual_edit'  => true,
-            'last_edited_at'  => now(),
-            'last_edited_by'  => Auth::id(),
-        ]);
+        $updates = [];
+        foreach (['check_in', 'check_out', 'lembur', 'lm', 'status'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $updates[$field] = $validated[$field];
+            }
+        }
+        $updates['is_manual_edit'] = true;
+        $updates['last_edited_at'] = now();
+        $updates['last_edited_by'] = Auth::id();
+        $autolog->update($updates);
 
         // Refresh buat dapetin format datetime yang udah di-cast
         $autolog->refresh();
