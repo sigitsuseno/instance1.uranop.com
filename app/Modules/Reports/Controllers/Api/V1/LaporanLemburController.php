@@ -1011,9 +1011,24 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $totalInsentif  += (float)$rec->insentif;
             }
 
-            // ── Hitung total_hari_kerja: min(activeDays, 25) × (gaji / 25) ─
-            $effectiveDays = min($activeDayCount, 25);
-            $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
+            // ── Hitung total_hari_kerja ──────────────────────────────────
+            // Jika hari ini >= end_date periode → formula: max(0, 25 - absent - izin) × (gaji/25)
+            // Jika belum → hitung dari hari aktif aktual (current logic)
+            $periodEndDate = $period?->end_date;
+            if ($periodEndDate && Carbon::today()->gte($periodEndDate)) {
+                $absentCount = 0;
+                $izinCount   = 0;
+                foreach ($days as $day) {
+                    $ha = $day['ha'] ?? '';
+                    if ($ha === 'A') $absentCount++;
+                    if ($ha === 'I') $izinCount++;
+                }
+                $effectiveDays = max(0, 25 - $absentCount - $izinCount);
+                $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
+            } else {
+                $effectiveDays = min($activeDayCount, 25);
+                $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
+            }
 
             // ── Cari nilai insentif dari record yg date = end_date periode ──
             $endDateStr = $period?->end_date?->format('Y-m-d');

@@ -6,7 +6,9 @@ use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeBpjs;
 use App\Modules\Employee\Models\EmployeeSalaryComponent;
+use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Models\ExtraEmployee;
@@ -100,13 +102,23 @@ class RekapPphKompensasiController extends Controller
 
         $employees = $query->orderBy('name')->get();
 
-        $periodMonth = $period->start_date->format('Y-m');
-
-        // Preload BPJS
-        $bpjsData = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
+        // Preload BPJS — cari per period dulu, fallback ke yg terbaru
+        $bpjsByPeriod = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_period_id', $periodId)
             ->get()
             ->keyBy('employee_id');
+
+        // Cari BPJS terbaru buat karyawan yg belum punya data period ini
+        $employeeIdsWithoutBpjs = $employees->pluck('id')->diff($bpjsByPeriod->keys());
+        $bpjsFallback = collect();
+        if ($employeeIdsWithoutBpjs->isNotEmpty()) {
+            $bpjsFallback = EmployeeBpjs::whereIn('employee_id', $employeeIdsWithoutBpjs)
+                ->orderBy('pay_period_id', 'desc')
+                ->orderBy('id', 'desc')
+                ->get()
+                ->groupBy('employee_id')
+                ->map->first();
+        }
 
         // Preload salary components
         $salaryComponents = EmployeeSalaryComponent::whereIn('employee_id', $employees->pluck('id'))
@@ -114,22 +126,24 @@ class RekapPphKompensasiController extends Controller
             ->get()
             ->keyBy('employee_id');
 
-        // ─── Section A: PPH ───
-        $pphData = $employees->map(function ($emp) use ($periodMonth, $bpjsData, $salaryComponents) {
-            $salary = $emp->activeSalary($periodMonth);
-            $bpjs   = $bpjsData->get($emp->id);
-            $sc     = $salaryComponents->get($emp->id);
+        // Preload PayRecord per period
+        $payRecords = PayRecord::whereIn('employee_id', $employees->pluck('id'))
+            ->where('pay_period_id', $periodId)
+            ->get()
+            ->keyBy('employee_id');
 
-            $maritalStatus = $emp->marital_status ?? '';
-            $children = $emp->families()
-                ->where('is_dependent', true)
-                ->count();
-            $statusLabel = '-';
-            if ($maritalStatus === 'single') {
-                $statusLabel = "TK/{$children}";
-            } elseif ($maritalStatus === 'married') {
-                $statusLabel = "K/{$children}";
-            }
+        // Preload EmployeeOvertime sum nominal per employee in period
+        $overtimeSums = EmployeeOvertime::whereIn('employee_id', $employees->pluck('id'))
+            ->where('pay_periode_id', $periodId)
+            ->groupBy('employee_id')
+            ->selectRaw('employee_id, SUM(nominal) as total_nominal')
+            ->pluck('total_nominal', 'employee_id');
+
+        // ─── Section A: PPH ───
+        $pphData = $employees->map(function ($emp) use ($payRecords, $overtimeSums, $bpjsByPeriod, $bpjsFallback, $salaryComponents) {
+            $payRecord = $payRecords->get($emp->id);
+            $bpjs      = $bpjsByPeriod->get($emp->id) ?? $bpjsFallback->get($emp->id);
+            $sc        = $salaryComponents->get($emp->id);
 
             $nik = $emp->nik ?? '-';
             $nikTku = $nik !== '-' ? $nik . '000000' : '-';
@@ -137,14 +151,14 @@ class RekapPphKompensasiController extends Controller
             $bpjsTk = 0;
             $bpjsKs = 0;
             if ($bpjs) {
-                $bpjsTk = (float)($bpjs->employee_jkk ?? 0) + (float)($bpjs->employee_jkm ?? 0);
-                $bpjsKs = (float)($bpjs->employee_kesehatan ?? 0);
+                $bpjsTk = (float)($bpjs->employer_jkk ?? 0) + (float)($bpjs->employer_jkm ?? 0);
+                $bpjsKs = (float)($bpjs->employer_kesehatan ?? 0);
             }
 
-            $baseSalary = $salary ? (float)$salary->base_salary : (float)($emp->base_salary ?? 0);
-            $premi      = $salary ? (float)$salary->premi : (float)($emp->premi ?? 0);
-            $tunjangan  = $salary ? (float)$salary->tunjangan : (float)($emp->tunjangan ?? 0);
-            $totalGaji  = $baseSalary + $tunjangan + $premi;
+            $gajiKotor = $payRecord ? (float) $payRecord->gaji_kotor : 0;
+
+            $groupCodes = $emp->groups->pluck('reference_code')->toArray();
+            $um = (float) (in_array('GRP-PS1', $groupCodes) || in_array('GRP-SS', $groupCodes) ? 0 : ($overtimeSums->get($emp->id) ?? 0));
 
             $pph = $sc ? (float)($sc->pph ?? 0) : 0;
 
@@ -153,9 +167,10 @@ class RekapPphKompensasiController extends Controller
                 'name'         => $emp->name,
                 'nik'          => $nik,
                 'nik_tku'      => $nikTku,
-                'gender'       => $emp->gender === 'male' ? 'L' : ($emp->gender === 'female' ? 'P' : '-'),
-                'status_label' => $statusLabel,
-                'total_gaji'   => $totalGaji,
+                'gender'       => $emp->gender,
+                'status_label' => $emp->ptkp ?? '-',
+                'total_gaji'   => $gajiKotor,
+                'um'           => $um,
                 'bpjs_tk'      => $bpjsTk,
                 'bpjs_ks'      => $bpjsKs,
                 'pph'          => $pph,
@@ -166,21 +181,16 @@ class RekapPphKompensasiController extends Controller
         $kompensasiData = $employees->map(function ($emp) use ($salaryComponents) {
             $sc = $salaryComponents->get($emp->id);
 
-            $maritalStatus = $emp->marital_status ?? '';
-            $children = $emp->families()
-                ->where('is_dependent', true)
-                ->count();
-            $statusLabel = '-';
-            if ($maritalStatus === 'single') {
-                $statusLabel = "TK/{$children}";
-            } elseif ($maritalStatus === 'married') {
-                $statusLabel = "K/{$children}";
+            // Perhitungan kompensasi kontrak: (gaji_pokok + tj_masa_kerja) / 12
+            $monthlyKompensasi = 0;
+            if ($sc) {
+                $gajiPokok  = (float) $sc->gaji_pokok;
+                $tjMasaKerja = (float) $sc->tunjangan_masa_kerja;
+                $monthlyKompensasi = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             }
 
             $nik = $emp->nik ?? '-';
             $nikTku = $nik !== '-' ? $nik . '000000' : '-';
-
-            $kompensasi = $sc ? (float)($sc->kompensasi_pph ?? 0) : 0;
 
             return [
                 'id'               => $emp->id,
@@ -188,8 +198,8 @@ class RekapPphKompensasiController extends Controller
                 'nik'              => $nik,
                 'nik_tku'          => $nikTku,
                 'gender'           => $emp->gender === 'male' ? 'L' : ($emp->gender === 'female' ? 'P' : '-'),
-                'status_label'     => $statusLabel,
-                'total_kompensasi' => $kompensasi,
+                'status_label'     => $emp->ptkp ?? '-',
+                'total_kompensasi' => $monthlyKompensasi,
             ];
         });
 
@@ -224,6 +234,7 @@ class RekapPphKompensasiController extends Controller
                 'gender'       => in_array($gender, ['L', 'P']) ? $gender : '-',
                 'status_label' => $statusLabel,
                 'total_gaji'   => (float) ($komponen['total_gaji'] ?? 0),
+                'um'           => 0,
                 'bpjs_tk'      => (float) ($komponen['ttl_bpjs'] ?? 0),
                 'bpjs_ks'      => 0,
                 'pph'          => (float) ($komponen['ttl_pph'] ?? 0),

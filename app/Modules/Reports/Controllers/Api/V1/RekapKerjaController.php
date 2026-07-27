@@ -158,8 +158,8 @@ class RekapKerjaController extends Controller
 
                 $bpjs = $bpjsData->get($emp->id);
                 if ($bpjs) {
-                    $bpjsTk += (float)($bpjs->employee_jht ?? 0) + (float)($bpjs->employee_jkk ?? 0) + (float)($bpjs->employee_jkm ?? 0);
-                    $bpjsKs += (float)($bpjs->employee_kesehatan ?? 0);
+                    $bpjsTk += (float)($bpjs->employer_jht ?? 0) + (float)($bpjs->employer_jkk ?? 0) + (float)($bpjs->employer_jkm ?? 0);
+                    $bpjsKs += (float)($bpjs->employer_kesehatan ?? 0);
                 }
 
                 $gaji += $gajiKotor;

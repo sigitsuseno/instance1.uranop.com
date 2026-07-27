@@ -106,6 +106,7 @@
                     <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:50px">L/P</th>
                     <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:70px">STATUS</th>
                     <th class="px-3 py-2 text-right font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:120px">TOTAL GAJI</th>
+                    <th class="px-3 py-2 text-right font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:100px">UM</th>
                     <th class="px-3 py-2 text-right font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:120px">BPJS TK<br/><span class="text-[9px] font-normal text-(--text-muted)">(JKK,JKM)</span></th>
                     <th class="px-3 py-2 text-right font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:120px">BPJS<br/>KESEHATAN</th>
                     <th class="px-3 py-2 text-right font-bold text-(--text-main)" style="min-width:100px">PPH</th>
@@ -134,7 +135,8 @@
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik_tku }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.gender }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.status_label }}</td>
-                    <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.total_gaji) }}</td>
+                    <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNumDec(row.total_gaji) }}</td>
+                    <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.um) }}</td>
                     <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_tk) }}</td>
                     <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_ks) }}</td>
                     <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNum(row.pph) }}</td>
@@ -146,7 +148,8 @@
                     <td class="px-2.5 py-2.5 text-right border-r border-(--border-soft)" colspan="7">
                       <span class="text-(--primary) uppercase">TOTAL</span>
                     </td>
-                    <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(pphTotals.total_gaji, true) }}</td>
+                    <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNumDec(pphTotals.total_gaji) }}</td>
+                    <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(pphTotals.um, true) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(pphTotals.bpjs_tk, true) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(pphTotals.bpjs_ks, true) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono">{{ fmtNum(pphTotals.pph, true) }}</td>
@@ -194,7 +197,7 @@
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik }}</td>
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik_tku }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.status_label }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNum(row.total_kompensasi) }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNumDec(row.total_kompensasi) }}</td>
                   </tr>
                 </tbody>
 
@@ -255,6 +258,7 @@ const pphTotals = computed(() => {
   const sum = (key) => pphData.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
   return {
     total_gaji: sum('total_gaji'),
+    um:         sum('um'),
     bpjs_tk:    sum('bpjs_tk'),
     bpjs_ks:    sum('bpjs_ks'),
     pph:        sum('pph'),
@@ -272,6 +276,11 @@ const kompensasiTotals = computed(() => {
 function fmtNum(v, force) {
   if (!force && (v === null || v === undefined || v === 0)) return '-'
   return new Intl.NumberFormat('id-ID').format(Math.round(v || 0))
+}
+
+function fmtNumDec(v) {
+  if (v === null || v === undefined || v === 0) return '-'
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
 }
 
 // ─── API Calls ───
@@ -384,9 +393,9 @@ function exportPph() {
   const periodName = selectedPeriod.value?.name || 'PPH'
   const safe = periodName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')
   exportToCsv(pphData.value, [
-    'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU', 'L/P', 'STATUS', 'TOTAL GAJI', 'BPJS TK (JKK,JKM)', 'BPJS KESEHATAN', 'PPH'
+    'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU', 'L/P', 'STATUS', 'TOTAL GAJI', 'UM', 'BPJS TK (JKK,JKM)', 'BPJS KESEHATAN', 'PPH'
   ], (row, i) => [
-    i + 1, row.source === 'extra' ? `${row.name} (TT)` : row.name, row.name, row.nik, row.nik_tku, row.gender, row.status_label, row.total_gaji, row.bpjs_tk, row.bpjs_ks, row.pph
+    i + 1, row.source === 'extra' ? `${row.name} (TT)` : row.name, row.name, row.nik, row.nik_tku, row.gender, row.status_label, row.total_gaji, row.um, row.bpjs_tk, row.bpjs_ks, row.pph
   ], `Rekap_PPH_${safe}.csv`)
   exporting.value = false
 }

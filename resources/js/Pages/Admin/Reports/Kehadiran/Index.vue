@@ -163,6 +163,9 @@ function onSettingsSaved(payload) {
 
 // ── Init ─────────────────────────────────────
 onMounted(async () => {
+    // 0. Restore period dari URL — sebelum async ops, agar watch sudah punya ID
+    if (route.query.period_id) selectedPeriodId.value = Number(route.query.period_id)
+
     // 1. Load all available groups (for modal checkboxes)
     try {
         const groupsRes = await get('/api/v1/settings/employee-data/groups')
@@ -190,10 +193,8 @@ onMounted(async () => {
         selectedGroups.value = ['GRP-PS1']
     }
 
-    // Restore query params (period only — group dari report config API)
-    if (route.query.period_id) selectedPeriodId.value = Number(route.query.period_id)
-
     // Auto-fetch if groups exist
+    // (watch akan skip karena loading masih true dari fetchData ini)
     if (selectedGroups.value.length) {
         fetchData()
     }
@@ -201,7 +202,7 @@ onMounted(async () => {
 
 // Re-fetch when groups change via settings save
 watch(selectedGroups, () => {
-    if (selectedPeriodId.value && selectedGroups.value.length) {
+    if (!loading.value && selectedPeriodId.value && selectedGroups.value.length) {
         fetchData()
     }
 }, { deep: true })
