@@ -4,6 +4,7 @@ namespace App\Modules\Reports\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Attendance\Models\AttendancePrepare;
+use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\KaryawanTitipan\Models\KaryawanTitipan;
 use App\Modules\KaryawanTitipan\Models\KaryawanTitipanRoster;
@@ -125,6 +126,10 @@ class AttendanceReportController extends Controller
         $prepares = AttendancePrepare::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->get()->groupBy('employee_id');
 
+        // ── 4a. Query employee_overtime (uang_makan, one record per day)
+        $employeeOvertimes = EmployeeOvertime::whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->get()->groupBy('employee_id');
+
         // ── 5. Query karyawan
         $employees = Employee::query()
             ->activeInPeriod($startDate, $endDate)
@@ -138,19 +143,23 @@ class AttendanceReportController extends Controller
             ->get()->keyBy(fn(Holiday $h) => $h->date->format('Y-m-d'));
 
         // ── 7. Bangun matrix records
-        $records = $employees->map(function (Employee $employee) use ($prepares, $holidays, $dateStrings) {
+        $records = $employees->map(function (Employee $employee) use ($prepares, $employeeOvertimes, $holidays, $dateStrings) {
             $empPrepares = $prepares->get($employee->id, collect())
                 ->keyBy(fn(AttendancePrepare $p) => $p->date->format('Y-m-d'));
 
+            $empOvertimes = $employeeOvertimes->get($employee->id, collect())
+                ->keyBy(fn(EmployeeOvertime $eo) => $eo->date->format('Y-m-d'));
+
             $totalUangMakan = 0;
+            $totalInsentif = 0;
             $attendance = [];
             foreach ($dateStrings as $dateStr) {
                 $prep      = $empPrepares->get($dateStr);
+                $eo        = $empOvertimes->get($dateStr);
                 $holiday   = $holidays->get($dateStr);
                 $carbon    = Carbon::parse($dateStr);
                 $isWeekend = $carbon->isSunday();
                 $isHoliday = $isWeekend || $holiday !== null;
-                $dayOfWeek = $carbon->dayOfWeek;
 
                 if ($prep) {
                     $status = $this->mapStatus($prep->status, $isHoliday);
@@ -158,32 +167,12 @@ class AttendanceReportController extends Controller
                     $status = ($isWeekend || $holiday) ? 'Off' : '-';
                 }
 
-                // Hitung uang_makan per hari (JKT default rate 15rb)
-                $lemburHours = $prep ? (($prep->lm ?? 0) + ($prep->overtime ?? 0)) / 60 : 0;
-                $uangMakan   = 0;
-
-                if ($lemburHours >= 2) {
-                    if ($dayOfWeek === 0 || $isHoliday) {
-                        // Sunday / Holiday
-                        if ($lemburHours >= 8) {
-                            $uangMakan = 0; // minggu_full — default 0
-                        } elseif ($lemburHours >= 4) {
-                            $uangMakan = 0; // minggu_half — default 0
-                        }
-                    } elseif ($dayOfWeek === 6) {
-                        // Saturday
-                        if ($lemburHours >= 4) {
-                            $uangMakan = 0; // sabtu_full — default 0
-                        } elseif ($lemburHours >= 2) {
-                            $uangMakan = 0; // sabtu_dua — default 0
-                        }
-                    } else {
-                        // Weekday
-                        $uangMakan = 15000;
-                    }
-                }
+                // Uang Makan & Insentif dari tabel employee_overtime
+                $uangMakan = $eo ? (float) $eo->nominal : 0;
+                $insentif  = $eo ? (float) $eo->insentif : 0;
 
                 $totalUangMakan += $uangMakan;
+                $totalInsentif  += $insentif;
 
                 $attendance[$dateStr] = [
                     'status'       => $status,
@@ -192,6 +181,7 @@ class AttendanceReportController extends Controller
                     'lm'           => $prep?->lm ?? null,
                     'overtime'     => $prep?->overtime ?? null,
                     'uang_makan'   => $uangMakan,
+                    'insentif'     => $insentif,
                 ];
             }
 
@@ -202,48 +192,54 @@ class AttendanceReportController extends Controller
                 'group_codes'      => $employee->groups->pluck('reference_code')->toArray(),
                 'attendance'       => $attendance,
                 'total_uang_makan' => $totalUangMakan,
+                'total_insentif'   => $totalInsentif,
             ];
         });
 
-        // ── 8. Karyawan Titipan → Section A. JAKARTA
-        $titipanEmployees = KaryawanTitipan::where('status', 'aktif')->get();
+        // ── 8. Karyawan Titipan → Section A. JAKARTA (hanya jika GRP-JKT dipilih)
+        $includeTitipan = empty($groups) || in_array('GRP-JKT', $groups);
 
-        $titipanRecords = $titipanEmployees->map(function ($employee) use ($dateStrings, $startDate, $endDate) {
-            $rosterRecords = KaryawanTitipanRoster::where('karyawan_titipan_id', $employee->id)
-                ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-                ->get()
-                ->keyBy(fn($r) => $r->date->format('Y-m-d'));
+        if ($includeTitipan) {
+            $titipanEmployees = KaryawanTitipan::where('status', 'aktif')->get();
 
-            $uangMakanRate = (int) ($employee->component['uang_makan'] ?? 0);
-            $totalUangMakan = 0;
-            $attendance = [];
+            $titipanRecords = $titipanEmployees->map(function ($employee) use ($dateStrings, $startDate, $endDate) {
+                $rosterRecords = KaryawanTitipanRoster::where('karyawan_titipan_id', $employee->id)
+                    ->whereBetween('date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+                    ->get()
+                    ->keyBy(fn($r) => $r->date->format('Y-m-d'));
 
-            foreach ($dateStrings as $dateStr) {
-                $roster = $rosterRecords->get($dateStr);
-                $status = $roster?->status ?? '-';
+                $uangMakanRate = (int) ($employee->component['uang_makan'] ?? 0);
+                $totalUangMakan = 0;
+                $attendance = [];
 
-                $uangMakanDaily = ($status === 'H') ? $uangMakanRate : 0;
-                $totalUangMakan += $uangMakanDaily;
+                foreach ($dateStrings as $dateStr) {
+                    $roster = $rosterRecords->get($dateStr);
+                    $status = $roster?->status ?? '-';
 
-                $attendance[$dateStr] = [
-                    'status'     => $status,
-                    'is_holiday' => false,
-                    'uang_makan' => $uangMakanDaily,
+                    $uangMakanDaily = ($status === 'H') ? $uangMakanRate : 0;
+                    $totalUangMakan += $uangMakanDaily;
+
+                    $attendance[$dateStr] = [
+                        'status'     => $status,
+                        'is_holiday' => false,
+                        'uang_makan' => $uangMakanDaily,
+                    ];
+                }
+
+                return [
+                    'id'               => 'titipan_' . $employee->id,
+                    'employee_code'    => $employee->employee_code,
+                    'name'             => $employee->nama,
+                    'group_codes'      => ['GRP-JKT'],
+                    'attendance'       => $attendance,
+                    'total_uang_makan' => $totalUangMakan,
+                    'is_titipan'       => true,
                 ];
-            }
+            });
 
-            return [
-                'id'               => 'titipan_' . $employee->id,
-                'employee_code'    => $employee->employee_code,
-                'name'             => $employee->nama,
-                'group_codes'      => ['GRP-JKT'],
-                'attendance'       => $attendance,
-                'total_uang_makan' => $totalUangMakan,
-            ];
-        });
-
-        // Gabungkan records reguler + titipan
-        $records = $records->concat($titipanRecords);
+            // Gabungkan records reguler + titipan
+            $records = $records->concat($titipanRecords);
+        }
 
         return [
             'periods' => $periods,

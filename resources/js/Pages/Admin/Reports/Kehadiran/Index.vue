@@ -41,7 +41,9 @@ const sections = computed(() => {
         const data = records.value.filter(r =>
             r.group_codes?.some(gc => codes.includes(gc))
         )
-        result.push({ label, data })
+        const regular = data.filter(r => !r.is_titipan)
+        const titipan = data.filter(r => r.is_titipan)
+        result.push({ label, data, regular, titipan })
     }
     return result
 })
@@ -83,6 +85,10 @@ function isSectionA(label) {
     return label?.startsWith('A.')
 }
 
+function showUangMakan(label) {
+    return label?.startsWith('A.') || label?.startsWith('B.')
+}
+
 function getCount(att, sectionLabel = '') {
     if (!att) return '-'
     // Section B: hide OT/LM
@@ -112,12 +118,29 @@ function getCountClass(att, sectionLabel = '') {
     if (sectionLabel.startsWith('B.')) return 'text-(--text-soft) text-[10px]'
     const val = att.is_holiday ? att.lm : att.overtime
     if (!val) return 'text-(--text-soft) text-[10px]'
-    return 'text-(--text-soft) text-[10px]'
+    return 'text-(--text-main) text-[10px] font-medium'
 }
 
 function formatUangMakan(val) {
     if (!val || val === 0) return '-'
     return 'Rp ' + Number(val).toLocaleString('id-ID')
+}
+
+function formatInsentif(val) {
+    if (!val || val === 0) return '-'
+    return 'Rp ' + Number(val).toLocaleString('id-ID')
+}
+
+function getSectionUangMakanTotal(sectionData) {
+    return sectionData.reduce((sum, row) => sum + (row.total_uang_makan || 0), 0)
+}
+
+function getSectionInsentifTotal(sectionData) {
+    return sectionData.reduce((sum, row) => sum + (row.total_insentif || 0), 0)
+}
+
+function hasSprInSection(sectionData) {
+    return sectionData.some(row => row.group_codes?.includes('GRP-SPR'))
 }
 
 // ── Print / Export ───────────────────────────
@@ -293,7 +316,14 @@ watch(selectedGroups, () => {
                 <!-- Section Header -->
                 <div class="flex items-center gap-3 mb-3 px-1">
                     <h3 class="text-base font-bold text-(--text-main)">{{ section.label }}</h3>
-                    <span class="text-xs text-(--text-muted) bg-(--bg-elevated) px-2 py-0.5 rounded-full">{{ section.data.length }} karyawan</span>
+                    <span class="text-xs text-(--text-muted) bg-(--bg-elevated) px-2 py-0.5 rounded-full">
+                        {{ section.regular.length }} karyawan
+                        <template v-if="section.titipan.length"> + {{ section.titipan.length }} titipan</template>
+                    </span>
+                    <span v-if="isSectionA(section.label) && section.titipan.length"
+                        class="text-[10px] text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/30 px-2 py-0.5 rounded-full font-medium">
+                        {{ section.titipan.length }} titipan
+                    </span>
                 </div>
 
                 <!-- No data for this section -->
@@ -308,8 +338,8 @@ watch(selectedGroups, () => {
                             <thead class="sticky top-0 z-20">
                                 <!-- Date row -->
                                 <tr class="bg-(--bg-elevated)">
-                                    <th class="sticky left-0 z-30 bg-(--bg-elevated) px-3 py-2.5 text-left text-xs font-semibold text-(--text-muted) uppercase border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)] w-20" rowspan="2">NIP</th>
-                                    <th class="sticky z-30 bg-(--bg-elevated) px-3 py-2.5 text-left text-xs font-semibold text-(--text-muted) uppercase border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)]" style="left:100px;width:180px;" rowspan="2">Nama</th>
+                                    <th class="sticky left-0 z-30 bg-(--bg-elevated) px-3 py-2.5 text-left text-xs font-semibold text-(--text-muted) uppercase border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)]" style="width:100px;" rowspan="2">NIP</th>
+                                    <th class="sticky z-30 bg-(--bg-elevated) px-3 py-2.5 text-left text-xs font-semibold text-(--text-muted) uppercase border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)]" style="left:100px;width:200px;" rowspan="2">Nama</th>
                                     <th v-for="d in dates" :key="d.date"
                                         :colspan="isSectionA(section.label) ? 1 : 2"
                                         class="px-1.5 py-2 text-center text-[10px] font-bold uppercase border-b border-l border-(--border-soft)"
@@ -326,13 +356,24 @@ watch(selectedGroups, () => {
                                         <th v-if="!isSectionA(section.label)" class="px-1 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted)"
                                             :class="d.is_weekend ? 'bg-red-50 dark:bg-red-950/30' : ''">{{ d.is_weekend ? 'LM' : 'OT' }}</th>
                                     </template>
-                                    <th v-if="isSectionA(section.label)" class="px-2 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted) bg-(--bg-elevated) sticky right-0 z-20 min-w-[80px]">Uang Makan</th>
+                                    <th v-if="showUangMakan(section.label)" class="px-2 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted) bg-(--bg-elevated) sticky right-0 z-20 min-w-[80px]">Uang Makan</th>
+                                    <th v-if="section.label.startsWith('B.') && hasSprInSection(section.data)" class="px-2 py-1 text-center text-[9px] font-semibold uppercase border-b border-l border-(--border-soft) text-(--text-muted) bg-(--bg-elevated) sticky right-0 z-20 min-w-[80px]">Insentif</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-(--border-soft)">
-                                <tr v-for="row in section.data" :key="row.id" class="hover:bg-(--bg-elevated) transition-colors group">
-                                    <td class="sticky left-0 z-10 bg-(--bg-card) group-hover:bg-(--bg-elevated) px-3 py-2 font-mono text-xs text-(--text-muted) border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.04)] transition-colors">{{ row.employee_code }}</td>
-                                    <td class="sticky z-10 bg-(--bg-card) group-hover:bg-(--bg-elevated) px-3 py-2 font-medium text-sm text-(--text-main) border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.04)] transition-colors truncate" :style="{ left:'100px' }">{{ row.name }}</td>
+                                <tr v-for="row in section.data" :key="row.id"
+                                    class="hover:bg-(--bg-elevated) transition-colors group"
+                                    :class="row.is_titipan ? 'bg-purple-50/20 dark:bg-purple-950/10' : ''">
+                                    <td class="sticky left-0 z-10 bg-(--bg-card) group-hover:bg-(--bg-elevated) px-3 py-2 font-mono text-base text-(--text-muted) border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.04)] transition-colors truncate"
+                                        :class="row.is_titipan ? 'bg-purple-50/20 dark:bg-purple-950/10 group-hover:bg-purple-100/50 dark:group-hover:bg-purple-950/30' : ''">
+                                        {{ row.employee_code }}
+                                        <span v-if="row.is_titipan" class="inline-block ml-1 px-1 py-px text-[8px] font-semibold bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400 rounded align-middle" title="Karyawan Titipan">T</span>
+                                    </td>
+                                    <td class="sticky z-10 bg-(--bg-card) group-hover:bg-(--bg-elevated) px-3 py-2 font-medium text-base text-(--text-main) border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.04)] transition-colors truncate"
+                                        :style="{ left:'100px' }"
+                                        :class="row.is_titipan ? 'bg-purple-50/20 dark:bg-purple-950/10 group-hover:bg-purple-100/50 dark:group-hover:bg-purple-950/30' : ''">
+                                        {{ row.name }}
+                                    </td>
                                     <template v-for="d in dates" :key="d.date">
                                         <td class="px-1 py-2 text-center text-xs border-b border-l border-(--border-soft)"
                                             :class="row.attendance[d.date]?.is_holiday ? 'bg-red-50/30 dark:bg-red-950/15' : ''"
@@ -344,11 +385,40 @@ watch(selectedGroups, () => {
                                             <span :class="getCountClass(row.attendance[d.date], section.label)">{{ getCount(row.attendance[d.date], section.label) }}</span>
                                         </td>
                                     </template>
-                                    <td v-if="isSectionA(section.label)" class="px-2 py-2 text-center text-xs font-semibold text-(--text-main) border-b border-l border-(--border-soft) bg-(--bg-card) sticky right-0 z-10">
+                                    <td v-if="showUangMakan(section.label)"
+                                        class="px-2 py-2 text-center text-xs font-semibold text-(--text-main) border-b border-l border-(--border-soft) bg-(--bg-card) sticky z-10"
+                                        :style="section.label.startsWith('B.') && hasSprInSection(section.data) ? { right: '80px' } : { right: '0' }">
                                         {{ formatUangMakan(row.total_uang_makan) }}
+                                    </td>
+                                    <td v-if="section.label.startsWith('B.') && hasSprInSection(section.data)" class="px-2 py-2 text-center text-xs font-semibold border-b border-l border-(--border-soft) bg-(--bg-card) sticky right-0 z-10"
+                                        :class="row.group_codes?.includes('GRP-SPR') ? 'text-amber-700 dark:text-amber-400' : 'text-(--text-soft)'">
+                                        {{ row.group_codes?.includes('GRP-SPR') ? formatInsentif(row.total_insentif) : '-' }}
                                     </td>
                                 </tr>
                             </tbody>
+                            <!-- Section A & B: Uang Makan Subtotal -->
+                            <tfoot v-if="showUangMakan(section.label) && section.data.length">
+                                <tr class="bg-(--bg-elevated) border-t-2 border-(--border-soft)">
+                                    <td class="sticky left-0 z-10 bg-(--bg-elevated) px-3 py-2 border-b border-(--border-soft) shadow-[2px_0_4px_rgba(0,0,0,0.06)]" colspan="2">
+                                        <span class="text-xs font-bold text-(--text-main)">Total Uang Makan</span>
+                                        <span class="text-[10px] text-(--text-muted) ml-2">({{ section.data.length }} karyawan)</span>
+                                    </td>
+                                    <!-- Empty cells for each date -->
+                                    <td v-for="d in dates" :key="'foot-' + d.date"
+                                        class="px-1 py-2 text-center text-xs border-b border-l border-(--border-soft)"
+                                        :class="d.is_weekend ? 'bg-red-50/30 dark:bg-red-950/15' : ''">
+                                    </td>
+                                    <!-- Total Uang Makan -->
+                                    <td class="px-2 py-2 text-center text-sm font-bold text-green-700 dark:text-green-400 border-b border-l border-(--border-soft) bg-(--bg-elevated) sticky z-10"
+                                        :style="section.label.startsWith('B.') && hasSprInSection(section.data) ? { right: '80px' } : { right: '0' }">
+                                        {{ formatUangMakan(getSectionUangMakanTotal(section.data)) }}
+                                    </td>
+                                    <!-- Total Insentif (khusus GRP-SPR di section B) -->
+                                    <td v-if="section.label.startsWith('B.') && hasSprInSection(section.data)" class="px-2 py-2 text-center text-sm font-bold text-amber-700 dark:text-amber-400 border-b border-l border-(--border-soft) bg-(--bg-elevated) sticky right-0 z-10">
+                                        {{ formatInsentif(getSectionInsentifTotal(section.data)) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
                         </table>
                     </div>
                 </div>
