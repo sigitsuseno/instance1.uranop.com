@@ -129,7 +129,7 @@ class UangMakanReportController extends Controller
             if ($isKrySpc) {
                 $getsUangMakan = false;
             } elseif ($isKryTkn) {
-                $getsUangMakan = true;
+                $getsUangMakan = false;
             } elseif ($inSpr) {
                 $getsUangMakan = true;
             } elseif ($inPs1 || $inSs) {
@@ -180,14 +180,14 @@ class UangMakanReportController extends Controller
                     $nominals['uang_makan'] += $nominal;
                 }
 
-                // KRY-SPC: semua nominal masuk ke insentif
-                if ($isKrySpc && $nominal > 0) {
+                // KRY-SPC / KRY-TKN: semua nominal masuk ke insentif
+                if (($isKrySpc || $isKryTkn) && $nominal > 0) {
                     $nominals['insentif'] += $nominal;
                 }
             }
 
-            // Insentif dari employee_overtime pada end_date periode (non-SPC)
-            if (!$isKrySpc) {
+            // Insentif dari employee_overtime pada end_date periode (non-SPC, non-TKN)
+            if (!$isKrySpc && !$isKryTkn) {
                 $nominals['insentif'] = (float)($item['insentif_end'] ?? 0);
             }
 
