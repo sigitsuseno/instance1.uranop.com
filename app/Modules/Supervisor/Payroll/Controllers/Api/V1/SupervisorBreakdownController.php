@@ -5,10 +5,11 @@ namespace App\Modules\Supervisor\Payroll\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
-use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Payroll\Models\PayrollConfig;
 use App\Modules\Settings\Models\SystemSetting;
+use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Supervisor\Models\SupervisorEmployeeGroup;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use Carbon\Carbon;
@@ -169,14 +170,6 @@ class SupervisorBreakdownController extends Controller
         $gajiConfig = PayrollConfig::getConfig('gaji_karyawan');
         $sectionAGroups = $gajiConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
 
-        // ── Ambil semua PayRecord untuk periode ini ──
-        $payRecords = PayRecord::where('pay_period_id', $period->id)
-            ->whereIn('employee_id', $groupEmployeeIds)
-            ->get()
-            ->keyBy(function ($item) {
-                return $item->employee_id . '|' . ($item->segment ?? '');
-            });
-
         $processed = 0;
         $errors = [];
 
@@ -194,16 +187,18 @@ class SupervisorBreakdownController extends Controller
                     if (!isset($splitDays['A']) || !isset($splitDays['B'])) {
                         throw new \Exception('Nilai hari kerja untuk split periode (A dan B) belum diatur.');
                     }
+                    $hkA = (int) $splitDays['A'];
+                    $hkB = (int) $splitDays['B'];
                     $month1End = Carbon::parse($startDate)->endOfMonth()->toDateString();
                     $month2Start = Carbon::parse($endDate)->startOfMonth()->toDateString();
 
                     $segments = [
-                        ['segment' => 'A', 'start' => $startDate, 'end' => $month1End],
-                        ['segment' => 'B', 'start' => $month2Start, 'end' => $endDate],
+                        ['segment' => 'A', 'start' => $startDate, 'end' => $month1End, 'hk' => $hkA],
+                        ['segment' => 'B', 'start' => $month2Start, 'end' => $endDate, 'hk' => $hkB],
                     ];
                 } else {
                     $segments = [
-                        ['segment' => null, 'start' => $startDate, 'end' => $endDate],
+                        ['segment' => null, 'start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays],
                     ];
                 }
 
@@ -217,19 +212,60 @@ class SupervisorBreakdownController extends Controller
                 }
 
                 foreach ($segments as $seg) {
-                    $segCode  = $seg['segment'];
-                    $segStart = $seg['start'];
-                    $segEnd   = $seg['end'];
+                    $segCode   = $seg['segment'];
+                    $segStart  = $seg['start'];
+                    $segEnd    = $seg['end'];
+                    $hkSegment = $seg['hk'];
 
-                    // ── Ambil data dari PayRecord ──
-                    $prKey = $employee->id . '|' . ($segCode ?? '');
-                    $pr    = $payRecords->get($prKey);
+                    // ── Query leave (izin/cuti/sakit) ──
+                    $leaves = LeaveRequest::where('employee_id', $employee->id)
+                        ->where('status', 'approved')
+                        ->where(function ($q) use ($segStart, $segEnd) {
+                            $q->whereBetween('start_date', [$segStart, $segEnd])
+                              ->orWhereBetween('end_date', [$segStart, $segEnd])
+                              ->orWhere(function ($q2) use ($segStart, $segEnd) {
+                                  $q2->where('start_date', '<=', $segStart)
+                                     ->where('end_date', '>=', $segEnd);
+                              });
+                        })
+                        ->with('leaveType')
+                        ->get();
 
-                    $hariKerja   = $pr ? (int) $pr->hari_kerja : 0;
-                    $lm          = $pr ? (float) $pr->lm : 0;
-                    $lmCount     = $pr ? (float) $pr->lm_count : 0;
-                    $lemburCount = $pr ? (float) $pr->lembur_count : 0;
-                    $deductDay   = $pr ? (float) $pr->deduct_day : 0;
+                    $leaveIzin = 0;
+                    foreach ($leaves as $l) {
+                        $lStart = Carbon::parse(max($l->start_date->toDateString(), $segStart));
+                        $lEnd   = Carbon::parse(min($l->end_date->toDateString(), $segEnd));
+                        $dur    = max(0, $lStart->diffInDays($lEnd) + 1);
+
+                        // Hanya leave dengan is_paid=false (unpaid) yang mengurangi hari kerja
+                        $isPaid = optional($l->leaveType)->is_paid;
+                        if ($isPaid === false || $isPaid === 0 || $isPaid === null) {
+                            $leaveIzin += $dur;
+                        }
+                    }
+
+                    // Untuk normal (non-split), ambil langsung dari snapshot
+                    if ($segCode === null) {
+                        $lm          = (float) $snapshot->lm;
+                        $lmCount     = (float) $snapshot->lm_count;
+                        $lemburCount = (float) $snapshot->lembur_count;
+                        $statusAbsen = (int) $snapshot->absen;
+                        $deductDay   = $statusAbsen + $leaveIzin;
+                        $hariKerja   = max(0, 25 - $deductDay);
+                    } else {
+                        // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
+                        // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
+                        $segLogs = AttendanceAutolog::where('employee_id', $employee->id)
+                            ->whereBetween('date', [$segStart, $segEnd])
+                            ->get();
+
+                        $lm          = $segLogs->sum('lm') / 60;
+                        $lmCount     = (float) $segLogs->sum('lm_calc');
+                        $lemburCount = (float) $segLogs->sum('lembur_calc');
+                        $statusAbsen = $segLogs->where('deduct_attendance', 1)->count();
+                        $deductDay   = $statusAbsen + $leaveIzin;
+                        $hariKerja   = max(0, 25 - $deductDay);
+                    }
 
                     // ── Data masukan (salary lookup) ──
                     $segmentMonth = $segCode !== null
@@ -245,7 +281,7 @@ class SupervisorBreakdownController extends Controller
                     $tunjangan    = $employee->tunjangan($segmentMonth);
 
                     // ── Hitungan: Gaji ──
-                    $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
+                    $gaji = round(($gajiPokok / 25) * $hariKerja, 2);
 
                     // ── Hitungan: Upah Lembur ──
                     $totalLemburJam = $lmCount + $lemburCount;
@@ -277,7 +313,7 @@ class SupervisorBreakdownController extends Controller
                     }
 
                     // ── Hitungan: Premi Hadir ──
-                    $premiHadir = round(($premi / $fixedDays) * $hariKerja, 2);
+                    $premiHadir = round(($premi / 25) * $hariKerja, 2);
 
                     // ── Split logic: Part 1 (seg-A) vs Part 2 (seg-B) ──
                     $isPart1 = ($segCode === 'A');
@@ -292,7 +328,7 @@ class SupervisorBreakdownController extends Controller
                     $gajiKotor = $gaji + $tjMasaKerja + $upahLembur + $revisi + $premiHadir + $tunjangan;
 
                     // ── Potongan ──
-                    $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
+                    $potKehadiran = round($deductDay * ($gajiPokok / 25), 2);
                     $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
 
                     // ── Pembulatan 100 ──
