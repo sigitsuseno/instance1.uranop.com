@@ -291,9 +291,9 @@ class RekapKerjaController extends Controller
 
                 $bpjs = $bpjsData->get($emp->id);
                 if ($bpjs) {
-                    // 3 komponen potongan karyawan: JHT + JP (TK) + Kesehatan (KS)
-                    $bpjsTk += (float)($bpjs->employee_jht ?? 0) + (float)($bpjs->employee_jp ?? 0);
-                    $bpjsKs += (float)($bpjs->employee_kesehatan ?? 0);
+                    // BPJS TK = employer JKK + JKM
+                    $bpjsTk += (float)($bpjs->employer_jkk ?? 0) + (float)($bpjs->employer_jkm ?? 0);
+                    $bpjsKs += (float)($bpjs->employer_kesehatan ?? 0);
                 }
 
                 // GAJI = gaji_kotor - lembur
