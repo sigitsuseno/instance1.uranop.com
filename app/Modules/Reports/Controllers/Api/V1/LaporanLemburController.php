@@ -1162,6 +1162,15 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             });
         }
 
+        // ── SPC Jakarta (section D): total_hari_kerja = 0 ────────────
+        if ($spcJakartaEmployees->isNotEmpty()) {
+            $spcJakartaEmployees = $spcJakartaEmployees->map(function ($emp) {
+                $emp['total_hari_kerja'] = 0;
+                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                return $emp;
+            });
+        }
+
         // ── Build sections (A=uang_makan, B=uang_makan, C=lembur, D=lembur, E=lembur) ──
         $sections = [];
 
@@ -1707,7 +1716,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 }
 
                 // ── Formula override: upah/hari × (25 - absent - izin) ──
-                if ($isPeriodComplete) {
+                // Jakarta & SPC Jakarta: total_hari_kerja = 0 (tidak dapat upah harian)
+                $isJakartaSection = in_array($sectionKey, ['jakarta', 'spc_jakarta']);
+                if ($isJakartaSection) {
+                    $totalHariKerja = 0;
+                } elseif ($isPeriodComplete) {
                     $totalHariKerja = 0;
                     foreach ($emps as $emp) {
                         if ($emp['_is_spr'] ?? false) {
