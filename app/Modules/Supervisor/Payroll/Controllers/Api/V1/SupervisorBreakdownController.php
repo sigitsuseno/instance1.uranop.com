@@ -5,6 +5,7 @@ namespace App\Modules\Supervisor\Payroll\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Payroll\Models\PayrollConfig;
 use App\Modules\Settings\Models\SystemSetting;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
@@ -170,6 +171,14 @@ class SupervisorBreakdownController extends Controller
         $gajiConfig = PayrollConfig::getConfig('gaji_karyawan');
         $sectionAGroups = $gajiConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
 
+        // ── Ambil PayRecord untuk lookup hari_kerja ──
+        $payRecords = PayRecord::where('pay_period_id', $period->id)
+            ->whereIn('employee_id', $groupEmployeeIds)
+            ->get()
+            ->keyBy(function ($item) {
+                return $item->employee_id . '|' . ($item->segment ?? '');
+            });
+
         $processed = 0;
         $errors = [];
 
@@ -251,7 +260,9 @@ class SupervisorBreakdownController extends Controller
                         $lemburCount = (float) $snapshot->lembur_count;
                         $statusAbsen = (int) $snapshot->absen;
                         $deductDay   = $statusAbsen + $leaveIzin;
-                        $hariKerja   = max(0, 25 - $deductDay);
+                        $prKey     = $employee->id . '|' . ($segCode ?? '');
+                        $pr        = $payRecords->get($prKey);
+                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, 25 - $deductDay);
                     } else {
                         // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
                         // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
@@ -264,7 +275,9 @@ class SupervisorBreakdownController extends Controller
                         $lemburCount = (float) $segLogs->sum('lembur_calc');
                         $statusAbsen = $segLogs->where('deduct_attendance', 1)->count();
                         $deductDay   = $statusAbsen + $leaveIzin;
-                        $hariKerja   = max(0, 25 - $deductDay);
+                        $prKey     = $employee->id . '|' . ($segCode ?? '');
+                        $pr        = $payRecords->get($prKey);
+                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, 25 - $deductDay);
                     }
 
                     // ── Data masukan (salary lookup) ──
