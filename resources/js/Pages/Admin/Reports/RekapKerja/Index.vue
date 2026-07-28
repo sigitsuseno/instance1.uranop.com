@@ -20,6 +20,18 @@
           </option>
         </select>
 
+        <!-- Export Button -->
+        <button
+          v-if="payPeriodId"
+          @click="exportExcel"
+          :disabled="exporting"
+          class="h-10 px-3 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+          title="Export Excel"
+        >
+          <i class="bx bx-download text-lg"></i>
+          <span class="hidden sm:inline">{{ exporting ? 'Export...' : 'Excel' }}</span>
+        </button>
+
         <!-- Settings Button -->
         <button
           @click="showSettings = true"
@@ -273,6 +285,7 @@ const { get } = useApi()
 
 // ─── State ───
 const loading = ref(false)
+const exporting = ref(false)
 const payPeriodId = ref('')
 const payPeriods = ref([])
 const showSettings = ref(false)
@@ -445,6 +458,48 @@ function onSettingsSaved({ employee_groups, config }) {
   printGroups.value = config?.print_groups || []
   selectedExtraIds.value = config?.extra_employee_ids || []
   fetchData()
+}
+
+async function exportExcel() {
+  if (!payPeriodId.value) return
+
+  exporting.value = true
+  try {
+    const groupParam = selectedGroups.value.length > 0
+      ? `&groups=${selectedGroups.value.join(',')}`
+      : ''
+
+    const printParam = printGroups.value.length > 0
+      ? `&print_groups=${printGroups.value.join(',')}`
+      : ''
+
+    const url = `/api/v1/reports/rekap-kerja/export?period_id=${payPeriodId.value}${groupParam}${printParam}`
+
+    // Download file via fetch + blob
+    const response = await fetch(url)
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Export failed')
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?(.+?)"?$/i)
+    const filename = match ? match[1] : `Rekap_Kerja.xlsx`
+
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
+  } catch (e) {
+    console.error('Export gagal:', e)
+    alert('Gagal mengekspor Excel: ' + e.message)
+  } finally {
+    exporting.value = false
+  }
 }
 
 // ─── Init ───

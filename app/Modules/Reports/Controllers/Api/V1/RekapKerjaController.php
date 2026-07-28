@@ -10,7 +10,9 @@ use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Models\ExtraEmployee;
+use App\Modules\Reports\Exports\RekapKerjaExport;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class RekapKerjaController extends Controller
 {
@@ -69,6 +71,58 @@ class RekapKerjaController extends Controller
             'date_start'  => $startDate,
             'date_end'    => $endDate,
         ]);
+    }
+
+    /**
+     * GET /api/v1/reports/rekap-kerja/export
+     *
+     * Export Excel — 3 sheet: ALL IN, BULANAN PRINT, UANG MAKAN.
+     */
+    public function export(Request $request)
+    {
+        $periodId = $request->input('period_id');
+        $groupCodes = $request->input('groups', '');
+        $printGroupCodes = $request->input('print_groups', '');
+
+        if (!$periodId) {
+            return response()->json(['message' => 'Period ID required'], 422);
+        }
+
+        $period = PayPeriod::find($periodId);
+        if (!$period) {
+            return response()->json(['message' => 'Period not found'], 404);
+        }
+
+        $startDate = $period->start_date->format('Y-m-d');
+        $endDate   = $period->end_date->format('Y-m-d');
+
+        $selectedGroups = [];
+        if ($groupCodes) {
+            $selectedGroups = array_filter(array_map('trim', explode(',', $groupCodes)));
+        }
+
+        // Build all 3 sections — reuse the same private methods
+        $extraIds    = $this->getExtraEmployeeIds();
+        $allInData   = $this->buildSection($startDate, $endDate, $periodId, $selectedGroups, $extraIds);
+
+        $printGroups = [];
+        if ($printGroupCodes) {
+            $printGroups = array_filter(array_map('trim', explode(',', $printGroupCodes)));
+        } else {
+            $printGroups = $this->getPrintGroups($selectedGroups);
+        }
+        $printData    = $this->buildSection($startDate, $endDate, $periodId, $printGroups, []);
+
+        $uangMakanData = $this->buildUangMakanSection($period, $selectedGroups);
+
+        $safePeriod = preg_replace('/[^a-zA-Z0-9\s]/', '', $period->name);
+        $safePeriod = str_replace(' ', '_', trim($safePeriod));
+        $filename   = "Rekap_Kerja_{$safePeriod}.xlsx";
+
+        return Excel::download(
+            new RekapKerjaExport($allInData, $printData, $uangMakanData, $period->name, $startDate, $endDate),
+            $filename
+        );
     }
 
     /**
