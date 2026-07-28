@@ -292,6 +292,7 @@ const showSettings = ref(false)
 const availableGroups = ref([])
 const selectedGroups = ref([])
 const printGroups = ref([])
+const uangMakanGroups = ref([])
 const extraEmployees = ref([])
 const selectedExtraIds = ref([])
 const sections = ref({
@@ -380,10 +381,14 @@ async function fetchSavedConfig() {
     if (data.config?.extra_employee_ids?.length > 0) {
       selectedExtraIds.value = data.config.extra_employee_ids
     }
+    if (data.config?.uang_makan_groups?.length > 0) {
+      uangMakanGroups.value = data.config.uang_makan_groups
+    }
   } catch (e) {
     selectedGroups.value = []
     printGroups.value = []
     selectedExtraIds.value = []
+    uangMakanGroups.value = []
   }
 }
 
@@ -413,7 +418,11 @@ async function fetchData() {
       ? `&print_groups=${printGroups.value.join(',')}`
       : ''
 
-    const res = await get(`/api/v1/reports/rekap-kerja?period_id=${payPeriodId.value}${groupParam}${printParam}`)
+    const umParam = uangMakanGroups.value.length > 0
+      ? `&uang_makan_groups=${uangMakanGroups.value.join(',')}`
+      : ''
+
+    const res = await get(`/api/v1/reports/rekap-kerja?period_id=${payPeriodId.value}${groupParam}${printParam}${umParam}`)
     const data = res.data || res
 
     sections.value = {
@@ -457,6 +466,7 @@ function onSettingsSaved({ employee_groups, config }) {
   selectedGroups.value = employee_groups
   printGroups.value = config?.print_groups || []
   selectedExtraIds.value = config?.extra_employee_ids || []
+  uangMakanGroups.value = config?.uang_makan_groups || []
   fetchData()
 }
 
@@ -473,7 +483,11 @@ async function exportExcel() {
       ? `&print_groups=${printGroups.value.join(',')}`
       : ''
 
-    const url = `/api/v1/reports/rekap-kerja/export?period_id=${payPeriodId.value}${groupParam}${printParam}`
+    const umParam = uangMakanGroups.value.length > 0
+      ? `&uang_makan_groups=${uangMakanGroups.value.join(',')}`
+      : ''
+
+    const url = `/api/v1/reports/rekap-kerja/export?period_id=${payPeriodId.value}${groupParam}${printParam}${umParam}`
 
     // Download file via fetch + blob
     const response = await fetch(url)

@@ -106,7 +106,50 @@
 
             <hr class="border-(--border-soft)" />
 
-            <!-- Section 3: Extra Employees (hanya untuk Section A) -->
+            <!-- Section 3: Group UANG MAKAN -->
+            <div>
+              <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-(--text-main)">
+                <i class="bx bx-food-menu text-lg"></i> C. Group UANG MAKAN
+              </h3>
+              <p class="text-xs text-(--text-muted) mb-3">
+                Pilih group karyawan yang akan muncul di Section C (UANG MAKAN).
+                <br/>Default: mengikuti pilihan Group ALL IN jika tidak dipilih.
+              </p>
+
+              <div class="flex flex-wrap gap-3">
+                <label
+                  v-for="group in availableGroups"
+                  :key="'uangmakan-'+group"
+                  class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-colors select-none"
+                  :class="localUangMakanGroups.includes(group)
+                    ? 'bg-amber-50 border-amber-300 dark:bg-amber-900/20 dark:border-amber-700'
+                    : 'border-(--border-soft) hover:bg-(--bg-hover)'"
+                >
+                  <input
+                    type="checkbox"
+                    :value="group"
+                    v-model="localUangMakanGroups"
+                    class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 border-(--border-soft)"
+                  />
+                  <span class="text-sm font-medium text-(--text-main)">{{ group }}</span>
+                </label>
+              </div>
+
+              <p v-if="localUangMakanGroups.length === 0 && !loading" class="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                <i class="bx bx-error-circle"></i> Tidak ada group dipilih — Section C akan mengikuti Group ALL IN.
+              </p>
+
+              <button
+                @click="localUangMakanGroups = [...availableGroups]"
+                class="mt-3 text-xs text-(--primary) hover:underline flex items-center gap-1"
+              >
+                <i class="bx bx-magic-wand"></i> Pilih Semua Group
+              </button>
+            </div>
+
+            <hr class="border-(--border-soft)" />
+
+            <!-- Section 4: Extra Employees (hanya untuk Section A) -->
             <div>
               <h3 class="text-sm font-semibold mb-3 flex items-center gap-2 text-(--text-main)">
                 <i class="bx bx-user-plus text-lg"></i> Extra Employees (Section A)
@@ -204,6 +247,7 @@ const loading = ref(true);
 const saving = ref(false);
 const selectedGroups = ref([]);
 const localPrintGroups = ref([]);
+const localUangMakanGroups = ref([]);
 const localExtraIds = ref([]);
 const lastUpdated = ref('');
 const lastUpdatedBy = ref('');
@@ -227,6 +271,14 @@ onMounted(async () => {
     } else {
       // Default: pilih semua extra
       localExtraIds.value = props.extraEmployees.map(e => e.id);
+    }
+
+    const uangMakanFromConfig = data.config?.uang_makan_groups || [];
+    if (uangMakanFromConfig.length > 0) {
+      localUangMakanGroups.value = uangMakanFromConfig;
+    } else {
+      // Default: pilih semua group yang tersedia
+      localUangMakanGroups.value = [...props.availableGroups];
     }
 
     lastUpdated.value = data.updated_at || '';
@@ -255,6 +307,7 @@ async function save() {
       config: {
         print_groups: localPrintGroups.value,
         extra_employee_ids: localExtraIds.value,
+        uang_makan_groups: localUangMakanGroups.value,
       },
     });
     lastUpdated.value = res.updated_at || new Date().toLocaleString('id-ID');
@@ -264,6 +317,7 @@ async function save() {
       config: {
         print_groups: localPrintGroups.value,
         extra_employee_ids: localExtraIds.value,
+        uang_makan_groups: localUangMakanGroups.value,
       },
     });
   } catch (e) {

@@ -135,6 +135,11 @@ class ReportConfigService
                 'allin_no_overtime_employees' => [],
                 'allin_driver_overtime'       => [],
             ],
+            'rekap-kerja' => [
+                'print_groups'       => [],
+                'extra_employee_ids' => [],
+                'uang_makan_groups'  => [],
+            ],
             'attendance_overtime_setting' => [
                 'formulas' => [
                     'FIXED' => 'rumus_1',

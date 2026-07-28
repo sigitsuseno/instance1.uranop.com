@@ -59,7 +59,16 @@ class RekapKerjaController extends Controller
         $printData = $this->buildSection($startDate, $endDate, $periodId, $printGroups, []);
 
         // Section C: UANG MAKAN — dikelompokkan per BAGIAN (position)
-        $uangMakanData = $this->buildUangMakanSection($period, $selectedGroups);
+        $uangMakanGroups = [];
+        $uangMakanParam = $request->input('uang_makan_groups', '');
+        if ($uangMakanParam) {
+            $uangMakanGroups = array_filter(array_map('trim', explode(',', $uangMakanParam)));
+        }
+        // Fallback: kalau belum diset, pakai selectedGroups (ALL IN)
+        if (empty($uangMakanGroups)) {
+            $uangMakanGroups = $selectedGroups;
+        }
+        $uangMakanData = $this->buildUangMakanSection($period, $uangMakanGroups);
 
         return response()->json([
             'sections' => [
@@ -113,7 +122,15 @@ class RekapKerjaController extends Controller
         }
         $printData    = $this->buildSection($startDate, $endDate, $periodId, $printGroups, []);
 
-        $uangMakanData = $this->buildUangMakanSection($period, $selectedGroups);
+        $uangMakanGroupsExport = [];
+        $uangMakanParamExport = $request->input('uang_makan_groups', '');
+        if ($uangMakanParamExport) {
+            $uangMakanGroupsExport = array_filter(array_map('trim', explode(',', $uangMakanParamExport)));
+        }
+        if (empty($uangMakanGroupsExport)) {
+            $uangMakanGroupsExport = $selectedGroups;
+        }
+        $uangMakanData = $this->buildUangMakanSection($period, $uangMakanGroupsExport);
 
         $safePeriod = preg_replace('/[^a-zA-Z0-9\s]/', '', $period->name);
         $safePeriod = str_replace(' ', '_', trim($safePeriod));
@@ -276,7 +293,7 @@ class RekapKerjaController extends Controller
      * Memanggil internal UangMakanReportController::rekab(),
      * lalu map employee_id → position untuk grouping.
      */
-    private function buildUangMakanSection(PayPeriod $period, array $selectedGroups): array
+    private function buildUangMakanSection(PayPeriod $period, array $uangMakanGroups): array
     {
         try {
             $startDate = $period->start_date->format('Y-m-d');
@@ -291,9 +308,9 @@ class RekapKerjaController extends Controller
                 ->where('is_active', true)
                 ->with(['position']);
 
-            if (!empty($selectedGroups)) {
-                $empQuery->whereHas('groups', function ($q) use ($selectedGroups) {
-                    $q->whereIn('reference_code', $selectedGroups);
+            if (!empty($uangMakanGroups)) {
+                $empQuery->whereHas('groups', function ($q) use ($uangMakanGroups) {
+                    $q->whereIn('reference_code', $uangMakanGroups);
                 });
             }
 
@@ -303,10 +320,16 @@ class RekapKerjaController extends Controller
                 ->toArray();
 
             // ─── Panggil internal rekab ───
+            // Teruskan uang_makan_groups agar employee_overtime difilter di sumbernya.
             $uangMakanCtrl = app(UangMakanReportController::class);
+            $rekabParams = ['period_id' => $period->id];
+            if (!empty($uangMakanGroups)) {
+                $rekabParams['groups'] = $uangMakanGroups;
+            }
             $rekabRequest  = Request::create(
-                "/api/v1/reports/uang-makan/rekab?period_id={$period->id}",
-                'GET'
+                '/api/v1/reports/uang-makan/rekab',
+                'GET',
+                $rekabParams
             );
             $rekabResponse = $uangMakanCtrl->rekab($rekabRequest);
             $rekabData     = json_decode($rekabResponse->getContent(), true);
