@@ -365,52 +365,31 @@ function onSettingsSaved({ employee_groups, config }) {
 }
 
 // ─── Export ───
-function exportToCsv(data, headers, mapFn, filename) {
-  const BOM = '\uFEFF'
-  const headerRow = headers.join(',')
-  const rows = data.map((row, i) => {
-    return mapFn(row, i).map(v => {
-      if (typeof v === 'string' && (v.includes(',') || v.includes('"'))) {
-        return `"${v.replace(/"/g, '""')}"`
-      }
-      return v
-    }).join(',')
-  })
-  const csv = BOM + headerRow + '\n' + rows.join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(a.href)
+function exportUrl(type) {
+  const params = new URLSearchParams()
+  params.set('period_id', payPeriodId.value)
+  if (selectedGroups.value.length > 0) {
+    params.set('groups', selectedGroups.value.join(','))
+  }
+  if (selectedExtraIds.value.length > 0) {
+    params.set('extra_ids', selectedExtraIds.value.join(','))
+  }
+  const endpoint = type === 'pph' ? 'export-pph' : 'export-kompensasi'
+  return `/api/v1/reports/rekap-pph-kompensasi/${endpoint}?${params.toString()}`
 }
 
 function exportPph() {
   if (pphData.value.length === 0) return
   exporting.value = 'pph'
-  const periodName = selectedPeriod.value?.name || 'PPH'
-  const safe = periodName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')
-  exportToCsv(pphData.value, [
-    'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU', 'L/P', 'STATUS', 'TOTAL GAJI', 'UM', 'BPJS TK (JKK,JKM)', 'BPJS KESEHATAN', 'PPH'
-  ], (row, i) => [
-    i + 1, row.source === 'extra' ? `${row.name} (TT)` : row.name, row.name, row.nik, row.nik_tku, row.gender, row.status_label, row.total_gaji, row.um, row.bpjs_tk, row.bpjs_ks, row.pph
-  ], `Rekap_PPH_${safe}.csv`)
-  exporting.value = false
+  window.open(exportUrl('pph'), '_blank')
+  setTimeout(() => { exporting.value = false }, 500)
 }
 
 function exportKompensasi() {
   if (kompensasiData.value.length === 0) return
   exporting.value = 'kompensasi'
-  const periodName = selectedPeriod.value?.name || 'Kompensasi'
-  const safe = periodName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_')
-  exportToCsv(kompensasiData.value, [
-    'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU', 'STATUS', 'TOTAL KOMPENSASI'
-  ], (row, i) => [
-    i + 1, row.name, row.name, row.nik, row.nik_tku, row.status_label, row.total_kompensasi
-  ], `Rekap_Kompensasi_${safe}.csv`)
-  exporting.value = false
+  window.open(exportUrl('kompensasi'), '_blank')
+  setTimeout(() => { exporting.value = false }, 500)
 }
 
 // ─── Init ───

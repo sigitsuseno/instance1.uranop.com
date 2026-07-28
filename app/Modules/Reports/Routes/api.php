@@ -73,6 +73,8 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
     // --- Rekap PPH & Kompensasi ---
     Route::get('/rekap-pph-kompensasi', [RekapPphKompensasiController::class, 'index'])->name('rekap-pph-kompensasi');
     Route::get('/rekap-pph-kompensasi/groups', [RekapPphKompensasiController::class, 'groups'])->name('rekap-pph-kompensasi.groups');
+    Route::get('/rekap-pph-kompensasi/export-pph', [RekapPphKompensasiController::class, 'exportPph'])->name('rekap-pph-kompensasi.export-pph');
+    Route::get('/rekap-pph-kompensasi/export-kompensasi', [RekapPphKompensasiController::class, 'exportKompensasi'])->name('rekap-pph-kompensasi.export-kompensasi');
 
 });
 

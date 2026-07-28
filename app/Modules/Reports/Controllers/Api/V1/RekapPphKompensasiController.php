@@ -12,7 +12,10 @@ use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\EmployeeGroupMaster;
 use App\Models\ExtraEmployee;
+use App\Modules\Reports\Exports\RekapPphKompensasiPphExport;
+use App\Modules\Reports\Exports\RekapPphKompensasiKompensasiExport;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 
 class RekapPphKompensasiController extends Controller
@@ -48,6 +51,62 @@ class RekapPphKompensasiController extends Controller
             ]);
 
         return response()->json(['data' => $groups]);
+    }
+
+    /**
+     * GET /api/v1/reports/rekap-pph-kompensasi/export-pph
+     *
+     * Export PPH ke Excel.
+     */
+    public function exportPph(Request $request)
+    {
+        $result = $this->buildData($request);
+        if ($result instanceof \Illuminate\Http\JsonResponse) {
+            return $result;
+        }
+
+        $rows       = $result['pph'] instanceof \Illuminate\Support\Collection
+            ? $result['pph']->toArray()
+            : (array) $result['pph'];
+        $periodName = $result['period_name'] ?? 'PPH';
+        $dateStart  = $result['date_start'] ?? '';
+        $dateEnd    = $result['date_end'] ?? '';
+
+        $safe     = str_replace(' ', '_', trim(preg_replace('/[^a-zA-Z0-9\s]/', '', $periodName)));
+        $filename = "Rekap_PPH_{$safe}.xlsx";
+
+        return Excel::download(
+            new RekapPphKompensasiPphExport($rows, $periodName, $dateStart, $dateEnd),
+            $filename
+        );
+    }
+
+    /**
+     * GET /api/v1/reports/rekap-pph-kompensasi/export-kompensasi
+     *
+     * Export Kompensasi ke Excel.
+     */
+    public function exportKompensasi(Request $request)
+    {
+        $result = $this->buildData($request);
+        if ($result instanceof \Illuminate\Http\JsonResponse) {
+            return $result;
+        }
+
+        $rows       = $result['kompensasi'] instanceof \Illuminate\Support\Collection
+            ? $result['kompensasi']->toArray()
+            : (array) $result['kompensasi'];
+        $periodName = $result['period_name'] ?? 'Kompensasi';
+        $dateStart  = $result['date_start'] ?? '';
+        $dateEnd    = $result['date_end'] ?? '';
+
+        $safe     = str_replace(' ', '_', trim(preg_replace('/[^a-zA-Z0-9\s]/', '', $periodName)));
+        $filename = "Rekap_Kompensasi_{$safe}.xlsx";
+
+        return Excel::download(
+            new RekapPphKompensasiKompensasiExport($rows, $periodName, $dateStart, $dateEnd),
+            $filename
+        );
     }
 
     // ─── Private helpers ──────────────────────────────────────────
