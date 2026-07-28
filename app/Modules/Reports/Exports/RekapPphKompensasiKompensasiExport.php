@@ -94,9 +94,10 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
         $lastCol  = $this->lastCol;
         $rowCount = &$this->rowCount;
         $totals   = $this->totals;
+        $rows     = $this->rows;
 
         return [
-            AfterSheet::class => function (AfterSheet $event) use ($lastCol, &$rowCount, $totals) {
+            AfterSheet::class => function (AfterSheet $event) use ($lastCol, &$rowCount, $totals, $rows) {
                 $sheet = $event->sheet->getDelegate();
 
                 $headerRow = 5;
@@ -141,9 +142,13 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $sheet->getStyle("F{$dataStart}:F{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
-                // ─── Number format ───
-                $numRange = "G{$dataStart}:G{$dataEnd}";
-                $sheet->getStyle($numRange)->getNumberFormat()->setFormatCode('#,##0');
+                // ─── NIK & NIK TKU sebagai teks (hindari floating-point truncation 16-digit) ───
+                $sheet->getStyle("D{$dataStart}:E{$dataEnd}")->getNumberFormat()->setFormatCode('@');
+                foreach ($rows as $i => $row) {
+                    $r = $dataStart + $i;
+                    $sheet->setCellValueExplicit("D{$r}", $row['nik'] ?? '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                    $sheet->setCellValueExplicit("E{$r}", $row['nik_tku'] ?? '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                }
 
                 // ─── Zebra ───
                 for ($r = $dataStart; $r <= $dataEnd; $r++) {
