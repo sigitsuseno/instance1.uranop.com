@@ -57,16 +57,15 @@
     <div v-if="hasFilter" class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-(--bg-elevated) border border-(--border-soft) rounded-lg">
       <span class="text-xs font-bold text-(--text-muted) uppercase mr-2">Tampilkan Group:</span>
       <label
-        v-for="g in props.groups"
+        v-for="g in allGroupOptions"
         :key="g"
         class="flex items-center gap-1.5 cursor-pointer select-none px-2 py-1 rounded-md hover:bg-(--bg-card) transition-colors"
         :class="{ 'opacity-50': !activeGroups.includes(g) }"
       >
         <input
           type="checkbox"
-          :value="g"
-          v-model="activeGroups"
-          @change="onGroupFilterChange"
+          :checked="activeGroups.includes(g)"
+          @change="toggleGroup(g, $event)"
           class="rounded border-(--border-soft) accent-(--primary) w-3.5 h-3.5"
         />
         <span class="text-xs font-medium text-(--text-main)">{{ formatGroupLabel(g) }}</span>
@@ -74,7 +73,7 @@
       <span class="text-(--border-soft) mx-1">|</span>
       <button
         @click="selectAllGroups"
-        :disabled="activeGroups.length === props.groups.length"
+        :disabled="activeGroups.length === allGroupOptions.length"
         class="text-xs text-(--primary) hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
       >Pilih Semua</button>
       <button
@@ -373,7 +372,8 @@ import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
 
 const props = defineProps({
-  groups: { type: Array, default: () => [] }
+  groups: { type: Array, default: () => [] },
+  availableGroups: { type: Array, default: () => [] },
 })
 
 const { get, post } = useApi()
@@ -381,6 +381,13 @@ const notification = useNotificationStore()
 
 // ── Group filter state (local, per-tab) ──────────────────────────────
 const activeGroups = ref([...props.groups])
+
+// Gabungan semua grup yang tersedia (dari parent) — selalu tampil di filter
+const allGroupOptions = computed(() => {
+  const merged = new Set([...props.availableGroups, ...props.groups])
+  return [...merged]
+})
+
 const groupLabels = {
   'GRP-JKT': 'Jakarta',
   'GRP-PS1': 'PS1',
@@ -499,23 +506,34 @@ function formatGroupLabel(code) {
   return groupLabels[code] || code
 }
 
-function onGroupFilterChange() {
-  if (activeGroups.value.length === 0) {
-    // Prevent deselecting all — keep at least the last one
-    activeGroups.value = [props.groups[0]]
+function toggleGroup(groupCode, event) {
+  const checked = event.target.checked
+  if (checked) {
+    // Tambah group
+    if (!activeGroups.value.includes(groupCode)) {
+      activeGroups.value = [...activeGroups.value, groupCode]
+    }
+  } else {
+    // Hapus group — minimal 1 harus tetap aktif
+    if (activeGroups.value.length <= 1) {
+      // Kembalikan checkbox ke checked (jangan sampai kosong)
+      event.target.checked = true
+      return
+    }
+    activeGroups.value = activeGroups.value.filter(g => g !== groupCode)
   }
   fetchData()
 }
 
 function selectAllGroups() {
-  activeGroups.value = [...props.groups]
+  activeGroups.value = [...allGroupOptions.value]
   fetchData()
 }
 
 function deselectAllGroups() {
   // Keep at least 1 group
-  if (props.groups.length > 0) {
-    activeGroups.value = [props.groups[0]]
+  if (allGroupOptions.value.length > 0) {
+    activeGroups.value = [allGroupOptions.value[0]]
     fetchData()
   }
 }
@@ -623,6 +641,7 @@ function exportExcel() {
 
 watch(() => props.groups, (newGroups) => {
   // Sync activeGroups when parent (Settings modal) changes
+  // Reset ke semua grup yang tersedia jika dari Settings
   activeGroups.value = [...newGroups]
   fetchData()
 })

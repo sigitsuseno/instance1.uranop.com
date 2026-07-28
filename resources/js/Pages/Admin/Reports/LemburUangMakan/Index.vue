@@ -57,7 +57,7 @@
 
     <!-- Tab Content -->
     <TabDetail v-if="activeTab === 'detail'" :groups="selectedGroups" />
-    <TabDetailPre v-if="activeTab === 'detail_pre'" :groups="selectedGroups" />
+    <TabDetailPre v-if="activeTab === 'detail_pre'" :groups="selectedGroups" :available-groups="groupCodes" />
     <TabResume v-if="activeTab === 'resume'" :groups="selectedGroups" />
 
     <!-- Update Data Modal -->
