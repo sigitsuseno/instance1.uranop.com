@@ -169,11 +169,11 @@ class RekapGajiController extends Controller
 
             $groupCodes = $emp->groups->pluck('reference_code')->toArray();
 
-            // BPJS TK = employer JHT + JKK + JKM
+            // BPJS TK = employer JKK + JKM
             $bpjsTk = 0;
             $bpjsKs = 0;
             if ($bpjs) {
-                $bpjsTk = (float)($bpjs->employer_jht ?? 0) + (float)($bpjs->employer_jkk ?? 0) + (float)($bpjs->employer_jkm ?? 0);
+                $bpjsTk = (float)($bpjs->employer_jkk ?? 0) + (float)($bpjs->employer_jkm ?? 0);
                 $bpjsKs = (float)($bpjs->employer_kesehatan ?? 0);
             }
 

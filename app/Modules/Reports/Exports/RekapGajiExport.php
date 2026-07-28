@@ -76,7 +76,7 @@ class RekapGajiExport implements FromArray, WithHeadings, WithStyles, WithColumn
                 'No', 'NAMA', 'ACCOUNT NO', 'STATUS', 'L/P',
                 "GAJI\n{$periodUpper}",
                 'TOTAL GAJI',
-                "BPJS TK\n(JHT,JKK,JKM)",
+                "BPJS TK\n(JKK,JKM)",
                 'BPJS KESEHATAN',
                 'UM',
             ],

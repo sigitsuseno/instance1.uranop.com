@@ -94,7 +94,7 @@
                 <tr class="bg-pink-50 border-b-2 border-(--border-soft)">
                   <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[120px]">GAJI<br/><span class="text-[9px] font-normal text-(--text-muted)">{{ subPeriodLabel }}</span></th>
                   <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[110px]">TOTAL GAJI</th>
-                  <th class="px-3 py-1.5 text-center font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[130px]">BPJS TK<br/><span class="text-[9px] font-normal text-(--text-muted)">(JHT,JKK,JKM)</span></th>
+                  <th class="px-3 py-1.5 text-center font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[130px]">BPJS TK<br/><span class="text-[9px] font-normal text-(--text-muted)">(JKK,JKM)</span></th>
                   <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) border-r border-(--border-soft) whitespace-nowrap min-w-[110px]">BPJS KESEHATAN</th>
                   <th class="px-3 py-1.5 text-right font-semibold text-(--text-main) whitespace-nowrap min-w-[90px]">UM</th>
                 </tr>

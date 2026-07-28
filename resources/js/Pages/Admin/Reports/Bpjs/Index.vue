@@ -100,7 +100,7 @@
 
           <!-- Per-Group Table -->
           <BaseCard class="p-0">
-            <div class="overflow-x-auto">
+            <div :class="['overflow-x-auto', { 'max-h-[55vh] overflow-y-auto': group.code === 'BPJS-PROD' }]">
               <table class="w-full text-xs border-collapse">
                 <thead>
                   <!-- Row 1: Grouped Headers -->
