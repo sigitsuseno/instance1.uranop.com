@@ -20,16 +20,27 @@
           </option>
         </select>
 
-        <!-- Export Button -->
+        <!-- Export Buttons -->
         <button
           v-if="payPeriodId"
           @click="exportExcel"
           :disabled="exporting"
           class="h-10 px-3 text-sm rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
-          title="Export Excel"
+          title="Export Excel (3 Sheet terpisah)"
         >
           <i class="bx bx-download text-lg"></i>
           <span class="hidden sm:inline">{{ exporting ? 'Export...' : 'Excel' }}</span>
+        </button>
+
+        <button
+          v-if="payPeriodId"
+          @click="exportCombined"
+          :disabled="exportingCombined"
+          class="h-10 px-3 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+          title="Export Gabungan (1 Sheet: A+B+C dari atas ke bawah)"
+        >
+          <i class="bx bx-layer text-lg"></i>
+          <span class="hidden sm:inline">{{ exportingCombined ? 'Export...' : 'Gabung' }}</span>
         </button>
 
         <!-- Settings Button -->
@@ -286,6 +297,7 @@ const { get } = useApi()
 // ─── State ───
 const loading = ref(false)
 const exporting = ref(false)
+const exportingCombined = ref(false)
 const payPeriodId = ref('')
 const payPeriods = ref([])
 const showSettings = ref(false)
@@ -475,19 +487,8 @@ async function exportExcel() {
 
   exporting.value = true
   try {
-    const groupParam = selectedGroups.value.length > 0
-      ? `&groups=${selectedGroups.value.join(',')}`
-      : ''
-
-    const printParam = printGroups.value.length > 0
-      ? `&print_groups=${printGroups.value.join(',')}`
-      : ''
-
-    const umParam = uangMakanGroups.value.length > 0
-      ? `&uang_makan_groups=${uangMakanGroups.value.join(',')}`
-      : ''
-
-    const url = `/api/v1/reports/rekap-kerja/export?period_id=${payPeriodId.value}${groupParam}${printParam}${umParam}`
+    const params = getExportParams()
+    const url = `/api/v1/reports/rekap-kerja/export?period_id=${payPeriodId.value}${params}`
 
     // Download file via fetch + blob
     const response = await fetch(url)
@@ -513,6 +514,56 @@ async function exportExcel() {
     alert('Gagal mengekspor Excel: ' + e.message)
   } finally {
     exporting.value = false
+  }
+}
+
+function getExportParams() {
+  const groupParam = selectedGroups.value.length > 0
+    ? `&groups=${selectedGroups.value.join(',')}`
+    : ''
+
+  const printParam = printGroups.value.length > 0
+    ? `&print_groups=${printGroups.value.join(',')}`
+    : ''
+
+  const umParam = uangMakanGroups.value.length > 0
+    ? `&uang_makan_groups=${uangMakanGroups.value.join(',')}`
+    : ''
+
+  return `${groupParam}${printParam}${umParam}`
+}
+
+async function exportCombined() {
+  if (!payPeriodId.value) return
+
+  exportingCombined.value = true
+  try {
+    const params = getExportParams()
+    const url = `/api/v1/reports/rekap-kerja/export-combined?period_id=${payPeriodId.value}${params}`
+
+    const response = await fetch(url)
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err.message || 'Export failed')
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const match = disposition.match(/filename="?(.+?)"?$/i)
+    const filename = match ? match[1] : `Rekap_Kerja_Gabungan.xlsx`
+
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
+  } catch (e) {
+    console.error('Export gabungan gagal:', e)
+    alert('Gagal mengekspor Excel: ' + e.message)
+  } finally {
+    exportingCombined.value = false
   }
 }
 

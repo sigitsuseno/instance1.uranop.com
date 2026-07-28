@@ -67,6 +67,7 @@ Route::prefix('v1/reports')->name('api.reports.')->group(function () {
     // --- Rekap Kerja ---
     Route::get('/rekap-kerja', [RekapKerjaController::class, 'index'])->name('rekap-kerja');
     Route::get('/rekap-kerja/export', [RekapKerjaController::class, 'export'])->name('rekap-kerja.export');
+    Route::get('/rekap-kerja/export-combined', [RekapKerjaController::class, 'exportCombined'])->name('rekap-kerja.export-combined');
     Route::get('/rekap-kerja/groups', [RekapKerjaController::class, 'groups'])->name('rekap-kerja.groups');
     Route::get('/rekap-kerja/extra-employees', [RekapKerjaController::class, 'extraEmployees'])->name('rekap-kerja.extra-employees');
 
