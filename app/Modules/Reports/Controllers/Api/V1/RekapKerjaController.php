@@ -280,6 +280,7 @@ class RekapKerjaController extends Controller
             $jml = count($emps);
             $gaji = 0;
             $lembur = 0;
+            $gajiKotorTotal = 0;
             $bpjsTk = 0;
             $bpjsKs = 0;
 
@@ -295,11 +296,14 @@ class RekapKerjaController extends Controller
                     $bpjsKs += (float)($bpjs->employee_kesehatan ?? 0);
                 }
 
-                $gaji += $gajiKotor;
+                // GAJI = gaji_kotor - lembur
+                $gaji += ($gajiKotor - $overtimePay);
                 $lembur += $overtimePay;
+                $gajiKotorTotal += $gajiKotor;
             }
 
-            $total = $gaji + $lembur;
+            // TOTAL = gaji_kotor (tanpa ditambah lembur)
+            $total = $gajiKotorTotal;
             $bpjsTotal = $bpjsTk + $bpjsKs;
 
             $result[] = [
