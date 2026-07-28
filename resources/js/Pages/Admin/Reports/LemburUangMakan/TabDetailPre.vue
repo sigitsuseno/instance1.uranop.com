@@ -53,6 +53,38 @@
       </div>
     </div>
 
+    <!-- ── Group Filter Bar ───────────────────────────────────────────── -->
+    <div v-if="hasFilter" class="flex flex-wrap items-center gap-2 mb-4 p-3 bg-(--bg-elevated) border border-(--border-soft) rounded-lg">
+      <span class="text-xs font-bold text-(--text-muted) uppercase mr-2">Tampilkan Group:</span>
+      <label
+        v-for="g in props.groups"
+        :key="g"
+        class="flex items-center gap-1.5 cursor-pointer select-none px-2 py-1 rounded-md hover:bg-(--bg-card) transition-colors"
+        :class="{ 'opacity-50': !activeGroups.includes(g) }"
+      >
+        <input
+          type="checkbox"
+          :value="g"
+          v-model="activeGroups"
+          @change="onGroupFilterChange"
+          class="rounded border-(--border-soft) accent-(--primary) w-3.5 h-3.5"
+        />
+        <span class="text-xs font-medium text-(--text-main)">{{ formatGroupLabel(g) }}</span>
+      </label>
+      <span class="text-(--border-soft) mx-1">|</span>
+      <button
+        @click="selectAllGroups"
+        :disabled="activeGroups.length === props.groups.length"
+        class="text-xs text-(--primary) hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+      >Pilih Semua</button>
+      <button
+        @click="deselectAllGroups"
+        :disabled="activeGroups.length <= 1"
+        class="text-xs text-(--text-muted) hover:text-red-500 hover:underline disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Minimal 1 grup harus dipilih"
+      >Bersihkan</button>
+    </div>
+
     <!-- Table -->
     <BaseCard>
       <div v-if="!hasFilter" class="p-12 text-center text-(--text-muted)">
@@ -347,6 +379,18 @@ const props = defineProps({
 const { get, post } = useApi()
 const notification = useNotificationStore()
 
+// ── Group filter state (local, per-tab) ──────────────────────────────
+const activeGroups = ref([...props.groups])
+const groupLabels = {
+  'GRP-JKT': 'Jakarta',
+  'GRP-PS1': 'PS1',
+  'GRP-ALLIN': 'All In',
+  'GRP-GD': 'GD',
+  'GRP-SPR': 'SPR',
+  'KRY-SPC': 'SPC',
+  'KRY-TKN': 'TKN',
+}
+
 const dateMode = ref('period')
 const selectedPeriodId = ref(null)
 const startDate = ref('')
@@ -446,8 +490,34 @@ function buildParams() {
   } else {
     params.set('period_id', selectedPeriodId.value)
   }
-  props.groups.forEach(g => params.append('groups[]', g))
+  activeGroups.value.forEach(g => params.append('groups[]', g))
   return params
+}
+
+// ── Group filter helpers ─────────────────────────────────────────────
+function formatGroupLabel(code) {
+  return groupLabels[code] || code
+}
+
+function onGroupFilterChange() {
+  if (activeGroups.value.length === 0) {
+    // Prevent deselecting all — keep at least the last one
+    activeGroups.value = [props.groups[0]]
+  }
+  fetchData()
+}
+
+function selectAllGroups() {
+  activeGroups.value = [...props.groups]
+  fetchData()
+}
+
+function deselectAllGroups() {
+  // Keep at least 1 group
+  if (props.groups.length > 0) {
+    activeGroups.value = [props.groups[0]]
+    fetchData()
+  }
 }
 
 async function fetchData() {
@@ -551,7 +621,11 @@ function exportExcel() {
     .catch(err => notification.addNotification('Gagal export Excel', 'error'))
 }
 
-watch(() => props.groups, fetchData)
+watch(() => props.groups, (newGroups) => {
+  // Sync activeGroups when parent (Settings modal) changes
+  activeGroups.value = [...newGroups]
+  fetchData()
+})
 watch(selectedPeriodId, () => { if (dateMode.value === 'period') fetchData() })
 watch(dateMode, () => { selectedPeriodId.value = null; startDate.value = ''; endDate.value = '' })
 </script>

@@ -889,6 +889,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         // ── Fetch from employee_overtime (per-date records) ──────
         $overtimeRecords = \App\Modules\Attendance\Models\EmployeeOvertime::where('pay_periode_id', $period?->id)
             ->whereBetween('date', [$startDate, $endDate])
+            ->when(!empty($groups), fn($q) => $q->whereHas('employee.groups', fn($gq) => $gq->whereIn('reference_code', $groups)))
             ->with('employee.position', 'employee.groups', 'employee.groups.master')
             ->get();
 

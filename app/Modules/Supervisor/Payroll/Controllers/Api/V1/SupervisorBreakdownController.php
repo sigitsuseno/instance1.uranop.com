@@ -232,17 +232,16 @@ class SupervisorBreakdownController extends Controller
                         ->get();
 
                     $leaveIzin = 0;
-                    $leaveCuti = 0;
-                    $leaveSakit = 0;
                     foreach ($leaves as $l) {
                         $lStart = Carbon::parse(max($l->start_date->toDateString(), $segStart));
                         $lEnd   = Carbon::parse(min($l->end_date->toDateString(), $segEnd));
                         $dur    = max(0, $lStart->diffInDays($lEnd) + 1);
 
-                        $cat = optional($l->leaveType)->category;
-                        if ($cat === 'leave') $leaveCuti += $dur;
-                        elseif ($cat === 'permit') $leaveIzin += $dur;
-                        elseif ($cat === 'sick') $leaveSakit += $dur;
+                        // Hanya leave dengan is_paid=false (unpaid) yang mengurangi hari kerja
+                        $isPaid = optional($l->leaveType)->is_paid;
+                        if ($isPaid === false || $isPaid === 0 || $isPaid === null) {
+                            $leaveIzin += $dur;
+                        }
                     }
 
                     // Untuk normal (non-split), ambil langsung dari snapshot
@@ -250,8 +249,9 @@ class SupervisorBreakdownController extends Controller
                         $lm          = (float) $snapshot->lm;
                         $lmCount     = (float) $snapshot->lm_count;
                         $lemburCount = (float) $snapshot->lembur_count;
-                        $deductDay   = (float) $snapshot->deduct_day + $leaveIzin;
-                        $hariKerja   = max(0, $hkSegment - $deductDay);
+                        $statusAbsen = (int) $snapshot->absen;
+                        $deductDay   = $statusAbsen + $leaveIzin;
+                        $hariKerja   = max(0, 25 - $deductDay);
                     } else {
                         // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
                         // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
@@ -262,8 +262,9 @@ class SupervisorBreakdownController extends Controller
                         $lm          = $segLogs->sum('lm') / 60;
                         $lmCount     = (float) $segLogs->sum('lm_calc');
                         $lemburCount = (float) $segLogs->sum('lembur_calc');
-                        $deductDay   = (float) $segLogs->sum('deduct_day') + $segLogs->where('deduct_attendance', 1)->count() + $leaveIzin;
-                        $hariKerja   = max(0, $hkSegment - $deductDay);
+                        $statusAbsen = $segLogs->where('deduct_attendance', 1)->count();
+                        $deductDay   = $statusAbsen + $leaveIzin;
+                        $hariKerja   = max(0, 25 - $deductDay);
                     }
 
                     // ── Data masukan (salary lookup) ──
@@ -280,7 +281,7 @@ class SupervisorBreakdownController extends Controller
                     $tunjangan    = $employee->tunjangan($segmentMonth);
 
                     // ── Hitungan: Gaji ──
-                    $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
+                    $gaji = round(($gajiPokok / 25) * $hariKerja, 2);
 
                     // ── Hitungan: Upah Lembur ──
                     $totalLemburJam = $lmCount + $lemburCount;
@@ -312,7 +313,7 @@ class SupervisorBreakdownController extends Controller
                     }
 
                     // ── Hitungan: Premi Hadir ──
-                    $premiHadir = round(($premi / $fixedDays) * $hariKerja, 2);
+                    $premiHadir = round(($premi / 25) * $hariKerja, 2);
 
                     // ── Split logic: Part 1 (seg-A) vs Part 2 (seg-B) ──
                     $isPart1 = ($segCode === 'A');
@@ -327,7 +328,7 @@ class SupervisorBreakdownController extends Controller
                     $gajiKotor = $gaji + $tjMasaKerja + $upahLembur + $revisi + $premiHadir + $tunjangan;
 
                     // ── Potongan ──
-                    $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
+                    $potKehadiran = round($deductDay * ($gajiPokok / 25), 2);
                     $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
 
                     // ── Pembulatan 100 ──
