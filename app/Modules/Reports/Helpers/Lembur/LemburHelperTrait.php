@@ -7,10 +7,38 @@ use Carbon\Carbon;
 trait LemburHelperTrait
 {
     /**
+     * Static cache: kode leave type → is_paid.
+     * @var array<string, bool>|null
+     */
+    private static ?array $_ltPaidMap = null;
+
+    /**
+     * Load semua leave type code → is_paid (static cache, shared via trait).
+     */
+    private static function getLeaveTypePaidMap(): array
+    {
+        if (self::$_ltPaidMap === null) {
+            self::$_ltPaidMap = \App\Modules\Leave\Models\LeaveType::pluck('is_paid', 'code')
+                ->mapWithKeys(fn($isPaid, $code) => [strtolower($code) => (bool) $isPaid])
+                ->toArray();
+        }
+        return self::$_ltPaidMap;
+    }
+
+    /**
      * Dapatkan kode H/A dari status attendance.
+     *
+     * Logika "I" (Izin) sekarang berbasis LeaveType.is_paid:
+     * - is_paid === false → 'I' (unpaid, potong 25 hari)
+     * - is_paid === true  → 'H' (paid, tidak potong 25 hari)
+     * - bukan leave type  → fallback ke aturan lama
      */
     protected function getHACode(string $statusRaw, bool $isHoliday, $roster): string
     {
+        $ltPaidMap = self::getLeaveTypePaidMap();
+        $code      = strtolower($statusRaw);
+        $ltPaid    = $ltPaidMap[$code] ?? null; // null = bukan leave type
+
         return match (true) {
             $statusRaw === 'hadir'          => 'H',
             $statusRaw === 'absent'         => 'A',
@@ -20,7 +48,11 @@ trait LemburHelperTrait
             str_starts_with($statusRaw, 'c') => 'C',
             $statusRaw === 'imt',
             $statusRaw === 'ipa'            => 'H',
-            str_starts_with($statusRaw, 'i') => 'I',
+            // Unpaid leave type → Izin (potong 25 hari)
+            $ltPaid === false               => 'I',
+            // Paid leave type → Hadir (tidak potong 25 hari)
+            $ltPaid === true                => 'H',
+            // Bukan leave type → fallback
             default                         => $statusRaw === '-' ? '-' : 'I',
         };
     }

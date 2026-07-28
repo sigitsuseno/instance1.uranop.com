@@ -904,6 +904,29 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         // ── Helpers ────────────────────────────────────────────────
         $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
 
+        // ── Preload leave_request → is_paid map (employee_id => [date => is_paid]) ──
+        $leaveRequestPaidMap = [];
+        if ($period) {
+            $leaveRequests = \App\Modules\Leave\Models\LeaveRequest::where('leave_period_id', $period->id)
+                ->where('status', 'approved')
+                ->with('leaveType')
+                ->get();
+
+            foreach ($leaveRequests as $lr) {
+                $isPaid = (bool) ($lr->leaveType->is_paid ?? false);
+                $d = Carbon::parse($lr->start_date);
+                $end = Carbon::parse($lr->end_date);
+                while ($d->lte($end)) {
+                    $dateStr = $d->format('Y-m-d');
+                    if (!isset($leaveRequestPaidMap[$lr->employee_id])) {
+                        $leaveRequestPaidMap[$lr->employee_id] = [];
+                    }
+                    $leaveRequestPaidMap[$lr->employee_id][$dateStr] = $isPaid;
+                    $d->addDay();
+                }
+            }
+        }
+
         // ── Group employees by section ─────────────────────────────
         $jakartaEmployees  = collect();
         $allInEmployees    = collect();
@@ -946,7 +969,14 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $komponen = $rec->komponen ?? [];
                 $status   = $komponen['status'] ?? '-';
 
+                $dateStr = $rec->date instanceof Carbon
+                    ? $rec->date->format('Y-m-d')
+                    : ($rec->date ?? '');
+
                 // ── Derive HA dari status ────────────────────────────
+                // Cek leave_request: unpaid → I (potong 25), paid → H
+                $ltPaid = $leaveRequestPaidMap[$employee->id][$dateStr] ?? null;
+
                 $ha = match (true) {
                     $status === 'hadir'          => 'H',
                     $status === 'absent'         => 'A',
@@ -956,7 +986,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     str_starts_with($status, 'c') => 'C',
                     $status === 'imt',
                     $status === 'ipa'            => 'H',
-                    str_starts_with($status, 'i') => 'I',
+                    // Unpaid leave type → Izin (potong 25 hari)
+                    $ltPaid === false            => 'I',
+                    // Paid leave type → Hadir (tidak potong 25 hari)
+                    $ltPaid === true             => 'H',
+                    // Bukan leave type → fallback
                     default                      => $status === '-' ? '-' : 'I',
                 };
 
@@ -987,10 +1021,6 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     $overtimeNominalDay = $nominalAmount;
                 }
 
-                $dateStr = $rec->date instanceof Carbon
-                    ? $rec->date->format('Y-m-d')
-                    : ($rec->date ?? '');
-
                 $days[$dateStr] = [
                     'kode'             => $kode,
                     'ha'               => $ha,
@@ -1012,9 +1042,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             }
 
             // ── Hitung total_hari_kerja ──────────────────────────────────
-            // Jika hari ini >= end_date periode → formula: max(0, 25 - absent - izin) × (gaji/25)
+            // Jika hari ini >= end_date periode → formula: gaji/25 × max(0, 25 - absent - izin)
             // Jika belum → hitung dari hari aktif aktual (current logic)
             $periodEndDate = $period?->end_date;
+            $dailyRate = $gaji / 25;
             if ($periodEndDate && Carbon::today()->gte($periodEndDate)) {
                 $absentCount = 0;
                 $izinCount   = 0;
@@ -1024,10 +1055,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     if ($ha === 'I') $izinCount++;
                 }
                 $effectiveDays = max(0, 25 - $absentCount - $izinCount);
-                $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
+                $totalHariKerja = round($effectiveDays * $dailyRate, 2);
             } else {
                 $effectiveDays = min($activeDayCount, 25);
-                $totalHariKerja = round($effectiveDays * ($gaji / 25), 2);
+                $totalHariKerja = round($effectiveDays * $dailyRate, 2);
             }
 
             // ── Cari nilai insentif dari record yg date = end_date periode ──
@@ -1592,8 +1623,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
     private function buildCombinedResumeData(Request $request)
     {
-        // First get the detail data
-        $detailResult = $this->buildCombinedDetailData($request);
+        // Ambil dari data Pre (employee_overtime), bukan Detail (attendance_prepare)
+        $detailResult = $this->buildCombinedDetailPreData($request);
         $dates = $detailResult['dates'];
 
         // Flatten all employees from both sections
@@ -1695,6 +1726,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                         $totalHariKerja += ($emp['upah_per_hari'] ?? 0) * $hariKerjaEmp;
                     }
                 }
+
+                // Tambah insentif dari Pre data (per-employee lump sum)
+                $totalUangMakan += $emps->sum('total_insentif');
 
                 $data[] = [
                     'bagian'            => $posName,
