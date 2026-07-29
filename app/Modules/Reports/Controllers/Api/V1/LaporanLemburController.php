@@ -1906,6 +1906,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             ];
         }
 
+        // ── Merge SPC sections into parent sections ─────────────────
+        // D (SPC Jakarta) → A (Jakarta) | E (SPC Ungaran) → B (All In)
+        $sections = $this->mergeSpcSections($sections);
+
         return [
             'sections'     => $sections,
             'dates'        => $dates,
@@ -1914,6 +1918,57 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
     }
 
     // ─── Helpers ──────────────────────────────────────────────────
+
+    /**
+     * Merge SPC sections into their parent sections for Resume.
+     * D (SPC Jakarta) → A (Jakarta) | E (SPC Ungaran) → B (All In)
+     */
+    private function mergeSpcSections(array $sections): array
+    {
+        $merged = [];
+        $spcJakartaData = [];
+        $spcUngaranData = [];
+
+        foreach ($sections as $section) {
+            $key = $section['key'] ?? '';
+
+            if ($key === 'spc_jakarta') {
+                $spcJakartaData = $section['data'];
+                // Tidak ditambahkan ke result
+            } elseif ($key === 'spc_ungaran') {
+                $spcUngaranData = $section['data'];
+                // Tidak ditambahkan ke result
+            } else {
+                $merged[] = $section;
+            }
+        }
+
+        // Gabung data SPC Jakarta ke Jakarta
+        if (!empty($spcJakartaData)) {
+            foreach ($merged as &$section) {
+                if (($section['key'] ?? '') === 'jakarta') {
+                    $section['data'] = array_merge($section['data'], $spcJakartaData);
+                    // Re-sort by bagian
+                    usort($section['data'], fn($a, $b) => strcmp($a['bagian'], $b['bagian']));
+                    break;
+                }
+            }
+        }
+
+        // Gabung data SPC Ungaran ke All In
+        if (!empty($spcUngaranData)) {
+            foreach ($merged as &$section) {
+                if (($section['key'] ?? '') === 'all_in') {
+                    $section['data'] = array_merge($section['data'], $spcUngaranData);
+                    // Re-sort by bagian
+                    usort($section['data'], fn($a, $b) => strcmp($a['bagian'], $b['bagian']));
+                    break;
+                }
+            }
+        }
+
+        return $merged;
+    }
 
     private function calculateSectionTotals($employees): array
     {

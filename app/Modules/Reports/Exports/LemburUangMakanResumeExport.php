@@ -306,7 +306,6 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
 
                     // ── SUM / TOTAL ROW ─────────────────────────────
                     $sumRow = $currentRow;
-                    $colIdx = 1;
 
                     // Merge No + Bagian columns for "TOTAL" label
                     $sheet->mergeCells("A{$sumRow}:B{$sumRow}");
