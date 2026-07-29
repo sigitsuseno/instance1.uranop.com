@@ -239,8 +239,22 @@
                 <td :colspan="9" class="px-3 py-2 text-right text-xs uppercase">
                   TOTAL {{ section.label }}
                 </td>
+                <!-- Daily column sums -->
                 <template v-for="dateStr in dates" :key="'st-' + section.key + '-' + dateStr">
-                  <td :colspan="(section.key === 'jakarta' || section.key === 'spc_jakarta') ? 5 : 6" class="px-2 py-2"></td>
+                  <td class="px-1 py-2 border-r border-(--border-soft)"></td>
+                  <td class="px-1 py-2 border-r border-(--border-soft)"></td>
+                  <td v-if="section.key !== 'jakarta' && section.key !== 'spc_jakarta'" class="px-2 py-2 text-right text-xs text-emerald-700 border-r border-(--border-soft)">
+                    {{ sectionDailySums[section.key]?.[dateStr]?.upahHari > 0 ? formatNumber(sectionDailySums[section.key][dateStr].upahHari) : '' }}
+                  </td>
+                  <td class="px-1 py-2 text-right text-xs text-purple-700 border-r border-(--border-soft)">
+                    {{ sectionDailySums[section.key]?.[dateStr]?.lm > 0 ? formatNumber(sectionDailySums[section.key][dateStr].lm) : '' }}
+                  </td>
+                  <td class="px-1 py-2 text-right text-xs text-orange-700 border-r border-(--border-soft)">
+                    {{ sectionDailySums[section.key]?.[dateStr]?.lembur > 0 ? formatNumber(sectionDailySums[section.key][dateStr].lembur) : '' }}
+                  </td>
+                  <td class="px-2 py-2 text-right text-xs text-green-700">
+                    {{ sectionDailySums[section.key]?.[dateStr]?.nominal > 0 ? formatNumber(sectionDailySums[section.key][dateStr].nominal) : '' }}
+                  </td>
                 </template>
                 <td class="px-3 py-2 text-right text-xs text-emerald-700 border-r">{{ formatNumber(section.totals.total_hari_kerja) }}</td>
                 <td class="px-3 py-2 text-right text-xs text-green-700 border-r">{{ formatNumber(section.totals.total_overtime) }}</td>
@@ -432,6 +446,29 @@ const flattenedEmployees = computed(() => {
     for (const emp of (section.data || [])) {
       result.push({ ...emp, bagian })
     }
+  }
+  return result
+})
+
+// Daily column sums per section (untuk baris TOTAL di tiap section)
+const sectionDailySums = computed(() => {
+  const result = {}
+  for (const section of sections.value) {
+    const sums = {}
+    for (const dateStr of dates.value) {
+      let upahHari = 0, lm = 0, lembur = 0, nominal = 0
+      for (const emp of (section.data || [])) {
+        const day = emp.days?.[dateStr]
+        if (day) {
+          upahHari += day.upah_per_hari || 0
+          lm += parseFloat(day.lm) || 0
+          lembur += parseFloat(day.lembur) || 0
+          nominal += day.nominal || 0
+        }
+      }
+      sums[dateStr] = { upahHari, lm, lembur, nominal }
+    }
+    result[section.key] = sums
   }
   return result
 })

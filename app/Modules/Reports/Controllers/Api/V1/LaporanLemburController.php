@@ -958,6 +958,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
+
         // ── Helpers ────────────────────────────────────────────────
         $config = app(ReportConfigService::class)->getConfig('lembur_uang_makan');
 
@@ -1414,6 +1415,13 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
         }
 
+        // Preload employee premi & tj_masa_kerja (untuk total_terima manual)
+        $empPremiMap = $employees
+            ->mapWithKeys(fn($e) => [$e->id => [
+                'premi' => $e->premi($startDate->format('Y-m')),
+                'tj_mk' => $e->tunjangan_masa_kerja($startDate->format('Y-m')),
+            ]]);
+
         // Employee Reserves (insentif)
         $employeeReserves = collect();
         if ($period) {
@@ -1637,26 +1645,38 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $spcUngaranEmployees = $spcUngaranEmployees->map($addReserve);
         }
 
-        // ── Pay Record Components: tambah ke total_terima (setelah period complete) ─
-        if ($isPeriodComplete && $payRecords->isNotEmpty()) {
-            $addPayrollComponents = function ($emp) use ($payRecords) {
-                $pr = $payRecords->get($emp['id'])?->first();
-                if ($pr) {
-                    $premiHadir = (float)($pr->premi_hadir ?? 0);
-                    $tjMk       = (float)($pr->tj_masa_kerja ?? 0);
-                    $emp['total_terima'] = round(
-                        $emp['total_terima'] + $premiHadir + $tjMk, 2
-                    );
+        // ── Manual Payroll Components: tambah ke total_terima (setelah period complete) ─
+        if ($isPeriodComplete) {
+            $addManualComponents = function ($emp) use ($empPremiMap) {
+                // Hitung hari_kerja efektif (25 - absent - izin)
+                $absent = 0;
+                $izin   = 0;
+                foreach ($emp['days'] as $day) {
+                    $ha = $day['ha'] ?? '';
+                    if ($ha === 'A') $absent++;
+                    if ($ha === 'I') $izin++;
                 }
+                $hariKerja = max(0, 25 - $absent - $izin);
+
+                $empData = $empPremiMap->get($emp['id']);
+                $premi = $empData['premi'] ?? 0;
+                $tjMk  = $empData['tj_mk'] ?? 0;
+
+                // premi / 25 × hari_kerja efektif
+                $premiHarian = $premi > 0 ? round(($premi / 25) * $hariKerja, 2) : 0;
+
+                $emp['total_terima'] = round(
+                    $emp['total_terima'] + $premiHarian + $tjMk, 2
+                );
                 return $emp;
             };
 
-            $jakartaEmployees    = $jakartaEmployees->map($addPayrollComponents);
-            $allInEmployees      = $allInEmployees->map($addPayrollComponents);
-            $printingEmployees   = $printingEmployees->map($addPayrollComponents);
-            $spcEmployees        = $spcEmployees->map($addPayrollComponents);
-            $spcJakartaEmployees = $spcJakartaEmployees->map($addPayrollComponents);
-            $spcUngaranEmployees = $spcUngaranEmployees->map($addPayrollComponents);
+            $jakartaEmployees    = $jakartaEmployees->map($addManualComponents);
+            $allInEmployees      = $allInEmployees->map($addManualComponents);
+            $printingEmployees   = $printingEmployees->map($addManualComponents);
+            $spcEmployees        = $spcEmployees->map($addManualComponents);
+            $spcJakartaEmployees = $spcJakartaEmployees->map($addManualComponents);
+            $spcUngaranEmployees = $spcUngaranEmployees->map($addManualComponents);
         }
 
         // ── Assemble sections ──────────────────────────────────────
@@ -1746,12 +1766,6 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $period = PayPeriod::find($periodId);
         }
 
-        // Fetch pay records (untuk premi_hadir & tj_masa_kerja di total_terima)
-        $payRecords = collect();
-        if ($period) {
-            $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
-        }
-
         if (SpcHelper::shouldShow($period?->id)) {
             $sectionMeta['spc_jakarta'] = ['label' => 'D. KARYAWAN SPESIFIK JAKARTA', 'uang_makan_key' => 'nominal', 'type' => 'uang_makan'];
             $sectionMeta['spc_ungaran'] = ['label' => 'E. KARYAWAN SPESIFIK UNGARAN', 'uang_makan_key' => 'nominal', 'type' => 'uang_makan'];
@@ -1768,6 +1782,15 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 
         $isPeriodComplete = !empty($checkDates)
             && AttendancePrepare::whereIn('date', $checkDates)->exists();
+
+        // Preload employee premi & tj_masa_kerja (untuk total_terima manual di resume)
+        $allEmployeeIds = $allEmployees->pluck('id')->unique()->all();
+        $empPremiMapResume = Employee::whereIn('id', $allEmployeeIds)
+            ->get()
+            ->mapWithKeys(fn($e) => [$e->id => [
+                'premi' => $e->premi($lastDate->format('Y-m')),
+                'tj_mk' => $e->tunjangan_masa_kerja($lastDate->format('Y-m')),
+            ]]);
 
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
@@ -1836,15 +1859,27 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 // Tambah insentif dari Pre data (per-employee lump sum)
                 $totalUangMakan += $emps->sum('total_insentif');
 
-                // Pay record components (premi_hadir + tj_masa_kerja) — setelah period complete
+                // Manual payroll components (premi/25 × hari_kerja + tj_masa_kerja) — setelah period complete
                 $totalPayrollExtra = 0;
-                if ($isPeriodComplete && $payRecords->isNotEmpty()) {
+                if ($isPeriodComplete) {
                     foreach ($emps as $emp) {
-                        $pr = $payRecords->get($emp['id'])?->first();
-                        if ($pr) {
-                            $totalPayrollExtra += (float)($pr->premi_hadir ?? 0);
-                            $totalPayrollExtra += (float)($pr->tj_masa_kerja ?? 0);
+                        // Hitung hari_kerja efektif
+                        $absent = 0;
+                        $izin   = 0;
+                        foreach ($emp['days'] as $day) {
+                            $ha = $day['ha'] ?? '';
+                            if ($ha === 'A') $absent++;
+                            if ($ha === 'I') $izin++;
                         }
+                        $hariKerja = max(0, 25 - $absent - $izin);
+
+                        $empData = $empPremiMapResume->get($emp['id']);
+                        $premi = $empData['premi'] ?? 0;
+                        $tjMk  = $empData['tj_mk'] ?? 0;
+
+                        // premi / 25 × hari_kerja efektif
+                        $premiHarian = $premi > 0 ? round(($premi / 25) * $hariKerja, 2) : 0;
+                        $totalPayrollExtra += $premiHarian + $tjMk;
                     }
                 }
 

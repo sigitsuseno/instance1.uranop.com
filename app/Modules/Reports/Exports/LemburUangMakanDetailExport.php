@@ -340,6 +340,7 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                     // ── Section totals row ──────────────────────────
                     if (!empty($section['totals']) && ($section['totals']['count'] ?? 0) > 0) {
                         $totals = $section['totals'];
+                        $sectionKey = $section['key'] ?? '';
                         $colIdx = 1;
 
                         $sheet->mergeCells("A{$currentRow}:E{$currentRow}");
@@ -347,15 +348,32 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(9);
                         $colIdx = 6;
 
-                        // Skip fixed cols
-                        $emptyCols = 4; // Tj.MK, Tunjangan, Upah/Hari, Upah Lbr/Jam
-                        for ($i = 0; $i < $emptyCols; $i++) {
+                        // Skip fixed cols (4: Tj.MK, Tunjangan, Upah/Hari, Upah Lbr/Jam)
+                        for ($i = 0; $i < 4; $i++) {
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", '');
                             $colIdx++;
                         }
 
-                        // Skip date columns
-                        $colIdx += self::SUB_COLS * count($this->dates);
+                        // Daily column sums
+                        foreach ($this->dates as $dateStr) {
+                            $sumUpahHari = 0; $sumLm = 0; $sumLembur = 0; $sumNominal = 0;
+                            foreach (($section['data'] ?? []) as $emp) {
+                                $day = $emp['days'][$dateStr] ?? null;
+                                if ($day) {
+                                    $sumUpahHari += $day['upah_per_hari'] ?? 0;
+                                    $sumLm += (float)($day['lm'] ?? 0);
+                                    $sumLembur += (float)($day['lembur'] ?? 0);
+                                    $sumNominal += $day['nominal'] ?? 0;
+                                }
+                            }
+                            // Kode | H/A | Upah/Hari | L/M | Lembur | Nominal (selalu 6 kolom di export)
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;                   // Kode
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;                   // H/A
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumUpahHari > 0 ? $sumUpahHari : ''); $colIdx++; // Upah/Hari
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumLm > 0 ? round($sumLm, 2) : ''); $colIdx++;       // L/M
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumLembur > 0 ? round($sumLembur, 2) : ''); $colIdx++; // Lembur/Lbr
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumNominal > 0 ? $sumNominal : ''); $colIdx++;          // Nominal
+                        }
 
                         // Totals
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $totals['total_hari_kerja']); $colIdx++;
