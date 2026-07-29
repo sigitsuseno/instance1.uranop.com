@@ -1110,8 +1110,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             // Jika hari ini >= end_date periode → formula: gaji/25 × max(0, 25 - absent - izin)
             // Jika belum → hitung dari hari aktif aktual (current logic)
             $periodEndDate = $period?->end_date;
+            $isAfterEndDate = $periodEndDate && Carbon::today()->gte($periodEndDate);
             $dailyRate = $gaji / 25;
-            if ($periodEndDate && Carbon::today()->gte($periodEndDate)) {
+            if ($isAfterEndDate) {
                 $absentCount = 0;
                 $izinCount   = 0;
                 foreach ($days as $day) {
@@ -1157,7 +1158,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $totalUangMakan = 0;
             }
 
-            $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakan + $totalInsentif + $premiHadir;
+            if ($isAfterEndDate) {
+                $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakan + $totalInsentif + $premiHadir;
+            } else {
+                $totalTerima = $totalOvertime + $totalUangMakan + $totalInsentif;
+            }
 
             $item = [
                 'id'                => $employee->id,
@@ -1178,7 +1183,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'total_uang_makan'  => round($totalUangMakan + $totalInsentif, 2),
                 'total_insentif'    => round($totalInsentif, 2),
                 'total_terima'      => round($totalTerima, 2),
-                '_is_spr'           => false,
+                '_is_spr'            => false,
+                '_is_after_end_date' => $isAfterEndDate,
             ];
 
             // Classify employee by group
@@ -1224,7 +1230,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         if ($jakartaEmployees->isNotEmpty()) {
             $jakartaEmployees = $jakartaEmployees->map(function ($emp) {
                 $emp['total_hari_kerja'] = 0;
-                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
+                if ($emp['_is_after_end_date'] ?? false) {
+                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
+                } else {
+                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                }
                 return $emp;
             });
         }
@@ -1233,7 +1243,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         if ($spcJakartaEmployees->isNotEmpty()) {
             $spcJakartaEmployees = $spcJakartaEmployees->map(function ($emp) {
                 $emp['total_hari_kerja'] = 0;
-                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
+                if ($emp['_is_after_end_date'] ?? false) {
+                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
+                } else {
+                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                }
                 return $emp;
             });
         }
