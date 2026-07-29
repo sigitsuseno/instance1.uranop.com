@@ -191,12 +191,13 @@ class RekapPphKompensasiController extends Controller
             ->get()
             ->keyBy('employee_id');
 
-        // Preload EmployeeOvertime sum nominal per employee in period
+        // Preload EmployeeOvertime sum nominal & insentif per employee in period
         $overtimeSums = EmployeeOvertime::whereIn('employee_id', $employees->pluck('id'))
             ->where('pay_periode_id', $periodId)
             ->groupBy('employee_id')
-            ->selectRaw('employee_id, SUM(nominal) as total_nominal')
-            ->pluck('total_nominal', 'employee_id');
+            ->selectRaw('employee_id, SUM(nominal) as total_nominal, SUM(insentif) as total_insentif')
+            ->get()
+            ->keyBy('employee_id');
 
         // ─── Section A: PPH ───
         $pphData = $employees->map(function ($emp) use ($payRecords, $overtimeSums, $bpjsByPeriod, $bpjsFallback, $salaryComponents) {
@@ -217,7 +218,15 @@ class RekapPphKompensasiController extends Controller
             $gajiKotor = $payRecord ? (float) $payRecord->gaji_kotor : 0;
 
             $groupCodes = $emp->groups->pluck('reference_code')->toArray();
-            $um = (float) (in_array('GRP-PS1', $groupCodes) || in_array('GRP-SS', $groupCodes) ? 0 : ($overtimeSums->get($emp->id) ?? 0));
+            $ot = $overtimeSums->get($emp->id);
+
+            if (in_array('GRP-PS1', $groupCodes) || in_array('GRP-SS', $groupCodes) || in_array('GRP-JKT', $groupCodes)) {
+                $um = 0;
+            } elseif (in_array('GRP-SPR', $groupCodes)) {
+                $um = (float) ($ot->total_insentif ?? 0);
+            } else {
+                $um = (float) ($ot->total_nominal ?? 0);
+            }
 
             $pph = $sc ? (float)($sc->pph ?? 0) : 0;
 
