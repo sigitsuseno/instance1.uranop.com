@@ -1078,6 +1078,12 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     $overtimeNominalDay = $nominalAmount;
                 }
 
+                // KRY-SPC: nominal selalu masuk ke uang_makan (kolom Total U. MKN+INS)
+                if (SpcHelper::matches($employee)) {
+                    $uangMakanDay = $nominalAmount;
+                    $overtimeNominalDay = 0;
+                }
+
                 $days[$dateStr] = [
                     'kode'             => $kode,
                     'ha'               => $ha,
@@ -1135,16 +1141,17 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $endDateInsentif = $targetRecord ? (float)$targetRecord->insentif : 0;
 
             // ── Tentukan tipe: uang_makan vs lembur (mutually exclusive) ─
-            // Uang_makan type: dapat meal allowance, TIDAK dapat overtime money
-            // Lembur type: dapat overtime money, TIDAK dapat meal allowance
+            // Uang_makan type: nominal → total_uang_makan (kolom Total U. MKN+INS)
+            // Lembur type: nominal → total_overtime (kolom TOTAL OVERTIME)
             $hasUmCode = $records->contains(fn($r) => !empty($r->um_code));
             $isSPR = in_array('GRP-SPR', $employee->groups->pluck('reference_code')->toArray());
-            
-            if ($hasUmCode && !$isSPR) {
-                // Uang_makan type (Jakarta/AllIn/TKN): total_overtime = 0
+            $isSPC = SpcHelper::matches($employee);
+
+            if (($hasUmCode && !$isSPR) || $isSPC) {
+                // Uang_makan type (Jakarta/AllIn/TKN/SPC): total_overtime = 0
                 $totalOvertime = 0;
             } else {
-                // Lembur type (Printing/SPC/SPR): total_uang_makan = 0
+                // Lembur type (Printing/SPR): total_uang_makan = 0
                 $totalUangMakan = 0;
             }
 

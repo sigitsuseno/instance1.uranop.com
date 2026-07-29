@@ -122,8 +122,8 @@ class SpcHelper
                 $statusRaw, $ha, $upahPerHari, $hourlyRate, $isSG, $prep
             );
 
-            $totalOvertime += $dayResult['overtime_nominal'];
-            $totalUangMakan += 0; // SPC = Lembur only
+            $totalOvertime += 0;
+            $totalUangMakan += $dayResult['overtime_nominal']; // SPC nominal masuk ke Total U. MKN+INS
 
             $days[$dateStr] = $dayResult;
         }
