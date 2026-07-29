@@ -396,7 +396,7 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                 }
 
                 // ══════════════════════════════════════════════════════
-                // GRAND TOTAL (cari dari section terakhir atau hitung ulang)
+                // GRAND TOTAL
                 // ══════════════════════════════════════════════════════
                 if ($this->sections) {
                     $allData = collect();
@@ -412,24 +412,57 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $gtUangMakan = round($allData->sum('total_uang_makan'), 2);
                         $gtTerima = round($allData->sum('total_terima'), 2);
 
+                        // Compute daily column grand totals
+                        $gtDailySums = [];
+                        foreach ($this->dates as $dateStr) {
+                            $sumUpahHari = 0; $sumLm = 0; $sumLembur = 0; $sumNominal = 0;
+                            foreach ($allData as $emp) {
+                                $day = $emp['days'][$dateStr] ?? null;
+                                if ($day) {
+                                    $sumUpahHari += $day['upah_per_hari'] ?? 0;
+                                    $sumLm += (float)($day['lm'] ?? 0);
+                                    $sumLembur += (float)($day['lembur'] ?? 0);
+                                    $sumNominal += $day['nominal'] ?? 0;
+                                }
+                            }
+                            $gtDailySums[$dateStr] = [
+                                'upahHari' => $sumUpahHari,
+                                'lm'       => $sumLm,
+                                'lembur'   => $sumLembur,
+                                'nominal'  => $sumNominal,
+                            ];
+                        }
+
                         $colIdx = 1;
                         $sheet->mergeCells("A{$currentRow}:E{$currentRow}");
                         $sheet->setCellValue("A{$currentRow}", 'GRAND TOTAL');
                         $sheet->getStyle("A{$currentRow}")->getFont()->setBold(true)->setSize(11)->setColor(new Color(self::COLOR_WHITE));
                         $colIdx = 6;
 
+                        // Blank for Tj.MK, Tunjangan, Upah/Hari, Upah Lbr/Jam (cols F-I)
                         for ($i = 0; $i < 4; $i++) {
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", '');
                             $colIdx++;
                         }
 
-                        $colIdx += self::SUB_COLS * count($this->dates);
+                        // Daily column grand sums (6 sub-kolom per tanggal)
+                        foreach ($this->dates as $dateStr) {
+                            $ds = $gtDailySums[$dateStr] ?? ['upahHari' => 0, 'lm' => 0, 'lembur' => 0, 'nominal' => 0];
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;  // Kode
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;  // H/A
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['upahHari'] > 0 ? round($ds['upahHari'], 2) : ''); $colIdx++; // Upah/Hari
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['lm'] > 0 ? round($ds['lm'], 2) : ''); $colIdx++;             // L/M
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['lembur'] > 0 ? round($ds['lembur'], 2) : ''); $colIdx++;       // Lembur
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['nominal'] > 0 ? round($ds['nominal'], 2) : ''); $colIdx++;      // Nominal
+                        }
 
+                        // Grand total summary columns
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $gtHariKerja); $colIdx++;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $gtOvertime); $colIdx++;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $gtUangMakan); $colIdx++;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $gtTerima);
 
+                        // Style: dark navy background with white text
                         $sheet->getStyle("A{$currentRow}:{$lastCol}{$currentRow}")
                             ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::COLOR_GRAND_BG);
                         $sheet->getStyle("A{$currentRow}:{$lastCol}{$currentRow}")
@@ -438,6 +471,9 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                             ->getBorders()->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
                         $sheet->getStyle("A{$currentRow}:{$lastCol}{$currentRow}")
                             ->getBorders()->getTop()->setBorderStyle(Border::BORDER_THICK);
+                        // Right-align the numeric cells
+                        $sheet->getStyle("F{$currentRow}:{$lastCol}{$currentRow}")
+                            ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                         $sheet->getRowDimension($currentRow)->setRowHeight(22);
                         $lastDataRow = $currentRow;
                         $currentRow += 2;
@@ -522,6 +558,21 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                 // Also format grand total row
                 if (isset($gtHariKerja)) {
                     $gtRow = $currentRow - 2; // Row we wrote grand total to
+                    // Daily column number formats
+                    for ($i = 0; $i < count($this->dates); $i++) {
+                        $base = self::FIXED_COLS + ($i * self::SUB_COLS);
+                        // Upah/Hari (offset 3)
+                        $sheet->getStyle(self::colLetter($base + 3) . "{$gtRow}")
+                            ->getNumberFormat()->setFormatCode('#,##0');
+                        // L/M atau Lbr (offset 4,5), Nominal (offset 6)
+                        $sheet->getStyle(self::colLetter($base + 4) . "{$gtRow}")
+                            ->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle(self::colLetter($base + 5) . "{$gtRow}")
+                            ->getNumberFormat()->setFormatCode('#,##0');
+                        $sheet->getStyle(self::colLetter($base + 6) . "{$gtRow}")
+                            ->getNumberFormat()->setFormatCode('#,##0');
+                    }
+                    // Total columns
                     $totBase = self::FIXED_COLS + (self::SUB_COLS * count($this->dates));
                     for ($c = 1; $c <= self::TOT_COLS; $c++) {
                         $totCol = self::colLetter($totBase + $c);

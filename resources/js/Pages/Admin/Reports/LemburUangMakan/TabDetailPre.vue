@@ -265,14 +265,38 @@
           </table>
         </template>
 
-        <!-- Grand Totals -->
-        <div v-if="grandTotals" class="px-4 py-3 bg-blue-50 font-bold border-t-2 border-(--primary) flex justify-end gap-4 text-sm">
-          <span class="uppercase text-(--primary)">TOTAL KESELURUHAN</span>
-          <span class="text-emerald-700">{{ formatNumber(grandTotals.total_hari_kerja) }}</span>
-          <span class="text-green-700">{{ formatNumber(grandTotals.total_overtime) }}</span>
-          <span class="text-amber-700">{{ formatNumber(grandTotals.total_uang_makan) }}</span>
-          <span class="text-(--primary)">{{ formatNumber(grandTotals.total_terima) }}</span>
-        </div>
+        <!-- Grand Totals Table -->
+        <table v-if="grandTotals" class="min-w-full divide-y divide-(--border-soft) text-[10px] whitespace-nowrap border-t-2 border-(--primary)">
+          <tfoot>
+            <tr class="bg-blue-100 font-bold">
+              <td colspan="9" class="px-3 py-2.5 text-left text-xs uppercase text-(--primary) sticky left-0 bg-blue-100 z-10 border-r border-(--border-soft)">
+                TOTAL KESELURUHAN
+              </td>
+              <!-- Daily column grand sums -->
+              <template v-for="dateStr in dates" :key="'gt-' + dateStr">
+                <td class="px-1 py-2.5 text-center border-r border-(--border-soft) text-xs text-(--text-muted)">-</td>
+                <td class="px-1 py-2.5 text-center border-r border-(--border-soft) text-xs text-(--text-muted)">-</td>
+                <td class="px-2 py-2.5 text-right border-r border-(--border-soft) text-xs text-emerald-700">
+                  {{ grandDailySums[dateStr]?.upahHari > 0 ? formatNumber(grandDailySums[dateStr].upahHari) : '' }}
+                </td>
+                <td class="px-1 py-2.5 text-right border-r border-(--border-soft) text-xs text-purple-700">
+                  {{ grandDailySums[dateStr]?.lm > 0 ? formatNumber(grandDailySums[dateStr].lm) : '' }}
+                </td>
+                <td class="px-1 py-2.5 text-right border-r border-(--border-soft) text-xs text-orange-700">
+                  {{ grandDailySums[dateStr]?.lembur > 0 ? formatNumber(grandDailySums[dateStr].lembur) : '' }}
+                </td>
+                <td class="px-2 py-2.5 text-right text-xs text-green-700">
+                  {{ grandDailySums[dateStr]?.nominal > 0 ? formatNumber(grandDailySums[dateStr].nominal) : '' }}
+                </td>
+              </template>
+              <!-- Grand total columns -->
+              <td class="px-3 py-2.5 text-right text-xs text-emerald-700 border-r border-(--border-soft)">{{ formatNumber(grandTotals.total_hari_kerja) }}</td>
+              <td class="px-3 py-2.5 text-right text-xs text-green-700 border-r border-(--border-soft)">{{ formatNumber(grandTotals.total_overtime) }}</td>
+              <td class="px-3 py-2.5 text-right text-xs text-amber-700 border-r border-(--border-soft)">{{ formatNumber(grandTotals.total_uang_makan) }}</td>
+              <td class="px-3 py-2.5 text-right text-xs text-(--primary)">{{ formatNumber(grandTotals.total_terima) }}</td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     </BaseCard>
 
@@ -469,6 +493,27 @@ const sectionDailySums = computed(() => {
       sums[dateStr] = { upahHari, lm, lembur, nominal }
     }
     result[section.key] = sums
+  }
+  return result
+})
+
+// Daily column grand totals (semua section digabung)
+const grandDailySums = computed(() => {
+  const result = {}
+  for (const dateStr of dates.value) {
+    let upahHari = 0, lm = 0, lembur = 0, nominal = 0
+    for (const section of sections.value) {
+      for (const emp of (section.data || [])) {
+        const day = emp.days?.[dateStr]
+        if (day) {
+          upahHari += day.upah_per_hari || 0
+          lm += parseFloat(day.lm) || 0
+          lembur += parseFloat(day.lembur) || 0
+          nominal += day.nominal || 0
+        }
+      }
+    }
+    result[dateStr] = { upahHari, lm, lembur, nominal }
   }
   return result
 })
