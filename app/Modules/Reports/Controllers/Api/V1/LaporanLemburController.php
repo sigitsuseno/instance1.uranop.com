@@ -1745,9 +1745,16 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         if ($periodId = $request->input('period_id')) {
             $period = PayPeriod::find($periodId);
         }
+
+        // Fetch pay records (untuk premi_hadir & tj_masa_kerja di total_terima)
+        $payRecords = collect();
+        if ($period) {
+            $payRecords = PayRecord::where('pay_period_id', $period->id)->get()->groupBy('employee_id');
+        }
+
         if (SpcHelper::shouldShow($period?->id)) {
-            $sectionMeta['spc_jakarta'] = ['label' => 'D. KARYAWAN SPESIFIK JAKARTA', 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
-            $sectionMeta['spc_ungaran'] = ['label' => 'E. KARYAWAN SPESIFIK UNGARAN', 'uang_makan_key' => 'nominal', 'type' => 'lembur'];
+            $sectionMeta['spc_jakarta'] = ['label' => 'D. KARYAWAN SPESIFIK JAKARTA', 'uang_makan_key' => 'nominal', 'type' => 'uang_makan'];
+            $sectionMeta['spc_ungaran'] = ['label' => 'E. KARYAWAN SPESIFIK UNGARAN', 'uang_makan_key' => 'nominal', 'type' => 'uang_makan'];
         }
         // ── Period complete check for resume ──────────────────────
         $lastDate  = Carbon::parse(end($dates));
@@ -1829,6 +1836,18 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 // Tambah insentif dari Pre data (per-employee lump sum)
                 $totalUangMakan += $emps->sum('total_insentif');
 
+                // Pay record components (premi_hadir + tj_masa_kerja) — setelah period complete
+                $totalPayrollExtra = 0;
+                if ($isPeriodComplete && $payRecords->isNotEmpty()) {
+                    foreach ($emps as $emp) {
+                        $pr = $payRecords->get($emp['id'])?->first();
+                        if ($pr) {
+                            $totalPayrollExtra += (float)($pr->premi_hadir ?? 0);
+                            $totalPayrollExtra += (float)($pr->tj_masa_kerja ?? 0);
+                        }
+                    }
+                }
+
                 $data[] = [
                     'bagian'            => $posName,
                     'l'                 => $l,
@@ -1837,7 +1856,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     'total_hari_kerja'  => round($totalHariKerja, 2),
                     'total_overtime'    => round($totalOvertime, 2),
                     'total_uang_makan'  => round($totalUangMakan, 2),
-                    'total_terima'      => round($totalHariKerja + $totalOvertime + $totalUangMakan, 2),
+                    'total_terima'      => round($totalHariKerja + $totalOvertime + $totalUangMakan + $totalPayrollExtra, 2),
                 ];
             }
 
