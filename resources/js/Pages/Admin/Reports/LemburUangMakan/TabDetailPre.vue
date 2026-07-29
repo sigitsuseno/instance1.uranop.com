@@ -230,7 +230,7 @@
                 <!-- Employee Totals -->
                 <td class="px-3 py-3 text-right font-bold text-emerald-600 border-r border-(--border-soft)">{{ item.total_hari_kerja != null ? formatNumber(item.total_hari_kerja) : '-' }}</td>
                 <td class="px-3 py-3 text-right font-bold text-green-600 border-r border-(--border-soft)">{{ item.total_overtime ? formatNumber(item.total_overtime) : '-' }}</td>
-                <td class="px-3 py-3 text-right font-bold text-amber-600 border-r border-(--border-soft)">{{ formatNumber((item.total_uang_makan || 0) + (item.insentif || 0)) }}</td>
+                <td class="px-3 py-3 text-right font-bold text-amber-600 border-r border-(--border-soft)">{{ formatNumber(item.total_uang_makan || 0) }}</td>
                 <td class="px-3 py-3 text-right font-bold text-(--primary)">{{ item.total_terima ? formatNumber(item.total_terima) : '-' }}</td>
               </tr>
 

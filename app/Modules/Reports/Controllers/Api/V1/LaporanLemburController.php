@@ -829,13 +829,69 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
     public function exportCombinedDetailPre(Request $request)
     {
         $result = $this->buildCombinedDetailPreData($request);
+        $sections = $result['sections'];
+
+        // ── Merge SPC sections for export ──────────────────────────
+        // SPC Jakarta → Jakarta | SPC Ungaran → All In
+        $jakartaData = collect();
+        $allInData   = collect();
+        $jakartaSection = null;
+        $allInSection   = null;
+        $otherSections  = [];
+
+        foreach ($sections as $section) {
+            $key = $section['key'] ?? '';
+
+            if ($key === 'jakarta') {
+                $jakartaSection = $section;
+                $jakartaData = collect($section['data']);
+            } elseif ($key === 'all_in') {
+                $allInSection = $section;
+                $allInData = collect($section['data']);
+            } elseif ($key === 'spc_jakarta') {
+                $jakartaData = $jakartaData->concat($section['data']);
+            } elseif ($key === 'spc_ungaran') {
+                $allInData = $allInData->concat($section['data']);
+            } else {
+                $otherSections[] = $section;
+            }
+        }
+
+        // Rebuild merged sections in correct order: A (Jakarta) → B (All In) → C (Printing) ...
+        $mergedSections = [];
+
+        if ($jakartaData->isNotEmpty()) {
+            $sorted = $jakartaData->sortBy('name')->values();
+            $mergedSections[] = [
+                'key'    => 'jakarta',
+                'label'  => $jakartaSection['label'] ?? 'A. KARYAWAN JAKARTA',
+                'type'   => $jakartaSection['type'] ?? 'uang_makan',
+                'data'   => $sorted,
+                'totals' => $this->calcSectionTotals($sorted),
+            ];
+        }
+
+        if ($allInData->isNotEmpty()) {
+            $sorted = $allInData->sortBy('name')->values();
+            $mergedSections[] = [
+                'key'    => 'all_in',
+                'label'  => $allInSection['label'] ?? 'B. KARYAWAN ALL IN',
+                'type'   => $allInSection['type'] ?? 'uang_makan',
+                'data'   => $sorted,
+                'totals' => $this->calcSectionTotals($sorted),
+            ];
+        }
+
+        // Append remaining sections (Printing, etc.)
+        $mergedSections = array_merge($mergedSections, $otherSections);
+
         $periodId = $request->input('period_id');
         $period = PayPeriod::find($periodId);
         $label = $period ? $period->name : ($result['month_label'] ?? 'Laporan');
         $companyName = $request->input('company_name', 'PT. KEMILAU UNGARAN SUKSES');
         $filename = 'Rincian_Gaji_Overtime_Pre_' . str_replace(' ', '_', $label) . '.xlsx';
         return Excel::download(
-            new LemburUangMakanDetailExport($result['sections'], $result['dates'], $label, $companyName),
+            new LemburUangMakanDetailExport($mergedSections, $result['dates'], $label, $companyName),
             $filename
         );
     }
@@ -1109,7 +1165,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'insentif'          => $endDateInsentif,
                 'total_hari_kerja'  => round($totalHariKerja, 2),
                 'total_overtime'    => round($totalOvertime, 2),
-                'total_uang_makan'  => round($totalUangMakan, 2),
+                'total_uang_makan'  => round($totalUangMakan + $totalInsentif, 2),
                 'total_insentif'    => round($totalInsentif, 2),
                 'total_terima'      => round($totalTerima, 2),
                 '_is_spr'           => false,
@@ -1140,7 +1196,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 }
                 unset($day);
                 $item['_is_spr'] = true;
-                $item['total_uang_makan'] = 0;
+                $item['total_uang_makan'] = round($totalInsentif, 2);
                 $allInEmployees->push($item);
             } else {
                 $allInEmployees->push($item);
@@ -1257,7 +1313,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         return [
             'total_hari_kerja' => round($employees->sum('total_hari_kerja'), 2),
             'total_overtime'   => round($employees->sum('total_overtime'), 2),
-            'total_uang_makan' => round($employees->sum('total_uang_makan') + $employees->sum('total_insentif'), 2),
+            'total_uang_makan' => round($employees->sum('total_uang_makan'), 2),
             'total_terima'     => round($employees->sum('total_terima'), 2),
             'count'            => $employees->count(),
         ];

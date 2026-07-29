@@ -548,7 +548,10 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                 // ══════════════════════════════════════════════════════
                 // FREEZE PANE
                 // ══════════════════════════════════════════════════════
-                $sheet->freezePane('J' . ($headerStartRow + 1));
+                // $dataStartRow = first section label row
+                // +3 = skip label + 2 header rows → freeze at first data row
+                $freezeRow = $dataStartRow + 3;
+                $sheet->freezePane('J' . $freezeRow);
             },
         ];
     }
