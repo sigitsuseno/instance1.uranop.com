@@ -1637,6 +1637,28 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $spcUngaranEmployees = $spcUngaranEmployees->map($addReserve);
         }
 
+        // ── Pay Record Components: tambah ke total_terima (setelah period complete) ─
+        if ($isPeriodComplete && $payRecords->isNotEmpty()) {
+            $addPayrollComponents = function ($emp) use ($payRecords) {
+                $pr = $payRecords->get($emp['id'])?->first();
+                if ($pr) {
+                    $premiHadir = (float)($pr->premi_hadir ?? 0);
+                    $tjMk       = (float)($pr->tj_masa_kerja ?? 0);
+                    $emp['total_terima'] = round(
+                        $emp['total_terima'] + $premiHadir + $tjMk, 2
+                    );
+                }
+                return $emp;
+            };
+
+            $jakartaEmployees    = $jakartaEmployees->map($addPayrollComponents);
+            $allInEmployees      = $allInEmployees->map($addPayrollComponents);
+            $printingEmployees   = $printingEmployees->map($addPayrollComponents);
+            $spcEmployees        = $spcEmployees->map($addPayrollComponents);
+            $spcJakartaEmployees = $spcJakartaEmployees->map($addPayrollComponents);
+            $spcUngaranEmployees = $spcUngaranEmployees->map($addPayrollComponents);
+        }
+
         // ── Assemble sections ──────────────────────────────────────
         $sections = [
             [
