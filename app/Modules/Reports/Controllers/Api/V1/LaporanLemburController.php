@@ -1010,6 +1010,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             }
             $tunjangan = $payRecord ? (float)($payRecord->tunjangan ?? 0)
                 : (float)($employee->activeSalary()?->tunjangan ?? 0);
+            $premiHadir = $payRecord ? (float)($payRecord->premi_hadir ?? 0) : 0;
 
             $upahPerHari = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
             $upahLemburPerJam = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
@@ -1156,7 +1157,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $totalUangMakan = 0;
             }
 
-            $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakan + $totalInsentif;
+            $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakan + $totalInsentif + $premiHadir;
 
             $item = [
                 'id'                => $employee->id,
@@ -1167,6 +1168,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'gaji'              => $gaji,
                 'tj_mk'             => $tjMk,
                 'tunjangan'         => $tunjangan,
+                'premi_hadir'       => $premiHadir,
                 'upah_per_hari'     => $upahPerHari,
                 'upah_lembur_per_jam' => $upahLemburPerJam,
                 'days'              => $days,
@@ -1222,7 +1224,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         if ($jakartaEmployees->isNotEmpty()) {
             $jakartaEmployees = $jakartaEmployees->map(function ($emp) {
                 $emp['total_hari_kerja'] = 0;
-                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
                 return $emp;
             });
         }
@@ -1231,7 +1233,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         if ($spcJakartaEmployees->isNotEmpty()) {
             $spcJakartaEmployees = $spcJakartaEmployees->map(function ($emp) {
                 $emp['total_hari_kerja'] = 0;
-                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
                 return $emp;
             });
         }
