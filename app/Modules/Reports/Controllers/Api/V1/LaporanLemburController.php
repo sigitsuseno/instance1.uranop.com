@@ -1772,28 +1772,6 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $sectionMeta['spc_jakarta'] = ['label' => 'D. KARYAWAN SPESIFIK JAKARTA', 'uang_makan_key' => 'nominal', 'type' => 'uang_makan'];
             $sectionMeta['spc_ungaran'] = ['label' => 'E. KARYAWAN SPESIFIK UNGARAN', 'uang_makan_key' => 'nominal', 'type' => 'uang_makan'];
         }
-        // ── Period complete check for resume ──────────────────────
-        $lastDate  = Carbon::parse(end($dates));
-        $endMonth  = (int) $lastDate->format('m');
-        $endYear   = (int) $lastDate->format('Y');
-        $checkDates = array_values(array_filter([
-            sprintf('%04d-%02d-22', $endYear, $endMonth),
-            sprintf('%04d-%02d-23', $endYear, $endMonth),
-            sprintf('%04d-%02d-24', $endYear, $endMonth),
-        ], fn($d) => in_array($d, $dates)));
-
-        $isPeriodComplete = !empty($checkDates)
-            && AttendancePrepare::whereIn('date', $checkDates)->exists();
-
-        // Preload employee premi & tj_masa_kerja (untuk total_terima manual di resume)
-        $allEmployeeIds = $allEmployees->pluck('id')->unique()->all();
-        $empPremiMapResume = Employee::whereIn('id', $allEmployeeIds)
-            ->get()
-            ->mapWithKeys(fn($e) => [$e->id => [
-                'premi' => $e->premi($lastDate->format('Y-m')),
-                'tj_mk' => $e->tunjangan_masa_kerja($lastDate->format('Y-m')),
-            ]]);
-
         foreach ($sectionMeta as $sectionKey => $meta) {
             $sectionEmps = $allEmployees->where('_section_key', $sectionKey);
             $posGroups = $sectionEmps->groupBy('jabatan');
@@ -1807,9 +1785,6 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $p = $emps->where('gender', 'P')->count();
 
                 $days = [];
-                $totalHariKerja = 0;
-                $totalOvertime = 0;
-                $totalUangMakan = 0;
 
                 foreach ($dates as $dateStr) {
                     $hariKerja = $emps->sum(fn($e) => $e['days'][$dateStr]['upah_per_hari'] ?? 0);
@@ -1828,72 +1803,19 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                         'overtime'   => round($overtime, 2),
                         'uang_makan' => round($uangMakan, 2),
                     ];
-                    $totalHariKerja += $hariKerja;
-                    $totalOvertime += $overtime;
-                    $totalUangMakan += $uangMakan;
                 }
 
-                // ── Formula override: upah/hari × (25 - absent - izin) ──
-                // Jakarta & SPC Jakarta: total_hari_kerja = 0 (tidak dapat upah harian)
-                $isJakartaSection = in_array($sectionKey, ['jakarta', 'spc_jakarta']);
-                if ($isJakartaSection) {
-                    $totalHariKerja = 0;
-                } elseif ($isPeriodComplete) {
-                    $totalHariKerja = 0;
-                    foreach ($emps as $emp) {
-                        if ($emp['_is_spr'] ?? false) {
-                            // SPR: pake total_hari_kerja dari sum per-day, skip 25-formula
-                            $totalHariKerja += $emp['total_hari_kerja'] ?? 0;
-                            continue;
-                        }
-                        $absent = 0;
-                        $izin   = 0;
-                        foreach ($emp['days'] as $day) {
-                            $ha = $day['ha'] ?? '';
-                            if ($ha === 'A') $absent++;
-                            if ($ha === 'I') $izin++;
-                        }
-                        $hariKerjaEmp = max(0, 25 - $absent - $izin);
-                        $totalHariKerja += ($emp['upah_per_hari'] ?? 0) * $hariKerjaEmp;
-                    }
-                }
-
-                // Tambah insentif dari Pre data (per-employee lump sum)
-                $totalUangMakan += $emps->sum('total_insentif');
-
-                // Manual payroll components (premi/25 × hari_kerja + tj_masa_kerja) — setelah period complete
-                $totalPayrollExtra = 0;
-                if ($isPeriodComplete) {
-                    foreach ($emps as $emp) {
-                        // Hitung hari_kerja efektif
-                        $absent = 0;
-                        $izin   = 0;
-                        foreach ($emp['days'] as $day) {
-                            $ha = $day['ha'] ?? '';
-                            if ($ha === 'A') $absent++;
-                            if ($ha === 'I') $izin++;
-                        }
-                        $hariKerja = max(0, 25 - $absent - $izin);
-
-                        $empData = $empPremiMapResume->get($emp['id']);
-                        $premi = $empData['premi'] ?? 0;
-                        $tjMk  = $empData['tj_mk'] ?? 0;
-
-                        // premi / 25 × hari_kerja efektif
-                        $premiHarian = $premi > 0 ? round(($premi / 25) * $hariKerja, 2) : 0;
-                        $totalPayrollExtra += $premiHarian + $tjMk;
-                    }
-                }
-
+                // Totals: langsung sum dari per-employee totals Detail Pre
+                // agar konsisten dengan tab Detail Pre
                 $data[] = [
                     'bagian'            => $posName,
                     'l'                 => $l,
                     'p'                 => $p,
                     'days'              => $days,
-                    'total_hari_kerja'  => round($totalHariKerja, 2),
-                    'total_overtime'    => round($totalOvertime, 2),
-                    'total_uang_makan'  => round($totalUangMakan, 2),
-                    'total_terima'      => round($totalHariKerja + $totalOvertime + $totalUangMakan + $totalPayrollExtra, 2),
+                    'total_hari_kerja'  => round($emps->sum('total_hari_kerja'), 2),
+                    'total_overtime'    => round($emps->sum('total_overtime'), 2),
+                    'total_uang_makan'  => round($emps->sum('total_uang_makan'), 2),
+                    'total_terima'      => round($emps->sum('total_terima'), 2),
                 ];
             }
 
