@@ -165,6 +165,18 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
                 $lastDataRow = $currentRow;
                 $currentIsAlt = false;
 
+                // ── Grand total accumulators (across all sections) ────
+                $grandL = 0;
+                $grandP = 0;
+                $grandDays = [];
+                foreach ($this->dates as $dateStr) {
+                    $grandDays[$dateStr] = ['hari_kerja' => 0, 'overtime' => 0, 'uang_makan' => 0];
+                }
+                $grandTotalHariKerja = 0;
+                $grandTotalOvertime = 0;
+                $grandTotalUangMakan = 0;
+                $grandTotalTerima = 0;
+
                 foreach ($this->sections as $section) {
                     // ── Section label ───────────────────────────────
                     $sheet->mergeCells("A{$currentRow}:{$lastCol}{$currentRow}");
@@ -341,11 +353,68 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
                         ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     $sheet->getRowDimension($sumRow)->setRowHeight(18);
 
+                    // Accumulate into grand totals
+                    $grandL += $sumL;
+                    $grandP += $sumP;
+                    foreach ($this->dates as $dateStr) {
+                        $grandDays[$dateStr]['hari_kerja'] += $sumDays[$dateStr]['hari_kerja'];
+                        $grandDays[$dateStr]['overtime'] += $sumDays[$dateStr]['overtime'];
+                        $grandDays[$dateStr]['uang_makan'] += $sumDays[$dateStr]['uang_makan'];
+                    }
+                    $grandTotalHariKerja += $sumTotalHariKerja;
+                    $grandTotalOvertime += $sumTotalOvertime;
+                    $grandTotalUangMakan += $sumTotalUangMakan;
+                    $grandTotalTerima += $sumTotalTerima;
+
                     $currentRow++; // Move past sum row
                     $currentRow++; // Blank row
                 }
 
                 $lastDataRow = $currentRow - 2;
+
+                // ══════════════════════════════════════════════════════
+                // GRAND TOTAL ROW
+                // ══════════════════════════════════════════════════════
+                $gtRow = $currentRow;
+
+                // Merge No + Bagian columns for label
+                $sheet->mergeCells("A{$gtRow}:B{$gtRow}");
+                $sheet->setCellValue("A{$gtRow}", 'GRAND TOTAL');
+
+                $sheet->setCellValue(self::colLetter(3) . "{$gtRow}", $grandL);
+                $sheet->setCellValue(self::colLetter(4) . "{$gtRow}", $grandP);
+
+                $gtColStart = self::FIXED_COLS + 1;
+                foreach ($this->dates as $dateStr) {
+                    $sheet->setCellValue(self::colLetter($gtColStart) . "{$gtRow}", $grandDays[$dateStr]['hari_kerja']);
+                    $sheet->setCellValue(self::colLetter($gtColStart + 1) . "{$gtRow}", $grandDays[$dateStr]['overtime']);
+                    $sheet->setCellValue(self::colLetter($gtColStart + 2) . "{$gtRow}", $grandDays[$dateStr]['uang_makan']);
+                    $gtColStart += self::SUB_COLS;
+                }
+
+                $sheet->setCellValue(self::colLetter($gtColStart) . "{$gtRow}", $grandTotalHariKerja); $gtColStart++;
+                $sheet->setCellValue(self::colLetter($gtColStart) . "{$gtRow}", $grandTotalOvertime); $gtColStart++;
+                $sheet->setCellValue(self::colLetter($gtColStart) . "{$gtRow}", $grandTotalUangMakan); $gtColStart++;
+                $sheet->setCellValue(self::colLetter($gtColStart) . "{$gtRow}", $grandTotalTerima);
+
+                // Style the grand total row
+                $sheet->getStyle("A{$gtRow}:{$lastCol}{$gtRow}")
+                    ->getFont()->setBold(true)->setSize(10)->setColor(new Color(self::COLOR_WHITE));
+                $sheet->getStyle("A{$gtRow}:{$lastCol}{$gtRow}")
+                    ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::COLOR_GRAND_BG);
+                $sheet->getStyle("A{$gtRow}:{$lastCol}{$gtRow}")
+                    ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT)
+                    ->setVertical(Alignment::VERTICAL_CENTER);
+                $sheet->getStyle("A{$gtRow}:B{$gtRow}")
+                    ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getRowDimension($gtRow)->setRowHeight(22);
+
+                // Thick top border on grand total
+                $sheet->getStyle("A{$gtRow}:{$lastCol}{$gtRow}")
+                    ->getBorders()->getTop()->setBorderStyle(Border::BORDER_THICK)
+                    ->getColor()->setARGB(self::COLOR_GRAND_BG);
+
+                $lastDataRow = $gtRow;
 
                 // ══════════════════════════════════════════════════════
                 // BORDERS

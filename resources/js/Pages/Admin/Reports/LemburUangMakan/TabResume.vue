@@ -166,6 +166,46 @@
           <!-- Spacer -->
           <div class="mb-4"></div>
         </template>
+
+        <!-- GRAND TOTAL -->
+        <table class="min-w-max divide-y divide-(--border-soft) text-[11px] whitespace-nowrap mb-0 border-t-4 border-(--primary)">
+          <thead>
+            <tr>
+              <th colspan="2" class="px-4 py-2.5 text-left font-bold text-(--text-main) uppercase bg-(--primary)/10 border-r border-(--border-soft) sticky left-0 z-10">
+                GRAND TOTAL
+              </th>
+              <th class="px-2 py-2.5 text-center font-bold text-(--text-main) bg-(--primary)/10 border-r border-(--border-soft)">
+                {{ grandTotals.l || '-' }}
+              </th>
+              <th class="px-2 py-2.5 text-center font-bold text-(--text-main) bg-(--primary)/10 border-r border-(--border-soft)">
+                {{ grandTotals.p || '-' }}
+              </th>
+              <template v-for="dateStr in dates" :key="'gt-hdr-' + dateStr">
+                <th v-if="allSectionsHave('non_jakarta')" class="px-2 py-2.5 text-right font-bold text-emerald-700 bg-(--primary)/10 border-r border-(--border-soft)">
+                  {{ grandTotals.days[dateStr]?.hari_kerja > 0 ? formatNumber(grandTotals.days[dateStr].hari_kerja) : '-' }}
+                </th>
+                <th class="px-2 py-2.5 text-right font-bold text-orange-700 bg-(--primary)/10 border-r border-(--border-soft)">
+                  {{ grandTotals.days[dateStr]?.overtime > 0 ? formatNumber(grandTotals.days[dateStr].overtime) : '-' }}
+                </th>
+                <th class="px-2 py-2.5 text-right font-bold text-amber-700 bg-(--primary)/10" :class="{ 'border-r border-(--border-soft)': dateStr !== dates[dates.length - 1] }">
+                  {{ grandTotals.days[dateStr]?.uang_makan > 0 ? formatNumber(grandTotals.days[dateStr].uang_makan) : '-' }}
+                </th>
+              </template>
+              <th class="px-4 py-2.5 text-right font-bold text-emerald-700 bg-(--primary)/10 border-r border-(--border-soft)">
+                {{ grandTotals.total_hari_kerja > 0 ? formatNumber(grandTotals.total_hari_kerja) : '-' }}
+              </th>
+              <th class="px-4 py-2.5 text-right font-bold text-orange-700 bg-(--primary)/10 border-r border-(--border-soft)">
+                {{ grandTotals.total_overtime > 0 ? formatNumber(grandTotals.total_overtime) : '-' }}
+              </th>
+              <th class="px-4 py-2.5 text-right font-bold text-amber-700 bg-(--primary)/10 border-r border-(--border-soft)">
+                {{ grandTotals.total_uang_makan > 0 ? formatNumber(grandTotals.total_uang_makan) : '-' }}
+              </th>
+              <th class="px-4 py-2.5 text-right font-bold text-(--primary) bg-(--primary)/10">
+                {{ grandTotals.total_terima > 0 ? formatNumber(grandTotals.total_terima) : '-' }}
+              </th>
+            </tr>
+          </thead>
+        </table>
       </div>
     </BaseCard>
   </div>
@@ -224,6 +264,40 @@ onMounted(async () => {
 function formatNumber(num) {
   return new Intl.NumberFormat('id-ID').format(num || 0)
 }
+
+// Cek apakah ada section non-jakarta (untuk kolom hari_kerja)
+const allSectionsHave = (type) => {
+  if (type === 'non_jakarta') {
+    return sections.value.some(s => s.key !== 'jakarta')
+  }
+  return false
+}
+
+// Grand total across ALL sections
+const grandTotals = computed(() => {
+  const allData = sections.value.flatMap(s => s.data || [])
+  const result = {
+    l: allData.reduce((s, i) => s + (Number(i.l) || 0), 0),
+    p: allData.reduce((s, i) => s + (Number(i.p) || 0), 0),
+    days: {},
+    total_hari_kerja: 0,
+    total_overtime: 0,
+    total_uang_makan: 0,
+    total_terima: 0,
+  }
+  dates.value.forEach(dateStr => {
+    result.days[dateStr] = {
+      hari_kerja: allData.reduce((s, i) => s + (Number(i.days?.[dateStr]?.hari_kerja) || 0), 0),
+      overtime: allData.reduce((s, i) => s + (Number(i.days?.[dateStr]?.overtime) || 0), 0),
+      uang_makan: allData.reduce((s, i) => s + (Number(i.days?.[dateStr]?.uang_makan) || 0), 0),
+    }
+  })
+  result.total_hari_kerja = allData.reduce((s, i) => s + (Number(i.total_hari_kerja) || 0), 0)
+  result.total_overtime = allData.reduce((s, i) => s + (Number(i.total_overtime) || 0), 0)
+  result.total_uang_makan = allData.reduce((s, i) => s + (Number(i.total_uang_makan) || 0), 0)
+  result.total_terima = allData.reduce((s, i) => s + (Number(i.total_terima) || 0), 0)
+  return result
+})
 
 function sectionTotals(section) {
   const data = section.data || []
