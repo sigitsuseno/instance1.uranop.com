@@ -243,6 +243,18 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
                     $sectionDataStart = $currentRow;
                     $counter = 0;
 
+                    // Accumulators for column sums
+                    $sumL = 0;
+                    $sumP = 0;
+                    $sumDays = [];
+                    foreach ($this->dates as $dateStr) {
+                        $sumDays[$dateStr] = ['hari_kerja' => 0, 'overtime' => 0, 'uang_makan' => 0];
+                    }
+                    $sumTotalHariKerja = 0;
+                    $sumTotalOvertime = 0;
+                    $sumTotalUangMakan = 0;
+                    $sumTotalTerima = 0;
+
                     foreach ($section['data'] as $item) {
                         $counter++;
                         $colIdx = 1;
@@ -252,19 +264,36 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $item['l']); $colIdx++;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $item['p']); $colIdx++;
 
+                        $sumL += (int)($item['l'] ?? 0);
+                        $sumP += (int)($item['p'] ?? 0);
+
                         $days = $item['days'] ?? [];
                         foreach ($this->dates as $dateStr) {
                             $d = $days[$dateStr] ?? null;
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ($d['hari_kerja'] ?? 0) > 0 ? $d['hari_kerja'] : 0); $colIdx++;
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ($d['overtime'] ?? 0) > 0 ? $d['overtime'] : 0); $colIdx++;
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ($d['uang_makan'] ?? 0) > 0 ? $d['uang_makan'] : 0); $colIdx++;
+                            $valHk = ($d['hari_kerja'] ?? 0) > 0 ? $d['hari_kerja'] : 0;
+                            $valOt = ($d['overtime'] ?? 0) > 0 ? $d['overtime'] : 0;
+                            $valUm = ($d['uang_makan'] ?? 0) > 0 ? $d['uang_makan'] : 0;
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valHk); $colIdx++;
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valOt); $colIdx++;
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valUm); $colIdx++;
+                            $sumDays[$dateStr]['hari_kerja'] += $valHk;
+                            $sumDays[$dateStr]['overtime'] += $valOt;
+                            $sumDays[$dateStr]['uang_makan'] += $valUm;
                         }
 
                         // Totals
-                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $item['total_hari_kerja']); $colIdx++;
-                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $item['total_overtime']); $colIdx++;
-                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $item['total_uang_makan']); $colIdx++;
-                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $item['total_terima']);
+                        $valThk = (int)($item['total_hari_kerja'] ?? 0);
+                        $valTot = (int)($item['total_overtime'] ?? 0);
+                        $valTum = (int)($item['total_uang_makan'] ?? 0);
+                        $valTtr = (int)($item['total_terima'] ?? 0);
+                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valThk); $colIdx++;
+                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valTot); $colIdx++;
+                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valTum); $colIdx++;
+                        $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valTtr);
+                        $sumTotalHariKerja += $valThk;
+                        $sumTotalOvertime += $valTot;
+                        $sumTotalUangMakan += $valTum;
+                        $sumTotalTerima += $valTtr;
 
                         // Alternating rows
                         if ($currentIsAlt) {
@@ -275,6 +304,45 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
                         $currentRow++;
                     }
 
+                    // ── SUM / TOTAL ROW ─────────────────────────────
+                    $sumRow = $currentRow;
+                    $colIdx = 1;
+
+                    // Merge No + Bagian columns for "TOTAL" label
+                    $sheet->mergeCells("A{$sumRow}:B{$sumRow}");
+                    $sheet->setCellValue("A{$sumRow}", 'TOTAL');
+
+                    $sheet->setCellValue(self::colLetter(3) . "{$sumRow}", $sumL);
+                    $sheet->setCellValue(self::colLetter(4) . "{$sumRow}", $sumP);
+
+                    // After merged A-B + C + D = 4 fixed cols, then date columns: 3 per date
+                    $sumColStart = self::FIXED_COLS + 1;
+                    foreach ($this->dates as $dateStr) {
+                        $sheet->setCellValue(self::colLetter($sumColStart) . "{$sumRow}", $sumDays[$dateStr]['hari_kerja']);
+                        $sheet->setCellValue(self::colLetter($sumColStart + 1) . "{$sumRow}", $sumDays[$dateStr]['overtime']);
+                        $sheet->setCellValue(self::colLetter($sumColStart + 2) . "{$sumRow}", $sumDays[$dateStr]['uang_makan']);
+                        $sumColStart += self::SUB_COLS;
+                    }
+
+                    // Total columns
+                    $sheet->setCellValue(self::colLetter($sumColStart) . "{$sumRow}", $sumTotalHariKerja); $sumColStart++;
+                    $sheet->setCellValue(self::colLetter($sumColStart) . "{$sumRow}", $sumTotalOvertime); $sumColStart++;
+                    $sheet->setCellValue(self::colLetter($sumColStart) . "{$sumRow}", $sumTotalUangMakan); $sumColStart++;
+                    $sheet->setCellValue(self::colLetter($sumColStart) . "{$sumRow}", $sumTotalTerima);
+
+                    // Style the sum row
+                    $sheet->getStyle("A{$sumRow}:{$lastCol}{$sumRow}")
+                        ->getFont()->setBold(true)->setSize(9)->setColor(new Color(self::COLOR_PRIMARY));
+                    $sheet->getStyle("A{$sumRow}:{$lastCol}{$sumRow}")
+                        ->getFill()->setFillType(Fill::FILL_SOLID)->getStartColor()->setARGB(self::COLOR_TOTAL_BG);
+                    $sheet->getStyle("A{$sumRow}:{$lastCol}{$sumRow}")
+                        ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT)
+                        ->setVertical(Alignment::VERTICAL_CENTER);
+                    $sheet->getStyle("A{$sumRow}:B{$sumRow}")
+                        ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    $sheet->getRowDimension($sumRow)->setRowHeight(18);
+
+                    $currentRow++; // Move past sum row
                     $currentRow++; // Blank row
                 }
 

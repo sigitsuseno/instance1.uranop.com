@@ -56,13 +56,13 @@
         Tidak ada data untuk periode yang dipilih.
       </div>
 
-      <div v-else class="overflow-auto max-h-[65vh]">
+      <div v-else class="overflow-x-auto overflow-y-auto max-h-[65vh]">
         <template v-for="section in sections" :key="section.key">
           <div class="px-4 py-2 bg-green-50/50 font-bold text-sm text-(--text-main) uppercase sticky left-0 border-b border-(--border-soft)">
             {{ section.label }}
           </div>
 
-          <table class="min-w-full divide-y divide-(--border-soft) text-[11px] whitespace-nowrap mb-4">
+          <table class="min-w-max divide-y divide-(--border-soft) text-[11px] whitespace-nowrap mb-0">
             <thead class="bg-(--bg-elevated) sticky top-0 z-20">
               <tr>
                 <th rowspan="2" class="px-3 py-3 text-center font-bold text-(--text-muted) uppercase border-r border-(--border-soft) sticky left-0 bg-(--bg-elevated) z-30">No</th>
@@ -123,7 +123,48 @@
                 <td class="px-4 py-3 text-right font-bold text-(--primary)">{{ item.total_terima ? formatNumber(item.total_terima) : '-' }}</td>
               </tr>
             </tbody>
+
+            <!-- SUM / TOTAL ROW -->
+            <tfoot>
+              <tr class="bg-amber-50/60 border-t-2 border-(--border-soft) font-bold text-[11px]">
+                <td colspan="2" class="px-4 py-2.5 text-left text-(--text-main) uppercase sticky left-0 bg-amber-50/60 z-10 border-r border-(--border-soft)">
+                  TOTAL
+                </td>
+                <td class="px-2 py-2.5 text-center text-(--text-main) border-r border-(--border-soft)">
+                  {{ sectionTotals(section).l || '-' }}
+                </td>
+                <td class="px-2 py-2.5 text-center text-(--text-main) border-r border-(--border-soft)">
+                  {{ sectionTotals(section).p || '-' }}
+                </td>
+                <template v-for="dateStr in dates" :key="'sf-' + section.key + '-' + dateStr">
+                  <td v-if="section.key !== 'jakarta'" class="px-2 py-2.5 text-right text-emerald-700 border-r border-(--border-soft)">
+                    {{ sectionTotals(section).days[dateStr]?.hari_kerja > 0 ? formatNumber(sectionTotals(section).days[dateStr].hari_kerja) : '-' }}
+                  </td>
+                  <td class="px-2 py-2.5 text-right text-orange-700 border-r border-(--border-soft)">
+                    {{ sectionTotals(section).days[dateStr]?.overtime > 0 ? formatNumber(sectionTotals(section).days[dateStr].overtime) : '-' }}
+                  </td>
+                  <td class="px-2 py-2.5 text-right text-amber-700">
+                    {{ sectionTotals(section).days[dateStr]?.uang_makan > 0 ? formatNumber(sectionTotals(section).days[dateStr].uang_makan) : '-' }}
+                  </td>
+                </template>
+                <td class="px-4 py-2.5 text-right text-emerald-700 border-r border-(--border-soft)">
+                  {{ sectionTotals(section).total_hari_kerja > 0 ? formatNumber(sectionTotals(section).total_hari_kerja) : '-' }}
+                </td>
+                <td class="px-4 py-2.5 text-right text-orange-700 border-r border-(--border-soft)">
+                  {{ sectionTotals(section).total_overtime > 0 ? formatNumber(sectionTotals(section).total_overtime) : '-' }}
+                </td>
+                <td class="px-4 py-2.5 text-right text-amber-700 border-r border-(--border-soft)">
+                  {{ sectionTotals(section).total_uang_makan > 0 ? formatNumber(sectionTotals(section).total_uang_makan) : '-' }}
+                </td>
+                <td class="px-4 py-2.5 text-right text-(--primary)">
+                  {{ sectionTotals(section).total_terima > 0 ? formatNumber(sectionTotals(section).total_terima) : '-' }}
+                </td>
+              </tr>
+            </tfoot>
           </table>
+
+          <!-- Spacer -->
+          <div class="mb-4"></div>
         </template>
       </div>
     </BaseCard>
@@ -182,6 +223,31 @@ onMounted(async () => {
 
 function formatNumber(num) {
   return new Intl.NumberFormat('id-ID').format(num || 0)
+}
+
+function sectionTotals(section) {
+  const data = section.data || []
+  const result = {
+    l: data.reduce((s, i) => s + (Number(i.l) || 0), 0),
+    p: data.reduce((s, i) => s + (Number(i.p) || 0), 0),
+    days: {},
+    total_hari_kerja: 0,
+    total_overtime: 0,
+    total_uang_makan: 0,
+    total_terima: 0,
+  }
+  dates.value.forEach(dateStr => {
+    result.days[dateStr] = {
+      hari_kerja: data.reduce((s, i) => s + (Number(i.days?.[dateStr]?.hari_kerja) || 0), 0),
+      overtime: data.reduce((s, i) => s + (Number(i.days?.[dateStr]?.overtime) || 0), 0),
+      uang_makan: data.reduce((s, i) => s + (Number(i.days?.[dateStr]?.uang_makan) || 0), 0),
+    }
+  })
+  result.total_hari_kerja = data.reduce((s, i) => s + (Number(i.total_hari_kerja) || 0), 0)
+  result.total_overtime = data.reduce((s, i) => s + (Number(i.total_overtime) || 0), 0)
+  result.total_uang_makan = data.reduce((s, i) => s + (Number(i.total_uang_makan) || 0), 0)
+  result.total_terima = data.reduce((s, i) => s + (Number(i.total_terima) || 0), 0)
+  return result
 }
 
 function formatDateHeader(dateStr) {
