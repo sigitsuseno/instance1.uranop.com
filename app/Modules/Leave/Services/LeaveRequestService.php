@@ -7,6 +7,7 @@ use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Leave\Models\LeavePeriod;
 use App\Modules\Leave\Models\EmployeeLeave;
 use App\Modules\Leave\Models\LeaveChangeRequest;
+use App\Modules\Leave\Models\LeavePolicy;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Exception;
@@ -512,5 +513,123 @@ class LeaveRequestService
         ]);
 
         return $changeRequest;
+    }
+
+    /**
+     * Kalibrasi Cuti — hitung ulang sisa_cuti di leave_requests & employee_leaves.
+     * Hanya untuk Cuti Tahunan (CT).
+     *
+     * Untuk setiap karyawan di periode tertentu:
+     *   1. Ambil approved leave_requests (CT), urut start_date ASC
+     *   2. Hitung running balance: sisa = entitlement - akumulasi days_requested
+     *   3. Update leave_requests.sisa_cuti per request
+     *   4. Update employee_leaves.amount = sisa akhir
+     *
+     * @param  int|null  $leavePeriodId  Default: periode aktif
+     * @return array
+     */
+    public function calibrateBalances(?int $leavePeriodId = null): array
+    {
+        $period = $leavePeriodId
+            ? LeavePeriod::findOrFail($leavePeriodId)
+            : LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->firstOrFail();
+
+        $leaveType = LeaveType::where('code', 'CT')->firstOrFail();
+        $policy    = LeavePolicy::where('leave_type_id', $leaveType->id)->first();
+
+        $entitlement = $policy ? (int) $policy->entitlement_days : 12;
+
+        $employeeCount = 0;
+        $requestCount  = 0;
+
+        DB::transaction(function () use ($period, $leaveType, $entitlement, &$employeeCount, &$requestCount) {
+            $employeeIds = LeaveRequest::where('leave_type_id', $leaveType->id)
+                ->where('leave_period_id', $period->id)
+                ->where('status', 'approved')
+                ->distinct()
+                ->pluck('employee_id');
+
+            foreach ($employeeIds as $employeeId) {
+                $requests = LeaveRequest::where('employee_id', $employeeId)
+                    ->where('leave_type_id', $leaveType->id)
+                    ->where('leave_period_id', $period->id)
+                    ->where('status', 'approved')
+                    ->orderBy('start_date', 'asc')
+                    ->get();
+
+                $totalUsed = 0;
+                foreach ($requests as $req) {
+                    $totalUsed += $req->days_requested;
+                    $req->updateQuietly(['sisa_cuti' => max(0, $entitlement - $totalUsed)]);
+                    $requestCount++;
+                }
+
+                // Update/find single employee_leave record
+                $record = EmployeeLeave::where('employee_id', $employeeId)
+                    ->where('leave_type_id', $leaveType->id)
+                    ->where('leave_period_id', $period->id)
+                    ->first();
+
+                $finalBalance = max(0, $entitlement - $totalUsed);
+
+                if ($record) {
+                    $record->updateQuietly(['amount' => $finalBalance]);
+                } else {
+                    EmployeeLeave::create([
+                        'employee_id'      => $employeeId,
+                        'leave_type_id'    => $leaveType->id,
+                        'leave_period_id'  => $period->id,
+                        'transaction_type' => 'increment',
+                        'amount'           => $finalBalance,
+                        'description'      => 'Kalibrasi Cuti: ' . $leaveType->name,
+                    ]);
+                }
+
+                $employeeCount++;
+            }
+        });
+
+        return [
+            'updated_employees' => $employeeCount,
+            'updated_requests'  => $requestCount,
+            'leave_period_name' => $period->name,
+        ];
+    }
+
+    /**
+     * Normalisasi period — update leave_period_id di leave_requests
+     * DAN employee_leaves (decrement) berdasarkan range tanggal periode.
+     *
+     * Cari semua leave_request yang start_date/end_date-nya masuk range periode,
+     * lalu update leave_period_id + employee_leaves decrement yang mereferensinya.
+     * Idempoten — jalan berapa kali pun hasilnya sama.
+     */
+    public function normalizePeriods(int $leavePeriodId): array
+    {
+        $period = LeavePeriod::findOrFail($leavePeriodId);
+
+        // 1. Cari semua leave_request yang tanggalnya masuk range periode ini
+        $affectedIds = LeaveRequest::where(function ($q) use ($period) {
+            $q->whereBetween('start_date', [$period->start_date, $period->end_date])
+              ->orWhereBetween('end_date', [$period->start_date, $period->end_date]);
+        })->pluck('id');
+
+        $requestCount = $affectedIds->count();
+
+        if ($requestCount > 0) {
+            // 2. Update leave_requests — set period_id = periode yang benar
+            LeaveRequest::whereIn('id', $affectedIds)
+                ->update(['leave_period_id' => $leavePeriodId]);
+
+            // 3. Update employee_leaves decrement yang reference_id-nya指向 leave_request tsb
+            EmployeeLeave::whereIn('reference_id', $affectedIds)
+                ->where('transaction_type', 'decrement')
+                ->update(['leave_period_id' => $leavePeriodId]);
+        }
+
+        return [
+            'updated_requests'  => $requestCount,
+            'leave_period_name' => $period->name,
+        ];
     }
 }

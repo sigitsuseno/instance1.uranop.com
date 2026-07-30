@@ -724,8 +724,32 @@ class SupervisorBreakdownController extends Controller
         }
         $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodName) . '.xlsx';
 
+        // Hitung grand total
+        $totals = [
+            'gaji_pokok'    => 0,
+            'premi'         => 0,
+            'tj_masa_kerja' => 0,
+            'upah_lembur'   => 0,
+            'gaji'          => 0,
+            'tunjangan'     => 0,
+            'premi_hadir'   => 0,
+            'bpjs_tk'       => 0,
+            'bpjs_ks'       => 0,
+            'bpjs_pen'      => 0,
+            'pph'           => 0,
+            'cashbon'       => 0,
+            'pblt'          => 0,
+            'gaji_bersih'   => 0,
+        ];
+        foreach ($exportData as $row) {
+            foreach ($totals as $key => &$total) {
+                $total += $row[$key];
+            }
+            unset($total);
+        }
+
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Supervisor\Payroll\Exports\SupervisorPayrollExport($exportData, $periodName),
+            new \App\Modules\Supervisor\Payroll\Exports\SupervisorPayrollExport($exportData, $periodName, $totals),
             $filename
         );
     }
@@ -812,17 +836,42 @@ class SupervisorBreakdownController extends Controller
             $periodLabel .= " (Segmen {$segment})";
         }
 
+        // Hitung grand total
+        $totals = [
+            'gaji_pokok'    => 0,
+            'premi'         => 0,
+            'tj_masa_kerja' => 0,
+            'upah_lembur'   => 0,
+            'gaji'          => 0,
+            'tunjangan'     => 0,
+            'premi_hadir'   => 0,
+            'bpjs_tk'       => 0,
+            'bpjs_ks'       => 0,
+            'bpjs_pen'      => 0,
+            'pph'           => 0,
+            'cashbon'       => 0,
+            'pblt'          => 0,
+            'gaji_bersih'   => 0,
+        ];
+        foreach ($data as $row) {
+            foreach ($totals as $key => &$total) {
+                $total += $row[$key];
+            }
+            unset($total);
+        }
+
         // Boost limits for large datasets
         set_time_limit(300);
         ini_set('memory_limit', '512M');
 
         $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('supervisor.payroll.salary-breakdown-pdf', [
             'data'        => $data,
+            'totals'      => $totals,
             'periodLabel' => $periodLabel,
             'companyName' => 'PT. KEMILAU UNGARAN SUKSES',
         ]);
 
-        $pdf->setPaper('A4', 'portrait');
+        $pdf->setPaper('A4', 'landscape');
 
         $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodLabel) . '.pdf';
         return $pdf->download($filename);

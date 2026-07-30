@@ -281,3 +281,28 @@ Perusahaan
    5.1 Import Kehadiran - Proses import data mentah absensi ke tabel log (yang ini kalau bisa selengkap mungkin)
    5.2 Manual Sync - Check scan kehadiran manual dan push ke att_prepare
    5.3 (dan submenu selanjutya)
+
+Buat Tombol Kalibrasi Cuti,
+
+- fungsinya menghitung ulang saldo cuti
+- mengurutkan leave request perkayawan berdasarkan kolom sisa cuti per karyawan untuk cuti tahunan, (leave_request->sisa_cuti)
+
+Caranya :
+$cuti = Cari karyawan yang memiliki leave_request di leave_periods yang di pilih, urutkan berdasarkan tanggal terlama.
+
+$jumlahCuti = $cuti->count(),
+$ixd = urutanCuti
+a. di tabel employee_leave
+
+- employee_leave->transaction_type = decrement
+- employee_leave->amount = 12 - $jumlah_cuti
+  b. di tabel leave_request
+- seperti kode dibawah
+
+```php
+foreach ($cuti as $index => $cutiSingle) {
+    $cutiSingle->update([
+        'sisa_cuti' => 12 - ($index + 1)
+    ]);
+}
+```

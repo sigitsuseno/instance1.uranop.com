@@ -21,7 +21,29 @@
       </div>
     </div>
 
-    <div class="flex justify-end gap-2 mb-4">
+    <div class="flex items-center justify-end gap-2 mb-4">
+      <BaseButton
+        v-if="auth.isSuperadmin"
+        variant="outline"
+        size="sm"
+        @click="executeNormalizePeriod"
+        :disabled="normalizing"
+        title="Sesuaikan period_id leave_request dengan range tanggal periode terpilih"
+      >
+        <template #icon-left><i class="bx bx-sort text-base"></i></template>
+        Normalisasi Period
+      </BaseButton>
+      <BaseButton
+        v-if="auth.isSuperadmin"
+        variant="warning"
+        size="sm"
+        @click="showCalibrateDialog = true"
+        :disabled="calibrating"
+        title="Kalibrasi ulang saldo cuti berdasarkan data transaksi"
+      >
+        <template #icon-left><i class="bx bx-adjust text-base"></i></template>
+        Kalibrasi Cuti
+      </BaseButton>
       <BaseButton variant="secondary" size="sm" @click="exportExcel" title="Export Excel">
         <template #icon-left><i class="bx bx-spreadsheet text-base"></i></template>
       </BaseButton>
@@ -50,6 +72,19 @@
         </template>
       </DataTable>
     </BaseCard>
+
+    <!-- Confirm Dialog Kalibrasi -->
+    <ConfirmDialog
+      :show="showCalibrateDialog"
+      title="Kalibrasi Cuti"
+      message="Proses ini akan menyelaraskan sisa saldo cuti (Cuti Tahunan) semua karyawan berdasarkan urutan transaksi yang ada. Semua data sisa cuti di pengajuan akan diperbarui. Lanjutkan?"
+      confirmText="Ya, Kalibrasi"
+      cancelText="Batal"
+      variant="warning"
+      :loading="calibrating"
+      @confirm="executeCalibrate"
+      @cancel="showCalibrateDialog = false"
+    />
   </div>
 </template>
 
@@ -57,18 +92,24 @@
 import { ref, onMounted } from 'vue'
 import BaseCard from '../../../Components/BaseCard.vue'
 import BaseButton from '../../../Components/BaseButton.vue'
+import ConfirmDialog from '../../../Components/ConfirmDialog.vue'
 import DataTable from '../../../Components/Table/DataTable.vue'
 import { useApi } from '../../../composables/useApi'
+import { useAuth } from '../../../composables/useAuth'
 import { useNotification } from '../../../composables/useNotification'
 
 const api = useApi()
 const notify = useNotification()
+const auth = useAuth()
 
 const selectedPeriodId = ref('')
 const periods = ref([])
 const balances = ref([])
 const loadingPeriods = ref(false)
 const loading = ref(false)
+const showCalibrateDialog = ref(false)
+const calibrating = ref(false)
+const normalizing = ref(false)
 
 const headers = [
   { key: 'nip', label: 'NIP' },
@@ -131,6 +172,44 @@ function exportExcel() {
 }
 
 function exportPdf() { notify.info('Export PDF akan diimplementasikan.') }
+
+async function executeNormalizePeriod() {
+  if (!selectedPeriodId.value) {
+    notify.error('Pilih periode terlebih dahulu.')
+    return
+  }
+  if (!confirm('Normalisasi period_id semua leave_request yang masuk range periode ini?')) return
+  normalizing.value = true
+  try {
+    const res = await api.post('/api/v1/leave/normalize-period', {
+      leave_period_id: selectedPeriodId.value,
+    })
+    notify.success(res.message || 'Normalisasi periode berhasil.')
+    await fetchBalances()
+  } catch (err) {
+    notify.error(err.message || 'Gagal normalisasi periode.')
+  } finally {
+    normalizing.value = false
+  }
+}
+
+async function executeCalibrate() {
+  calibrating.value = true
+  try {
+    const payload = {}
+    if (selectedPeriodId.value) {
+      payload.leave_period_id = selectedPeriodId.value
+    }
+    const res = await api.post('/api/v1/leave/calibrate', payload)
+    notify.success(res.message || 'Kalibrasi cuti berhasil.')
+    showCalibrateDialog.value = false
+    await fetchBalances()
+  } catch (err) {
+    notify.error(err.message || 'Gagal melakukan kalibrasi cuti.')
+  } finally {
+    calibrating.value = false
+  }
+}
 
 onMounted(async () => {
   await fetchPeriods()

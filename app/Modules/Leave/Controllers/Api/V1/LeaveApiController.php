@@ -493,27 +493,24 @@ class LeaveApiController extends Controller
             ->orderBy('name')
             ->get();
 
-        $leaveTypes = LeaveType::all();
+        $leaveTypes = LeaveType::where('balance_type', 'decrement')->get();
+        $policies  = LeavePolicy::whereIn('leave_type_id', $leaveTypes->pluck('id'))->get()->keyBy('leave_type_id');
         $balances = [];
 
         foreach ($employees as $employee) {
             foreach ($leaveTypes as $type) {
-                $additions = EmployeeLeave::where('employee_id', $employee->id)
-                    ->where('leave_type_id', $type->id)
-                    ->where('leave_period_id', $periodId)
-                    ->where('transaction_type', 'increment')
-                    ->sum('amount');
+                $policy = $policies->get($type->id);
+                $entitlement = $policy ? (float) $policy->entitlement_days : 0;
 
-                $deductions = EmployeeLeave::where('employee_id', $employee->id)
+                $deductions = (float) EmployeeLeave::where('employee_id', $employee->id)
                     ->where('leave_type_id', $type->id)
                     ->where('leave_period_id', $periodId)
                     ->where('transaction_type', 'decrement')
                     ->sum('amount');
 
-                $remaining = $additions - $deductions;
+                $remaining = $entitlement - $deductions;
 
-                // Hanya tampilkan jika ada data kuota (addition/deduction) — jangan tampilin row kosong
-                if ($additions > 0 || $deductions > 0) {
+                if ($entitlement > 0 || $deductions > 0) {
                     $balances[] = [
                         'employee_id' => $employee->id,
                         'employee_name' => $employee->name,
@@ -521,9 +518,9 @@ class LeaveApiController extends Controller
                         'department_name' => $employee->department?->name ?? '-',
                         'leave_type_id' => $type->id,
                         'leave_type_name' => $type->name,
-                        'entitlement' => (float)$additions,
-                        'used' => (float)$deductions,
-                        'balance' => (float)$remaining,
+                        'entitlement' => $entitlement,
+                        'used' => $deductions,
+                        'balance' => max(0, $remaining),
                     ];
                 }
             }
@@ -791,25 +788,32 @@ class LeaveApiController extends Controller
             ->get();
 
         $leaveTypes = LeaveType::all();
+        $policies   = LeavePolicy::all()->keyBy('leave_type_id');
         $balances = [];
 
         foreach ($employees as $employee) {
             foreach ($leaveTypes as $type) {
-                $additions = EmployeeLeave::where('employee_id', $employee->id)
-                    ->where('leave_type_id', $type->id)
-                    ->where('leave_period_id', $periodId)
-                    ->where('transaction_type', 'increment')
-                    ->sum('amount');
+                $policy = $policies->get($type->id);
 
-                $deductions = EmployeeLeave::where('employee_id', $employee->id)
+                if ($policy) {
+                    $entitlement = (float) $policy->entitlement_days;
+                } else {
+                    $entitlement = (float) EmployeeLeave::where('employee_id', $employee->id)
+                        ->where('leave_type_id', $type->id)
+                        ->where('leave_period_id', $periodId)
+                        ->where('transaction_type', 'increment')
+                        ->sum('amount');
+                }
+
+                $deductions = (float) EmployeeLeave::where('employee_id', $employee->id)
                     ->where('leave_type_id', $type->id)
                     ->where('leave_period_id', $periodId)
                     ->where('transaction_type', 'decrement')
                     ->sum('amount');
 
-                $remaining = $additions - $deductions;
+                $remaining = $entitlement - $deductions;
 
-                if ($additions > 0 || $deductions > 0) {
+                if ($entitlement > 0 || $deductions > 0) {
                     $balances[] = [
                         'employee_id' => $employee->id,
                         'employee_name' => $employee->name,
@@ -817,9 +821,9 @@ class LeaveApiController extends Controller
                         'department_name' => $employee->department?->name ?? '-',
                         'leave_type_id' => $type->id,
                         'leave_type_name' => $type->name,
-                        'entitlement' => (float)$additions,
-                        'used' => (float)$deductions,
-                        'balance' => (float)$remaining,
+                        'entitlement' => $entitlement,
+                        'used' => $deductions,
+                        'balance' => max(0, $remaining),
                     ];
                 }
             }
@@ -851,5 +855,63 @@ class LeaveApiController extends Controller
             'message' => 'Tanggal masuk berhasil diupdate.',
             'data' => $leaveRequest->fresh(),
         ]);
+    }
+
+    /**
+     * Kalibrasi / reconcile saldo cuti untuk leave_type dengan balance_type = 'decrement'.
+     * Hitung ulang sisa_cuti di leave_requests & amount di employee_leaves.
+     */
+    public function calibrate(Request $request)
+    {
+        $user = Auth::user();
+        $roles = $user->roles->pluck('name')->toArray();
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        if (!$isHr) {
+            return response()->json(['message' => 'Anda tidak memiliki akses untuk kalibrasi cuti.'], 403);
+        }
+
+        $validated = $request->validate([
+            'leave_period_id' => 'nullable|exists:leave_periods,id',
+        ]);
+
+        try {
+            $result = $this->leaveService->calibrateBalances($validated['leave_period_id'] ?? null);
+            return response()->json([
+                'message' => "Kalibrasi cuti berhasil untuk {$result['updated_employees']} karyawan "
+                           . "pada periode '{$result['leave_period_name']}'.",
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal kalibrasi cuti: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Normalisasi period — update leave_period_id di leave_requests
+     * berdasarkan range tanggal periode yang dipilih.
+     */
+    public function normalizePeriod(Request $request)
+    {
+        $user = Auth::user();
+        $roles = $user->roles->pluck('name')->toArray();
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        if (!$isHr) {
+            return response()->json(['message' => 'Anda tidak memiliki akses.'], 403);
+        }
+
+        $validated = $request->validate([
+            'leave_period_id' => 'required|exists:leave_periods,id',
+        ]);
+
+        try {
+            $result = $this->leaveService->normalizePeriods($validated['leave_period_id']);
+            return response()->json([
+                'message' => "Normalisasi periode berhasil untuk {$result['updated_requests']} pengajuan "
+                           . "pada periode '{$result['leave_period_name']}'.",
+                'data' => $result,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Gagal normalisasi periode: ' . $e->getMessage()], 500);
+        }
     }
 }

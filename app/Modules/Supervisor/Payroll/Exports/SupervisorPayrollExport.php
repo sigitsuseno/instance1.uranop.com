@@ -31,14 +31,16 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
     protected array $data;
     protected string $periodLabel;
     protected string $companyName;
+    protected array $totals;
 
     private const LAST_COL = 'Y';
     private const COL_COUNT = 25;
 
-    public function __construct(array $data, string $periodLabel, string $companyName = 'PT. KEMILAU UNGARAN SUKSES')
+    public function __construct(array $data, string $periodLabel, array $totals = [], string $companyName = 'PT. KEMILAU UNGARAN SUKSES')
     {
         $this->data        = $data;
         $this->periodLabel = $periodLabel;
+        $this->totals      = $totals;
         $this->companyName = $companyName;
     }
 
@@ -55,7 +57,44 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
             $rows[] = $this->dataRow($r, $idx + 1);
         }
 
+        // Grand total row
+        if (!empty($this->totals)) {
+            $rows[] = $this->totalsRow();
+        }
+
         return $rows;
+    }
+
+    private function totalsRow(): array
+    {
+        $t = $this->totals;
+        return [
+            'GRAND TOTAL',  // A — No
+            '',             // B — ID No
+            '',             // C — Nama
+            '',             // D — Bagian / Jabatan
+            '',             // E — L/P
+            '',             // F — MASA KERJA
+            '',             // G — Join Date
+            '',             // H — Status
+            $t['gaji_pokok'] ?? 0,      // I
+            $t['premi'] ?? 0,           // J
+            $t['tj_masa_kerja'] ?? 0,   // K
+            '',             // L — HK
+            '',             // M — L/M
+            '',             // N — Lbr Hitung
+            $t['upah_lembur'] ?? 0,     // O
+            $t['gaji'] ?? 0,            // P
+            $t['tunjangan'] ?? 0,       // Q
+            $t['premi_hadir'] ?? 0,     // R
+            $t['bpjs_tk'] ?? 0,         // S
+            $t['bpjs_ks'] ?? 0,         // T
+            $t['bpjs_pen'] ?? 0,        // U
+            $t['pph'] ?? 0,             // V
+            $t['cashbon'] ?? 0,         // W
+            $t['pblt'] ?? 0,            // X
+            $t['gaji_bersih'] ?? 0,     // Y
+        ];
     }
 
     private function dataRow(array $r, int $no): array
@@ -114,11 +153,12 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
                 $spreadsheet = $sheet->getParent();
 
                 $dataRows = count($this->data);
+                $hasTotals = !empty($this->totals);
                 $lastCol = self::LAST_COL;
 
                 // ── Shift data down 3 rows to make room for title + period + headers ──
                 $sheet->insertNewRowBefore(1, 3);
-                $lastDataRow = 3 + $dataRows; // row 1=title, row 2=period, row 3=headers, row 4+ = data
+                $lastDataRow = 3 + $dataRows + ($hasTotals ? 1 : 0); // row 1=title, row 2=period, row 3=headers, row 4+ = data + totals
 
                 // ── Default font ──
                 $spreadsheet->getDefaultStyle()->getFont()->setName('Calibri')->setSize(11);
@@ -274,6 +314,25 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
 
                 // ── Freeze pane ──
                 $sheet->freezePane('A4');
+
+                // ── Grand total row styling ──
+                if ($hasTotals) {
+                    $totalRow = $lastDataRow;
+                    $sheet->getStyle("A{$totalRow}:{$lastCol}{$totalRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'size' => 11, 'name' => 'Calibri'],
+                        'fill' => [
+                            'fillType'   => Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'D6E4F0'],
+                        ],
+                    ]);
+                    $sheet->getStyle("A{$totalRow}")->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                    foreach ($rightCols as $col) {
+                        $sheet->getStyle("{$col}{$totalRow}")
+                            ->getAlignment()
+                            ->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                    }
+                }
             },
         ];
     }

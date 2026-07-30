@@ -5,11 +5,11 @@
     <title>Laporan Salary Breakdown</title>
     <style>
         @page {
-            margin: 10mm 8mm;
+            margin: 8mm 6mm;
         }
         body {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 7.5px;
+            font-size: 7px;
             color: #000;
         }
         .header {
@@ -59,6 +59,7 @@
         .text-right  { text-align: right; }
         .text-left   { text-align: left; }
         .bg-zebra    { background-color: #F9FAFB; }
+        .bg-total    { background-color: #D6E4F0; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -129,6 +130,30 @@
             </tr>
         @endforeach
     </tbody>
+    @if(count($data) > 0)
+    <tfoot>
+        <tr class="bg-total">
+            <td colspan="8" style="text-align:center; font-weight:bold; font-size:7px;">GRAND TOTAL</td>
+            <td class="text-right">{{ number_format($totals['gaji_pokok'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['premi'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['tj_masa_kerja'], 0, ',', '.') }}</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td class="text-right">{{ number_format($totals['upah_lembur'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['gaji'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['tunjangan'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['premi_hadir'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['bpjs_tk'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['bpjs_ks'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['bpjs_pen'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['pph'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['cashbon'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ number_format($totals['pblt'], 0, ',', '.') }}</td>
+            <td class="text-right"><strong>{{ number_format($totals['gaji_bersih'], 0, ',', '.') }}</strong></td>
+        </tr>
+    </tfoot>
+    @endif
 </table>
 
 </body>
