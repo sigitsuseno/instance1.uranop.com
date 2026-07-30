@@ -488,43 +488,41 @@ class LeaveApiController extends Controller
             return response()->json(['data' => []]);
         }
 
-        $employees = Employee::with(['department'])
-            ->where('is_active', 1)
-            ->orderBy('name')
+        $records = EmployeeLeave::with(['employee.department', 'leaveType.policy'])
+            ->where('leave_period_id', $periodId)
+            ->where('transaction_type', 'increment')
+            ->orderBy(EmployeeLeave::select('name')
+                ->whereColumn('employee_id', 'employee_leaves.employee_id')
+                ->from('employees')
+                ->limit(1)
+            )
             ->get();
 
-        $leaveTypes = LeaveType::where('balance_type', 'decrement')->get();
-        $policies  = LeavePolicy::whereIn('leave_type_id', $leaveTypes->pluck('id'))->get()->keyBy('leave_type_id');
-        $balances = [];
+        // Kumpulkan total used per employee + leave_type
+        $usedMap = EmployeeLeave::where('leave_period_id', $periodId)
+            ->where('transaction_type', 'decrement')
+            ->groupBy('employee_id', 'leave_type_id')
+            ->selectRaw('employee_id, leave_type_id, SUM(amount) as total')
+            ->get()
+            ->keyBy(fn ($item) => $item->employee_id . '_' . $item->leave_type_id);
 
-        foreach ($employees as $employee) {
-            foreach ($leaveTypes as $type) {
-                $policy = $policies->get($type->id);
-                $entitlement = $policy ? (float) $policy->entitlement_days : 0;
+        $balances = $records->map(function ($record) use ($usedMap) {
+            $key = $record->employee_id . '_' . $record->leave_type_id;
+            $used = (float) ($usedMap->get($key)?->total ?? 0);
+            $entitlement = (float) ($record->leaveType?->policy?->entitlement_days ?? 0);
 
-                $deductions = (float) EmployeeLeave::where('employee_id', $employee->id)
-                    ->where('leave_type_id', $type->id)
-                    ->where('leave_period_id', $periodId)
-                    ->where('transaction_type', 'decrement')
-                    ->sum('amount');
-
-                $remaining = $entitlement - $deductions;
-
-                if ($entitlement > 0 || $deductions > 0) {
-                    $balances[] = [
-                        'employee_id' => $employee->id,
-                        'employee_name' => $employee->name,
-                        'nip' => $employee->nip,
-                        'department_name' => $employee->department?->name ?? '-',
-                        'leave_type_id' => $type->id,
-                        'leave_type_name' => $type->name,
-                        'entitlement' => $entitlement,
-                        'used' => $deductions,
-                        'balance' => max(0, $remaining),
-                    ];
-                }
-            }
-        }
+            return [
+                'employee_id'     => $record->employee_id,
+                'employee_name'   => $record->employee->name ?? '-',
+                'nip'             => $record->employee->nip ?? '-',
+                'department_name' => $record->employee->department?->name ?? '-',
+                'leave_type_id'   => $record->leave_type_id,
+                'leave_type_name' => $record->leaveType->name ?? '-',
+                'entitlement'     => $entitlement,
+                'used'            => $used,
+                'balance'         => max(0, (float) $record->amount),
+            ];
+        })->values();
 
         return response()->json(['data' => $balances]);
     }

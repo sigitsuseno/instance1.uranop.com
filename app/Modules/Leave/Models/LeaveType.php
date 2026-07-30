@@ -41,6 +41,11 @@ class LeaveType extends Model
         ];
     }
 
+    public function policy()
+    {
+        return $this->hasOne(LeavePolicy::class, 'leave_type_id');
+    }
+
     protected static function boot()
     {
         parent::boot();

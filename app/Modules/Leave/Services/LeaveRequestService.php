@@ -516,14 +516,13 @@ class LeaveRequestService
     }
 
     /**
-     * Kalibrasi Cuti — hitung ulang sisa_cuti di leave_requests & employee_leaves.
-     * Hanya untuk Cuti Tahunan (CT).
+     * Kalibrasi Cuti Tahunan (CT) — running balance dari employee_leave.
      *
-     * Untuk setiap karyawan di periode tertentu:
-     *   1. Ambil approved leave_requests (CT), urut start_date ASC
-     *   2. Hitung running balance: sisa = entitlement - akumulasi days_requested
-     *   3. Update leave_requests.sisa_cuti per request
-     *   4. Update employee_leaves.amount = sisa akhir
+     * Untuk setiap employee yang punya employee_leave di periode dipilih:
+     *   1. Ambil approved leave_requests CT, urut start_date ASC
+     *   2. Per request:
+     *      - sisa_cuti = employee_leave->amount - days_requested
+     *      - employee_leave->amount -= days_requested
      *
      * @param  int|null  $leavePeriodId  Default: periode aktif
      * @return array
@@ -535,54 +534,34 @@ class LeaveRequestService
             : LeavePeriod::where('status', 'active')->orderBy('start_date', 'desc')->firstOrFail();
 
         $leaveType = LeaveType::where('code', 'CT')->firstOrFail();
-        $policy    = LeavePolicy::where('leave_type_id', $leaveType->id)->first();
-
-        $entitlement = $policy ? (int) $policy->entitlement_days : 12;
 
         $employeeCount = 0;
         $requestCount  = 0;
 
-        DB::transaction(function () use ($period, $leaveType, $entitlement, &$employeeCount, &$requestCount) {
-            $employeeIds = LeaveRequest::where('leave_type_id', $leaveType->id)
+        DB::transaction(function () use ($period, $leaveType, &$employeeCount, &$requestCount) {
+            $records = EmployeeLeave::where('leave_type_id', $leaveType->id)
                 ->where('leave_period_id', $period->id)
-                ->where('status', 'approved')
-                ->distinct()
-                ->pluck('employee_id');
+                ->where('transaction_type', 'increment')
+                ->get();
 
-            foreach ($employeeIds as $employeeId) {
-                $requests = LeaveRequest::where('employee_id', $employeeId)
+            foreach ($records as $record) {
+                $requests = LeaveRequest::where('employee_id', $record->employee_id)
                     ->where('leave_type_id', $leaveType->id)
                     ->where('leave_period_id', $period->id)
                     ->where('status', 'approved')
                     ->orderBy('start_date', 'asc')
                     ->get();
 
-                $totalUsed = 0;
-                foreach ($requests as $req) {
-                    $totalUsed += $req->days_requested;
-                    $req->updateQuietly(['sisa_cuti' => max(0, $entitlement - $totalUsed)]);
-                    $requestCount++;
+                if ($requests->isEmpty()) {
+                    continue;
                 }
 
-                // Update/find single employee_leave record
-                $record = EmployeeLeave::where('employee_id', $employeeId)
-                    ->where('leave_type_id', $leaveType->id)
-                    ->where('leave_period_id', $period->id)
-                    ->first();
+                foreach ($requests as $req) {
+                    $sisaCuti = max(0, $record->amount - $req->days_requested);
 
-                $finalBalance = max(0, $entitlement - $totalUsed);
-
-                if ($record) {
-                    $record->updateQuietly(['amount' => $finalBalance]);
-                } else {
-                    EmployeeLeave::create([
-                        'employee_id'      => $employeeId,
-                        'leave_type_id'    => $leaveType->id,
-                        'leave_period_id'  => $period->id,
-                        'transaction_type' => 'increment',
-                        'amount'           => $finalBalance,
-                        'description'      => 'Kalibrasi Cuti: ' . $leaveType->name,
-                    ]);
+                    $req->updateQuietly(['sisa_cuti' => $sisaCuti]);
+                    $record->decrement('amount', $req->days_requested);
+                    $requestCount++;
                 }
 
                 $employeeCount++;
