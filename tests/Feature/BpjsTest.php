@@ -2,16 +2,18 @@
 
 namespace Tests\Feature;
 
+use App\Modules\Settings\Models\BpjsConfig;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
-use App\Modules\Auth\Models\User;
 
 class BpjsTest extends TestCase
 {
-    public function test_create_bpjs()
+    use RefreshDatabase;
+
+    public function test_bpjs_config_creation()
     {
-        $user = User::first() ?? User::factory()->create();
-        $response = $this->actingAs($user, 'sanctum')->postJson('/api/v1/settings/bpjs-configs', [
+        $config = BpjsConfig::create([
+            'uuid' => \Illuminate\Support\Str::uuid(),
             'effective_date' => '2026-06-15',
             'jht_employer' => 3.70,
             'jht_employee' => 2.00,
@@ -22,9 +24,10 @@ class BpjsTest extends TestCase
             'kesehatan_employer' => 4.00,
             'kesehatan_employee' => 1.00,
             'max_wage_cap' => 12000000,
-            'description' => '',
         ]);
 
-        $response->dump();
+        $this->assertNotNull($config->id);
+        $this->assertEquals(3.70, $config->jht_employer);
+        $this->assertEquals(12000000, $config->max_wage_cap);
     }
 }

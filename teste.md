@@ -268,3 +268,16 @@ Kalau kurang faham tolong tanyakan
 jais 196.000
 miftah 313.000
 suyono 188.000
+
+Perusahaan
+
+- Menu edit profil management user
+  -> Profile Perusahaan
+    - Identitas Perusahaan
+      -> Admin
+    - Submenu managemen user
+
+5. KEHADIRAN
+   5.1 Import Kehadiran - Proses import data mentah absensi ke tabel log (yang ini kalau bisa selengkap mungkin)
+   5.2 Manual Sync - Check scan kehadiran manual dan push ke att_prepare
+   5.3 (dan submenu selanjutya)

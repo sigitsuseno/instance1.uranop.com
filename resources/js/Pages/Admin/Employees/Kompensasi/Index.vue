@@ -204,7 +204,7 @@ async function downloadFile(url, defaultFilename) {
         const contentType = response.headers.get('content-type')
         if (contentType && contentType.includes('application/json')) {
             const data = await response.json()
-            notification.addNotification(data.message || 'Fitur ekspor akan segera tersedia.', 'warning')
+            notification.addNotification(data.message || 'Gagal mengekspor data.', 'error')
             return
         }
 

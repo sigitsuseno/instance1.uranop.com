@@ -74,7 +74,7 @@ class PayrollDetailExport implements FromArray, WithHeadings, WithMapping, WithS
             ['PT KEMILAU UNGARAN SUKSES'],
             ['PRINTING KARANGJATI'],
             [''],
-            ['A. KARYAWAN ALL IN', '', '', '', '', '', '', '', '', '', '', '', '25 JANUARI - 24 FEBRUARI 26'], // TODO: dynamic period
+            ['A. KARYAWAN ALL IN', '', '', '', '', '', '', '', '', '', '', '', strtoupper($this->periodName ?? '')],
             [
                 'No', 'ID No', 'NAMA', 'BAGIAN / JABATAN', 'BAGIAN / JABATAN', 'L/P',
                 'THN MASUK KARYAWAN', 'MASA KERJA', 'STATUS (K/TK)', 'JML ANAK', 'ACCOUNT NO',

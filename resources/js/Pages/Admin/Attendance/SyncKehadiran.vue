@@ -53,7 +53,7 @@
           </template>
           Perbarui Status
         </BaseButton>
-        <BaseButton variant="secondary" @click="handleKunci" :disabled="true" title="Coming soon — sesi selanjutnya">
+        <BaseButton variant="secondary" :loading="isLocking" @click="auth.isManajemen ? null : handleKunci()" :disabled="auth.isManajemen">
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
@@ -518,6 +518,7 @@ const isSyncing = ref(false)
 const isCompleting = ref(false)
 const isCalculating = ref(false)
 const isUpdatingStatus = ref(false)
+const isLocking = ref(false)
 const isLoading = ref(true)
 const isSaving = ref(false)
 const syncResult = ref(null)
@@ -1201,7 +1202,52 @@ async function handleProceedLengkapi() {
 }
 
 // ── Kunci ──
-function handleKunci() { /* TODO: sesi selanjutnya */ }
+async function handleKunci() {
+  const { start, end } = getPeriodDates()
+  if (!confirm(`Kunci semua data kehadiran untuk periode ${start} s/d ${end}? Record yang sudah dikunci tidak dapat diedit.`)) return
+
+  isLocking.value = true
+  syncResult.value = null
+
+  try {
+    // Collect all IDs that are not already locked
+    const ids = []
+    for (const empId in attendanceData.value) {
+      for (const dateStr in attendanceData.value[empId]) {
+        const record = attendanceData.value[empId][dateStr]
+        if (record.id && !record.isLocked) {
+          ids.push(record.id)
+        }
+      }
+    }
+
+    if (ids.length === 0) {
+      syncResult.value = {
+        success: true,
+        message: 'Semua record sudah terkunci.',
+      }
+      return
+    }
+
+    const res = await post('/api/v1/attendance/prepare/lock', { ids, lock: true })
+    syncResult.value = {
+      success: res.success,
+      message: res.message || `${ids.length} record berhasil dikunci.`,
+    }
+
+    if (res.success) {
+      await fetchData()
+    }
+  } catch (e) {
+    const msg = e?.response?.data?.message || e.message || 'Unknown error'
+    syncResult.value = {
+      success: false,
+      message: 'Kunci gagal: ' + msg,
+    }
+  } finally {
+    isLocking.value = false
+  }
+}
 
 function filterData() { /* computed handles this */ }
 

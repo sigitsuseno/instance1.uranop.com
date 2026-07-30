@@ -57,10 +57,11 @@ function initForm() {
     form.notes = props.contract.notes || ''
     form.status = props.contract.status || 'active'
   } else {
-    // Generate simple contract number placeholder
+    // Generate unique contract number (edit dulu sebelum simpan)
     const date = new Date()
     const prefix = `CTR-${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}`
-    form.contract_number = `${prefix}-XXXX`
+    const rand = Math.random().toString(36).substring(2, 6).toUpperCase()
+    form.contract_number = `${prefix}-${rand}`
     form.contract_type = 'pkwt'
     form.start_date = ''
     form.end_date = ''

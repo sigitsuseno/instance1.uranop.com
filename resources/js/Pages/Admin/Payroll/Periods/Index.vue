@@ -337,8 +337,12 @@ async function handleGenerate() {
 }
 
 function handleExport() {
-  // TODO: implement export
-  alert('Export coming soon')
+  if (!selectedPeriodId.value) return
+  const params = new URLSearchParams({ period_id: selectedPeriodId.value, tab: 'all-in' })
+  if (activeSegment.value) {
+    params.append('segment', activeSegment.value)
+  }
+  window.open(`/api/v1/laporan/payroll/detail/export?${params.toString()}`, '_blank')
 }
 
 function openCreateModal() {

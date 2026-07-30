@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Modules\Attendance\Exports\ResumeKehadiranExport;
+use App\Modules\Payroll\Services\PphCalculationService;
 
 class AttendanceApiController extends Controller
 {
@@ -1393,7 +1394,7 @@ class AttendanceApiController extends Controller
                     $bpjsTk = $isPart1 ? 0 : ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
                     $bpjsKs = $isPart1 ? 0 : ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
                     $bpjsPen = $isPart1 ? 0 : ($employee->bpjs?->bpjs_pensiun ?? 0);
-                    $pph = $isPart1 ? 0 : 0; // TODO: dari pengelolaan PPH
+                    $pph = app(PphCalculationService::class)->calculate($employee, $period, $gajiPokok, $tunjangan, $upahLembur, $premiHadir, $gaji, $isPart1);
                     $cashbon = 0;
 
                     $gajiKotor = $gaji + $tjMasaKerja + $upahLembur + $revisi + $premiHadir + $tunjangan;

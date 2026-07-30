@@ -7,6 +7,7 @@ use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Payroll\Models\PayrollConfig;
+use App\Modules\Payroll\Services\PphCalculationService;
 use App\Modules\Settings\Models\SystemSetting;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
@@ -334,7 +335,7 @@ class SupervisorBreakdownController extends Controller
                     $bpjsTk  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
                     $bpjsKs  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
                     $bpjsPen = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_pensiun ?? 0);
-                    $pph     = 0; // TODO: dari pengelolaan PPH
+                    $pph     = app(PphCalculationService::class)->calculate($employee, $period, $gajiPokok, $tunjangan, $upahLembur, $premiHadir, $gaji, $isPart1);
                     $cashbon = 0;
 
                     // ── Gaji Kotor ──

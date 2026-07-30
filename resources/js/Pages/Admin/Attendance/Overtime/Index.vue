@@ -268,7 +268,7 @@ function submitOvertime() {
   overtimeRecords.value.unshift({
     id: Date.now(),
     employee_name: 'Karyawan Baru',
-    nip: 'EMPXXX',
+    nip: '', // will be filled from employee selection
     department: 'IT',
     date: createForm.date || '2026-05-27',
     start_time: createForm.startTime || '17:00',
