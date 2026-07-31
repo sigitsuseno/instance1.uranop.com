@@ -1369,6 +1369,118 @@ class AttendanceAutologController extends Controller
     }
 
     /**
+     * Daftar karyawan untuk periode tertentu (dipakai modal export terpilih).
+     * GET /api/v1/supervisor/attendance/absensi/employees?start_date=...&end_date=...
+     */
+    public function employees(Request $request)
+    {
+        $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
+        $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
+
+        $groupEmployeeIds = SupervisorEmployeeGroup::where('period_start', $startDate)
+            ->where('period_end', $endDate)
+            ->pluck('employee_id')
+            ->unique()
+            ->values();
+
+        $employees = Employee::whereIn('id', $groupEmployeeIds)
+            ->with(['department', 'position'])
+            ->orderBy('employee_code')
+            ->get()
+            ->map(fn ($emp) => [
+                'id' => $emp->id,
+                'employee_code' => $emp->employee_code,
+                'employee_name' => $emp->name,
+                'department' => $emp->department?->name ?? '-',
+                'position' => $emp->position?->name ?? '-',
+            ]);
+
+        return response()->json(['employees' => $employees]);
+    }
+
+    /**
+     * Export detail beberapa karyawan ke satu file Excel, 1 karyawan 1 sheet.
+     * POST /api/v1/supervisor/attendance/absensi/export-selected
+     * body: { employee_ids: [..], start_date, end_date }
+     */
+    public function exportSelected(Request $request)
+    {
+        $request->validate([
+            'employee_ids' => ['required', 'array', 'min:1'],
+            'employee_ids.*' => ['integer'],
+        ]);
+
+        $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
+        $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
+
+        $employees = Employee::with(['department', 'position'])
+            ->whereIn('id', $request->input('employee_ids'))
+            ->get()
+            ->keyBy('id');
+
+        $employeesData = [];
+
+        foreach ($request->input('employee_ids') as $employeeId) {
+            $employee = $employees->get($employeeId);
+            if (! $employee) {
+                continue;
+            }
+
+            $logs = AttendanceAutolog::with('employeeShiftRoster.workPattern')
+                ->where('employee_id', $employeeId)
+                ->whereBetween('date', [$startDate, $endDate])
+                ->orderBy('date')
+                ->get();
+
+            $rows = [];
+            $currentDate = Carbon::parse($startDate);
+            $lastDate = Carbon::parse($endDate);
+            $totalOvertimeRaw = 0;
+
+            while ($currentDate <= $lastDate) {
+                $dateStr = $currentDate->toDateString();
+                $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
+
+                $lemburMin = $log?->lembur ?? 0;
+                $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
+                $totalOvertimeRaw += $lemburMin;
+
+                $rows[] = [
+                    $employee->employee_code,
+                    $employee->name,
+                    $currentDate->translatedFormat('D, d M Y'),
+                    $log?->check_in ? $log->check_in->format('H:i') : '--:--',
+                    $log?->check_out ? $log->check_out->format('H:i') : '--:--',
+                    $lemburDisplay,
+                ];
+
+                $currentDate->addDay();
+            }
+
+            $employeesData[] = [
+                'employee' => [
+                    'name' => $employee->name,
+                    'code' => $employee->employee_code,
+                    'department' => $employee->department?->name ?? '-',
+                    'position' => $employee->position?->name ?? '-',
+                ],
+                'rows' => $rows,
+                'periodStart' => Carbon::parse($startDate)->format('d F Y'),
+                'periodEnd' => Carbon::parse($endDate)->format('d F Y'),
+                'totalOvertime' => round($totalOvertimeRaw / 60, 1),
+            ];
+        }
+
+        $periodLabel = Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = 'Absensi_Detail_' . $periodLabel . '.xlsx';
+
+        return Excel::download(
+            new \App\Modules\Supervisor\Attendance\Exports\AttendanceMultipleDetailExport($employeesData),
+            $filename
+        );
+    }
+
+    /**
      * Export detail autolog harian per employee ke Excel.
      */
     public function exportDetail($employeeId, Request $request)

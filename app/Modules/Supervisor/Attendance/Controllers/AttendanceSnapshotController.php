@@ -8,12 +8,12 @@ use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot as AttendanceSnapshot;
 use App\Modules\Supervisor\Attendance\Models\SupervisorEmployee as Employee;
 use App\Modules\Leave\Models\LeaveRequest;
-use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Organization\Models\Company;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 class AttendanceSnapshotController extends Controller
@@ -52,14 +52,6 @@ class AttendanceSnapshotController extends Controller
             $selectedPeriodId = $matchedPeriod?->id;
         }
 
-        $leaveTypeIds = LeaveType::all();
-        $cutiTypeIds = $leaveTypeIds->where('category', 'leave')->pluck('id');
-        $izinTypeIds = $leaveTypeIds->where('category', 'permit')->pluck('id');
-        $sakitTypeId = $leaveTypeIds->firstWhere('category', 'sick')?->id;
-
-        $month = Carbon::parse($endDate)->month;
-        $year = Carbon::parse($endDate)->year;
-
         // Ambil employee ID dari supervisor_employee_groups per periode
         $groupEmployeeIds = \App\Modules\Supervisor\Models\SupervisorEmployeeGroup::where('period_start', $startDate)
             ->where('period_end', $endDate)
@@ -91,35 +83,23 @@ class AttendanceSnapshotController extends Controller
         $allLeaveRequests = LeaveRequest::whereIn('employee_id', $allEmployeeIds)
             ->where('status', 'approved')
             ->whereBetween('start_date', [$startDate, $endDate])
+            ->with('leaveType')
             ->get()
             ->groupBy('employee_id');
 
-        // Transform all employees for stats calculation
+        // Transform all employees for stats calculation (pakai calculateFields)
         $allSummaryData = [];
         $totalActualOvertime = 0;
         $totalCalculatedOvertime = 0;
         foreach ($allEmployees as $employee) {
-            $logs = $employee->autologs;
-            $employeeLeaves = $allLeaveRequests[$employee->id] ?? collect();
-            $presentDays = $logs->where('status', 'present')->count();
-            $absentDays = $logs->where('status', 'absent')->count();
-            $offDays = $logs->where('status', 'off')->count();
-            $holidayDays = $logs->where('status', 'holiday')->count();
+            $fields = $this->calculateFields(
+                $employee->autologs,
+                $allLeaveRequests[$employee->id] ?? collect(),
+                Carbon::parse($endDate)
+            );
 
-            $leaveDays = $employeeLeaves->whereIn('leave_type_id', $cutiTypeIds)->sum('days_requested');
-            $permitDays = $employeeLeaves->whereIn('leave_type_id', $izinTypeIds)->sum('days_requested');
-            $sickDays = $employeeLeaves->where('leave_type_id', $sakitTypeId)->sum('days_requested');
-
-            $lateDays = $logs->where('late_duration', '>', 0)->count();
-            $totalLateMinutes = $logs->sum('late_duration');
-            $totalEarlyLeaveMinutes = $logs->sum('early_leave_duration');
-            $totalOvertimeMinutes = $logs->sum('lembur');
-
-            $overtimeHours = $totalOvertimeMinutes / 60;
-            $calculatedOvertime = $logs->sum('lembur_calc') + $logs->sum('lm_calc');
-
-            $totalActualOvertime += $overtimeHours;
-            $totalCalculatedOvertime += $calculatedOvertime;
+            $totalActualOvertime += $fields['lembur'];
+            $totalCalculatedOvertime += $fields['calculated_overtime'];
 
             $allSummaryData[] = [
                 'id' => $employee->id,
@@ -127,19 +107,19 @@ class AttendanceSnapshotController extends Controller
                 'employee_name' => $employee->name,
                 'employment_status' => $employee->employment_status,
                 'position' => $employee->position?->name,
-                'present_days' => $presentDays,
-                'absent_days' => $absentDays,
-                'leave_days' => $leaveDays,
-                'permit_days' => $permitDays,
-                'sick_days' => $sickDays,
-                'off_days' => $offDays,
-                'holiday_days' => $holidayDays,
-                'late_days' => $lateDays,
-                'total_late_minutes' => $totalLateMinutes,
-                'total_early_leave_minutes' => $totalEarlyLeaveMinutes,
-                'total_overtime_minutes' => $totalOvertimeMinutes,
-                'overtime_hours' => round($overtimeHours, 2),
-                'calculated_overtime' => round($calculatedOvertime, 2),
+                'present_days' => $fields['present_days'],
+                'absent_days' => $fields['absent_days'],
+                'leave_days' => $fields['leave_days'],
+                'permit_days' => $fields['permit_days'],
+                'sick_days' => $fields['sick_days'],
+                'off_days' => $fields['off_days'],
+                'holiday_days' => $fields['holiday_days'],
+                'late_days' => $fields['late_days'],
+                'total_late_minutes' => $fields['late_minutes'],
+                'total_early_leave_minutes' => $fields['early_leave_minutes'],
+                'total_overtime_minutes' => $fields['lembur'] * 60,
+                'overtime_hours' => $fields['lembur'],
+                'calculated_overtime' => $fields['calculated_overtime'],
             ];
         }
 
@@ -165,30 +145,17 @@ class AttendanceSnapshotController extends Controller
         $paginatedLeaveRequests = LeaveRequest::whereIn('employee_id', $paginatedEmployeeIds)
             ->where('status', 'approved')
             ->whereBetween('start_date', [$startDate, $endDate])
+            ->with('leaveType')
             ->get()
             ->groupBy('employee_id');
 
         $summaryData = [];
         foreach ($employees as $employee) {
-            $logs = $employee->autologs;
-            $employeeLeaves = $paginatedLeaveRequests[$employee->id] ?? collect();
-
-            $presentDays = $logs->where('status', 'present')->count();
-            $absentDays = $logs->where('status', 'absent')->count();
-            $offDays = $logs->where('status', 'off')->count();
-            $holidayDays = $logs->where('status', 'holiday')->count();
-
-            $leaveDays = $employeeLeaves->whereIn('leave_type_id', $cutiTypeIds)->sum('days_requested');
-            $permitDays = $employeeLeaves->whereIn('leave_type_id', $izinTypeIds)->sum('days_requested');
-            $sickDays = $employeeLeaves->where('leave_type_id', $sakitTypeId)->sum('days_requested');
-
-            $lateDays = $logs->where('late_duration', '>', 0)->count();
-            $totalLateMinutes = $logs->sum('late_duration');
-            $totalEarlyLeaveMinutes = $logs->sum('early_leave_duration');
-            $totalOvertimeMinutes = $logs->sum('lembur');
-
-            $overtimeHours = $totalOvertimeMinutes / 60;
-            $calculatedOvertime = $logs->sum('lembur_calc') + $logs->sum('lm_calc');
+            $fields = $this->calculateFields(
+                $employee->autologs,
+                $paginatedLeaveRequests[$employee->id] ?? collect(),
+                Carbon::parse($endDate)
+            );
 
             $summaryData[] = [
                 'id' => $employee->id,
@@ -196,19 +163,17 @@ class AttendanceSnapshotController extends Controller
                 'employee_name' => $employee->name,
                 'employment_status' => $employee->employment_status,
                 'position' => $employee->position?->name,
-                'present_days' => $presentDays,
-                'absent_days' => $absentDays,
-                'leave_days' => $leaveDays,
-                'permit_days' => $permitDays,
-                'sick_days' => $sickDays,
-                'off_days' => $offDays,
-                'holiday_days' => $holidayDays,
-                'late_days' => $lateDays,
-                'total_late_minutes' => $totalLateMinutes,
-                'total_early_leave_minutes' => $totalEarlyLeaveMinutes,
-                'total_overtime_minutes' => $totalOvertimeMinutes,
-                'overtime_hours' => round($overtimeHours, 2),
-                'calculated_overtime' => round($calculatedOvertime, 2),
+                'hari_kerja' => $fields['hari_kerja'],
+                'absen' => $fields['absent_days'],
+                'cuti' => $fields['leave_days'],
+                'izin' => $fields['permit_days'],
+                'sakit' => $fields['sick_days'],
+                'deduct_day' => $fields['deduct_day'],
+                'late_minutes' => $fields['late_minutes'],
+                'lembur' => $fields['lembur'],
+                'lembur_count' => $fields['lembur_count'],
+                'lm' => $fields['lm'],
+                'lm_count' => $fields['lm_count'],
             ];
         }
 
@@ -280,25 +245,15 @@ class AttendanceSnapshotController extends Controller
 
         $logs = AttendanceAutolog::where('employee_id', $request->employee_id)
             ->whereBetween('date', [$startDate, $endDate])
-            ->with('leave')
             ->get();
 
-        $presentDays = $logs->where('status', 'present')->count();
-        $absentDays = $logs->where('status', 'absent')->count();
-        $dedDays = $logs->where('deduct_attendance', 1)->count();
-        $notPaidDays = $logs->sum('deduct_day') + $dedDays;
+        $leaveRequests = LeaveRequest::where('employee_id', $request->employee_id)
+            ->where('status', 'approved')
+            ->whereBetween('start_date', [$startDate, $endDate])
+            ->with('leaveType')
+            ->get();
 
-        $leaveData = $this->getLeaveDataFromRequests($request->employee_id, $startDate, $endDate);
-        $leaveDays = $leaveData['leave_days'];
-        $permitDays = $leaveData['permit_days'];
-        $sickDays = $leaveData['sick_days'];
-
-        $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
-        $lateMinutes = $logs->sum('late_duration');
-        $lm = $logs->sum('lm') / 60;
-        $lmCount = (float) $logs->sum('lm_calc');
-        $lembur = $logs->sum('lembur') / 60;
-        $lemburCount = (float) $logs->sum('lembur_calc');
+        $fields = $this->calculateFields($logs, $leaveRequests, Carbon::parse($endDate));
 
         $snapshot = AttendanceSnapshot::updateOrCreate(
             [
@@ -307,17 +262,17 @@ class AttendanceSnapshotController extends Controller
                 'segment' => null,
             ],
             [
-                'hari_kerja' => $workingDays,
-                'cuti' => $leaveDays,
-                'izin' => $permitDays,
-                'sakit' => $sickDays,
-                'absen' => $absentDays,
-                'deduct_day' => $notPaidDays,
-                'late_minutes' => $lateMinutes,
-                'lm' => $lm,
-                'lm_count' => $lmCount,
-                'lembur' => $lembur,
-                'lembur_count' => $lemburCount,
+                'hari_kerja' => $fields['hari_kerja'],
+                'cuti' => $fields['leave_days'],
+                'izin' => $fields['permit_days'],
+                'sakit' => $fields['sick_days'],
+                'absen' => $fields['absent_days'],
+                'deduct_day' => $fields['deduct_day'],
+                'late_minutes' => $fields['late_minutes'],
+                'lm' => $fields['lm'],
+                'lm_count' => $fields['lm_count'],
+                'lembur' => $fields['lembur'],
+                'lembur_count' => $fields['lembur_count'],
                 'status' => 'draft',
                 'created_by' => Auth::id(),
                 'updated_by' => Auth::id(),
@@ -383,22 +338,13 @@ class AttendanceSnapshotController extends Controller
                     ->whereBetween('date', [$startDate, $endDate])
                     ->get();
 
-                $presentDays = $logs->where('status', 'present')->count();
-                $absentDays = $logs->where('status', 'absent')->count();
-                $dedDays = $logs->where('deduct_attendance', 1)->count();
-                $notPaidDays = $logs->sum('deduct_day') + $dedDays;
+                $leaveRequests = LeaveRequest::where('employee_id', $employeeId)
+                    ->where('status', 'approved')
+                    ->whereBetween('start_date', [$startDate, $endDate])
+                    ->with('leaveType')
+                    ->get();
 
-                $leaveData = $this->getLeaveDataFromRequests($employeeId, $startDate, $endDate);
-                $leaveDays = $leaveData['leave_days'];
-                $permitDays = $leaveData['permit_days'];
-                $sickDays = $leaveData['sick_days'];
-
-                $workingDays = $presentDays + $absentDays + $leaveDays + $permitDays + $sickDays;
-                $lateMinutes = $logs->sum('late_duration');
-                $lm = $logs->sum('lm') / 60;
-                $lmCount = (float) $logs->sum('lm_calc');
-                $lembur = $logs->sum('lembur') / 60;
-                $lemburCount = (float) $logs->sum('lembur_calc');
+                $fields = $this->calculateFields($logs, $leaveRequests, Carbon::parse($endDate));
 
                 $existing = AttendanceSnapshot::where('employee_id', $employeeId)
                     ->where('pay_period_id', $payPeriod->id)
@@ -418,17 +364,17 @@ class AttendanceSnapshotController extends Controller
                         'segment' => null,
                     ],
                     [
-                        'hari_kerja' => $workingDays,
-                        'cuti' => $leaveDays,
-                        'izin' => $permitDays,
-                        'sakit' => $sickDays,
-                        'absen' => $absentDays,
-                        'deduct_day' => $notPaidDays,
-                        'late_minutes' => $lateMinutes,
-                        'lm' => $lm,
-                        'lm_count' => $lmCount,
-                        'lembur' => $lembur,
-                        'lembur_count' => $lemburCount,
+                        'hari_kerja' => $fields['hari_kerja'],
+                        'cuti' => $fields['leave_days'],
+                        'izin' => $fields['permit_days'],
+                        'sakit' => $fields['sick_days'],
+                        'absen' => $fields['absent_days'],
+                        'deduct_day' => $fields['deduct_day'],
+                        'late_minutes' => $fields['late_minutes'],
+                        'lm' => $fields['lm'],
+                        'lm_count' => $fields['lm_count'],
+                        'lembur' => $fields['lembur'],
+                        'lembur_count' => $fields['lembur_count'],
                         'status' => 'draft',
                         'created_by' => Auth::id(),
                         'updated_by' => Auth::id(),
@@ -464,11 +410,6 @@ class AttendanceSnapshotController extends Controller
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
 
-        $leaveTypeIds = LeaveType::all();
-        $cutiTypeIds = $leaveTypeIds->where('category', 'leave')->pluck('id');
-        $izinTypeIds = $leaveTypeIds->where('category', 'permit')->pluck('id');
-        $sakitTypeId = $leaveTypeIds->firstWhere('category', 'sick')?->id;
-
         // Ambil employee ID dari supervisor_employee_groups per periode
         $groupEmployeeIds = \App\Modules\Supervisor\Models\SupervisorEmployeeGroup::where('period_start', $startDate)
             ->where('period_end', $endDate)
@@ -498,73 +439,63 @@ class AttendanceSnapshotController extends Controller
         $leaveRequests = LeaveRequest::whereIn('employee_id', $employeeIds)
             ->where('status', 'approved')
             ->whereBetween('start_date', [$startDate, $endDate])
+            ->with('leaveType')
             ->get()
             ->groupBy('employee_id');
 
         $summaryData = [];
-        $totalActualOvertime = 0;
-        $totalCalculatedOvertime = 0;
+        $stats = [
+            'present' => 0,
+            'absent' => 0,
+            'leave' => 0,
+            'permit' => 0,
+            'sick' => 0,
+            'late_minutes' => 0,
+            'total_overtime_hours' => 0,
+            'total_actual_overtime' => 0,
+            'total_calculated_overtime' => 0,
+        ];
 
         foreach ($employees as $employee) {
-            $logs = $employee->autologs;
-            $employeeLeaves = $leaveRequests[$employee->id] ?? collect();
+            $fields = $this->calculateFields(
+                $employee->autologs,
+                $leaveRequests[$employee->id] ?? collect(),
+                Carbon::parse($endDate)
+            );
 
-            $presentDays = $logs->where('status', 'present')->count();
-            $absentDays = $logs->where('status', 'absent')->count();
-            $dedDays = $logs->where('deduct_attendance', 1)->count();
-            $notPaidDays = $logs->sum('deduct_day') + $dedDays;
-            $offDays = $logs->where('status', 'off')->count();
-            $holidayDays = $logs->where('status', 'holiday')->count();
-
-            $leaveDays = $employeeLeaves->whereIn('leave_type_id', $cutiTypeIds)->sum('days_requested');
-            $permitDays = $employeeLeaves->whereIn('leave_type_id', $izinTypeIds)->sum('days_requested');
-            $sickDays = $employeeLeaves->where('leave_type_id', $sakitTypeId)->sum('days_requested');
-
-            $lateDays = $logs->where('late_duration', '>', 0)->count();
-            $totalLateMinutes = $logs->sum('late_duration');
-            $totalEarlyLeaveMinutes = $logs->sum('early_leave_duration');
-            $totalOvertimeMinutes = $logs->sum('lembur');
-
-            $overtimeHours = $totalOvertimeMinutes / 60;
-            $calculatedOvertime = $logs->sum('lembur_calc') + $logs->sum('lm_calc');
-
-            $totalActualOvertime += $overtimeHours;
-            $totalCalculatedOvertime += $calculatedOvertime;
+            $stats['present'] += $fields['present_days'];
+            $stats['absent'] += $fields['absent_days'];
+            $stats['leave'] += $fields['leave_days'];
+            $stats['permit'] += $fields['permit_days'];
+            $stats['sick'] += $fields['sick_days'];
+            $stats['late_minutes'] += $fields['late_minutes'];
+            $stats['total_overtime_hours'] += $fields['lembur'];
+            $stats['total_actual_overtime'] += $fields['lembur'];
+            $stats['total_calculated_overtime'] += $fields['calculated_overtime'];
 
             $summaryData[] = [
                 'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
                 'employment_status' => $employee->employment_status,
                 'position' => $employee->position?->name,
-                'present_days' => $presentDays,
-                'absent_days' => $absentDays,
-                'leave_days' => $leaveDays,
-                'permit_days' => $permitDays,
-                'sick_days' => $sickDays,
-                'off_days' => $offDays,
-                'holiday_days' => $holidayDays,
-                'late_days' => $lateDays,
-                'total_late_minutes' => $totalLateMinutes,
-                'total_early_leave_minutes' => $totalEarlyLeaveMinutes,
-                'total_overtime_minutes' => $totalOvertimeMinutes,
-                'overtime_hours' => round($overtimeHours, 2),
-                'calculated_overtime' => round($calculatedOvertime, 2),
+                'hari_kerja' => $fields['hari_kerja'],
+                'absen' => $fields['absent_days'],
+                'cuti' => $fields['leave_days'],
+                'izin' => $fields['permit_days'],
+                'sakit' => $fields['sick_days'],
+                'deduct_day' => $fields['deduct_day'],
+                'late_minutes' => $fields['late_minutes'],
+                'lembur' => $fields['lembur'],
+                'lembur_count' => $fields['lembur_count'],
+                'lm' => $fields['lm'],
+                'lm_count' => $fields['lm_count'],
             ];
         }
 
-        $stats = [
-            'total_employees' => count($summaryData),
-            'present' => collect($summaryData)->sum('present_days'),
-            'absent' => collect($summaryData)->sum('absent_days'),
-            'leave' => collect($summaryData)->sum('leave_days'),
-            'permit' => collect($summaryData)->sum('permit_days'),
-            'sick' => collect($summaryData)->sum('sick_days'),
-            'late_days' => collect($summaryData)->sum('late_days'),
-            'total_overtime_hours' => round(collect($summaryData)->sum('total_overtime_minutes') / 60, 1),
-            'total_late_minutes' => collect($summaryData)->sum('total_late_minutes'),
-            'total_actual_overtime' => round($totalActualOvertime, 2),
-            'total_calculated_overtime' => round($totalCalculatedOvertime, 2),
-        ];
+        $stats['total_employees'] = count($summaryData);
+        $stats['total_overtime_hours'] = round($stats['total_overtime_hours'], 1);
+        $stats['total_actual_overtime'] = round($stats['total_actual_overtime'], 2);
+        $stats['total_calculated_overtime'] = round($stats['total_calculated_overtime'], 2);
 
         // Get company info
         $company = Company::first();
@@ -603,22 +534,79 @@ class AttendanceSnapshotController extends Controller
         return 1 * 1.5 + ($hours - 1) * 2;
     }
 
-    private function getLeaveDataFromRequests($employeeId, $startDate, $endDate)
+    /**
+     * Satu sumber kebenaran untuk semua field snapshot.
+     * Dipakai oleh index(), store(), storeBulk(), dan print() agar
+     * "yang tampil = yang disimpan".
+     *
+     * @param  Collection  $logs  autologs karyawan dalam periode
+     * @param  Collection  $leaveRequests  LeaveRequest approved + leaveType, start_date dalam periode
+     * @param  Carbon  $endDate  untuk menentukan fase hari kerja
+     */
+    private function calculateFields(Collection $logs, Collection $leaveRequests, Carbon $endDate): array
     {
-        $leaveTypeIds = LeaveType::all();
-        $cutiTypeIds = $leaveTypeIds->where('category', 'leave')->pluck('id');
-        $izinTypeIds = $leaveTypeIds->where('category', 'permit')->pluck('id');
-        $sakitTypeId = $leaveTypeIds->firstWhere('category', 'sick')?->id;
+        $presentDays = $logs->where('status', 'present')->count();
+        $absentDays = $logs->where('status', 'absent')->count();
+        $offDays = $logs->where('status', 'off')->count();
+        $holidayDays = $logs->where('status', 'holiday')->count();
 
-        $leaveRequests = LeaveRequest::where('employee_id', $employeeId)
-            ->where('status', 'approved')
-            ->whereBetween('start_date', [$startDate, $endDate])
-            ->get();
+        // Cuti: category leave/special (abaikan is_paid)
+        $leaveDays = $leaveRequests->filter(function ($l) {
+            return in_array(optional($l->leaveType)->category, ['leave', 'special'], true);
+        })->sum('days_requested');
+
+        // Izin: category permit + unpaid
+        $permitDays = $leaveRequests->filter(function ($l) {
+            return optional($l->leaveType)->category === 'permit'
+                && ! optional($l->leaveType)->is_paid;
+        })->sum('days_requested');
+
+        // Sakit: category sick
+        $sickDays = $leaveRequests->filter(function ($l) {
+            return optional($l->leaveType)->category === 'sick';
+        })->sum('days_requested');
+
+        // Record leave unpaid (is_paid = false/0/null) — dipakai di deduct & hari kerja fase 2
+        $unpaidLeaveCount = $leaveRequests->filter(function ($l) {
+            return ! optional($l->leaveType)->is_paid;
+        })->count();
+
+        $lateDays = $logs->where('late_duration', '>', 0)->count();
+        $lateMinutes = $logs->sum('late_duration');
+        $earlyLeaveMinutes = $logs->sum('early_leave_duration');
+
+        $lembur = $logs->sum('lembur') / 60;
+        $lemburCount = (float) $logs->sum('lembur_calc');
+        $lm = $logs->sum('lm') / 60;
+        $lmCount = (float) $logs->sum('lm_calc');
+
+        $deductDay = $absentDays + $unpaidLeaveCount;
+
+        // Hari kerja dua fase
+        if ($endDate->day >= 25) {
+            $hariKerja = max(0, 25 - $deductDay);
+        } else {
+            $hariKerja = $presentDays;
+        }
 
         return [
-            'leave_days' => $leaveRequests->whereIn('leave_type_id', $cutiTypeIds)->sum('days_requested'),
-            'permit_days' => $leaveRequests->whereIn('leave_type_id', $izinTypeIds)->sum('days_requested'),
-            'sick_days' => $leaveRequests->where('leave_type_id', $sakitTypeId)->sum('days_requested'),
+            'present_days' => $presentDays,
+            'absent_days' => $absentDays,
+            'off_days' => $offDays,
+            'holiday_days' => $holidayDays,
+            'late_days' => $lateDays,
+            'late_minutes' => $lateMinutes,
+            'early_leave_minutes' => $earlyLeaveMinutes,
+            'leave_days' => $leaveDays,
+            'permit_days' => $permitDays,
+            'sick_days' => $sickDays,
+            'deduct_day' => $deductDay,
+            'lembur' => round($lembur, 2),
+            'lembur_count' => round($lemburCount, 2),
+            'lm' => round($lm, 2),
+            'lm_count' => round($lmCount, 2),
+            'calculated_overtime' => round($lemburCount + $lmCount, 2),
+            'hari_kerja' => $hariKerja,
         ];
     }
 

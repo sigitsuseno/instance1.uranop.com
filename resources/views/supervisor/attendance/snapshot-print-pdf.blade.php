@@ -70,17 +70,21 @@
         <thead>
             <tr>
                 <th rowspan="2" width="4%">No</th>
-                <th rowspan="2" width="18%">Karyawan</th>
-                <th colspan="5" class="group-header">Kehadiran</th>
+                <th rowspan="2" width="16%">Karyawan</th>
+                <th colspan="6" class="group-header">Kehadiran</th>
                 <th rowspan="2" width="7%">Terlambat</th>
-                <th colspan="2" class="group-header">Lembur</th>
+                <th colspan="2" class="group-header">Lembur Hari Kerja</th>
+                <th colspan="2" class="group-header">Lembur Minggu</th>
             </tr>
             <tr>
-                <th class="sub-header" width="6%">Hadir</th>
-                <th class="sub-header" width="6%">Absent</th>
+                <th class="sub-header" width="6%">Hari Kerja</th>
+                <th class="sub-header" width="6%">Absen</th>
                 <th class="sub-header" width="6%">Cuti</th>
                 <th class="sub-header" width="6%">Izin</th>
                 <th class="sub-header" width="6%">Sakit</th>
+                <th class="sub-header" width="6%">Deduct</th>
+                <th class="sub-header" width="7%">Aktual</th>
+                <th class="sub-header" width="7%">Hitung</th>
                 <th class="sub-header" width="7%">Aktual</th>
                 <th class="sub-header" width="7%">Hitung</th>
             </tr>
@@ -93,17 +97,20 @@
                     <div class="emp-name">{{ $emp['employee_name'] }}</div>
                     <div class="emp-code">{{ $emp['employee_code'] }}</div>
                 </td>
-                <td class="num text-green">{{ $emp['present_days'] }}</td>
-                <td class="num text-red">{{ $emp['absent_days'] }}</td>
-                <td class="num">{{ $emp['leave_days'] }}</td>
-                <td class="num">{{ $emp['permit_days'] }}</td>
-                <td class="num">{{ $emp['sick_days'] }}</td>
-                <td class="num">{{ $emp['late_days'] }}</td>
-                <td class="num">{{ $emp['overtime_hours'] }}</td>
-                <td class="num">{{ $emp['calculated_overtime'] }}</td>
+                <td class="num text-green">{{ $emp['hari_kerja'] }}</td>
+                <td class="num text-red">{{ $emp['absen'] }}</td>
+                <td class="num">{{ $emp['cuti'] }}</td>
+                <td class="num">{{ $emp['izin'] }}</td>
+                <td class="num">{{ $emp['sakit'] }}</td>
+                <td class="num">{{ $emp['deduct_day'] }}</td>
+                <td class="num">{{ round($emp['late_minutes'] / 60, 2) }}j</td>
+                <td class="num">{{ $emp['lembur'] }}j</td>
+                <td class="num">{{ $emp['lembur_count'] }}j</td>
+                <td class="num">{{ $emp['lm'] }}j</td>
+                <td class="num">{{ $emp['lm_count'] }}j</td>
             </tr>
             @empty
-            <tr><td colspan="10" style="text-align:center;">Tidak ada data</td></tr>
+            <tr><td colspan="13" style="text-align:center;">Tidak ada data</td></tr>
             @endforelse
         </tbody>
     </table>

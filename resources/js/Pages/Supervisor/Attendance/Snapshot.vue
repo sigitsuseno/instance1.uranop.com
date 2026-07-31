@@ -331,17 +331,17 @@ async function downloadPdf(url) {
                     <thead class="bg-(--bg-elevated) border-b border-(--border-soft)">
                         <tr>
                             <th class="px-4 py-3 text-left text-sm font-medium text-(--text-muted)">Karyawan</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Hadir</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Absent</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Off</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Holiday</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Hari Kerja</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Absen</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Cuti</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Izin</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Sakit</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Deduct</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Terlambat</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Plg Cepat</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur (Aktual)</th>
-                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur (Hitung)</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur HK (Aktual)</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur HK (Hitung)</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur Minggu (Aktual)</th>
+                            <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Lembur Minggu (Hitung)</th>
                             <th class="px-4 py-3 text-center text-sm font-medium text-(--text-muted)">Status</th>
                         </tr>
                     </thead>
@@ -353,38 +353,37 @@ async function downloadPdf(url) {
                                 <div class="text-xs text-(--text-soft)">{{ employee.employment_status === 'contract' ? 'PKWT' : 'PKWTT' }}</div>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-green-600 font-medium">{{ employee.present_days }}</span>
+                                <span class="text-green-600 font-medium">{{ employee.hari_kerja }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-red-600 font-medium">{{ employee.absent_days }}</span>
+                                <span class="text-red-600 font-medium">{{ employee.absen }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-gray-500 font-medium">{{ employee.off_days }}</span>
+                                <span class="text-blue-600 font-medium">{{ employee.cuti }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-teal-600 font-medium">{{ employee.holiday_days }}</span>
+                                <span class="text-yellow-600 font-medium">{{ employee.izin }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-blue-600 font-medium">{{ employee.leave_days }}</span>
+                                <span class="text-purple-600 font-medium">{{ employee.sakit }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-yellow-600 font-medium">{{ employee.permit_days }}</span>
+                                <span class="text-orange-600 font-medium">{{ employee.deduct_day }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-purple-600 font-medium">{{ employee.sick_days }}</span>
+                                <span class="text-orange-600 font-medium">{{ formatMinutes(employee.late_minutes) }}</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-orange-600 font-medium">{{ employee.late_days }}</span>
-                                <div class="text-xs text-(--text-soft)">{{ formatMinutes(employee.total_late_minutes) }}</div>
+                                <span class="text-purple-600 font-medium">{{ employee.lembur || 0 }}j</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-rose-600 font-medium">{{ formatMinutes(employee.total_early_leave_minutes) }}</span>
+                                <span class="text-indigo-600 font-bold">{{ employee.lembur_count || 0 }}j</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-purple-600 font-medium">{{ employee.overtime_hours || 0 }}j</span>
+                                <span class="text-purple-600 font-medium">{{ employee.lm || 0 }}j</span>
                             </td>
                             <td class="px-4 py-3 text-center">
-                                <span class="text-indigo-600 font-bold">{{ employee.calculated_overtime || 0 }}j</span>
+                                <span class="text-indigo-600 font-bold">{{ employee.lm_count || 0 }}j</span>
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span v-if="employee.has_snapshot" class="inline-flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 text-xs rounded-lg">

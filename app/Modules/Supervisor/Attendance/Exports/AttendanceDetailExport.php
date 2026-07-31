@@ -19,19 +19,21 @@ class AttendanceDetailExport implements FromArray, ShouldAutoSize, WithHeadings,
     protected string $periodStart;
     protected string $periodEnd;
     protected float $totalOvertime;
+    protected string $sheetTitle;
 
-    public function __construct(array $data, array $employee, string $periodStart, string $periodEnd, float $totalOvertime = 0)
+    public function __construct(array $data, array $employee, string $periodStart, string $periodEnd, float $totalOvertime = 0, string $sheetTitle = 'Detail Absensi')
     {
         $this->data = $data;
         $this->employee = $employee;
         $this->periodStart = $periodStart;
         $this->periodEnd = $periodEnd;
         $this->totalOvertime = $totalOvertime;
+        $this->sheetTitle = $sheetTitle;
     }
 
     public function title(): string
     {
-        return 'Detail Absensi';
+        return $this->sheetTitle;
     }
 
     public function array(): array

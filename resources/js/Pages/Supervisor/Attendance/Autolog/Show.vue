@@ -14,12 +14,36 @@ const isLoading = ref(true);
 const exportScope = ref('single');
 const exportDate = ref(new Date().toISOString().split('T')[0]);
 
+// Modal export terpilih
+const showEmployeeModal = ref(false);
+const modalEmployees = ref([]);
+const selectedIds = ref([]);
+const isLoadingEmployees = ref(false);
+const isExportingSelected = ref(false);
+const modalSearch = ref('');
+
 // Groups yang libur/minggu jadwalnya kosong
 const blankOnHolidayGroups = ['GRP-ALLIN', 'GRP-GD', 'GRP-SPR', 'GRP-PS1'];
 const isBlankGroup = computed(() => {
     const groups = employee.value?.groups || [];
     return groups.some(g => blankOnHolidayGroups.includes(g));
 });
+
+const filteredEmployees = computed(() => {
+    const q = modalSearch.value.toLowerCase().trim();
+    if (!q) return modalEmployees.value;
+    return modalEmployees.value.filter(e =>
+        (e.employee_name || '').toLowerCase().includes(q) ||
+        (e.employee_code || '').toLowerCase().includes(q)
+    );
+});
+
+const selectedCount = computed(() => selectedIds.value.length);
+
+const isAllSelected = computed(() =>
+    filteredEmployees.value.length > 0 &&
+    filteredEmployees.value.every(e => selectedIds.value.includes(e.id))
+);
 
 function jadwalMasuk(day) {
     if (isBlankGroup.value && (day.is_holiday || day.is_weekend)) return '--:--';
@@ -128,12 +152,12 @@ async function handlePrint() {
 }
 
 async function handleExport() {
-    let url;
+    // Mode "Export Semua" → buka modal pilih karyawan
     if (exportScope.value === 'all') {
-        url = `/api/v1/supervisor/attendance/absensi/export?start_date=${period.value.start}&end_date=${period.value.end}`;
-    } else {
-        url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/export?start_date=${period.value.start}&end_date=${period.value.end}`;
+        openExportModal();
+        return;
     }
+    const url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/export?start_date=${period.value.start}&end_date=${period.value.end}`;
     try {
         const token = localStorage.getItem('token');
         const headers = { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
@@ -198,6 +222,97 @@ async function handleExportByDate() {
         window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
         alert(error.message);
+    }
+}
+
+async function openExportModal() {
+    showEmployeeModal.value = true;
+    isLoadingEmployees.value = true;
+    try {
+        const response = await get(`/api/v1/supervisor/attendance/absensi/employees?start_date=${period.value.start}&end_date=${period.value.end}`);
+        modalEmployees.value = response.employees || [];
+    } catch (error) {
+        console.error('Error fetching employees:', error);
+        alert('Gagal memuat daftar karyawan');
+    } finally {
+        isLoadingEmployees.value = false;
+    }
+}
+
+function closeExportModal() {
+    if (isExportingSelected.value) return;
+    showEmployeeModal.value = false;
+    modalSearch.value = '';
+    selectedIds.value = [];
+}
+
+function toggleEmployee(id) {
+    if (selectedIds.value.includes(id)) {
+        selectedIds.value = selectedIds.value.filter(x => x !== id);
+    } else {
+        selectedIds.value = [...selectedIds.value, id];
+    }
+}
+
+function toggleAll() {
+    if (isAllSelected.value) {
+        const filteredIds = new Set(filteredEmployees.value.map(e => e.id));
+        selectedIds.value = selectedIds.value.filter(id => !filteredIds.has(id));
+    } else {
+        const ids = new Set(selectedIds.value);
+        filteredEmployees.value.forEach(e => ids.add(e.id));
+        selectedIds.value = [...ids];
+    }
+}
+
+async function confirmExportSelected() {
+    if (selectedIds.value.length === 0 || isExportingSelected.value) return;
+    isExportingSelected.value = true;
+    try {
+        const token = localStorage.getItem('token');
+        const headers = {
+            'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Type': 'application/json',
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch('/api/v1/supervisor/attendance/absensi/export-selected', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                employee_ids: selectedIds.value,
+                start_date: period.value.start,
+                end_date: period.value.end,
+            }),
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Download gagal');
+        }
+        const blob = await response.blob();
+
+        // Ambil filename dari Content-Disposition header
+        let filename = 'export.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+
+        closeExportModal();
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        isExportingSelected.value = false;
     }
 }
 
@@ -428,6 +543,74 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                 </router-link>
             </div>
         </template>
+
+        <!-- Modal: Pilih Karyawan untuk Export -->
+        <div v-if="showEmployeeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div class="absolute inset-0 bg-black/50" @click="closeExportModal"></div>
+            <div class="relative bg-(--bg-card) border border-(--border-soft) rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[80vh]">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-6 py-4 border-b border-(--border-soft) shrink-0">
+                    <h3 class="text-lg font-bold text-(--text-main)">
+                        <i class="bx bx-check-square mr-2 text-teal-600"></i>Pilih Karyawan
+                    </h3>
+                    <button @click="closeExportModal" :disabled="isExportingSelected" class="text-(--text-muted) hover:text-(--text-main) transition disabled:opacity-50">
+                        <i class="bx bx-x text-2xl"></i>
+                    </button>
+                </div>
+
+                <!-- Search + Select All -->
+                <div class="px-6 py-3 border-b border-(--border-soft) flex flex-wrap items-center gap-3 shrink-0">
+                    <div class="relative flex-1 min-w-[200px]">
+                        <i class="bx bx-search absolute left-3 top-1/2 -translate-y-1/2 text-(--text-soft)"></i>
+                        <input v-model="modalSearch" type="text" placeholder="Cari karyawan..." class="pl-9 pr-3 py-2 w-full border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-teal-500" />
+                    </div>
+                    <label class="flex items-center gap-2 text-sm text-(--text-muted) cursor-pointer select-none">
+                        <input type="checkbox" :checked="isAllSelected" @change="toggleAll" class="accent-teal-600 w-4 h-4" />
+                        Pilih Semua
+                    </label>
+                </div>
+
+                <!-- List -->
+                <div v-if="isLoadingEmployees" class="flex justify-center py-12">
+                    <i class="bx bx-loader-alt animate-spin text-3xl text-teal-600"></i>
+                </div>
+                <div v-else class="overflow-y-auto flex-1 px-2 py-2">
+                    <p v-if="filteredEmployees.length === 0" class="text-center text-(--text-muted) py-10">
+                        <i class="bx bx-data text-4xl mb-3 block text-gray-300"></i>
+                        Tidak ada karyawan
+                    </p>
+                    <label v-for="emp in filteredEmployees" :key="emp.id"
+                        class="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-indigo-50/30 cursor-pointer transition">
+                        <input type="checkbox" :checked="selectedIds.includes(emp.id)" @change="toggleEmployee(emp.id)" class="accent-teal-600 w-4 h-4 shrink-0" />
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-sm text-(--text-main) truncate">{{ emp.employee_name }}</div>
+                            <div class="text-xs text-(--text-muted) font-mono">{{ emp.employee_code }}</div>
+                        </div>
+                        <div class="text-xs text-(--text-soft) text-right shrink-0">
+                            <div>{{ emp.department }}</div>
+                            <div>{{ emp.position }}</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Footer -->
+                <div class="flex items-center justify-between px-6 py-4 border-t border-(--border-soft) shrink-0">
+                    <span class="text-sm text-(--text-muted)">{{ selectedCount }} karyawan terpilih</span>
+                    <div class="flex gap-2">
+                        <button @click="closeExportModal" :disabled="isExportingSelected"
+                            class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-gray-50 transition text-sm disabled:opacity-50">
+                            Batal
+                        </button>
+                        <button @click="confirmExportSelected" :disabled="selectedCount === 0 || isExportingSelected"
+                            class="px-5 py-2 bg-teal-600 hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition text-sm font-medium inline-flex items-center gap-2">
+                            <i v-if="isExportingSelected" class="bx bx-loader-alt animate-spin"></i>
+                            <i v-else class="bx bx-spreadsheet"></i>
+                            {{ isExportingSelected ? 'Exporting...' : `Export (${selectedCount})` }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
