@@ -19,7 +19,6 @@ const isDataExists = ref(true)
 
 const isLoading = ref(true)
 const isAdjusting = ref(false)
-const isSyncing = ref(false)
 
 const selectedPeriod = ref('')
 const startDate = ref('')
@@ -199,34 +198,6 @@ async function runAdjustment() {
     }
 }
 
-async function runSync() {
-    if (!selectedPeriod.value || !startDate.value || !endDate.value) {
-        alert('Pilih periode terlebih dahulu');
-        return;
-    }
-    
-    if (!confirm('Sync data dari att_prepares ke attendance_autologs?\n\n' +
-        'Periode 1-4 (2026): hanya karyawan Jakarta\n' +
-        'Periode 5+: semua karyawan')) {
-        return;
-    }
-    
-    isSyncing.value = true;
-    try {
-        const res = await post('/api/v1/supervisor/attendance/absensi/sync', {
-            payroll_period_id: selectedPeriod.value,
-            start_date: startDate.value,
-            end_date: endDate.value,
-        });
-        alert(res.message || 'Sync selesai!');
-        fetchData(route.query);
-    } catch (error) {
-        alert(error.message || 'Terjadi kesalahan saat sync');
-    } finally {
-        isSyncing.value = false;
-    }
-}
-
 function goToPage(urlStr) {
     if (!urlStr) return;
     try {
@@ -265,15 +236,7 @@ const hasNextPage = () => !!pagination.value.links?.next
             </div>
             
             <div class="flex gap-2">
-                <button 
-                    @click="runSync"
-                    class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50"
-                    :disabled="!selectedPeriod || isSyncing"
-                >
-                    <i class="bx bx-cloud-upload text-lg" :class="{ 'animate-spin': isSyncing }"></i>
-                    {{ isSyncing ? 'Syncing...' : 'Sync' }}
-                </button>
-                <button 
+                <button
                     @click="runAdjustment"
                     class="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition disabled:opacity-50"
                     :disabled="!startDate || !endDate || isAdjusting"

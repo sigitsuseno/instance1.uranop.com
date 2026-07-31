@@ -308,3 +308,17 @@ foreach ($cuti as $index => $cutiSingle) {
 ```
 
  di /admin/payroll/slip di tombol cetak semua, itu tolong saat di klik muncul modal yang yang memfilter print berdasarkan GRP-\* . faham tidak ?
+
+berarti overwrite total,
+
+- ambil karyawannya yang punya sch_employee_shift_roster dan yang masuk di supervisor_employee_group di periode terpilih.
+- filter berdasarkan work_patterns->type
+  a. fixed & flex-shift
+  a.1 hari senin - jumat jika roster->external_code === 'P' - check_in = roster->shift->work_hour_start + (randomMinutes (-10, 3)) - check_out = roster->shift->work_hour_start + lembur + (randomMinutes (10, -3)) - actual_in = roster->shift->work_hour_start - Actual_out = roster->shift->work_hour_end - lm = 0 - lembur = att_prepare->overtime (cap max 3 jam) - status = att_prepare->status -
+  a.2 hari senin - jumat jika roster->external_code === 'S' - check_in = roster->shift->work_hour_start + lembur + (randomMinutes (-10, 3)) - check_out = roster->shift->work_hour_start + (randomMinutes (10, -3)) - actual_in = roster->shift->work_hour_start - Actual_out = roster->shift->work_hour_end - lm = 0 - lembur = att_prepare->overtime (cap max 3 jam) - status = att_prepare->status
+  a.3 hari sabtu sama seperti hari senin-jumat, hanya lm dan lembur selalu 0.
+  a.4 hari Minggu & holiday - check_in = '' - check_out = '' - actual_in = '' - Actual_out = '' - lm = 0 - lembur = 0 - status = selalu off
+
+    c. shift full ambil dari att_prepare kecuali actual_in dan actual_out. jika di att_prepare kosong default ''. - check_in = att_prepare->check_in - check_out = roster->shift->work_hour_start + lembur + (randomMinutes (10, -3)) - actual_in = roster->shift->work_hour_start - Actual_out = roster->shift->work_hour_end - lm = att_prepare->lm - lembur = att_prepare->overtime - status = att_prepare->status
+
+- setiap tanggal selalu ada record.
