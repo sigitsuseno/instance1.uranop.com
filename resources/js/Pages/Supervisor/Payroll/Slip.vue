@@ -10,7 +10,7 @@
           <option value="">Pilih Periode</option>
           <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
-        <BaseButton variant="success" :disabled="!selectedPeriodId || records.length === 0" @click="doBulkPrint">
+        <BaseButton variant="success" :disabled="!selectedPeriodId || records.length === 0" @click="openPrintModal">
           <template #icon-left>
             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
           </template>
@@ -103,6 +103,86 @@
         <div><h3 class="text-lg font-bold text-(--text-main)">Pilih Periode</h3><p class="text-sm text-(--text-muted) mt-1">Pilih periode dari dropdown di atas untuk melihat dan mencetak slip gaji karyawan</p></div>
       </div>
     </BaseCard>
+
+    <!-- Filter Cetak Semua Modal -->
+    <BaseModal :show="showPrintModal" title="Cetak Slip Gaji" size="md" @close="showPrintModal = false">
+      <div v-if="printLoading" class="flex items-center justify-center gap-3 py-10 text-sm text-(--text-muted)">
+        <svg class="animate-spin h-5 w-5 text-(--primary)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+        Memuat data cetak...
+      </div>
+      <div v-else class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih grup <span class="font-mono font-semibold text-(--text-main)">GRP-*</span> yang akan dicetak. Slip hanya dibuat untuk karyawan pada grup terpilih.
+        </p>
+
+        <!-- Select All -->
+        <label
+          class="flex items-center justify-between gap-3 p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated)/60 cursor-pointer select-none"
+        >
+          <div class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              :checked="allGroupsSelected"
+              @change="toggleSelectAll"
+              class="w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+            />
+            <span class="text-sm font-semibold text-(--text-main)">Pilih Semua Grup</span>
+          </div>
+          <span class="text-xs text-(--text-muted)">{{ printSource.length }} slip</span>
+        </label>
+
+        <!-- Group list -->
+        <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <label
+            v-for="g in availableGroups"
+            :key="g.code"
+            class="flex items-center justify-between gap-3 p-2.5 rounded-md border border-(--border-soft) bg-(--bg-card) cursor-pointer select-none hover:border-(--primary)/40 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <input
+                type="checkbox"
+                :value="g.code"
+                v-model="selectedGroups"
+                class="w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+              />
+              <span class="text-sm font-mono font-semibold text-(--text-main)">{{ g.code }}</span>
+            </div>
+            <span class="text-xs text-(--text-muted)">{{ g.count }} karyawan</span>
+          </label>
+
+          <label
+            v-if="noGroupCount > 0"
+            class="flex items-center justify-between gap-3 p-2.5 rounded-md border border-(--border-soft) bg-(--bg-card) cursor-pointer select-none hover:border-(--primary)/40 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <input
+                type="checkbox"
+                v-model="includeNoGroup"
+                class="w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+              />
+              <span class="text-sm font-medium text-(--text-muted)">Karyawan tanpa grup</span>
+            </div>
+            <span class="text-xs text-(--text-muted)">{{ noGroupCount }} karyawan</span>
+          </label>
+        </div>
+
+        <!-- Summary -->
+        <div class="flex items-center gap-2 text-sm rounded-md px-3 py-2.5 bg-(--primary)/5 border border-(--primary)/20">
+          <span class="text-(--text-muted)">Akan dicetak:</span>
+          <span class="font-bold text-(--primary)">{{ printableRecords.length }} slip</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="printLoading" @click="showPrintModal = false">Batal</BaseButton>
+        <BaseButton variant="success" :disabled="printLoading || printableRecords.length === 0" @click="confirmBulkPrint">
+          <template #icon-left>
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </template>
+          Cetak ({{ printableRecords.length }})
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -111,6 +191,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import Badge from '@/Components/Badge.vue'
+import BaseModal from '@/Components/BaseModal.vue'
 import { IconSearch, IconFileInvoice } from '@/Components/Icons/index.js'
 import { useApi } from '@/composables/useApi'
 import { useNotificationStore } from '@/Stores/notification'
@@ -128,10 +209,59 @@ const searchQuery = ref('')
 const fixedWorkDay = ref(25)
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 50, total: 0 })
 
+// ── Print filter modal state ──
+const showPrintModal = ref(false)
+const selectedGroups = ref([])
+const includeNoGroup = ref(false)
+const printRecords = ref(null) // seluruh data periode untuk cetak (mode all=1)
+const printLoading = ref(false)
+
 let searchTimer = null
 
 const selectedPeriod = computed(() => periods.value.find(p => p.id === selectedPeriodId.value))
 const isSplit = computed(() => selectedPeriod.value?.is_split ?? false)
+
+// ── Print filter computed ──
+// Basis filter cetak = seluruh data periode (mode all), fallback ke halaman aktif
+const printSource = computed(() => printRecords.value ?? records.value)
+
+const availableGroups = computed(() => {
+  const map = new Map()
+  for (const r of printSource.value) {
+    const codes = r.group_codes?.length ? r.group_codes : [null]
+    for (const c of codes) {
+      if (c === null) {
+        map.set('__none__', (map.get('__none__') || 0) + 1)
+      } else if (typeof c === 'string' && c.startsWith('GRP-')) {
+        map.set(c, (map.get(c) || 0) + 1)
+      }
+    }
+  }
+  return Array.from(map.entries())
+    .filter(([code]) => code !== '__none__')
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => a.code.localeCompare(b.code))
+})
+
+const noGroupCount = computed(() => {
+  return printSource.value.filter(r => !(r.group_codes?.length)).length
+})
+
+const allGroupsSelected = computed(() => {
+  return availableGroups.value.length > 0 && selectedGroups.value.length === availableGroups.value.length
+})
+
+const printableRecords = computed(() => {
+  // Tidak ada filter aktif → cetak semua (perilaku lama)
+  if (selectedGroups.value.length === 0 && !includeNoGroup.value) {
+    return printSource.value
+  }
+  return printSource.value.filter(r => {
+    const codes = r.group_codes || []
+    if (!codes.length) return includeNoGroup.value
+    return codes.some(c => selectedGroups.value.includes(c))
+  })
+})
 
 const totals = computed(() => {
   const fSum = (key) => records.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
@@ -169,20 +299,28 @@ async function fetchPayslips() {
   finally { loading.value = false }
 }
 
-async function switchSegment(seg) { activeSegment.value = seg; await fetchPayslips() }
+async function switchSegment(seg) {
+  activeSegment.value = seg
+  printRecords.value = null
+  await fetchPayslips()
+}
 
 async function onPeriodChange() {
   clearTimeout(searchTimer)
   const period = periods.value.find(p => p.id === selectedPeriodId.value)
   activeSegment.value = period?.is_split ? 'A' : null
   searchQuery.value = ''
+  printRecords.value = null
   await fetchPayslips()
 }
 
 // Debounced search: kirim ke backend untuk cari di SEMUA halaman
 watch(searchQuery, () => {
   clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => fetchPayslips(), 300)
+  searchTimer = setTimeout(() => {
+    printRecords.value = null
+    fetchPayslips()
+  }, 300)
 })
 
 function printSingle(record) {
@@ -191,10 +329,46 @@ function printSingle(record) {
   openPrintWindow(html)
 }
 
-function doBulkPrint() {
+async function openPrintModal() {
   if (!records.value.length) { notification.error('Tidak ada data untuk dicetak'); return }
-  let slips = isSplit.value ? records.value.map(r => buildSplitSlipData(r)).filter(Boolean) : records.value.map(r => buildNormalSlipData(r)).filter(Boolean)
+  if (printLoading.value) return
+
+  showPrintModal.value = true
+  printLoading.value = true
+  try {
+    // Muat SELURUH data periode (tidak dibatasi pagination 50) agar cetak massal lengkap
+    let url = `/api/v1/supervisor/payroll/payslips?period_id=${selectedPeriodId.value}&all=1`
+    if (activeSegment.value) url += `&segment=${activeSegment.value}`
+    if (searchQuery.value) url += `&search=${encodeURIComponent(searchQuery.value)}`
+    const res = await get(url)
+    printRecords.value = res.data || []
+
+    // Default: semua grup terpilih
+    selectedGroups.value = availableGroups.value.map(g => g.code)
+    includeNoGroup.value = noGroupCount.value > 0
+  } catch (error) {
+    console.error('Error loading print data', error)
+    notification.error('Gagal memuat data untuk cetak')
+    showPrintModal.value = false
+  } finally {
+    printLoading.value = false
+  }
+}
+
+function toggleSelectAll() {
+  if (allGroupsSelected.value) {
+    selectedGroups.value = []
+  } else {
+    selectedGroups.value = availableGroups.value.map(g => g.code)
+  }
+}
+
+function confirmBulkPrint() {
+  const target = printableRecords.value
+  if (!target.length) { notification.error('Tidak ada data yang cocok dengan filter'); return }
+  let slips = isSplit.value ? target.map(r => buildSplitSlipData(r)).filter(Boolean) : target.map(r => buildNormalSlipData(r)).filter(Boolean)
   const html = generateBulkPrintHtml(slips, isSplit.value)
+  showPrintModal.value = false
   openPrintWindow(html)
 }
 

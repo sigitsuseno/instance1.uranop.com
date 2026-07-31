@@ -306,3 +306,5 @@ foreach ($cuti as $index => $cutiSingle) {
     ]);
 }
 ```
+
+ di /admin/payroll/slip di tombol cetak semua, itu tolong saat di klik muncul modal yang yang memfilter print berdasarkan GRP-\* . faham tidak ?

@@ -31,7 +31,7 @@ class PayslipController extends Controller
         $setting = SystemSetting::first();
         $fixedWorkDay = (int) ($setting?->fixed_working_day ?? 25);
 
-        $query = PayRecord::with(['employee.department', 'employee.position'])
+        $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
             ->where('pay_period_id', $period->id)
             ->where('status', 'generated');
 
@@ -135,6 +135,7 @@ class PayslipController extends Controller
                 'employee_id'     => $record->employee_id,
                 'employee_code'   => $emp?->employee_code ?? $emp?->nip ?? '-',
                 'employee_name'   => $emp?->name ?? '-',
+                'group_codes'     => $emp?->groups?->pluck('reference_code')->filter(fn ($c) => str_starts_with((string) $c, 'GRP-'))->values()->toArray() ?? [],
                 'department'      => $emp?->department?->name ?? '-',
                 'position'        => $emp?->position?->name ?? '-',
                 'gender'          => $emp?->gender ?? '-',

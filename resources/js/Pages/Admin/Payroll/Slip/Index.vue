@@ -25,7 +25,7 @@
         <BaseButton
           variant="success"
           :disabled="!selectedPeriodId || records.length === 0"
-          @click="doBulkPrint"
+          @click="openPrintModal"
         >
           <template #icon-left>
             <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -209,6 +209,82 @@
         </div>
       </div>
     </BaseCard>
+
+    <!-- Filter Cetak Semua Modal -->
+    <BaseModal :show="showPrintModal" title="Cetak Slip Gaji" size="md" @close="showPrintModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih grup <span class="font-mono font-semibold text-(--text-main)">GRP-*</span> yang akan dicetak. Slip hanya dibuat untuk karyawan pada grup terpilih.
+        </p>
+
+        <!-- Select All -->
+        <label
+          class="flex items-center justify-between gap-3 p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated)/60 cursor-pointer select-none"
+        >
+          <div class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              :checked="allGroupsSelected"
+              @change="toggleSelectAll"
+              class="w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+            />
+            <span class="text-sm font-semibold text-(--text-main)">Pilih Semua Grup</span>
+          </div>
+          <span class="text-xs text-(--text-muted)">{{ records.length }} slip</span>
+        </label>
+
+        <!-- Group list -->
+        <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+          <label
+            v-for="g in availableGroups"
+            :key="g.code"
+            class="flex items-center justify-between gap-3 p-2.5 rounded-md border border-(--border-soft) bg-(--bg-card) cursor-pointer select-none hover:border-(--primary)/40 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <input
+                type="checkbox"
+                :value="g.code"
+                v-model="selectedGroups"
+                class="w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+              />
+              <span class="text-sm font-mono font-semibold text-(--text-main)">{{ g.code }}</span>
+            </div>
+            <span class="text-xs text-(--text-muted)">{{ g.count }} karyawan</span>
+          </label>
+
+          <label
+            v-if="noGroupCount > 0"
+            class="flex items-center justify-between gap-3 p-2.5 rounded-md border border-(--border-soft) bg-(--bg-card) cursor-pointer select-none hover:border-(--primary)/40 transition-colors"
+          >
+            <div class="flex items-center gap-3">
+              <input
+                type="checkbox"
+                v-model="includeNoGroup"
+                class="w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+              />
+              <span class="text-sm font-medium text-(--text-muted)">Karyawan tanpa grup</span>
+            </div>
+            <span class="text-xs text-(--text-muted)">{{ noGroupCount }} karyawan</span>
+          </label>
+        </div>
+
+        <!-- Summary -->
+        <div class="flex items-center gap-2 text-sm rounded-md px-3 py-2.5 bg-(--primary)/5 border border-(--primary)/20">
+          <span class="text-(--text-muted)">Akan dicetak:</span>
+          <span class="font-bold text-(--primary)">{{ printableRecords.length }} slip</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="secondary" @click="showPrintModal = false">Batal</BaseButton>
+        <BaseButton variant="success" :disabled="printableRecords.length === 0" @click="confirmBulkPrint">
+          <template #icon-left>
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </template>
+          Cetak ({{ printableRecords.length }})
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -217,6 +293,7 @@ import { ref, computed, onMounted } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import Badge from '@/Components/Badge.vue'
+import BaseModal from '@/Components/BaseModal.vue'
 import { IconSearch, IconFileInvoice } from '@/Components/Icons/index.js'
 import { useApi } from '@/composables/useApi'
 import { useNotificationStore } from '@/Stores/notification'
@@ -234,6 +311,11 @@ const activeSegment = ref(null)
 const searchQuery = ref('')
 const fixedWorkDay = ref(25)
 
+// ── Print filter modal state ──
+const showPrintModal = ref(false)
+const selectedGroups = ref([])
+const includeNoGroup = ref(false)
+
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
 })
@@ -248,6 +330,45 @@ const filteredRecords = computed(() => {
     r.employee_code.toLowerCase().includes(q) ||
     r.department.toLowerCase().includes(q)
   )
+})
+
+// ── Print filter computed ──
+const availableGroups = computed(() => {
+  const map = new Map()
+  for (const r of records.value) {
+    const codes = r.group_codes?.length ? r.group_codes : [null]
+    for (const c of codes) {
+      if (c === null) {
+        map.set('__none__', (map.get('__none__') || 0) + 1)
+      } else if (typeof c === 'string' && c.startsWith('GRP-')) {
+        map.set(c, (map.get(c) || 0) + 1)
+      }
+    }
+  }
+  return Array.from(map.entries())
+    .filter(([code]) => code !== '__none__')
+    .map(([code, count]) => ({ code, count }))
+    .sort((a, b) => a.code.localeCompare(b.code))
+})
+
+const noGroupCount = computed(() => {
+  return records.value.filter(r => !(r.group_codes?.length)).length
+})
+
+const allGroupsSelected = computed(() => {
+  return availableGroups.value.length > 0 && selectedGroups.value.length === availableGroups.value.length
+})
+
+const printableRecords = computed(() => {
+  // Tidak ada filter aktif → cetak semua (perilaku lama)
+  if (selectedGroups.value.length === 0 && !includeNoGroup.value) {
+    return records.value
+  }
+  return records.value.filter(r => {
+    const codes = r.group_codes || []
+    if (!codes.length) return includeNoGroup.value
+    return codes.some(c => selectedGroups.value.includes(c))
+  })
 })
 
 const totals = computed(() => {
@@ -324,20 +445,42 @@ function printSingle(record) {
   openPrintWindow(html)
 }
 
-function doBulkPrint() {
+function openPrintModal() {
   if (!records.value.length) {
     notification.error('Tidak ada data untuk dicetak')
     return
   }
 
+  // Default: semua grup terpilih
+  selectedGroups.value = availableGroups.value.map(g => g.code)
+  includeNoGroup.value = noGroupCount.value > 0
+  showPrintModal.value = true
+}
+
+function toggleSelectAll() {
+  if (allGroupsSelected.value) {
+    selectedGroups.value = []
+  } else {
+    selectedGroups.value = availableGroups.value.map(g => g.code)
+  }
+}
+
+function confirmBulkPrint() {
+  const target = printableRecords.value
+  if (!target.length) {
+    notification.error('Tidak ada data yang cocok dengan filter')
+    return
+  }
+
   let slips
   if (isSplit.value) {
-    slips = records.value.map(r => buildSplitSlipData(r)).filter(Boolean)
+    slips = target.map(r => buildSplitSlipData(r)).filter(Boolean)
   } else {
-    slips = records.value.map(r => buildNormalSlipData(r)).filter(Boolean)
+    slips = target.map(r => buildNormalSlipData(r)).filter(Boolean)
   }
 
   const html = generateBulkPrintHtml(slips, isSplit.value)
+  showPrintModal.value = false
   openPrintWindow(html)
 }
 

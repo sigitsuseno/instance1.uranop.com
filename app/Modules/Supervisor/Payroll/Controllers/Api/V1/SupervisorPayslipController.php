@@ -28,6 +28,7 @@ class SupervisorPayslipController extends Controller
             'search'    => 'nullable|string|max:100',
             'page'      => 'nullable|integer|min:1',
             'per_page'  => 'nullable|integer|min:1|max:200',
+            'all'       => 'nullable|boolean',
         ]);
 
         $period = PayPeriod::findOrFail($validated['period_id']);
@@ -38,7 +39,7 @@ class SupervisorPayslipController extends Controller
         $fixedWorkDay = (int) ($setting?->fixed_working_day ?? 25);
 
         // Query dari supervisor_breakdowns (tempat data sebenarnya)
-        $query = SupervisorBreakdown::with(['employee'])
+        $query = SupervisorBreakdown::with(['employee', 'employee.groups'])
             ->where('pay_period_id', $period->id);
 
         if ($period->is_split) {
@@ -61,7 +62,11 @@ class SupervisorPayslipController extends Controller
             });
         }
 
-        $paginator = $query->orderBy('id')->paginate($perPage);
+        // Mode "all": kembalikan seluruh data (tanpa pagination) untuk cetak massal
+        $allMode = (bool) ($validated['all'] ?? false);
+        $records = $allMode
+            ? $query->orderBy('id')->get()
+            : $query->orderBy('id')->paginate($perPage);
 
         // --- Leave quota per employee ---
         $leavePeriod = \App\Modules\Leave\Models\LeavePeriod::where('status', 'active')
@@ -74,7 +79,7 @@ class SupervisorPayslipController extends Controller
                 ->orderBy('start_date', 'desc')
                 ->first();
         }
-        $employeeIds = $paginator->pluck('employee_id')->unique()->toArray();
+        $employeeIds = $records->pluck('employee_id')->unique()->toArray();
         $leaveBalances = [];
         if ($leavePeriod && !empty($employeeIds)) {
             // Ambil sisa_cuti dari leave_request terakhir per employee di periode aktif
@@ -116,14 +121,14 @@ class SupervisorPayslipController extends Controller
         $otherSegmentRecords = collect();
         if ($period->is_split) {
             $otherSegment = $segment === 'A' ? 'B' : 'A';
-            $otherSegmentRecords = SupervisorBreakdown::with(['employee'])
+            $otherSegmentRecords = SupervisorBreakdown::with(['employee', 'employee.groups'])
                 ->where('pay_period_id', $period->id)
                 ->where('segment', $otherSegment)
                 ->get()
                 ->keyBy('employee_id');
         }
 
-        $data = $paginator->map(function ($record) use ($period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances) {
+        $data = $records->map(function ($record) use ($period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances) {
             return $this->formatRow($record, $period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances);
         });
 
@@ -174,11 +179,11 @@ class SupervisorPayslipController extends Controller
                 'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
             ],
             'fixed_work_day'  => $fixedWorkDay,
-            'pagination'      => [
-                'current_page' => $paginator->currentPage(),
-                'last_page'    => $paginator->lastPage(),
-                'per_page'     => $paginator->perPage(),
-                'total'        => $paginator->total(),
+            'pagination'      => $allMode ? null : [
+                'current_page' => $records->currentPage(),
+                'last_page'    => $records->lastPage(),
+                'per_page'     => $records->perPage(),
+                'total'        => $records->total(),
             ],
         ]);
     }
@@ -311,6 +316,7 @@ class SupervisorPayslipController extends Controller
             'employee_id'     => $record->employee_id,
             'employee_code'   => $employeeCode,
             'employee_name'   => $employeeName,
+            'group_codes'     => $emp?->groups?->pluck('reference_code')->filter(fn ($c) => str_starts_with((string) $c, 'GRP-'))->values()->toArray() ?? [],
             'department'      => $department,
             'position'        => $position,
             'gender'          => $gender,
