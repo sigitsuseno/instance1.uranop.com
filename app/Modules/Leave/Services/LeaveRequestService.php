@@ -519,10 +519,13 @@ class LeaveRequestService
      * Kalibrasi Cuti Tahunan (CT) — running balance dari employee_leave.
      *
      * Untuk setiap employee yang punya employee_leave di periode dipilih:
+     *   0. Reset employee_leave->amount ke 12 (default jatah CT)
      *   1. Ambil approved leave_requests CT, urut start_date ASC
      *   2. Per request:
      *      - sisa_cuti = employee_leave->amount - days_requested
      *      - employee_leave->amount -= days_requested
+     *
+     * Idempoten: karena amount di-reset ke 12 di awal, jalan berapa kali pun hasilnya sama.
      *
      * @param  int|null  $leavePeriodId  Default: periode aktif
      * @return array
@@ -541,10 +544,12 @@ class LeaveRequestService
         DB::transaction(function () use ($period, $leaveType, &$employeeCount, &$requestCount) {
             $records = EmployeeLeave::where('leave_type_id', $leaveType->id)
                 ->where('leave_period_id', $period->id)
-                ->where('transaction_type', 'increment')
                 ->get();
 
             foreach ($records as $record) {
+                // Reset saldo ke angka default (12) agar kalibrasi idempoten
+                $record->updateQuietly(['amount' => 12]);
+
                 $requests = LeaveRequest::where('employee_id', $record->employee_id)
                     ->where('leave_type_id', $leaveType->id)
                     ->where('leave_period_id', $period->id)
