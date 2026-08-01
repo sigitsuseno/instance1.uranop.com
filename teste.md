@@ -322,3 +322,38 @@ berarti overwrite total,
     c. shift full ambil dari att_prepare kecuali actual_in dan actual_out. jika di att_prepare kosong default ''. - check_in = att_prepare->check_in - check_out = roster->shift->work_hour_start + lembur + (randomMinutes (10, -3)) - actual_in = roster->shift->work_hour_start - Actual_out = roster->shift->work_hour_end - lm = att_prepare->lm - lembur = att_prepare->overtime - status = att_prepare->status
 
 - setiap tanggal selalu ada record.
+
+flow.
+
+1. klik tombol update jadwal akan muncul modal yang isinya search dropdown pilih karyawan (checkbox bisa multiple select) dan tombol update
+2. setelah pilih karyawan dan klik tombol update, akan melakukan proses :
+   a mencari semua record karyawan dari tabel attendance_autolog di rentang periode yang di pilih (relasi ke sch_employee_shift_rosters, dan employee)
+   b kemudian update berdasarkan wp.
+   b.1 Jika roster->work_pattern_type->FIXED & roster->work_pattern_type->FLEX-SHIFT
+   b.1.1 jika roster->external_code === "P", - untuk hari minggu dan holiday
+   -> check_in = ''
+   -> check_out = ''
+   -> actual_in = ''
+   -> actual_out = '' - jika autolog->status [leave, izin, sakit, ]
+   -> check_in = ''
+   -> check_out = ''
+   -> actual_in = roster->shift->work_hour_start
+   -> actual_out = roster->shift->work_hour_end - jika autolog->status [present]
+   -> check_in = roster->shift->work_hour_start
+   -> check_out = roster->shift->work_hour_end + autolog->lembur + (randomMinutes (10, -3))
+   -> actual_in = roster->shift->work_hour_start
+   -> actual_out = roster->shift->work_hour_end
+   b.1.1 jika roster->external_code === "S", - untuk hari minggu dan holiday
+   -> check_in = ''
+   -> check_out = ''
+   -> actual_in = ''
+   -> actual_out = '' - jika autolog->status [leave, izin, sakit, ]
+   -> check_in = ''
+   -> check_out = ''
+   -> actual_in = roster->shift->work_hour_start
+   -> actual_out = roster->shift->work_hour_end - jika autolog->status [present]
+   -> check_in = roster->shift->work_hour_start + autolog->lembur + (randomMinutes (10, -3))
+   -> check_out = roster->shift->work_hour_end
+   -> actual_in = roster->shift->work_hour_start
+   -> actual_out = roster->shift->work_hour_end
+   b.2 Jika roster->work_pattern_type->SHIFT - skip

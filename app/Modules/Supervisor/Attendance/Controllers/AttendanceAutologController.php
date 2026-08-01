@@ -888,6 +888,175 @@ class AttendanceAutologController extends Controller
     }
 
     /**
+     * Update Jadwal: generate check_in / check_out / actual_in / actual_out
+     * dari jadwal shift di roster untuk karyawan terpilih dalam periode.
+     *
+     * Rule per autolog:
+     *  - roster->work_pattern_type = SHIFT            → skip
+     *  - roster->work_pattern_type FIXED / FLEX-SHIFT:
+     *      - Minggu & holiday                          → semua waktu kosong
+     *      - status leave / izin / sakit               → check kosong, actual = jadwal
+     *      - status present + external_code 'S'        → check_in = jadwal + lembur + random, check_out = jadwal
+     *      - status present + external_code 'P'        → check_in = jadwal, check_out = jadwal + lembur + random
+     *      - status lainnya                            → tidak diubah
+     *
+     * POST /api/v1/supervisor/attendance/roster/update-schedule
+     */
+    public function updateSchedule(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $request->validate([
+            'start_date'     => ['required', 'date'],
+            'end_date'       => ['required', 'date'],
+            'employee_ids'   => ['required', 'array', 'min:1'],
+            'employee_ids.*' => ['integer'],
+        ]);
+
+        $startDate   = Carbon::parse($request->input('start_date'))->toDateString();
+        $endDate     = Carbon::parse($request->input('end_date'))->toDateString();
+        $employeeIds = array_values(array_unique(array_map('intval', $request->input('employee_ids'))));
+
+        // Set tanggal holiday dalam range
+        $holidaySet = \App\Modules\Schedule\Models\Holiday::whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->mapWithKeys(fn ($h) => [Carbon::parse($h->date)->toDateString() => true]);
+
+        // Autolog karyawan terpilih dalam periode (dengan relasi roster + shift)
+        $autologs = AttendanceAutolog::with(['employeeShiftRoster.shift'])
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->get();
+
+        // Fallback roster by (employee_id, date) untuk autolog tanpa employee_shift_roster_id
+        // (terjadi pada data import XLSX manual)
+        $rostersByEmpDate = \App\Modules\Schedule\Models\EmployeeShiftRoster::with('shift')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy(fn ($r) => $r->employee_id.'|'.$r->date->toDateString());
+
+        $updated = 0;
+        $skipped = 0;
+
+        try {
+            DB::beginTransaction();
+
+            foreach ($autologs as $autolog) {
+                $roster = $autolog->employeeShiftRoster;
+
+                // Fallback: cari roster by employee+date kalau autolog tidak punya roster_id
+                if (! $roster) {
+                    $dateStrKey = Carbon::parse($autolog->date)->toDateString();
+                    $roster = $rostersByEmpDate->get($autolog->employee_id.'|'.$dateStrKey);
+                }
+
+                // b.2 SHIFT → skip
+                if (! $roster || $roster->work_pattern_type === 'SHIFT') {
+                    $skipped++;
+                    continue;
+                }
+
+                // Hanya FIXED & FLEX-SHIFT yang diproses
+                if (! in_array($roster->work_pattern_type, ['FIXED', 'FLEX-SHIFT'], true)) {
+                    $skipped++;
+                    continue;
+                }
+
+                // Hanya external_code P / S
+                $externalCode = strtoupper(trim((string) $roster->external_code));
+                if (! in_array($externalCode, ['P', 'S'], true)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $shift = $roster->shift;
+                if (! $shift || ! $shift->work_hour_start || ! $shift->work_hour_end) {
+                    $skipped++;
+                    continue;
+                }
+
+                $dateStr = Carbon::parse($autolog->date)->toDateString();
+                $date    = Carbon::parse($dateStr);
+
+                $start = Carbon::parse($dateStr.' '.Carbon::parse($shift->work_hour_start)->format('H:i'));
+                $end   = Carbon::parse($dateStr.' '.Carbon::parse($shift->work_hour_end)->format('H:i'));
+
+                $isSunOrHoliday = $date->isSunday() || isset($holidaySet[$dateStr]);
+
+                if ($isSunOrHoliday) {
+                    // Minggu & holiday → semua waktu kosong
+                    $updates = [
+                        'check_in'   => null,
+                        'check_out'  => null,
+                        'actual_in'  => null,
+                        'actual_out' => null,
+                    ];
+                } elseif (in_array($autolog->status, ['leave', 'izin', 'sakit'], true)) {
+                    // Cuti / izin / sakit → check kosong, actual = jadwal shift
+                    $updates = [
+                        'check_in'   => null,
+                        'check_out'  => null,
+                        'actual_in'  => $start,
+                        'actual_out' => $end,
+                    ];
+                } elseif ($autolog->status === 'present') {
+                    $lembur       = (int) $autolog->lembur;
+                    $randomOffset = random_int(-3, 10);
+
+                    if ($externalCode === 'S') {
+                        // S → lembur & random ditambahkan ke check_in
+                        $checkIn  = $start->copy()->addMinutes($lembur + $randomOffset);
+                        $checkOut = $end;
+                    } else {
+                        // P → lembur & random ditambahkan ke check_out
+                        $checkIn  = $start;
+                        $checkOut = $end->copy()->addMinutes($lembur + $randomOffset);
+                    }
+
+                    $updates = [
+                        'check_in'   => $checkIn,
+                        'check_out'  => $checkOut,
+                        'actual_in'  => $start,
+                        'actual_out' => $end,
+                    ];
+                } else {
+                    // status lain (absent / off / pending / holiday) → tidak diubah
+                    $skipped++;
+                    continue;
+                }
+
+                $updates['is_manual_edit'] = true;
+                $updates['last_edited_at'] = now();
+                $updates['last_edited_by'] = Auth::id();
+
+                $autolog->update($updates);
+                $updated++;
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Update Jadwal berhasil! {$updated} record diperbarui, {$skipped} dilewati.",
+                'updated' => $updated,
+                'skipped' => $skipped,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Update Schedule Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Sync data dari att_prepares ke attendance_autologs.
      * Tombol Sync di halaman Data Absensi.
      */

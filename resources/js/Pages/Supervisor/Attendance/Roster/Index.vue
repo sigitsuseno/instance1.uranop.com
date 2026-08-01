@@ -19,6 +19,11 @@
           :class="holidaySuccess ? 'text-green-600' : 'text-red-600'">
           {{ holidayMessage }}
         </span>
+        <!-- Update Jadwal Feedback -->
+        <span v-if="updateMessage" class="text-sm font-medium"
+          :class="updateSuccess ? 'text-green-600' : 'text-red-600'">
+          {{ updateMessage }}
+        </span>
         <!-- Update Cuti Button -->
         <button @click="handleAdjustment"
           :disabled="isAdjusting"
@@ -45,6 +50,19 @@
             <line x1="3" y1="10" x2="21" y2="10" />
           </svg>
           {{ isHolidaying ? 'Update Holiday...' : 'Update Holiday' }}
+        </button>
+        <!-- Update Jadwal Button -->
+        <button @click="handleScheduleUpdate"
+          :disabled="isUpdating"
+          class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium">
+          <svg v-if="isUpdating" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" />
+          </svg>
+          <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          {{ isUpdating ? 'Update Jadwal...' : 'Update Jadwal' }}
         </button>
         <!-- Refresh Button -->
         <button @click="fetchData"
@@ -362,6 +380,78 @@
         </div>
       </template>
     </BaseModal>
+
+    <!-- Update Jadwal Modal -->
+    <BaseModal v-if="showScheduleModal" :show="showScheduleModal" title="Update Jadwal" size="lg" @close="closeScheduleModal">
+      <div class="p-3 bg-(--bg-elevated) rounded-lg mb-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih karyawan untuk memperbarui jadwal absensi dari roster
+          (check_in, check_out, actual_in, actual_out) pada periode
+          <span class="font-medium text-(--text-main)">{{ formatDateLong(startDate) }}</span> —
+          <span class="font-medium text-(--text-main)">{{ formatDateLong(endDate) }}</span>.
+        </p>
+      </div>
+
+      <!-- Search -->
+      <div class="relative mb-3">
+        <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-(--text-soft)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" />
+        </svg>
+        <input v-model="scheduleSearchQuery" type="text" placeholder="Cari karyawan..."
+          class="pl-9 pr-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full" />
+      </div>
+
+      <!-- Select all / counter -->
+      <div class="flex items-center justify-between mb-2 text-xs text-(--text-muted)">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox"
+            :checked="scheduleFilteredEmployees.length > 0 && scheduleFilteredEmployees.every(e => scheduleSelectedIds.includes(e.id))"
+            @change="toggleScheduleSelectAll"
+            class="w-3.5 h-3.5 rounded accent-emerald-600" />
+          Pilih semua ({{ scheduleFilteredEmployees.length }})
+        </label>
+        <span>Terpilih: {{ scheduleSelectedIds.length }}</span>
+      </div>
+
+      <!-- Employee checklist -->
+      <div class="max-h-[45vh] overflow-y-auto border border-(--border-soft) rounded-lg custom-scrollbar divide-y divide-(--border-soft)/50">
+        <label v-for="emp in scheduleFilteredEmployees" :key="emp.id"
+          class="flex items-start gap-3 px-3 py-2 cursor-pointer hover:bg-(--bg-elevated)/50 transition">
+          <input type="checkbox" :value="emp.id" v-model="scheduleSelectedIds"
+            class="w-3.5 h-3.5 rounded accent-emerald-600 mt-0.5" />
+          <span class="min-w-0">
+            <span class="block text-sm font-medium text-(--text-main) truncate">{{ emp.name }}</span>
+            <span class="block text-xs text-(--text-muted)">{{ emp.nip }} · {{ emp.department }}</span>
+          </span>
+        </label>
+        <div v-if="scheduleFilteredEmployees.length === 0" class="px-4 py-8 text-center text-sm text-(--text-muted)">
+          Tidak ada karyawan.
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex gap-3 w-full">
+          <button @click="closeScheduleModal"
+            class="px-4 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-(--bg-elevated) transition">
+            Tutup
+          </button>
+          <span class="flex-1"></span>
+          <button @click="submitScheduleUpdate"
+            :disabled="isSubmittingSchedule || scheduleSelectedIds.length === 0"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2">
+            <svg v-if="isSubmittingSchedule" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" />
+            </svg>
+            <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+              <polyline points="17 21 17 13 7 13 7 21" />
+              <polyline points="7 3 7 8 15 8" />
+            </svg>
+            Update
+          </button>
+        </div>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -381,6 +471,13 @@ const adjustmentSuccess = ref(false)
 const isHolidaying = ref(false)
 const holidayMessage = ref('')
 const holidaySuccess = ref(false)
+const isUpdating = ref(false)
+const updateMessage = ref('')
+const updateSuccess = ref(false)
+const showScheduleModal = ref(false)
+const scheduleSelectedIds = ref([])
+const scheduleSearchQuery = ref('')
+const isSubmittingSchedule = ref(false)
 const editError = ref(null)
 
 const availableGroups = ref([])
@@ -424,6 +521,14 @@ const filteredEmployees = computed(() => {
     result = result.filter(e => e.name.toLowerCase().includes(q) || e.nip.toLowerCase().includes(q))
   }
   return result
+})
+
+const scheduleFilteredEmployees = computed(() => {
+  const q = scheduleSearchQuery.value.toLowerCase().trim()
+  if (!q) return employees.value
+  return employees.value.filter(e =>
+    e.name.toLowerCase().includes(q) || (e.nip || '').toLowerCase().includes(q)
+  )
 })
 
 // ── API ──
@@ -574,6 +679,62 @@ async function handleHolidayUpdate() {
   } finally {
     isHolidaying.value = false
     setTimeout(() => { holidayMessage.value = '' }, 8000)
+  }
+}
+
+// ── Update Jadwal ──
+function handleScheduleUpdate() {
+  if (!startDate.value || !endDate.value) {
+    updateMessage.value = 'Periode belum dipilih.'
+    updateSuccess.value = false
+    setTimeout(() => { updateMessage.value = '' }, 5000)
+    return
+  }
+  scheduleSelectedIds.value = []
+  scheduleSearchQuery.value = ''
+  showScheduleModal.value = true
+}
+
+function closeScheduleModal() {
+  showScheduleModal.value = false
+}
+
+function toggleScheduleSelectAll(e) {
+  const visibleIds = scheduleFilteredEmployees.value.map(emp => emp.id)
+  if (e.target.checked) {
+    scheduleSelectedIds.value = [...new Set([...scheduleSelectedIds.value, ...visibleIds])]
+  } else {
+    const idSet = new Set(visibleIds)
+    scheduleSelectedIds.value = scheduleSelectedIds.value.filter(id => !idSet.has(id))
+  }
+}
+
+async function submitScheduleUpdate() {
+  if (scheduleSelectedIds.value.length === 0) return
+  isSubmittingSchedule.value = true
+  updateMessage.value = ''
+  try {
+    const res = await post('/api/v1/supervisor/attendance/roster/update-schedule', {
+      start_date: startDate.value,
+      end_date: endDate.value,
+      employee_ids: scheduleSelectedIds.value,
+    })
+    if (res.success) {
+      updateSuccess.value = true
+      updateMessage.value = res.message || 'Update Jadwal berhasil!'
+      showScheduleModal.value = false
+      // Refresh data setelah update
+      await fetchData()
+    } else {
+      updateSuccess.value = false
+      updateMessage.value = res.message || 'Gagal update jadwal.'
+    }
+  } catch (e) {
+    updateSuccess.value = false
+    updateMessage.value = e.message || 'Gagal update jadwal.'
+  } finally {
+    isSubmittingSchedule.value = false
+    setTimeout(() => { updateMessage.value = '' }, 8000)
   }
 }
 

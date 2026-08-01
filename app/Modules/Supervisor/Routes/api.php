@@ -42,6 +42,7 @@ Route::prefix('v1/supervisor')
             Route::post('roster/adjustment', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'adjustmentRoster'])->middleware('role:superadmin');
             Route::post('roster/update', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'updateRoster'])->middleware('role:superadmin');
             Route::post('roster/holiday', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'updateHoliday'])->middleware('role:superadmin');
+            Route::post('roster/update-schedule', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'updateSchedule'])->middleware('role:superadmin');
             Route::get('absensi/export', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'export']);
             Route::get('absensi/export-by-date', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'exportByDate']);
             Route::get('absensi/employees', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'employees']);
