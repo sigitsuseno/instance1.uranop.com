@@ -550,8 +550,11 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                     $totBase = self::FIXED_COLS + (self::SUB_COLS * count($this->dates));
                     for ($c = 1; $c <= self::TOT_COLS; $c++) {
                         $totCol = self::colLetter($totBase + $c);
+                        // Total Terima (kolom terakhir): tampilkan desimal tanpa pembulatan
+                        // agar konsisten dengan tab Resume
+                        $format = $c === self::TOT_COLS ? '#,##0.##' : '#,##0';
                         $sheet->getStyle("{$totCol}{$rStart}:{$totCol}{$rEnd}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode($format);
                     }
                 }
 
@@ -576,8 +579,11 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                     $totBase = self::FIXED_COLS + (self::SUB_COLS * count($this->dates));
                     for ($c = 1; $c <= self::TOT_COLS; $c++) {
                         $totCol = self::colLetter($totBase + $c);
+                        // Total Terima (kolom terakhir): tampilkan desimal tanpa pembulatan
+                        // agar konsisten dengan tab Resume
+                        $format = $c === self::TOT_COLS ? '#,##0.##' : '#,##0';
                         $sheet->getStyle("{$totCol}{$gtRow}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode($format);
                     }
                 }
 
