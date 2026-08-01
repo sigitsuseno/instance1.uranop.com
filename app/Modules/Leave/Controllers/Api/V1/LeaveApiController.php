@@ -498,11 +498,15 @@ class LeaveApiController extends Controller
             )
             ->get();
 
-        // Kumpulkan total used per employee + leave_type
-        $usedMap = EmployeeLeave::where('leave_period_id', $periodId)
-            ->where('transaction_type', 'decrement')
+        // Kumpulkan total Terpakai per employee + leave_type
+        // diambil dari leave_requests berstatus approved untuk tipe CT (Cuti Tahunan)
+        $usedMap = LeaveRequest::where('leave_period_id', $periodId)
+            ->where('status', 'approved')
+            ->whereHas('leaveType', function ($q) {
+                $q->where('code', 'CT');
+            })
             ->groupBy('employee_id', 'leave_type_id')
-            ->selectRaw('employee_id, leave_type_id, SUM(amount) as total')
+            ->selectRaw('employee_id, leave_type_id, SUM(days_requested) as total')
             ->get()
             ->keyBy(fn ($item) => $item->employee_id . '_' . $item->leave_type_id);
 
@@ -803,11 +807,15 @@ class LeaveApiController extends Controller
                         ->sum('amount');
                 }
 
-                $deductions = (float) EmployeeLeave::where('employee_id', $employee->id)
+                // Terpakai diambil dari leave_requests berstatus approved untuk tipe CT
+                $deductions = (float) LeaveRequest::where('employee_id', $employee->id)
                     ->where('leave_type_id', $type->id)
                     ->where('leave_period_id', $periodId)
-                    ->where('transaction_type', 'decrement')
-                    ->sum('amount');
+                    ->where('status', 'approved')
+                    ->whereHas('leaveType', function ($q) {
+                        $q->where('code', 'CT');
+                    })
+                    ->sum('days_requested');
 
                 $remaining = $entitlement - $deductions;
 

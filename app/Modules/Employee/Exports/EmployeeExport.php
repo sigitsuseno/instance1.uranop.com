@@ -4,14 +4,27 @@ namespace App\Modules\Employee\Exports;
 
 use App\Modules\Employee\Models\Employee;
 use Maatwebsite\Excel\Concerns\FromQuery;
+use Maatwebsite\Excel\Concerns\WithColumnFormatting;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithStyles;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
-class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSize, WithStyles
+class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithCustomValueBinder, WithColumnFormatting
 {
+    /**
+     * Kolom yang berisi nomor identifikasi panjang (NIK 16 digit, NPWP, No. Rekening, BPJS).
+     * Harus disimpan sebagai teks agar Excel tidak mengubahnya menjadi angka dan
+     * menghilangkan digit terakhir (batas presisi double Excel hanya 15 digit).
+     */
+    private const TEXT_COLUMNS = ['B', 'X', 'AA', 'AB', 'AC'];
+
     protected array $filters;
 
     public function __construct(array $filters = [])
@@ -19,9 +32,34 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
         $this->filters = $filters;
     }
 
+    /**
+     * Paksa kolom identifikasi panjang tetap bertipe string saat ditulis.
+     * Tanpa ini, PhpSpreadsheet akan menyimpan NIK/NPWP sebagai angka sehingga
+     * Excel membulatkan digit terakhir menjadi nol.
+     */
+    public function bindValue(Cell $cell, $value)
+    {
+        if (in_array($cell->getColumn(), self::TEXT_COLUMNS, true)) {
+            $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
+
+            return true;
+        }
+
+        return (new DefaultValueBinder)->bindValue($cell, $value);
+    }
+
+    /**
+     * Terapkan format teks ('@') pada kolom identifikasi agar Excel tetap
+     * memperlakukannya sebagai teks saat file dibuka.
+     */
+    public function columnFormats(): array
+    {
+        return array_fill_keys(self::TEXT_COLUMNS, NumberFormat::FORMAT_TEXT);
+    }
+
     public function query()
     {
-        $query = Employee::with(['department', 'position']);
+        $query = Employee::with(['department', 'position', 'groups.master']);
         
         $filters = $this->filters;
 
@@ -74,6 +112,7 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
             'Kode Pos',
             'Departemen',
             'Jabatan',
+            'Cabang',
             'Status Kepegawaian',
             'Status Aktif',
             'Tanggal Bergabung',
@@ -103,6 +142,16 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
             'terminated' => 'Terminated',
         ];
 
+        // Cabang = group penggajian karyawan (GRP-*) yang ditetapkan saat import,
+        // mis. GRP-JKT (Jakarta) / GRP-ALLIN. Tampilkan nama master-nya bila ada.
+        $cabang = '-';
+        foreach ($employee->groups as $group) {
+            if (str_starts_with((string) $group->reference_code, 'GRP-')) {
+                $cabang = $group->master?->name ?? $group->reference_code;
+                break;
+            }
+        }
+
         return [
             $employee->nip ?? '-',
             $employee->nik ?? '-',
@@ -119,6 +168,7 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
             $employee->postal_code ?? '-',
             $employee->department?->name ?? '-',
             $employee->position?->name ?? '-',
+            $cabang,
             $employmentStatusMap[$employee->employment_status] ?? $employee->employment_status,
             $employee->is_active ? 'Aktif' : 'Non-Aktif',
             $employee->join_date ? \Carbon\Carbon::parse($employee->join_date)->format('Y-m-d') : '-',
