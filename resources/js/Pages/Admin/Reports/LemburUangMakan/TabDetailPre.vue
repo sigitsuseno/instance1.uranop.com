@@ -192,7 +192,7 @@
                       {{ item.days[dateStr]?.upah_per_hari > 0 ? formatNumber(item.days[dateStr].upah_per_hari) : '-' }}
                     </td>
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lm ? 'text-purple-600 font-medium' : 'text-gray-300']">
-                      {{ item.days[dateStr]?.lm || '-' }}
+                      {{ item.days[dateStr]?.lm > 0 ? formatNumber(item.days[dateStr].lm) : '-' }}
                     </td>
                     <td :class="['px-1 py-3 text-center border-r border-(--border-soft) text-xs', item.days[dateStr]?.lembur ? 'text-orange-600 font-medium' : 'text-gray-300']">
                       {{ item.days[dateStr]?.lembur || '-' }}
@@ -553,7 +553,7 @@ onMounted(async () => {
 })
 
 function formatNumber(num) {
-  return new Intl.NumberFormat('id-ID').format(num || 0)
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num || 0)
 }
 
 function formatDateHeader(dateStr) {

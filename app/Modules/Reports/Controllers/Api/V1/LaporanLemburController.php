@@ -1012,8 +1012,8 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 : (float)($employee->activeSalary()?->tunjangan ?? 0);
             $premiHadir = $payRecord ? (float)($payRecord->premi_hadir ?? 0) : 0;
 
-            $upahPerHari = ($gaji + $tjMk) > 0 ? round(($gaji + $tjMk) / 25, 2) : 0;
-            $upahLemburPerJam = $gaji > 0 ? round(($gaji + $tjMk + $tunjangan) / 173, 2) : 0;
+            $upahPerHari = ($gaji + $tjMk) > 0 ? ($gaji + $tjMk) / 25 : 0;
+            $upahLemburPerJam = $gaji > 0 ? ($gaji + $tjMk + $tunjangan) / 173 : 0;
 
             // Build days map from each per-date record
             $days = [];
@@ -1121,10 +1121,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     if ($ha === 'I') $izinCount++;
                 }
                 $effectiveDays = max(0, 25 - $absentCount - $izinCount);
-                $totalHariKerja = round($effectiveDays * $dailyRate, 2);
+                $totalHariKerja = $effectiveDays * $dailyRate;
             } else {
                 $effectiveDays = min($activeDayCount, 25);
-                $totalHariKerja = round($effectiveDays * $dailyRate, 2);
+                $totalHariKerja = $effectiveDays * $dailyRate;
             }
 
             // ── Cari nilai insentif dari record yg date = end_date periode ──
@@ -1178,11 +1178,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'upah_lembur_per_jam' => $upahLemburPerJam,
                 'days'              => $days,
                 'insentif'          => $endDateInsentif,
-                'total_hari_kerja'  => round($totalHariKerja, 2),
-                'total_overtime'    => round($totalOvertime, 2),
-                'total_uang_makan'  => round($totalUangMakan + $totalInsentif, 2),
-                'total_insentif'    => round($totalInsentif, 2),
-                'total_terima'      => round($totalTerima, 2),
+                'total_hari_kerja'  => $totalHariKerja,
+                'total_overtime'    => $totalOvertime,
+                'total_uang_makan'  => $totalUangMakan + $totalInsentif,
+                'total_insentif'    => $totalInsentif,
+                'total_terima'      => $totalTerima,
                 '_is_spr'            => false,
                 '_is_after_end_date' => $isAfterEndDate,
             ];
@@ -1212,7 +1212,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 }
                 unset($day);
                 $item['_is_spr'] = true;
-                $item['total_uang_makan'] = round($totalInsentif, 2);
+                $item['total_uang_makan'] = $totalInsentif;
                 $allInEmployees->push($item);
             } else {
                 $allInEmployees->push($item);
@@ -1231,9 +1231,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $jakartaEmployees = $jakartaEmployees->map(function ($emp) {
                 $emp['total_hari_kerja'] = 0;
                 if ($emp['_is_after_end_date'] ?? false) {
-                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
+                    $emp['total_terima'] = ($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0);
                 } else {
-                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                    $emp['total_terima'] = ($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0);
                 }
                 return $emp;
             });
@@ -1244,9 +1244,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $spcJakartaEmployees = $spcJakartaEmployees->map(function ($emp) {
                 $emp['total_hari_kerja'] = 0;
                 if ($emp['_is_after_end_date'] ?? false) {
-                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0), 2);
+                    $emp['total_terima'] = ($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0) + ($emp['premi_hadir'] ?? 0);
                 } else {
-                    $emp['total_terima'] = round(($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0), 2);
+                    $emp['total_terima'] = ($emp['total_overtime'] ?? 0) + ($emp['total_uang_makan'] ?? 0);
                 }
                 return $emp;
             });
@@ -1335,10 +1335,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
     private function calcSectionTotals($employees): array
     {
         return [
-            'total_hari_kerja' => round($employees->sum('total_hari_kerja'), 2),
-            'total_overtime'   => round($employees->sum('total_overtime'), 2),
-            'total_uang_makan' => round($employees->sum('total_uang_makan'), 2),
-            'total_terima'     => round($employees->sum('total_terima'), 2),
+            'total_hari_kerja' => $employees->sum('total_hari_kerja'),
+            'total_overtime'   => $employees->sum('total_overtime'),
+            'total_uang_makan' => $employees->sum('total_uang_makan'),
+            'total_terima'     => $employees->sum('total_terima'),
             'count'            => $employees->count(),
         ];
     }
@@ -1813,9 +1813,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     }
 
                     $days[$dateStr] = [
-                        'hari_kerja' => round($hariKerja, 2),
-                        'overtime'   => round($overtime, 2),
-                        'uang_makan' => round($uangMakan, 2),
+                        'hari_kerja' => $hariKerja,
+                        'overtime'   => $overtime,
+                        'uang_makan' => $uangMakan,
                     ];
                 }
 
@@ -1826,10 +1826,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                     'l'                 => $l,
                     'p'                 => $p,
                     'days'              => $days,
-                    'total_hari_kerja'  => round($emps->sum('total_hari_kerja'), 2),
-                    'total_overtime'    => round($emps->sum('total_overtime'), 2),
-                    'total_uang_makan'  => round($emps->sum('total_uang_makan'), 2),
-                    'total_terima'      => round($emps->sum('total_terima'), 2),
+                    'total_hari_kerja'  => $emps->sum('total_hari_kerja'),
+                    'total_overtime'    => $emps->sum('total_overtime'),
+                    'total_uang_makan'  => $emps->sum('total_uang_makan'),
+                    'total_terima'      => $emps->sum('total_terima'),
                 ];
             }
 
@@ -1909,10 +1909,10 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
     private function calculateSectionTotals($employees): array
     {
         return [
-            'total_hari_kerja' => round($employees->sum('total_hari_kerja'), 2),
-            'total_overtime'   => round($employees->sum('total_overtime'), 2),
-            'total_uang_makan' => round($employees->sum('total_uang_makan'), 2),
-            'total_terima'     => round($employees->sum('total_terima'), 2),
+            'total_hari_kerja' => $employees->sum('total_hari_kerja'),
+            'total_overtime'   => $employees->sum('total_overtime'),
+            'total_uang_makan' => $employees->sum('total_uang_makan'),
+            'total_terima'     => $employees->sum('total_terima'),
             'count'            => $employees->count(),
         ];
     }

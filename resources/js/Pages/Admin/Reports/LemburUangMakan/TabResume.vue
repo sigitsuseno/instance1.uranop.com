@@ -262,7 +262,7 @@ onMounted(async () => {
 })
 
 function formatNumber(num) {
-  return new Intl.NumberFormat('id-ID').format(num || 0)
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num || 0)
 }
 
 // Cek apakah ada section non-jakarta (untuk kolom hari_kerja)
