@@ -294,10 +294,10 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
                         }
 
                         // Totals
-                        $valThk = (int)($item['total_hari_kerja'] ?? 0);
-                        $valTot = (int)($item['total_overtime'] ?? 0);
-                        $valTum = (int)($item['total_uang_makan'] ?? 0);
-                        $valTtr = (int)($item['total_terima'] ?? 0);
+                        $valThk = $item['total_hari_kerja'] ?? 0;
+                        $valTot = $item['total_overtime'] ?? 0;
+                        $valTum = $item['total_uang_makan'] ?? 0;
+                        $valTtr = $item['total_terima'] ?? 0;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valThk); $colIdx++;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valTot); $colIdx++;
                         $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $valTum); $colIdx++;
@@ -445,7 +445,7 @@ class LemburUangMakanResumeExport implements FromArray, WithHeadings, WithStyles
 
                 foreach ($numberCols as $col) {
                     $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastDataRow}")
-                        ->getNumberFormat()->setFormatCode('#,##0');
+                        ->getNumberFormat()->setFormatCode('#,##0.00');
                 }
 
                 // ══════════════════════════════════════════════════════

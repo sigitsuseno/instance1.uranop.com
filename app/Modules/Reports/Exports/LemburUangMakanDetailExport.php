@@ -370,8 +370,8 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;                   // Kode
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;                   // H/A
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumUpahHari > 0 ? $sumUpahHari : ''); $colIdx++; // Upah/Hari
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumLm > 0 ? round($sumLm, 2) : ''); $colIdx++;       // L/M
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumLembur > 0 ? round($sumLembur, 2) : ''); $colIdx++; // Lembur/Lbr
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumLm > 0 ? $sumLm : ''); $colIdx++;       // L/M
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumLembur > 0 ? $sumLembur : ''); $colIdx++; // Lembur/Lbr
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $sumNominal > 0 ? $sumNominal : ''); $colIdx++;          // Nominal
                         }
 
@@ -407,10 +407,10 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                     }
 
                     if ($allData->isNotEmpty()) {
-                        $gtHariKerja = round($allData->sum('total_hari_kerja'), 2);
-                        $gtOvertime = round($allData->sum('total_overtime'), 2);
-                        $gtUangMakan = round($allData->sum('total_uang_makan'), 2);
-                        $gtTerima = round($allData->sum('total_terima'), 2);
+                        $gtHariKerja = $allData->sum('total_hari_kerja');
+                        $gtOvertime = $allData->sum('total_overtime');
+                        $gtUangMakan = $allData->sum('total_uang_makan');
+                        $gtTerima = $allData->sum('total_terima');
 
                         // Compute daily column grand totals
                         $gtDailySums = [];
@@ -450,10 +450,10 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                             $ds = $gtDailySums[$dateStr] ?? ['upahHari' => 0, 'lm' => 0, 'lembur' => 0, 'nominal' => 0];
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;  // Kode
                             $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", ''); $colIdx++;  // H/A
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['upahHari'] > 0 ? round($ds['upahHari'], 2) : ''); $colIdx++; // Upah/Hari
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['lm'] > 0 ? round($ds['lm'], 2) : ''); $colIdx++;             // L/M
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['lembur'] > 0 ? round($ds['lembur'], 2) : ''); $colIdx++;       // Lembur
-                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['nominal'] > 0 ? round($ds['nominal'], 2) : ''); $colIdx++;      // Nominal
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['upahHari'] > 0 ? $ds['upahHari'] : ''); $colIdx++; // Upah/Hari
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['lm'] > 0 ? $ds['lm'] : ''); $colIdx++;             // L/M
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['lembur'] > 0 ? $ds['lembur'] : ''); $colIdx++;       // Lembur
+                            $sheet->setCellValue(self::colLetter($colIdx) . "{$currentRow}", $ds['nominal'] > 0 ? $ds['nominal'] : ''); $colIdx++;      // Nominal
                         }
 
                         // Grand total summary columns
@@ -520,7 +520,7 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                     for ($c = 6; $c <= 9; $c++) {
                         $cl = self::colLetter($c);
                         $sheet->getStyle("{$cl}{$rStart}:{$cl}{$rEnd}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
                     }
 
                     // Per-date number columns
@@ -529,20 +529,20 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
 
                         // Upah/Hari (offset 3)
                         $sheet->getStyle(self::colLetter($base + 3) . "{$rStart}:" . self::colLetter($base + 3) . "{$rEnd}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
 
                         if ($type === 'uang_makan') {
                             // Nominal (offset 6)
                             $sheet->getStyle(self::colLetter($base + 6) . "{$rStart}:" . self::colLetter($base + 6) . "{$rEnd}")
-                                ->getNumberFormat()->setFormatCode('#,##0');
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
                         } else {
                             // L/M (offset 4), Lbr (offset 5), Nominal (offset 6)
                             $sheet->getStyle(self::colLetter($base + 4) . "{$rStart}:" . self::colLetter($base + 4) . "{$rEnd}")
-                                ->getNumberFormat()->setFormatCode('#,##0');
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
                             $sheet->getStyle(self::colLetter($base + 5) . "{$rStart}:" . self::colLetter($base + 5) . "{$rEnd}")
-                                ->getNumberFormat()->setFormatCode('#,##0');
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
                             $sheet->getStyle(self::colLetter($base + 6) . "{$rStart}:" . self::colLetter($base + 6) . "{$rEnd}")
-                                ->getNumberFormat()->setFormatCode('#,##0');
+                                ->getNumberFormat()->setFormatCode('#,##0.00');
                         }
                     }
 
@@ -552,7 +552,7 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $totCol = self::colLetter($totBase + $c);
                         // Total Terima (kolom terakhir): tampilkan desimal tanpa pembulatan
                         // agar konsisten dengan tab Resume
-                        $format = $c === self::TOT_COLS ? '#,##0.##' : '#,##0';
+                        $format = '#,##0.00';
                         $sheet->getStyle("{$totCol}{$rStart}:{$totCol}{$rEnd}")
                             ->getNumberFormat()->setFormatCode($format);
                     }
@@ -566,14 +566,14 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $base = self::FIXED_COLS + ($i * self::SUB_COLS);
                         // Upah/Hari (offset 3)
                         $sheet->getStyle(self::colLetter($base + 3) . "{$gtRow}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
                         // L/M atau Lbr (offset 4,5), Nominal (offset 6)
                         $sheet->getStyle(self::colLetter($base + 4) . "{$gtRow}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
                         $sheet->getStyle(self::colLetter($base + 5) . "{$gtRow}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
                         $sheet->getStyle(self::colLetter($base + 6) . "{$gtRow}")
-                            ->getNumberFormat()->setFormatCode('#,##0');
+                            ->getNumberFormat()->setFormatCode('#,##0.00');
                     }
                     // Total columns
                     $totBase = self::FIXED_COLS + (self::SUB_COLS * count($this->dates));
@@ -581,7 +581,7 @@ class LemburUangMakanDetailExport implements FromArray, WithHeadings, WithStyles
                         $totCol = self::colLetter($totBase + $c);
                         // Total Terima (kolom terakhir): tampilkan desimal tanpa pembulatan
                         // agar konsisten dengan tab Resume
-                        $format = $c === self::TOT_COLS ? '#,##0.##' : '#,##0';
+                        $format = '#,##0.00';
                         $sheet->getStyle("{$totCol}{$gtRow}")
                             ->getNumberFormat()->setFormatCode($format);
                     }
