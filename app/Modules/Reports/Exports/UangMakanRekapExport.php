@@ -14,7 +14,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
+class UangMakanRekapExport implements FromArray, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
 {
     protected $data;
     protected $label;
@@ -63,7 +63,7 @@ class UangMakanRekabExport implements FromArray, WithHeadings, WithMapping, With
 
     public function headings(): array
     {
-        $row1 = ['REKAB UANG MAKAN — ' . strtoupper($this->label)];
+        $row1 = ['REKAP UANG MAKAN — ' . strtoupper($this->label)];
         $row2 = [''];
 
         $row3 = [

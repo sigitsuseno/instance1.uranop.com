@@ -13,7 +13,7 @@ use App\Modules\Settings\Services\ReportConfigService;
 use App\Modules\Reports\Exports\UangMakanHarianExport;
 use App\Modules\Reports\Exports\UangMakanBulananExport;
 use App\Modules\Reports\Exports\UangMakanResumeExport;
-use App\Modules\Reports\Exports\UangMakanRekabExport;
+use App\Modules\Reports\Exports\UangMakanRekapExport;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
@@ -107,11 +107,11 @@ class UangMakanReportController extends Controller
         return response($html);
     }
 
-    // ─── Rekab (Rekapitulasi per Karyawan per Bulan) ──────────────
+    // ─── Rekap (Rekapitulasi per Karyawan per Bulan) ──────────────
 
-    public function rekab(Request $request)
+    public function rekap(Request $request)
     {
-        $result = $this->buildRekabData($request);
+        $result = $this->buildRekapData($request);
 
         $employees = $result['data']->map(function ($item) {
             // Determine employee eligibility based on employment_status and group codes
@@ -223,35 +223,35 @@ class UangMakanReportController extends Controller
         ]);
     }
 
-    public function exportRekab(Request $request)
+    public function exportRekap(Request $request)
     {
-        $response = $this->rekab($request);
+        $response = $this->rekap($request);
         $payload  = json_decode($response->getContent(), true);
-        $label    = $payload['month_label'] ?? 'Rekab';
+        $label    = $payload['month_label'] ?? 'Rekap';
 
-        $filename = 'Rekab_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
+        $filename = 'Rekap_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
         return Excel::download(
-            new UangMakanRekabExport($payload['data'] ?? [], $label),
+            new UangMakanRekapExport($payload['data'] ?? [], $label),
             $filename
         );
     }
 
-    public function printRekab(Request $request)
+    public function printRekap(Request $request)
     {
-        $response = $this->rekab($request);
+        $response = $this->rekap($request);
         $payload  = json_decode($response->getContent(), true);
-        $label    = $payload['month_label'] ?? 'Rekab Uang Makan';
+        $label    = $payload['month_label'] ?? 'Rekap Uang Makan';
         $data     = $payload['data'] ?? [];
 
-        $html = $this->renderRekabPrintHtml($data, $label);
+        $html = $this->renderRekapPrintHtml($data, $label);
         return response($html);
     }
 
-    // ─── Rekab Resume (per Bagian) ────────────────────────────────
+    // ─── Rekap Resume (per Bagian) ────────────────────────────────
 
-    public function rekabResume(Request $request)
+    public function rekapResume(Request $request)
     {
-        $response = $this->rekab($request);
+        $response = $this->rekap($request);
         $payload  = json_decode($response->getContent(), true);
         $employees = $payload['data'] ?? [];
 
@@ -295,27 +295,27 @@ class UangMakanReportController extends Controller
         ]);
     }
 
-    public function exportRekabResume(Request $request)
+    public function exportRekapResume(Request $request)
     {
-        $response = $this->rekabResume($request);
+        $response = $this->rekapResume($request);
         $payload  = json_decode($response->getContent(), true);
         $label    = $payload['month_label'] ?? 'Resume';
 
         $filename = 'Resume_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
         return Excel::download(
-            new \App\Modules\Reports\Exports\UangMakanRekabResumeExport($payload['data'] ?? [], $label),
+            new \App\Modules\Reports\Exports\UangMakanRekapResumeExport($payload['data'] ?? [], $label),
             $filename
         );
     }
 
-    public function printRekabResume(Request $request)
+    public function printRekapResume(Request $request)
     {
-        $response = $this->rekabResume($request);
+        $response = $this->rekapResume($request);
         $payload  = json_decode($response->getContent(), true);
         $label    = $payload['month_label'] ?? 'Resume Uang Makan';
         $data     = $payload['data'] ?? [];
 
-        $html = $this->renderRekabResumePrintHtml($data, $label);
+        $html = $this->renderRekapResumePrintHtml($data, $label);
         return response($html);
     }
 
@@ -562,9 +562,9 @@ class UangMakanReportController extends Controller
     }
 
     /**
-     * Build data for Rekab Uang Makan from employee_overtime table.
+     * Build data for Rekap Uang Makan from employee_overtime table.
      */
-    private function buildRekabData(Request $request): array
+    private function buildRekapData(Request $request): array
     {
         $periodId = $request->input('period_id');
         $groups   = $request->input('groups', []);
@@ -651,7 +651,7 @@ class UangMakanReportController extends Controller
                             $lmStr = 'HALF';
                             break;
                         // TKN, SPR, PS1, SS, SPC — um_code empty or 'TKN', no count
-                        // matches existing rekab() behaviour (not counted as UM/2/FULL/HALF)
+                        // matches existing rekap() behaviour (not counted as UM/2/FULL/HALF)
                     }
                 }
 
@@ -1150,7 +1150,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
 </body></html>';
     }
 
-    private function renderRekabPrintHtml($data, $label)
+    private function renderRekapPrintHtml($data, $label)
     {
         $rows = '';
         $i = 0;
@@ -1230,7 +1230,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         </tr>";
 
         return '<!DOCTYPE html>
-<html lang="id"><head><meta charset="UTF-8"><title>Rekab Uang Makan</title>
+<html lang="id"><head><meta charset="UTF-8"><title>Rekap Uang Makan</title>
 <style>
 @page{size:A4 landscape;margin:8mm}
 body{font-family:-apple-system,BlinkMacSystemFont,\'Segoe UI\',sans-serif;font-size:9px;color:#1f2937}
@@ -1242,7 +1242,7 @@ tr:nth-child(even){background:#f9fafb}
 .text-right{text-align:right}.text-center{text-align:center}
 @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style></head><body>
-<h1>REKAB UANG MAKAN — ' . strtoupper($label) . '</h1>
+<h1>REKAP UANG MAKAN — ' . strtoupper($label) . '</h1>
 <div style="overflow-x:auto">
 <table>
 <thead>
@@ -1268,7 +1268,7 @@ tr:nth-child(even){background:#f9fafb}
 </body></html>';
     }
 
-    private function renderRekabResumePrintHtml($data, $label)
+    private function renderRekapResumePrintHtml($data, $label)
     {
         $rows = '';
         $i = 0;

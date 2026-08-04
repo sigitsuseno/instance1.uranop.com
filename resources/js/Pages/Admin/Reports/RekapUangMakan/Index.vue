@@ -11,11 +11,11 @@
         <button
           :class="[
             'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
-            activeTab === 'rekab'
+            activeTab === 'rekap'
               ? 'text-(--primary) border-(--primary)'
               : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
           ]"
-          @click="activeTab = 'rekab'"
+          @click="activeTab = 'rekap'"
         >
           Rekap
         </button>
@@ -80,13 +80,13 @@
     </BaseCard>
 
     <!-- Tab Content -->
-    <TabRekab
-      v-if="activeTab === 'rekab'"
-      ref="tabRekabRef"
+    <TabRekap
+      v-if="activeTab === 'rekap'"
+      ref="tabRekapRef"
       :period-id="selectedPeriodId"
       :groups="selectedGroups"
-      @has-data="(val) => rekabHasData = val"
-      @loading="(val) => rekabLoading = val"
+      @has-data="(val) => rekapHasData = val"
+      @loading="(val) => rekapLoading = val"
     />
     <TabResume
       v-if="activeTab === 'resume'"
@@ -104,30 +104,30 @@ import { ref, computed, onMounted } from 'vue'
 import { useApi } from '../../../../composables/useApi'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
-import TabRekab from './TabRekab.vue'
+import TabRekap from './TabRekap.vue'
 import TabResume from './TabResume.vue'
 
 const { get } = useApi()
 
-const activeTab = ref('rekab')
+const activeTab = ref('rekap')
 const selectedPeriodId = ref(null)
 const periods = ref([])
 const selectedGroups = ref([])
 const availableGroups = ref([])
 
 // Refs to child components
-const tabRekabRef = ref(null)
+const tabRekapRef = ref(null)
 const tabResumeRef = ref(null)
-const rekabHasData = ref(false)
+const rekapHasData = ref(false)
 const resumeHasData = ref(false)
-const rekabLoading = ref(false)
+const rekapLoading = ref(false)
 const resumeLoading = ref(false)
 
 const hasData = computed(() => {
-  return activeTab.value === 'rekab' ? rekabHasData.value : resumeHasData.value
+  return activeTab.value === 'rekap' ? rekapHasData.value : resumeHasData.value
 })
 const loading = computed(() => {
-  return activeTab.value === 'rekab' ? rekabLoading.value : resumeLoading.value
+  return activeTab.value === 'rekap' ? rekapLoading.value : resumeLoading.value
 })
 
 onMounted(async () => {
@@ -171,16 +171,16 @@ function formatDateRange(start, end) {
 }
 
 function handleExport() {
-  if (activeTab.value === 'rekab') {
-    tabRekabRef.value?.exportExcel()
+  if (activeTab.value === 'rekap') {
+    tabRekapRef.value?.exportExcel()
   } else {
     tabResumeRef.value?.exportExcel()
   }
 }
 
 function handlePrint() {
-  if (activeTab.value === 'rekab') {
-    tabRekabRef.value?.openPrint()
+  if (activeTab.value === 'rekap') {
+    tabRekapRef.value?.openPrint()
   } else {
     tabResumeRef.value?.openPrint()
   }

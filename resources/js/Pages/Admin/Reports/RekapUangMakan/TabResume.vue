@@ -111,7 +111,7 @@ async function fetchData() {
   try {
     const params = new URLSearchParams({ period_id: props.periodId })
     props.groups.forEach(g => params.append('groups[]', g))
-    const res = await get(`/api/v1/reports/uang-makan/rekab-resume?${params.toString()}`)
+    const res = await get(`/api/v1/reports/uang-makan/rekap-resume?${params.toString()}`)
     data.value = res.data || []
     monthLabel.value = res.month_label || ''
     emit('hasData', data.value.length > 0)
@@ -127,7 +127,7 @@ function exportExcel() {
   const token = localStorage.getItem('token')
   const params = new URLSearchParams({ period_id: props.periodId })
   props.groups.forEach(g => params.append('groups[]', g))
-  const url = `/api/v1/reports/uang-makan/rekab-resume/export?${params.toString()}`
+  const url = `/api/v1/reports/uang-makan/rekap-resume/export?${params.toString()}`
   const safeName = (monthLabel.value || 'Resume_Uang_Makan').replace(/\s+/g, '_').replace(/[()]/g, '')
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => r.blob())
@@ -148,7 +148,7 @@ function openPrint() {
   const token = localStorage.getItem('token')
   const params = new URLSearchParams({ period_id: props.periodId })
   props.groups.forEach(g => params.append('groups[]', g))
-  const url = `/api/v1/reports/uang-makan/rekab-resume/print?${params.toString()}`
+  const url = `/api/v1/reports/uang-makan/rekap-resume/print?${params.toString()}`
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => r.text())
     .then(html => {

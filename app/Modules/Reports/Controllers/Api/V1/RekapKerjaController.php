@@ -356,7 +356,7 @@ class RekapKerjaController extends Controller
 
     /**
      * Build Uang Makan section — grouped by POSITION (BAGIAN).
-     * Memanggil internal UangMakanReportController::rekab(),
+     * Memanggil internal UangMakanReportController::rekap(),
      * lalu map employee_id → position untuk grouping.
      */
     private function buildUangMakanSection(PayPeriod $period, array $uangMakanGroups): array
@@ -385,21 +385,21 @@ class RekapKerjaController extends Controller
                 ->map(fn($name) => $name ?: 'TANPA BAGIAN')
                 ->toArray();
 
-            // ─── Panggil internal rekab ───
+            // ─── Panggil internal rekap ───
             // Teruskan uang_makan_groups agar employee_overtime difilter di sumbernya.
             $uangMakanCtrl = app(UangMakanReportController::class);
-            $rekabParams = ['period_id' => $period->id];
+            $rekapParams = ['period_id' => $period->id];
             if (!empty($uangMakanGroups)) {
-                $rekabParams['groups'] = $uangMakanGroups;
+                $rekapParams['groups'] = $uangMakanGroups;
             }
-            $rekabRequest  = Request::create(
-                '/api/v1/reports/uang-makan/rekab',
+            $rekapRequest  = Request::create(
+                '/api/v1/reports/uang-makan/rekap',
                 'GET',
-                $rekabParams
+                $rekapParams
             );
-            $rekabResponse = $uangMakanCtrl->rekab($rekabRequest);
-            $rekabData     = json_decode($rekabResponse->getContent(), true);
-            $umItems       = $rekabData['data'] ?? [];
+            $rekapResponse = $uangMakanCtrl->rekap($rekapRequest);
+            $rekapData     = json_decode($rekapResponse->getContent(), true);
+            $umItems       = $rekapData['data'] ?? [];
 
             // ─── Group by POSITION ───
             $grouped = [];

@@ -14,7 +14,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class UangMakanRekabResumeExport implements FromArray, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
+class UangMakanRekapResumeExport implements FromArray, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
 {
     protected $data;
     protected $label;
