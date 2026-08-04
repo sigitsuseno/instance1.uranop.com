@@ -118,10 +118,10 @@
                   <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.account_no || '-' }}</td>
                   <td class="px-2.5 py-2 text-center text-(--text-muted) border-r border-(--border-soft)">{{ row.status_label || '-' }}</td>
                   <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.gender || '-' }}</td>
-                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.gaji) }}</td>
-                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.total_gaji) }}</td>
-                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_tk) }}</td>
-                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_ks) }}</td>
+                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.gaji, false, 0) }}</td>
+                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.total_gaji, false, 0) }}</td>
+                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_tk, false, 0) }}</td>
+                  <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_ks, false, 0) }}</td>
                   <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNum(row.uang_makan) }}</td>
                 </tr>
               </tbody>
@@ -132,10 +132,10 @@
                   <td class="px-2.5 py-2.5 text-right border-r border-(--border-soft)" colspan="5">
                     <span class="text-(--primary) uppercase">TOTAL</span>
                   </td>
-                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(totals.gaji, true) }}</td>
-                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(totals.total_gaji, true) }}</td>
-                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(totals.bpjs_tk, true) }}</td>
-                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(totals.bpjs_ks, true) }}</td>
+                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(totals.gaji, true, 0) }}</td>
+                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(totals.total_gaji, true, 0) }}</td>
+                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(totals.bpjs_tk, true, 0) }}</td>
+                  <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(totals.bpjs_ks, true, 0) }}</td>
                   <td class="px-3 py-2.5 text-right font-mono">{{ fmtNum(totals.uang_makan, true) }}</td>
                 </tr>
               </tfoot>
@@ -209,9 +209,9 @@ const totals = computed(() => {
 
 // ─── Helpers ───
 
-function fmtNum(v, force) {
+function fmtNum(v, force, decimals = 2) {
   if (!force && (v === null || v === undefined || v === 0)) return '-'
-  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(v || 0)
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: decimals }).format(v || 0)
 }
 
 // ─── API Calls ───

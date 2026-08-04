@@ -7,13 +7,17 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class RekapGajiExport implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithEvents
+class RekapGajiExport extends DefaultValueBinder implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithEvents, WithCustomValueBinder
 {
     protected array $rows;
     protected string $periodName;
@@ -38,6 +42,21 @@ class RekapGajiExport implements FromArray, WithHeadings, WithStyles, WithColumn
             'bpjs_ks'    => array_sum(array_column($rows, 'bpjs_ks')),
             'uang_makan' => array_sum(array_column($rows, 'uang_makan')),
         ];
+    }
+
+    /**
+     * Force kolom C (ACCOUNT NO) selalu ditulis sebagai teks,
+     * supaya Excel tidak menampilkan notasi ilmiah E+12
+     * dan nol di depan / digit panjang tetap utuh.
+     */
+    public function bindValue(Cell $cell, $value)
+    {
+        if ($cell->getColumn() === 'C') {
+            $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
+            return true;
+        }
+
+        return parent::bindValue($cell, $value);
     }
 
     public function array(): array
@@ -155,6 +174,8 @@ class RekapGajiExport implements FromArray, WithHeadings, WithStyles, WithColumn
                 $sheet->getStyle("B{$dataStart}:B{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                 // ACCOUNT NO, STATUS, L/P: center
                 $sheet->getStyle("C{$dataStart}:E{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                // ACCOUNT NO: paksa format teks agar tidak jadi notasi ilmiah
+                $sheet->getStyle("C{$dataStart}:C{$dataEnd}")->getNumberFormat()->setFormatCode('@');
                 // GAJI..UM: right
                 $sheet->getStyle("F{$dataStart}:{$lastCol}{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
