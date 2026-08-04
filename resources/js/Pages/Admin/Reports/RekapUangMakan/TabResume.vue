@@ -43,7 +43,7 @@
             <td class="px-4 py-3 text-right border-r border-(--border-soft) text-(--text-muted)">{{ item.insentif > 0 ? formatNumber(item.insentif) : '-' }}</td>
             <td class="px-4 py-3 text-right border-r border-(--border-soft) text-(--text-muted)">{{ item.pblt > 0 ? formatNumber(item.pblt) : '-' }}</td>
             <td class="px-4 py-3 text-right border-r border-(--border-soft) text-(--text-muted)">{{ item.revisi > 0 ? formatNumber(item.revisi) : '-' }}</td>
-            <td class="px-4 py-3 text-right font-bold border-r border-(--border-soft)" :class="item.total > 0 ? 'text-(--primary)' : 'text-(--text-muted)'">{{ item.total > 0 ? formatNumber(item.total) : '-' }}</td>
+            <td class="px-4 py-3 text-right font-bold border-r border-(--border-soft)" :class="item.total > 0 ? 'text-(--primary)' : 'text-(--text-muted)'">{{ item.total > 0 ? formatDecimal(item.total) : '-' }}</td>
           </tr>
 
           <!-- Grand Total Row -->
@@ -55,7 +55,7 @@
             <td class="px-4 py-3 text-right border-r border-(--border-soft)">{{ formatNumber(totalNominals.insentif) }}</td>
             <td class="px-4 py-3 text-right border-r border-(--border-soft)">{{ formatNumber(totalNominals.pblt) }}</td>
             <td class="px-4 py-3 text-right border-r border-(--border-soft)">{{ formatNumber(totalNominals.revisi) }}</td>
-            <td class="px-4 py-3 text-right text-(--primary) border-r border-(--border-soft) text-base">{{ formatNumber(grandTotal) }}</td>
+            <td class="px-4 py-3 text-right text-(--primary) border-r border-(--border-soft) text-base">{{ formatDecimal(grandTotal) }}</td>
           </tr>
         </tbody>
       </table>
@@ -102,6 +102,10 @@ const grandTotal = computed(() => {
 
 function formatNumber(num) {
   return new Intl.NumberFormat('id-ID').format(num || 0)
+}
+
+function formatDecimal(num) {
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num || 0)
 }
 
 async function fetchData() {

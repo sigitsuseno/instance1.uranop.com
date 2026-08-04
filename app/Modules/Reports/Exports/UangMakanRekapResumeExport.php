@@ -132,6 +132,9 @@ class UangMakanRekapResumeExport implements FromArray, WithHeadings, WithMapping
                     $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$totalRow}")
                         ->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                 }
+                // TOTAL column (I) — 2 decimal places
+                $sheet->getStyle("I{$dataStartRow}:I{$totalRow}")
+                    ->getNumberFormat()->setFormatCode('#,##0.00');
 
                 // Center alignment for No
                 $sheet->getStyle("A{$dataStartRow}:A{$totalRow}")

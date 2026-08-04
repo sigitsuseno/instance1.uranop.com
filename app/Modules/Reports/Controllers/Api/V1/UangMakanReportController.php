@@ -206,7 +206,7 @@ class UangMakanReportController extends Controller
                 'group_name'     => $item['group_name'] ?? '-',
                 'counts'         => $counts,
                 'nominals'       => $nominals,
-                'total'          => round($total, 2),
+                'total'          => $total,
             ];
         })->values();
 
@@ -284,9 +284,10 @@ class UangMakanReportController extends Controller
         usort($result, fn($a, $b) => strcmp($a['bagian'], $b['bagian']));
 
         foreach ($result as &$r) {
-            foreach (['uang_makan','lembur_sabtu','lembur_minggu','insentif','pblt','revisi','total'] as $k) {
+            foreach (['uang_makan','lembur_sabtu','lembur_minggu','insentif','pblt','revisi'] as $k) {
                 $r[$k] = round($r[$k], 2);
             }
+            // total tidak dibulatkan — nilai asli (ditampilkan 2 desimal di frontend)
         }
 
         return response()->json([
@@ -1189,7 +1190,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $ins   = ($n['insentif'] ?? 0) ? number_format($n['insentif'], 0, ',', '.') : '-';
             $pblt  = ($n['pblt'] ?? 0) ? number_format($n['pblt'], 0, ',', '.') : '-';
             $rev   = ($n['revisi'] ?? 0) ? number_format($n['revisi'], 0, ',', '.') : '-';
-            $tot   = $t ? number_format($t, 0, ',', '.') : '-';
+            $tot   = $t ? number_format($t, 2, ',', '.') : '-';
 
             $rows .= "<tr>
                 <td>{$i}</td>
@@ -1211,7 +1212,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             </tr>";
         }
 
-        $gtFmt = $grandTotal ? number_format($grandTotal, 0, ',', '.') : '-';
+        $gtFmt = $grandTotal ? number_format($grandTotal, 2, ',', '.') : '-';
 
         $totalRow = "<tr style='background:#f3f4f6;font-weight:bold;border-top:2px solid #6366f1'>
             <td colspan='4' class='text-right'>TOTAL</td>
@@ -1298,7 +1299,7 @@ tr:nth-child(even){background:#f9fafb}
             $insF   = $ins ? number_format($ins, 0, ',', '.') : '-';
             $pbltF  = $pblt ? number_format($pblt, 0, ',', '.') : '-';
             $revF   = $rev ? number_format($rev, 0, ',', '.') : '-';
-            $totF   = $tot ? number_format($tot, 0, ',', '.') : '-';
+            $totF   = $tot ? number_format($tot, 2, ',', '.') : '-';
 
             $rows .= "<tr>
                 <td>{$i}</td>
@@ -1313,7 +1314,7 @@ tr:nth-child(even){background:#f9fafb}
             </tr>";
         }
 
-        $gtFmt = $grandTotal ? number_format($grandTotal, 0, ',', '.') : '-';
+        $gtFmt = $grandTotal ? number_format($grandTotal, 2, ',', '.') : '-';
 
         $totalRow = "<tr style='background:#f3f4f6;font-weight:bold;border-top:2px solid #6366f1'>
             <td colspan='2' class='text-right' style='padding-right:12px'>TOTAL</td>

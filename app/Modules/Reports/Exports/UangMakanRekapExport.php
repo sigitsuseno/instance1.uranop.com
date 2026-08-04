@@ -161,6 +161,9 @@ class UangMakanRekapExport implements FromArray, WithHeadings, WithMapping, With
                     $sheet->getStyle("{$col}{$dataStartRow}:{$col}{$lastRow}")
                         ->getNumberFormat()->setFormatCode('#,##0');
                 }
+                // TOTAL column (P) — 2 decimal places
+                $sheet->getStyle("P{$dataStartRow}:P{$lastRow}")
+                    ->getNumberFormat()->setFormatCode('#,##0.00');
 
                 // Center alignment
                 $centerCols = ['A', 'C', 'E', 'F', 'G', 'H', 'I'];
@@ -196,6 +199,9 @@ class UangMakanRekapExport implements FromArray, WithHeadings, WithMapping, With
                     $sheet->getStyle("{$col}{$totalRow}")->getFont()->setBold(true);
                     $sheet->getStyle("{$col}{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                 }
+                // TOTAL column (P) total row — 2 decimal places
+                $sheet->getStyle("P{$totalRow}")
+                    ->getNumberFormat()->setFormatCode('#,##0.00');
 
                 // Total row borders
                 $sheet->getStyle("A{$totalRow}:{$lastCol}{$totalRow}")->getBorders()
