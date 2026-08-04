@@ -118,6 +118,7 @@ Route::prefix('v1/supervisor')
             Route::post('breakdown/calculate', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'calculate']);
             Route::post('breakdown/import', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'import']);
             Route::get('breakdown/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'export']);
+            Route::get('breakdown/export-kirim-audit', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'exportKirimAudit']);
             Route::get('breakdown/print', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'printPdf']);
 
             // THR

@@ -71,6 +71,62 @@ class PayrollReportController extends Controller
      */
     public function kirimAudit(Request $request)
     {
+        [$data, $period, $segment] = $this->buildKirimAuditData($request);
+
+        return response()->json([
+            'data'   => $data,
+            'period' => [
+                'id'                  => $period->id,
+                'name'                => $period->name,
+                'is_split'            => $period->is_split,
+                'segment'             => $segment,
+                'tanggal_penggajian'  => $period->tanggal_penggajian?->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/laporan/payroll/kirim-audit/export
+     * Export daftar transfer (Kirim Bank) — format persis seperti export Kirim ALL.
+     */
+    public function exportKirimBank(Request $request)
+    {
+        [$data, $period, $segment] = $this->buildKirimAuditData($request);
+
+        $secAData = [];
+        $secBData = [];
+        foreach ($data as $item) {
+            if (($item['section'] ?? null) === 'A') {
+                $secAData[] = $item;
+            } elseif (($item['section'] ?? null) === 'B') {
+                $secBData[] = $item;
+            }
+        }
+
+        $periodName = $period->name;
+        if ($period->is_split && $segment) {
+            $periodName .= " (Segmen {$segment})";
+        }
+
+        $filename = 'Kirim_Bank_' . str_replace(' ', '_', $periodName) . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Modules\Payroll\Exports\TransferGajiExport(
+                $secAData,
+                $secBData,
+                $period->tanggal_penggajian?->format('Y-m-d')
+            ),
+            $filename
+        );
+    }
+
+    /**
+     * Bangun data untuk laporan Kirim Audit / Kirim Bank.
+     * NOMINAL = (pay_records.gaji_bersih - supervisor_breakdowns.gaji_bersih)
+     *         + uangMakan + insentif
+     */
+    private function buildKirimAuditData(Request $request): array
+    {
         $validated = $request->validate([
             'period_id' => 'required|exists:pay_periods,id',
             'segment'   => 'nullable|in:A,B',
@@ -222,16 +278,7 @@ class PayrollReportController extends Controller
             ]);
         }
 
-        return response()->json([
-            'data'   => $data,
-            'period' => [
-                'id'                  => $period->id,
-                'name'                => $period->name,
-                'is_split'            => $period->is_split,
-                'segment'             => $segment,
-                'tanggal_penggajian'  => $period->tanggal_penggajian?->format('Y-m-d'),
-            ],
-        ]);
+        return [$data, $period, $segment];
     }
 
     private function buildPayrollData(Request $request)

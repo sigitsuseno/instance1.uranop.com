@@ -73,23 +73,27 @@ class GajiKaryawanExport implements FromArray, WithHeadings, WithStyles, WithEve
     {
         $rows = [];
 
-        // ── Section A ──
-        $countA = count($this->secAData);
-        $rows[] = $this->sectionRow("A. KARYAWAN ALL IN ({$countA} Karyawan)");
-        $no = 1;
-        foreach ($this->secAData as $r) {
-            $rows[] = $this->dataRow($r, $no++);
+        // ── Section A (skip entirely if empty) ──
+        if (count($this->secAData) > 0) {
+            $countA = count($this->secAData);
+            $rows[] = $this->sectionRow("A. KARYAWAN ALL IN ({$countA} Karyawan)");
+            $no = 1;
+            foreach ($this->secAData as $r) {
+                $rows[] = $this->dataRow($r, $no++);
+            }
+            $rows[] = $this->totalRow('TOTAL A. KARYAWAN ALL IN', $this->secAData);
         }
-        $rows[] = $this->totalRow('TOTAL A. KARYAWAN ALL IN', $this->secAData);
 
-        // ── Section B ──
-        $countB = count($this->secBData);
-        $rows[] = $this->sectionRow("B. KARYAWAN BULANAN PRINT ({$countB} Karyawan)");
-        $no = 1;
-        foreach ($this->secBData as $r) {
-            $rows[] = $this->dataRow($r, $no++);
+        // ── Section B (skip entirely if empty) ──
+        if (count($this->secBData) > 0) {
+            $countB = count($this->secBData);
+            $rows[] = $this->sectionRow("B. KARYAWAN BULANAN PRINT ({$countB} Karyawan)");
+            $no = 1;
+            foreach ($this->secBData as $r) {
+                $rows[] = $this->dataRow($r, $no++);
+            }
+            $rows[] = $this->totalRow('TOTAL B. KARYAWAN BULANAN PRINT', $this->secBData);
         }
-        $rows[] = $this->totalRow('TOTAL B. KARYAWAN BULANAN PRINT', $this->secBData);
 
         // ── Blank ──
         $rows[] = array_fill(0, self::COL_COUNT, null);

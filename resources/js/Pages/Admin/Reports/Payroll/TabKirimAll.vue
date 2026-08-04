@@ -292,7 +292,7 @@ const totalPrint = computed(() => {
 
 function formatNumber(value) {
   if (!value && value !== 0) return '-'
-  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
 }
 
 function formatDate(dateStr) {

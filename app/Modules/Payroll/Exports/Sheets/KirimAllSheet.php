@@ -15,16 +15,18 @@ class KirimAllSheet implements WithTitle, WithEvents
     protected float $total;
     protected string $sectionLabel;
     protected string $tanggalPenggajian;
+    protected string $titlePrefix;
 
     private const LAST_COL = 'G';
     private const HEADERS = ['PENERIMA', 'NOREK', 'SINGKATAN NAMA BANK', 'CABANG', 'NOMINAL', 'TANGGAL TRANSAKSI', 'KETERANGAN'];
 
-    public function __construct(array $data, float $total, string $sectionLabel, ?string $tanggalPenggajian = null)
+    public function __construct(array $data, float $total, string $sectionLabel, ?string $tanggalPenggajian = null, string $titlePrefix = 'KIRIM ALL')
     {
         $this->data = $data;
         $this->total = $total;
         $this->sectionLabel = $sectionLabel;
         $this->tanggalPenggajian = $tanggalPenggajian ?? '';
+        $this->titlePrefix = $titlePrefix;
     }
 
     public function title(): string
@@ -47,7 +49,7 @@ class KirimAllSheet implements WithTitle, WithEvents
                 $row = 1;
 
                 // ── Row 1: Title ──
-                $title = 'KIRIM ALL - ' . strtoupper($this->sectionLabel);
+                $title = $this->titlePrefix . ' - ' . strtoupper($this->sectionLabel);
                 $sheet->setCellValue("A{$row}", $title);
                 $sheet->mergeCells("A{$row}:{$lastCol}{$row}");
                 $sheet->getStyle("A{$row}")->applyFromArray([
@@ -94,7 +96,7 @@ class KirimAllSheet implements WithTitle, WithEvents
                     // D: Cabang
                     $sheet->setCellValue("D{$r}", $item['bank_cabang'] ?? '');
                     // E: Nominal
-                    $sheet->setCellValue("E{$r}", (float) ($item['gaji_bersih'] ?? 0));
+                    $sheet->setCellValue("E{$r}", round((float) ($item['gaji_bersih'] ?? 0)));
                     // F: Tanggal Transaksi
                     $sheet->setCellValue("F{$r}", $this->tanggalPenggajian);
                     // G: Keterangan
@@ -142,7 +144,7 @@ class KirimAllSheet implements WithTitle, WithEvents
                 $totalRow = $dataEndRow + 1;
                 $sheet->mergeCells("A{$totalRow}:D{$totalRow}");
                 $sheet->setCellValue("A{$totalRow}", 'TOTAL');
-                $sheet->setCellValue("E{$totalRow}", $this->total);
+                $sheet->setCellValue("E{$totalRow}", round($this->total));
 
                 foreach (['A', 'B', 'C', 'D'] as $col) {
                     $sheet->getStyle("{$col}{$totalRow}")->applyFromArray([

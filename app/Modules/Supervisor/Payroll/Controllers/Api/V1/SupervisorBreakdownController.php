@@ -13,6 +13,7 @@ use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceA
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Supervisor\Models\SupervisorEmployeeGroup;
+use App\Modules\Payroll\Exports\TransferGajiExport;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -107,6 +108,71 @@ class SupervisorBreakdownController extends Controller
                 'tanggal_penggajian'  => $period->tanggal_penggajian?->format('Y-m-d'),
             ],
         ]);
+    }
+
+    /**
+     * GET /api/v1/supervisor/payroll/breakdown/export-kirim-audit
+     * Export daftar transfer (Kirim Audit) — format persis seperti export Kirim ALL.
+     */
+    public function exportKirimAudit(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = SupervisorBreakdown::with(['employee'])
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'supervisor_breakdowns.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('supervisor_breakdowns.*');
+
+        if ($period->is_split) {
+            if (!$segment) {
+                $segment = 'A';
+            }
+            $query->where('segment', $segment);
+        }
+
+        $records = $query->get();
+
+        $secAData = [];
+        $secBData = [];
+
+        foreach ($records as $r) {
+            $emp = $r->employee;
+            $item = [
+                'name'                => $r->employee_name ?? $emp?->name ?? '-',
+                'bank_name'           => $r->bank_name ?? $emp?->bank_name ?? '-',
+                'bank_account_number' => $r->bank_account_number ?? $emp?->bank_account_number ?? '-',
+                'bank_account_name'   => $r->bank_account_name ?? $emp?->bank_account_name ?? '-',
+                'bank_cabang'         => $emp?->bank_cabang ?? '-',
+                'gaji_bersih'         => (float) $r->gaji_bersih,
+                'notes'               => $r->notes ?? '',
+            ];
+
+            if ($r->section === 'A') {
+                $secAData[] = $item;
+            } elseif ($r->section === 'B') {
+                $secBData[] = $item;
+            }
+        }
+
+        $periodName = $period->name;
+        if ($period->is_split && $segment) {
+            $periodName .= " (Segmen {$segment})";
+        }
+
+        $filename = 'Kirim_Audit_' . str_replace(' ', '_', $periodName) . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new TransferGajiExport($secAData, $secBData, $period->tanggal_penggajian?->format('Y-m-d')),
+            $filename
+        );
     }
 
     // ═══════════════════════════════════════════════════════════

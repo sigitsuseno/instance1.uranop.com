@@ -159,7 +159,7 @@ const isSplitPeriod = computed(() => {
 
 function formatNumber(num) {
   if (!num) return '-'
-  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(num)
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num)
 }
 
 function calculateTotal(data, key) {

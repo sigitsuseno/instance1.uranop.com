@@ -80,9 +80,9 @@
                 <td class="px-4 py-2 text-(--text-main) font-medium">{{ item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name }}</td>
                 <td class="px-4 py-2 text-(--text-main) font-mono">{{ item.bank_account_number }}</td>
                 <td class="px-4 py-2 text-(--text-main)">{{ item.bank_name }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-(--text-muted)">{{ item.bank_cabang }}</td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600">{{ formatNumber(item.gaji_bersih) }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-(--text-muted)">{{ formatDate(tanggalPenggajian) }}</td>
                 <td class="px-4 py-2 text-(--text-muted)"></td>
               </tr>
             </tbody>
@@ -131,9 +131,9 @@
                 <td class="px-4 py-2 text-(--text-main) font-medium">{{ item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name }}</td>
                 <td class="px-4 py-2 text-(--text-main) font-mono">{{ item.bank_account_number }}</td>
                 <td class="px-4 py-2 text-(--text-main)">{{ item.bank_name }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-(--text-muted)">{{ item.bank_cabang }}</td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600">{{ formatNumber(item.gaji_bersih) }}</td>
-                <td class="px-4 py-2 text-(--text-muted)"></td>
+                <td class="px-4 py-2 text-(--text-muted)">{{ formatDate(tanggalPenggajian) }}</td>
                 <td class="px-4 py-2 text-(--text-muted)"></td>
               </tr>
             </tbody>
@@ -187,7 +187,6 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import * as XLSX from 'xlsx'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import { useApi } from '../../../../composables/useApi'
@@ -200,6 +199,7 @@ const periods = ref([])
 const selectedPeriodId = ref('')
 const records = ref([])
 const activeSegment = ref(null)
+const tanggalPenggajian = ref('')
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
@@ -223,7 +223,15 @@ const totalB = computed(() => {
 
 function formatNumber(value) {
   if (!value && value !== 0) return '-'
-  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+  return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
+}
+
+// Tanggal transaksi (format backend: Y-m-d) → dd/mm/yyyy
+function formatDate(value) {
+  if (!value) return ''
+  const parts = String(value).split('-')
+  if (parts.length !== 3) return value
+  return `${parts[2]}/${parts[1]}/${parts[0]}`
 }
 
 async function fetchPeriods() {
@@ -247,6 +255,7 @@ async function fetchRecords() {
     }
     const res = await get(url)
     records.value = res.data || []
+    tanggalPenggajian.value = res.period?.tanggal_penggajian || ''
   } catch (error) {
     console.error('Error fetching records', error)
     records.value = []
@@ -259,57 +268,47 @@ async function onPeriodChange() {
   await fetchRecords()
 }
 
-function exportExcel() {
+async function exportExcel() {
   if (sectionAData.value.length === 0 && sectionBData.value.length === 0) {
     notification.error('Tidak ada data untuk di-export')
     return
   }
 
-  const dataToExport = [
-    ...sectionAData.value.map(item => ({
-      'SECTION': 'A',
-      'PENERIMA': item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name,
-      'NOREK': item.bank_account_number,
-      'SINGKATAN NAMA BANK': item.bank_name,
-      'CABANG': '',
-      'NOMINAL': item.gaji_bersih,
-      'TANGGAL TRANSAKSI': '',
-      'KETERANGAN': ''
-    })),
-    ...sectionBData.value.map(item => ({
-      'SECTION': 'B',
-      'PENERIMA': item.bank_account_name && item.bank_account_name !== '-' ? item.bank_account_name : item.name,
-      'NOREK': item.bank_account_number,
-      'SINGKATAN NAMA BANK': item.bank_name,
-      'CABANG': '',
-      'NOMINAL': item.gaji_bersih,
-      'TANGGAL TRANSAKSI': '',
-      'KETERANGAN': ''
-    }))
-  ]
-
-  const totalRow = {
-    'SECTION': '',
-    'PENERIMA': '',
-    'NOREK': '',
-    'SINGKATAN NAMA BANK': '',
-    'CABANG': '',
-    'NOMINAL': totalA.value + totalB.value,
-    'TANGGAL TRANSAKSI': '',
-    'KETERANGAN': ''
-  }
-
-  dataToExport.push(totalRow)
-
-  const worksheet = XLSX.utils.json_to_sheet(dataToExport)
-  const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Laporan_Bank')
+  const params = new URLSearchParams({ period_id: selectedPeriodId.value })
+  if (activeSegment.value) params.append('segment', activeSegment.value)
 
   const periodName = selectedPeriod.value?.name || 'Periode'
   const segName = activeSegment.value ? `_Segmen_${activeSegment.value}` : ''
   const fileName = `Kirim_Audit_${periodName}${segName}.xlsx`
 
-  XLSX.writeFile(workbook, fileName)
+  notification.info('Sedang menyiapkan file Excel...')
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/v1/supervisor/payroll/breakdown/export-kirim-audit?${params.toString()}`, {
+      credentials: 'include',
+      headers: {
+        'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      },
+    })
+    if (!response.ok) {
+      notification.error('Gagal mengunduh file Excel')
+      return
+    }
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    notification.error('Gagal mengunduh file Excel')
+    console.error(e)
+  }
 }
 
 onMounted(() => {
