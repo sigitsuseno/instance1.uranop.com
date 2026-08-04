@@ -135,7 +135,7 @@
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik_tku }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.gender }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.status_label }}</td>
-                    <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNumDec(row.total_gaji) }}</td>
+                    <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.total_gaji) }}</td>
                     <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--text-main)">{{ fmtNum(row.um) }}</td>
                     <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_tk) }}</td>
                     <td class="px-3 py-2 text-right font-mono border-r border-(--border-soft) text-(--danger)/80">{{ fmtNum(row.bpjs_ks) }}</td>
@@ -148,7 +148,7 @@
                     <td class="px-2.5 py-2.5 text-right border-r border-(--border-soft)" colspan="7">
                       <span class="text-(--primary) uppercase">TOTAL</span>
                     </td>
-                    <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNumDec(pphTotals.total_gaji) }}</td>
+                    <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(pphTotals.total_gaji, true) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft)">{{ fmtNum(pphTotals.um, true) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(pphTotals.bpjs_tk, true) }}</td>
                     <td class="px-3 py-2.5 text-right font-mono border-r border-(--border-soft) text-(--danger)">{{ fmtNum(pphTotals.bpjs_ks, true) }}</td>
@@ -197,7 +197,7 @@
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik }}</td>
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik_tku }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.status_label }}</td>
-                    <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNumDec(row.total_kompensasi) }}</td>
+                    <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNum(row.total_kompensasi) }}</td>
                   </tr>
                 </tbody>
 
