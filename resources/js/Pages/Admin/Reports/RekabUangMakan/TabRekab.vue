@@ -10,7 +10,7 @@
     </div>
 
     <div v-else-if="data.length === 0" class="p-12 text-center text-(--text-muted)">
-      Tidak ada data rekab uang makan untuk periode yang dipilih.
+      Tidak ada data rekap uang makan untuk periode yang dipilih.
     </div>
 
     <div v-else class="overflow-auto max-h-[65vh]">
@@ -149,7 +149,7 @@ async function fetchData() {
     monthLabel.value = res.month_label || ''
     emit('hasData', data.value.length > 0)
   } catch (err) {
-    notification.addNotification('Gagal mengambil data rekab uang makan', 'error')
+    notification.addNotification('Gagal mengambil data rekap uang makan', 'error')
   } finally {
     loading.value = false
     emit('loading', false)
@@ -161,14 +161,14 @@ function exportExcel() {
   const params = new URLSearchParams({ period_id: props.periodId })
   props.groups.forEach(g => params.append('groups[]', g))
   const url = `/api/v1/reports/uang-makan/rekab/export?${params.toString()}`
-  const safeName = (monthLabel.value || 'Rekab_Uang_Makan').replace(/\s+/g, '_').replace(/[()]/g, '')
+  const safeName = (monthLabel.value || 'Rekap_Uang_Makan').replace(/\s+/g, '_').replace(/[()]/g, '')
   fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
     .then(r => r.blob())
     .then(blob => {
       const downloadUrl = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.setAttribute('download', `Rekab_Uang_Makan_${safeName}.xlsx`)
+      link.setAttribute('download', `Rekap_Uang_Makan_${safeName}.xlsx`)
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)

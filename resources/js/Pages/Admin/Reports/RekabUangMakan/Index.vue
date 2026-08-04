@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="mb-6">
-      <h1 class="text-xl font-semibold text-(--text-main)">Rekab Uang Makan</h1>
+      <h1 class="text-xl font-semibold text-(--text-main)">Rekap Uang Makan</h1>
       <p class="text-sm text-(--text-muted) mt-1">Rekapitulasi uang makan & lembur — per karyawan & resume per bagian</p>
     </div>
 
@@ -17,7 +17,7 @@
           ]"
           @click="activeTab = 'rekab'"
         >
-          Rekab
+          Rekap
         </button>
         <button
           :class="[

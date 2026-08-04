@@ -210,7 +210,7 @@ const routes = [
       { path: 'reports/payroll', name: 'reports.payroll', component: LaporanPayrollIndex, meta: { title: 'Laporan Payroll' } },
       { path: 'reports/bpjs', name: 'reports.bpjs', component: LaporanBpjsIndex, meta: { title: 'Laporan BPJS' } },
       { path: 'reports/pph', name: 'reports.pph', component: LaporanPphIndex, meta: { title: 'Rekap PPh 21' } },
-      { path: 'reports/rekab-uang-makan', name: 'reports.rekab-uang-makan', component: RekabUangMakanIndex, meta: { title: 'Rekab Uang Makan' } },
+      { path: 'reports/rekab-uang-makan', name: 'reports.rekab-uang-makan', component: RekabUangMakanIndex, meta: { title: 'Rekap Uang Makan' } },
       { path: 'reports/rekap-gaji', name: 'reports.rekap-gaji', component: RekapGajiIndex, meta: { title: 'Rekap Gaji' } },
       { path: 'reports/rekap-kerja', name: 'reports.rekap-kerja', component: RekapKerjaIndex, meta: { title: 'Rekap Kerja' } },
       { path: 'reports/rekap-pph-kompensasi', name: 'reports.rekap-pph-kompensasi', component: RekapPphKompensasiIndex, meta: { title: 'Rekap PPH & Kompensasi' } },
