@@ -810,6 +810,49 @@ class AttendanceApiController extends Controller
     }
 
     /**
+     * GET /api/v1/attendance/consecutive/export
+     * Export consecutive days ke Excel. Filter: leave_period_id ATAU pay_period_id (+ employee_id, type).
+     */
+    public function consecutiveExport(Request $request)
+    {
+        $query = \App\Modules\Attendance\Models\ConsecutiveDay::with('employee:id,name,employee_code,nip,department_id')
+            ->orderBy('start_date', 'desc')
+            ->orderBy('employee_id');
+
+        // Filter periode: leave_period_id ATAU pay_period_id (overlap tanggal)
+        $leavePeriodId = $request->input('leave_period_id');
+        $payPeriodId   = $request->input('pay_period_id');
+
+        $periodName = '';
+        if ($leavePeriodId) {
+            $period = \App\Modules\Leave\Models\LeavePeriod::find($leavePeriodId);
+            if ($period) {
+                $query->forPeriod($period->start_date->toDateString(), $period->end_date->toDateString());
+                $periodName = $period->name;
+            }
+        } elseif ($payPeriodId) {
+            $period = \App\Modules\Payroll\Models\PayPeriod::find($payPeriodId);
+            if ($period) {
+                $query->forPeriod($period->start_date->toDateString(), $period->end_date->toDateString());
+                $periodName = $period->name;
+            }
+        }
+
+        if ($request->input('employee_id')) {
+            $query->where('employee_id', $request->input('employee_id'));
+        }
+
+        if ($request->input('type')) {
+            $query->byType($request->input('type'));
+        }
+
+        $data = $query->get()->toArray();
+
+        $filename = 'Consecutive_Day' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.xlsx';
+        return Excel::download(new \App\Modules\Attendance\Exports\ConsecutiveDayExport($data, $periodName), $filename);
+    }
+
+    /**
      * POST /api/v1/attendance/consecutive
      * Buat record consecutive day baru (HR input manual).
      */

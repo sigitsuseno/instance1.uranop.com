@@ -72,6 +72,8 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
     Route::prefix('attendance/consecutive')->group(function () {
         Route::get('/', [AttendanceApiController::class, 'consecutiveList'])
             ->name('attendance.consecutive.list');
+        Route::get('/export', [AttendanceApiController::class, 'consecutiveExport'])
+            ->name('attendance.consecutive.export');
         Route::post('/', [AttendanceApiController::class, 'consecutiveStore'])
             ->name('attendance.consecutive.store');
         Route::put('/{id}', [AttendanceApiController::class, 'consecutiveUpdate'])

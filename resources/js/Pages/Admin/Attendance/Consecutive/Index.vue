@@ -8,20 +8,28 @@
           Input manual hari kerja / absen berturut-turut dari permintaan karyawan
         </p>
       </div>
-      <BaseButton 
-        variant="primary" 
-        @click="auth.isManajemen ? null : openAdd()"
-        :disabled="auth.isManajemen"
-        :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
-      >
-        <template #icon-left>
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </template>
-        Tambah
-      </BaseButton>
+      <div class="flex items-center gap-2">
+        <BaseButton variant="secondary" @click="openExportModal" :disabled="auth.isManajemen">
+          <template #icon-left>
+            <i class="bx bx-spreadsheet text-base"></i>
+          </template>
+          Export Excel
+        </BaseButton>
+        <BaseButton 
+          variant="primary" 
+          @click="auth.isManajemen ? null : openAdd()"
+          :disabled="auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+        >
+          <template #icon-left>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </template>
+          Tambah
+        </BaseButton>
+      </div>
     </div>
 
     <!-- Filter Bar -->
@@ -191,6 +199,87 @@
         <BaseButton variant="primary" class="!bg-red-600" :loading="isSaving" @click="confirmDelete">Hapus</BaseButton>
       </template>
     </BaseModal>
+
+    <!-- Export Modal -->
+    <BaseModal :show="showExportModal" title="Export Consecutive Day" size="md" @close="showExportModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih sumber data yang mau diexport:
+        </p>
+
+        <!-- Source options -->
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            @click="exportSource = 'leave'"
+            class="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border text-left transition-all"
+            :class="exportSource === 'leave'
+              ? 'border-(--primary) bg-(--primary)/10 text-(--primary)'
+              : 'border-(--border-soft) bg-(--bg-card) text-(--text-main) hover:border-(--text-soft)'"
+          >
+            <span class="text-sm font-semibold">Periode Cuti</span>
+            <span class="text-xs text-(--text-muted)">Berdasarkan leave_periods</span>
+          </button>
+          <button
+            type="button"
+            @click="exportSource = 'pay'"
+            class="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border text-left transition-all"
+            :class="exportSource === 'pay'
+              ? 'border-(--primary) bg-(--primary)/10 text-(--primary)'
+              : 'border-(--border-soft) bg-(--bg-card) text-(--text-main) hover:border-(--text-soft)'"
+          >
+            <span class="text-sm font-semibold">Pay Period</span>
+            <span class="text-xs text-(--text-muted)">Berdasarkan pay_periods</span>
+          </button>
+        </div>
+
+        <!-- Period dropdown -->
+        <div v-if="exportSource === 'leave'">
+          <label class="block text-sm font-medium mb-1">Periode Cuti</label>
+          <select
+            v-model="exportLeavePeriodId"
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-sm"
+          >
+            <option v-if="loadingLeavePeriods" value="" disabled>Memuat periode cuti...</option>
+            <option v-else-if="leavePeriods.length === 0" value="" disabled>Tidak ada periode cuti</option>
+            <option v-for="p in leavePeriods" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.status }})
+            </option>
+          </select>
+        </div>
+        <div v-else>
+          <label class="block text-sm font-medium mb-1">Pay Period</label>
+          <select
+            v-model="exportPayPeriodId"
+            class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-sm"
+          >
+            <option v-if="isLoading" value="" disabled>Memuat pay period...</option>
+            <option v-else-if="payPeriods.length === 0" value="" disabled>Tidak ada pay period</option>
+            <option v-for="p in payPeriods" :key="p.id" :value="p.id">{{ p.label }}</option>
+          </select>
+        </div>
+
+        <div v-if="filterType || filterEmployeeId" class="flex items-center gap-2 text-xs text-(--text-muted) bg-(--bg-elevated) rounded-md px-3 py-2">
+          <i class="bx bx-filter-alt text-sm"></i>
+          <span>
+            Export mengikuti filter:
+            <strong v-if="filterType" class="text-(--text-main)">{{ filterType === 'absent' ? 'Absen' : 'Hadir' }}</strong>
+            <template v-if="filterType && filterEmployeeId"> + </template>
+            <strong v-if="filterEmployeeId" class="text-(--text-main)">Karyawan terpilih</strong>
+          </span>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex gap-3 w-full">
+          <BaseButton variant="secondary" @click="showExportModal = false">Batal</BaseButton>
+          <span class="flex-1"></span>
+          <BaseButton variant="primary" :loading="exporting" @click="doExport">
+            <template #icon-left><i class="bx bx-spreadsheet text-base"></i></template>
+            Export Excel
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -201,9 +290,11 @@ import BaseModal from '@/Components/BaseModal.vue'
 import SearchableSelect from '@/Components/SearchableSelect.vue'
 import { useApi } from '@/composables/useApi'
 import { useAuth } from '@/composables/useAuth'
+import { useNotification } from '@/composables/useNotification'
 
 const { get, post, put, destroy } = useApi()
 const auth = useAuth()
+const notify = useNotification()
 
 // ── State ──
 const isLoading = ref(true)
@@ -215,6 +306,15 @@ const streaks = ref([])
 const pagination = ref({ currentPage: 1, lastPage: 1 })
 const payPeriods = ref([])
 const employeeOptions = ref([])
+
+// ── Export modal state ──
+const showExportModal = ref(false)
+const exportSource = ref('leave') // 'leave' | 'pay'
+const exportLeavePeriodId = ref('')
+const exportPayPeriodId = ref('')
+const leavePeriods = ref([])
+const loadingLeavePeriods = ref(false)
+const exporting = ref(false)
 
 // ── Watch filterEmployeeId → fetchList
 watch(filterEmployeeId, () => fetchList())
@@ -246,6 +346,72 @@ async function fetchPayPeriods() {
     payPeriods.value = (res.data || []).map(p => ({ id: p.id, start: p.start_date, end: p.end_date, label: `${p.name} (${p.start_date} — ${p.end_date})` }))
     if (payPeriods.value.length > 0 && selectedPeriod.value === 'current') selectedPeriod.value = payPeriods.value[0].id
   } catch (e) { console.error(e) }
+}
+
+// ── Fetch Leave Periods (untuk export) ──
+async function fetchLeavePeriods() {
+  loadingLeavePeriods.value = true
+  try {
+    const res = await get('/api/v1/leave/periods')
+    leavePeriods.value = res.data || []
+  } catch (e) {
+    console.error('Gagal fetch leave periods:', e)
+  } finally {
+    loadingLeavePeriods.value = false
+  }
+}
+
+// ── Export ──
+function openExportModal() {
+  exportSource.value = 'leave'
+  exportLeavePeriodId.value = leavePeriods.value[0]?.id || ''
+  exportPayPeriodId.value = selectedPeriod.value !== 'current' ? selectedPeriod.value : (payPeriods.value[0]?.id || '')
+  showExportModal.value = true
+}
+
+async function doExport() {
+  if (exporting.value) return
+  const params = new URLSearchParams()
+  if (exportSource.value === 'pay') {
+    if (!exportPayPeriodId.value) {
+      notify.warning('Pilih pay period dulu.')
+      return
+    }
+    params.append('pay_period_id', exportPayPeriodId.value)
+  } else {
+    if (!exportLeavePeriodId.value) {
+      notify.warning('Pilih periode cuti dulu.')
+      return
+    }
+    params.append('leave_period_id', exportLeavePeriodId.value)
+  }
+  if (filterType.value) params.append('type', filterType.value)
+  if (filterEmployeeId.value) params.append('employee_id', filterEmployeeId.value)
+
+  exporting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/v1/attendance/consecutive/export?${params.toString()}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    if (!res.ok) throw new Error('Gagal export')
+    const blob = await res.blob()
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.setAttribute('download', 'Consecutive_Day.xlsx')
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+    notify.success('Excel berhasil diunduh.')
+    showExportModal.value = false
+  } catch (err) {
+    console.error('Error exporting', err)
+    notify.error('Gagal export.')
+  } finally {
+    exporting.value = false
+  }
 }
 
 function getPeriodDates() {
@@ -325,6 +491,6 @@ async function confirmDelete() {
 // ── Init ──
 ; (async () => {
   await fetchPayPeriods()
-  await Promise.all([fetchList(), fetchEmployeeOptions()])
+  await Promise.all([fetchList(), fetchEmployeeOptions(), fetchLeavePeriods()])
 })()
 </script>
