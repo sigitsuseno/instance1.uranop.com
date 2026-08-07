@@ -109,10 +109,10 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <BaseButton variant="secondary" size="sm" @click="exportExcel" title="Export Excel">
+        <BaseButton variant="secondary" size="sm" @click="openExportModal('excel')" title="Export Excel">
           <template #icon-left><i class="bx bx-spreadsheet text-base"></i></template>
         </BaseButton>
-        <BaseButton variant="secondary" size="sm" @click="exportPdf" title="Export PDF">
+        <BaseButton variant="secondary" size="sm" @click="openExportModal('pdf')" title="Export PDF">
           <template #icon-left><i class="bx bxs-file-pdf text-base"></i></template>
         </BaseButton>
 
@@ -470,6 +470,83 @@
         <BaseButton variant="danger" @click="confirmReject" :loading="bulkProcessing">Tolak</BaseButton>
       </template>
     </BaseModal>
+
+    <!-- Export Modal (Excel / PDF) -->
+    <BaseModal :show="showExportModal" :title="`Export Pengajuan Cuti (${exportFormat === 'pdf' ? 'PDF' : 'Excel'})`" size="md" @close="showExportModal = false">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih sumber data yang mau diexport:
+        </p>
+
+        <!-- Source options -->
+        <div class="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            @click="exportSource = 'leave'"
+            class="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border text-left transition-all"
+            :class="exportSource === 'leave'
+              ? 'border-(--primary) bg-(--primary)/10 text-(--primary)'
+              : 'border-(--border-soft) bg-(--bg-card) text-(--text-main) hover:border-(--text-soft)'"
+          >
+            <span class="text-sm font-semibold">Periode Cuti</span>
+            <span class="text-xs text-(--text-muted)">Berdasarkan leave_periods</span>
+          </button>
+          <button
+            type="button"
+            @click="exportSource = 'pay'"
+            class="flex flex-col items-start gap-1.5 px-3.5 py-3 rounded-lg border text-left transition-all"
+            :class="exportSource === 'pay'
+              ? 'border-(--primary) bg-(--primary)/10 text-(--primary)'
+              : 'border-(--border-soft) bg-(--bg-card) text-(--text-main) hover:border-(--text-soft)'"
+          >
+            <span class="text-sm font-semibold">Pay Period</span>
+            <span class="text-xs text-(--text-muted)">Berdasarkan pay_periods</span>
+          </button>
+        </div>
+
+        <!-- Period dropdown -->
+        <div v-if="exportSource === 'leave'">
+          <label class="block text-xs font-medium text-(--text-muted) mb-1.5">Periode Cuti</label>
+          <select
+            v-model="exportLeavePeriodId"
+            class="w-full px-3 py-2 pr-10 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all duration-300 h-10 appearance-none text-sm"
+          >
+            <option v-for="p in periods" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.status }})
+            </option>
+          </select>
+        </div>
+        <div v-else>
+          <label class="block text-xs font-medium text-(--text-muted) mb-1.5">Pay Period</label>
+          <select
+            v-model="exportPayPeriodId"
+            class="w-full px-3 py-2 pr-10 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) focus:outline-none focus:ring-4 focus:ring-(--primary-glow) focus:border-(--primary) transition-all duration-300 h-10 appearance-none text-sm"
+          >
+            <option v-if="loadingPayPeriods" value="" disabled>Memuat pay period...</option>
+            <option v-else-if="payPeriods.length === 0" value="" disabled>Tidak ada pay period</option>
+            <option v-for="p in payPeriods" :key="p.id" :value="p.id">
+              {{ p.name }} ({{ p.date_range }})
+            </option>
+          </select>
+        </div>
+
+        <div v-if="filters.status" class="flex items-center gap-2 text-xs text-(--text-muted) bg-(--bg-elevated) rounded-md px-3 py-2">
+          <i class="bx bx-filter-alt text-sm"></i>
+          <span>Export mengikuti filter status: <strong class="text-(--text-main)">{{ statusLabel(filters.status) }}</strong></span>
+        </div>
+      </div>
+      <template #footer>
+        <div class="flex items-center justify-end w-full gap-2">
+          <BaseButton variant="ghost" @click="showExportModal = false">Batal</BaseButton>
+          <BaseButton variant="primary" @click="doExport" :loading="exporting">
+            <template #icon-left>
+              <i :class="exportFormat === 'pdf' ? 'bx bxs-file-pdf text-base' : 'bx bx-spreadsheet text-base'"></i>
+            </template>
+            Export {{ exportFormat === 'pdf' ? 'PDF' : 'Excel' }}
+          </BaseButton>
+        </div>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -514,6 +591,16 @@ const showRejectModal = ref(false)
 const detailItem = ref(null)
 const rejectReason = ref('')
 const formPeriodId = ref('')
+
+// Export modal state
+const showExportModal = ref(false)
+const exportFormat = ref('excel') // 'excel' | 'pdf'
+const exportSource = ref('leave') // 'leave' | 'pay'
+const exportLeavePeriodId = ref('')
+const exportPayPeriodId = ref('')
+const payPeriods = ref([])
+const loadingPayPeriods = ref(false)
+const exporting = ref(false)
 
 const approveMode = ref(false)
 const rejectMode = ref(false)
@@ -932,29 +1019,71 @@ async function printRequest(item) {
 }
 
 // --- Export ---
-function exportExcel() {
-  const token = localStorage.getItem('token')
-  const params = new URLSearchParams()
-  if (selectedPeriodId.value) params.append('leave_period_id', selectedPeriodId.value)
-  if (filters.status) params.append('status', filters.status)
-  const url = `/api/v1/leave/export/requests?${params.toString()}`
-  fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
-    .then(r => r.blob())
-    .then(blob => {
-      const downloadUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.setAttribute('download', `Pengajuan_Cuti.xlsx`)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(downloadUrl)
-    })
-    .catch(() => notify.error('Gagal export Excel.'))
+async function fetchPayPeriods() {
+  loadingPayPeriods.value = true
+  try {
+    const res = await api.get('/api/v1/payroll/periods')
+    payPeriods.value = res.data || []
+  } catch (err) {
+    console.error('Error fetching pay periods', err)
+  } finally {
+    loadingPayPeriods.value = false
+  }
 }
 
-function exportPdf() {
-  notify.info('Export PDF akan diimplementasikan.')
+function openExportModal(format) {
+  exportFormat.value = format
+  exportSource.value = 'leave'
+  exportLeavePeriodId.value = selectedPeriodId.value || periods.value[0]?.id || ''
+  exportPayPeriodId.value = payPeriods.value[0]?.id || ''
+  showExportModal.value = true
+}
+
+async function doExport() {
+  if (exporting.value) return
+  const params = new URLSearchParams()
+  if (exportSource.value === 'pay') {
+    if (!exportPayPeriodId.value) {
+      notify.warning('Pilih pay period dulu.')
+      return
+    }
+    params.append('pay_period_id', exportPayPeriodId.value)
+  } else {
+    if (!exportLeavePeriodId.value) {
+      notify.warning('Pilih periode cuti dulu.')
+      return
+    }
+    params.append('leave_period_id', exportLeavePeriodId.value)
+  }
+  if (filters.status) params.append('status', filters.status)
+
+  const isPdf = exportFormat.value === 'pdf'
+  const url = isPdf
+    ? `/api/v1/leave/export/requests-pdf?${params.toString()}`
+    : `/api/v1/leave/export/requests?${params.toString()}`
+
+  exporting.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } })
+    if (!res.ok) throw new Error('Gagal export')
+    const blob = await res.blob()
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.setAttribute('download', `Pengajuan_Cuti.${isPdf ? 'pdf' : 'xlsx'}`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+    notify.success(isPdf ? 'PDF berhasil diunduh.' : 'Excel berhasil diunduh.')
+    showExportModal.value = false
+  } catch (err) {
+    console.error('Error exporting', err)
+    notify.error('Gagal export.')
+  } finally {
+    exporting.value = false
+  }
 }
 
 // --- Helpers ---
@@ -981,5 +1110,6 @@ onMounted(async () => {
   await fetchLeaveTypes()
   await fetchEmployees()
   fetchRequests()
+  fetchPayPeriods()
 })
 </script>

@@ -52,5 +52,6 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
 
     // Export routes
     Route::get('export/requests', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportRequests']);
+    Route::get('export/requests-pdf', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportRequestsPdf']);
     Route::get('export/balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'exportBalances']);
 });

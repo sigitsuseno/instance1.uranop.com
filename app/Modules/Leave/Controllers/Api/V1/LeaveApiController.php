@@ -14,6 +14,8 @@ use App\Modules\Leave\Services\LeaveRequestService;
 use App\Modules\Leave\Exports\LeaveRequestsExport;
 use App\Modules\Leave\Exports\LeaveBalancesExport;
 use App\Modules\Organization\Models\Company;
+use App\Modules\Payroll\Models\PayPeriod;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -718,18 +720,69 @@ class LeaveApiController extends Controller
     }
 
     /**
-     * Export leave requests to Excel
+     * Export leave requests to Excel (filter: periode cuti ATAU pay period)
      */
     public function exportRequests(Request $request)
     {
-        $periodId = $request->input('leave_period_id');
+        [$data, $periodName] = $this->buildExportData($request);
+
+        $filename = 'Pengajuan_Cuti' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.xlsx';
+        return Excel::download(new LeaveRequestsExport($data, $periodName), $filename);
+    }
+
+    /**
+     * Export leave requests to PDF (filter: periode cuti ATAU pay period)
+     */
+    public function exportRequestsPdf(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        [$data, $periodName] = $this->buildExportData($request);
+
+        $company = Company::first();
+
+        $pdf = Pdf::loadView('leave.export-requests-pdf', [
+            'company'    => $company,
+            'requests'   => $data,
+            'periodName' => $periodName,
+        ]);
+        $pdf->setPaper('A4', 'landscape');
+
+        $filename = 'Pengajuan_Cuti' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.pdf';
+        return $pdf->download($filename);
+    }
+
+    /**
+     * Bangun data leave request + nama periode, filter by leave period ATAU pay period.
+     *
+     * @return array{0: array, 1: string} [data, periodName]
+     */
+    private function buildExportData(Request $request): array
+    {
         $status = $request->input('status', '');
 
         $query = LeaveRequest::with(['employee.department', 'leaveType'])
             ->orderBy('created_at', 'desc');
 
-        if ($periodId) {
-            $period = LeavePeriod::find($periodId);
+        $leavePeriodId = $request->input('leave_period_id');
+        if ($leavePeriodId) {
+            $period = LeavePeriod::find($leavePeriodId);
+            if ($period) {
+                $query->where(function ($q) use ($period) {
+                    $q->whereBetween('start_date', [$period->start_date, $period->end_date])
+                      ->orWhereBetween('end_date', [$period->start_date, $period->end_date])
+                      ->orWhere(function ($sq) use ($period) {
+                          $sq->where('start_date', '<=', $period->start_date)
+                             ->where('end_date', '>=', $period->end_date);
+                      });
+                });
+            }
+        }
+
+        $payPeriodId = $request->input('pay_period_id');
+        if ($payPeriodId) {
+            $period = PayPeriod::find($payPeriodId);
             if ($period) {
                 $query->where(function ($q) use ($period) {
                     $q->whereBetween('start_date', [$period->start_date, $period->end_date])
@@ -760,13 +813,15 @@ class LeaveApiController extends Controller
         }));
 
         $periodName = '';
-        if ($periodId) {
-            $period = LeavePeriod::find($periodId);
+        if ($leavePeriodId) {
+            $period = LeavePeriod::find($leavePeriodId);
+            $periodName = $period ? $period->name : '';
+        } elseif ($payPeriodId) {
+            $period = PayPeriod::find($payPeriodId);
             $periodName = $period ? $period->name : '';
         }
 
-        $filename = 'Pengajuan_Cuti' . ($periodName ? '_' . str_replace(' ', '_', $periodName) : '') . '.xlsx';
-        return Excel::download(new LeaveRequestsExport($data, $periodName), $filename);
+        return [$data, $periodName];
     }
 
     /**
