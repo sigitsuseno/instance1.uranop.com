@@ -46,7 +46,26 @@ class EmployeeContractExport implements FromQuery, WithHeadings, WithMapping, Sh
         }
 
         if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
+            $status = $filters['status'];
+
+            // Sama dengan logika filter di halaman kontrak: status Aktif / Segera Berakhir / Expired
+            // dihitung dari end_date, sedangkan Terminated / Draft dari kolom status.
+            $today       = now()->startOfDay();
+            $activeStart = now()->addDays(15)->startOfDay();
+
+            match ($status) {
+                'active' => $query->where(function ($q) use ($activeStart) {
+                    $q->whereNull('end_date')
+                        ->orWhereDate('end_date', '>=', $activeStart);
+                }),
+                'expiring_soon' => $query->whereNotNull('end_date')
+                    ->whereDate('end_date', '>=', $today)
+                    ->whereDate('end_date', '<', $activeStart),
+                'expired' => $query->whereNotNull('end_date')
+                    ->whereDate('end_date', '<', $today),
+                'terminated' => $query->whereIn('status', ['terminated', 'resign', 'phk', 'mangkir']),
+                default => $query->where('status', $status),
+            };
         }
 
         return $query->orderBy('employee_id')->orderBy('start_date', 'desc');

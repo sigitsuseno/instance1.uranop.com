@@ -30,7 +30,7 @@ const periodStartFilter = ref('')
 const periodEndFilter = ref('')
 const currentPage = ref(1)
 
-// Sorting
+// Sorting: default expired terlama di atas, lalu end_date dengan sisa waktu paling sedikit
 const sortBy = ref('contract_end_date')
 const sortDir = ref('asc')
 
@@ -44,8 +44,11 @@ const contractTypeOptions = [
 
 const contractStatusOptions = [
   { value: 'active', label: 'Aktif' },
+  { value: 'expiring_soon', label: 'Segera Berakhir' },
   { value: 'expired', label: 'Expired' },
   { value: 'terminated', label: 'Terminated' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'no_contract', label: 'Belum Ada Kontrak' },
 ]
 
 // Modal Form
@@ -79,7 +82,7 @@ async function fetchEmployees() {
     if (contractStatusFilter.value) {
       params.set('contract_status', contractStatusFilter.value)
     } else {
-      // By default, exclude contracts that expired > 30 days ago
+      // By default, exclude contracts that have expired (end_date sudah lewat)
       params.set('exclude_expired_contracts', '1')
     }
     

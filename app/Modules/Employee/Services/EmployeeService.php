@@ -26,16 +26,26 @@ class EmployeeService
         if (in_array($sortBy, ['name', 'nik', 'nip', 'employee_code'])) {
             $query->orderBy($sortBy, $sortDir);
         } elseif ($sortBy === 'contract_end_date') {
-            $subquery = \App\Modules\Employee\Models\EmployeeContract::select('end_date')
+            $endSub = \App\Modules\Employee\Models\EmployeeContract::select('end_date')
                 ->whereColumn('employee_id', 'employees.id')
                 ->where('is_latest', true)
                 ->limit(1);
 
-            if ($sortDir === 'asc') {
-                $query->orderByRaw("({$subquery->toSql()}) IS NULL ASC", $subquery->getBindings())
-                      ->orderByRaw("({$subquery->toSql()}) ASC", $subquery->getBindings());
+            $statusSub = \App\Modules\Employee\Models\EmployeeContract::select('status')
+                ->whereColumn('employee_id', 'employees.id')
+                ->where('is_latest', true)
+                ->limit(1);
+
+            if ($sortDir === 'desc') {
+                // Default tampilan halaman kontrak:
+                // 1) Kontrak berstatus active di atas,
+                // 2) lalu diurutkan berdasarkan end_date terlama (paling jauh) di atas.
+                $query->orderByRaw("CASE WHEN ({$statusSub->toSql()}) = 'active' THEN 0 ELSE 1 END", $statusSub->getBindings())
+                      ->orderByRaw("({$endSub->toSql()}) IS NULL ASC", $endSub->getBindings())
+                      ->orderByRaw("({$endSub->toSql()}) DESC", $endSub->getBindings());
             } else {
-                $query->orderByRaw("({$subquery->toSql()}) DESC", $subquery->getBindings());
+                $query->orderByRaw("({$endSub->toSql()}) IS NULL ASC", $endSub->getBindings())
+                      ->orderByRaw("({$endSub->toSql()}) ASC", $endSub->getBindings());
             }
         } else {
             $query->orderBy('nip', 'asc');
@@ -77,15 +87,42 @@ class EmployeeService
         }
 
         if (! empty($filters['contract_status'])) {
-            $query->whereHas('latestContract', function ($q) use ($filters) {
-                $q->where('status', $filters['contract_status']);
-            });
+            $status = $filters['contract_status'];
+
+            if ($status === 'no_contract') {
+                // Karyawan yang belum punya kontrak sama sekali
+                $query->whereDoesntHave('latestContract');
+            } else {
+                // Status Aktif / Segera Berakhir / Expired dihitung dari end_date
+                // (sama dengan logika badge di halaman kontrak), bukan dari kolom status DB
+                // yang sering tidak sinkron dengan tanggal berakhirnya kontrak.
+                $today       = now()->startOfDay();
+                $activeStart = now()->addDays(15)->startOfDay();
+
+                $query->whereHas('latestContract', function ($q) use ($status, $today, $activeStart) {
+                    match ($status) {
+                        'active' => $q->where(function ($sub) use ($activeStart) {
+                            $sub->whereNull('end_date')
+                                ->orWhereDate('end_date', '>=', $activeStart);
+                        }),
+                        'expiring_soon' => $q->whereNotNull('end_date')
+                            ->whereDate('end_date', '>=', $today)
+                            ->whereDate('end_date', '<', $activeStart),
+                        'expired' => $q->whereNotNull('end_date')
+                            ->whereDate('end_date', '<', $today),
+                        'terminated' => $q->whereIn('status', ['terminated', 'resign', 'phk', 'mangkir']),
+                        default => $q->where('status', $status),
+                    };
+                });
+            }
         }
 
         if (! empty($filters['exclude_expired_contracts'])) {
-            // Sembunyikan karyawan yang kontrak terakhirnya sudah expired > 30 hari
+            // Sembunyikan karyawan yang kontrak terakhirnya sudah expired (end_date sudah lewat).
+            // View default halaman kontrak hanya menampilkan kontrak yang masih berlaku
+            // (aktif + segera berakhir). Kontrak yang sudah expired dilihat via filter status "Expired".
             $query->whereDoesntHave('latestContract', function ($q) {
-                $q->where('end_date', '<', now()->subDays(30)->toDateString());
+                $q->where('end_date', '<', now()->toDateString());
             });
             // Sembunyikan juga karyawan yang sudah keluar (punya end_date atau resign_date)
             $query->whereNull('end_date')->whereNull('resign_date');

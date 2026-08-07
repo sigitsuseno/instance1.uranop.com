@@ -21,16 +21,20 @@ class DashboardApiController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $today = now()->toDateString();
-
         // ── Stats ─────────────────────────────────────────────────────
         $totalKaryawan = Employee::where('is_active', 1)->count();
 
-        $hadirHariIni = AttendancePrepare::where('date', $today)
-            ->whereNotNull('check_in')
+        // Cuti Tahunan (CT) yang berakhir pada bulan ini
+        $cutiPeriodeIni = LeaveRequest::whereHas('leaveType', fn ($q) => $q->where('code', 'CT'))
+            ->whereYear('end_date', now()->year)
+            ->whereMonth('end_date', now()->month)
             ->count();
 
-        $menungguCuti = LeaveRequest::where('status', 'pending')->count();
+        // Izin (IZN) periode ini: query sama dengan cuti periode ini
+        $izinPeriodeIni = LeaveRequest::whereHas('leaveType', fn ($q) => $q->where('code', 'IZN'))
+            ->whereYear('end_date', now()->year)
+            ->whereMonth('end_date', now()->month)
+            ->count();
 
         // Total payroll bulan ini: sum gaji_kotor dari pay_records bulan aktif
         $totalPayroll = 0;
@@ -41,10 +45,10 @@ class DashboardApiController extends Controller
         }
 
         $stats = [
-            'totalKaryawan'  => $totalKaryawan,
-            'hadirHariIni'   => $hadirHariIni,
-            'menungguCuti'   => $menungguCuti,
-            'totalPayroll'   => $this->formatRupiah($totalPayroll),
+            'totalKaryawan'   => $totalKaryawan,
+            'cutiPeriodeIni'  => $cutiPeriodeIni,
+            'izinPeriodeIni'  => $izinPeriodeIni,
+            'totalPayroll'    => $this->formatRupiah($totalPayroll),
         ];
 
         // ── Pending Leave Requests ────────────────────────────────────
