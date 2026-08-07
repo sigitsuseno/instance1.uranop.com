@@ -41,8 +41,15 @@ class CompensationApiController extends Controller
         $label = $dateInfo['label'];
 
         // Get contracts that fall into this period (e.g. expiring in this period)
-        $contracts = EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+        $query = EmployeeContract::with(['employee'])
+            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
+        if ($request->boolean('is_latest')) {
+            $query->where('is_latest', true);
+        }
+
+        $contracts = $query
             ->orderBy('end_date', 'asc')
             ->get()
             ->map(function ($contract) use ($year, $month) {
@@ -130,11 +137,12 @@ class CompensationApiController extends Controller
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
         $periode = $request->query('periode', 'auto');
-        
+        $isLatest = $request->boolean('is_latest');
+
         $fileName = "kompensasi_{$year}_{$month}.xlsx";
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $periode), 
+            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $periode, $isLatest),
             $fileName
         );
     }
@@ -166,8 +174,15 @@ class CompensationApiController extends Controller
         // Get the company
         $company = Company::first();
 
-        $contracts = EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+        $query = EmployeeContract::with(['employee'])
+            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
+        if ($request->boolean('is_latest')) {
+            $query->where('is_latest', true);
+        }
+
+        $contracts = $query
             ->orderBy('end_date', 'asc')
             ->get();
 

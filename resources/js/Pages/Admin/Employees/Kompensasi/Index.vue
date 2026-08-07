@@ -33,6 +33,9 @@ const selectedMonth = ref(initMonth)
 const selectedYear = ref(initYear)
 const selectedPeriode = ref('auto')
 
+// Hanya tampilkan kontrak terakhir (is_latest = true) secara default
+const onlyLatest = ref(true)
+
 // Generate available months for filter
 const availableMonths = computed(() => {
     const months = []
@@ -97,6 +100,7 @@ async function fetchData() {
         params.set('month', month)
         params.set('year', year)
         params.set('periode', selectedPeriode.value)
+        if (onlyLatest.value) params.set('is_latest', '1')
 
         const res = await get(`/api/v1/employees/compensation?${params}`)
         if (res.data) {
@@ -226,7 +230,7 @@ async function downloadFile(url, defaultFilename) {
 
 function exportExcel() {
     const [year, month] = selectedMonthYear.value.split('-')
-    const url = `/api/v1/employees/compensation/export?month=${month}&year=${year}&periode=${selectedPeriode.value}`
+    const url = `/api/v1/employees/compensation/export?month=${month}&year=${year}&periode=${selectedPeriode.value}&is_latest=${onlyLatest.value ? 1 : 0}`
     downloadFile(url, `kompensasi-${year}-${month}.xlsx`)
 }
 
@@ -238,6 +242,7 @@ async function bulkPrint() {
         params.set('month', month)
         params.set('year', year)
         params.set('periode', selectedPeriode.value)
+        if (onlyLatest.value) params.set('is_latest', '1')
 
         const res = await get(`/api/v1/employees/compensation/print?${params}`)
         if (res.data) {
@@ -399,6 +404,13 @@ onMounted(() => {
                         <i class="bx bx-chevron-down text-lg"></i>
                     </div>
                 </div>
+
+                <label class="flex items-center gap-2 h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) cursor-pointer select-none text-sm text-(--text-main)"
+                    title="Jika dicentang, hanya menampilkan kontrak terakhir (is_latest) dari tiap karyawan">
+                    <input type="checkbox" v-model="onlyLatest" @change="applyFilter"
+                        class="w-4 h-4 rounded border-(--border-soft) text-(--primary) focus:ring-(--primary-glow) cursor-pointer">
+                    Hanya Kontrak Terakhir
+                </label>
             </div>
         </BaseCard>
 

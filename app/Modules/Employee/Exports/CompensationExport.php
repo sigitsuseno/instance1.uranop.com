@@ -18,12 +18,14 @@ class CompensationExport implements FromCollection, WithHeadings, WithMapping, S
     protected $month;
     protected $year;
     protected $periode;
+    protected $isLatest;
 
-    public function __construct($month, $year, $periode)
+    public function __construct($month, $year, $periode, $isLatest = false)
     {
         $this->month = $month;
         $this->year = $year;
         $this->periode = $periode;
+        $this->isLatest = $isLatest;
     }
 
     public function collection()
@@ -39,8 +41,15 @@ class CompensationExport implements FromCollection, WithHeadings, WithMapping, S
         $startDate = $dateInfo['start'];
         $endDate = $dateInfo['end'];
 
-        return EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+        $query = EmployeeContract::with(['employee'])
+            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
+        if ($this->isLatest) {
+            $query->where('is_latest', true);
+        }
+
+        return $query
             ->orderBy('end_date', 'asc')
             ->get();
     }
