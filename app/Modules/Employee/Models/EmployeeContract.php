@@ -31,6 +31,7 @@ class EmployeeContract extends Model
         'status',
         'expiry_notified_at',
         'compensation_paid_at',
+        'comp_group',
         'created_by',
         'updated_by',
     ];

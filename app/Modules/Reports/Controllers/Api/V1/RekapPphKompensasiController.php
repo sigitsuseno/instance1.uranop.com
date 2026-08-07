@@ -5,6 +5,7 @@ namespace App\Modules\Reports\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeBpjs;
+use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Employee\Models\EmployeeSalaryComponent;
 use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Payroll\Models\PayPeriod;
@@ -96,6 +97,18 @@ class RekapPphKompensasiController extends Controller
         $rows       = $result['kompensasi'] instanceof \Illuminate\Support\Collection
             ? $result['kompensasi']->toArray()
             : (array) $result['kompensasi'];
+
+        // Filter hanya tanggal bayar yang dicentang di UI (opsional)
+        $paidDates = $request->input('paid_dates', '');
+        if ($paidDates !== '') {
+            $dates = array_filter(array_map('trim', explode(',', $paidDates)));
+            if (!empty($dates)) {
+                $rows = array_values(array_filter($rows, function ($r) use ($dates) {
+                    return in_array($r['paid_at'] ?? '', $dates);
+                }));
+            }
+        }
+
         $periodName = $result['period_name'] ?? 'Kompensasi';
         $dateStart  = $result['date_start'] ?? '';
         $dateEnd    = $result['date_end'] ?? '';
@@ -133,7 +146,79 @@ class RekapPphKompensasiController extends Controller
             $selectedGroups = array_filter(array_map('trim', explode(',', $groupCodes)));
         }
 
-        // Karyawan yang punya roster di range tanggal periode
+        // ─── Section B: Kompensasi ───
+        // Berdasarkan kontrak (employee_contracts) yang compensation_paid_at-nya terisi
+        // di range [start_date, end_date + sisa hari sampai akhir bulan].
+        // Contoh: periode berakhir 24 Agustus → sisa hari = 31 - 24 = 7 → window sampai 31.
+        $daysInMonth = $period->end_date->daysInMonth;
+        $sisaHari    = $daysInMonth - (int) $period->end_date->day;
+        $windowEnd   = $period->end_date->copy()->addDays($sisaHari);
+
+        $contractsQuery = EmployeeContract::with(['employee'])
+            ->whereNotNull('compensation_paid_at')
+            ->whereDate('compensation_paid_at', '>=', $startDate)
+            ->whereDate('compensation_paid_at', '<=', $windowEnd->format('Y-m-d'));
+
+        if (!empty($selectedGroups)) {
+            $contractsQuery->whereHas('employee.groups', function ($q) use ($selectedGroups) {
+                $q->whereIn('reference_code', $selectedGroups);
+            });
+        }
+
+        $periodStr = sprintf('%d-%02d', $period->period_year, $period->period_month);
+
+        $nominalByGroup = [];
+        foreach ($contractsQuery->get() as $contract) {
+            $emp = $contract->employee;
+            if (!$emp) {
+                continue;
+            }
+
+            $paidDate = $contract->compensation_paid_at ? $contract->compensation_paid_at->format('Y-m-d') : null;
+            if (!$paidDate) {
+                continue;
+            }
+
+            // Nominal per kontrak, sama seperti halaman /admin/employees/kompensasi:
+            // (gaji pokok + tj. masa kerja) / 12 × durasi, dibulatkan ke atas.
+            $gajiPokok      = $emp->gaji_pokok($periodStr);
+            $tjMasaKerja    = $emp->tjMasaKerja($periodStr);
+            $durationMonths = (int) ($contract->duration_months ?? 0);
+            $monthlyRate    = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
+            $nominal        = (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
+
+            // Per karyawan per tanggal pembayaran
+            $key = $emp->id . '|' . $paidDate;
+            if (!isset($nominalByGroup[$key])) {
+                $nominalByGroup[$key] = ['employee' => $emp, 'paid_at' => $paidDate, 'total' => 0];
+            }
+            $nominalByGroup[$key]['total'] += $nominal;
+        }
+
+        $kompensasiData = collect($nominalByGroup)
+            ->map(function ($item) {
+                $emp = $item['employee'];
+                $nik = $emp->nik ?? '-';
+
+                return [
+                    'id'               => $emp->id . '-' . $item['paid_at'],
+                    'name'             => $emp->name,
+                    'nik'              => $nik,
+                    'nik_tku'          => $nik !== '-' ? $nik . '000000' : '-',
+                    'gender'           => $emp->gender === 'L' ? 'L' : ($emp->gender === 'P' ? 'P' : '-'),
+                    'status_label'     => $emp->ptkp ?? '-',
+                    'paid_at'          => $item['paid_at'],
+                    'total_kompensasi' => (float) $item['total'],
+                ];
+            })
+            ->values()
+            ->sortBy([
+                ['paid_at', 'asc'],
+                ['name', 'asc'],
+            ])
+            ->values();
+
+        // Karyawan yang punya roster di range tanggal periode (untuk Section A: PPH)
         $rosteredEmployeeIds = EmployeeShiftRoster::whereBetween('date', [$startDate, $endDate])
             ->distinct('employee_id')
             ->pluck('employee_id');
@@ -141,7 +226,7 @@ class RekapPphKompensasiController extends Controller
         if ($rosteredEmployeeIds->isEmpty()) {
             return response()->json([
                 'pph'          => [],
-                'kompensasi'   => [],
+                'kompensasi'   => $kompensasiData,
                 'period_name'  => $period->name,
                 'date_start'   => $startDate,
                 'date_end'     => $endDate,
@@ -242,32 +327,6 @@ class RekapPphKompensasiController extends Controller
                 'bpjs_tk'      => $bpjsTk,
                 'bpjs_ks'      => $bpjsKs,
                 'pph'          => $pph,
-            ];
-        });
-
-        // ─── Section B: Kompensasi ───
-        $kompensasiData = $employees->map(function ($emp) use ($salaryComponents) {
-            $sc = $salaryComponents->get($emp->id);
-
-            // Perhitungan kompensasi kontrak: (gaji_pokok + tj_masa_kerja) / 12
-            $monthlyKompensasi = 0;
-            if ($sc) {
-                $gajiPokok  = (float) $sc->gaji_pokok;
-                $tjMasaKerja = (float) $sc->tunjangan_masa_kerja;
-                $monthlyKompensasi = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
-            }
-
-            $nik = $emp->nik ?? '-';
-            $nikTku = $nik !== '-' ? $nik . '000000' : '-';
-
-            return [
-                'id'               => $emp->id,
-                'name'             => $emp->name,
-                'nik'              => $nik,
-                'nik_tku'          => $nikTku,
-                'gender'           => $emp->gender === 'L' ? 'L' : ($emp->gender === 'P' ? 'P' : '-'),
-                'status_label'     => $emp->ptkp ?? '-',
-                'total_kompensasi' => $monthlyKompensasi,
             ];
         });
 

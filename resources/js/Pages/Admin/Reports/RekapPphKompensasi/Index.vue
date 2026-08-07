@@ -34,7 +34,7 @@
         <button
           class="h-10 px-4 text-sm rounded-lg border border-(--border-soft) hover:bg-(--bg-hover) flex items-center gap-1.5 transition-colors disabled:opacity-40"
           @click="exportKompensasi"
-          :disabled="!payPeriodId || kompensasiData.length === 0 || exporting"
+          :disabled="!payPeriodId || filteredKompensasiData.length === 0 || exporting"
         >
           <i class="bx" :class="exporting === 'kompensasi' ? 'bx-loader-alt animate-spin' : 'bx-export'"></i>
           <span class="hidden sm:inline">{{ exporting === 'kompensasi' ? 'Mengekspor...' : 'Export Kompensasi' }}</span>
@@ -162,11 +162,28 @@
 
         <!-- ═══════════════ SECTION B: KOMPENSASI ═══════════════ -->
         <div>
-          <div class="flex items-center gap-2 mb-4">
+          <div class="flex flex-wrap items-center gap-3 mb-4">
             <div class="w-8 h-8 bg-amber-100 rounded-md flex items-center justify-center">
               <span class="text-amber-600 font-bold text-sm">B</span>
             </div>
             <h2 class="text-base font-semibold text-(--text-main)">KOMPENSASI</h2>
+            <div class="flex-1"></div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="text-xs font-medium text-(--text-muted)">Tanggal bayar:</span>
+              <label
+                v-for="d in availablePaidDates"
+                :key="d"
+                class="flex items-center gap-1.5 text-xs cursor-pointer select-none"
+              >
+                <input
+                  type="checkbox"
+                  :value="d"
+                  v-model="checkedPaidDates"
+                  class="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500 border-(--border-soft)"
+                />
+                <span class="font-medium text-(--text-main)">{{ fmtDate(d) }}</span>
+              </label>
+            </div>
           </div>
 
           <div class="bg-(--bg-card) border border-(--border-soft) rounded-md overflow-hidden shadow-sm">
@@ -180,13 +197,19 @@
                     <th class="px-3 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:140px">NIK</th>
                     <th class="px-3 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:160px">NIK TKU</th>
                     <th class="px-2.5 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="width:70px">STATUS</th>
+                    <th class="px-3 py-2 text-center font-bold text-(--text-main) border-r border-(--border-soft)" style="min-width:110px">TANGGAL<br/>BAYAR</th>
                     <th class="px-3 py-2 text-right font-bold text-(--text-main)" style="min-width:140px">TOTAL<br/>KOMPENSASI</th>
                   </tr>
                 </thead>
 
                 <tbody class="divide-y divide-(--border-soft)">
+                  <tr v-if="filteredKompensasiData.length === 0">
+                    <td colspan="8" class="px-3 py-6 text-center text-(--text-muted)">
+                      Tidak ada data untuk tanggal pembayaran terpilih.
+                    </td>
+                  </tr>
                   <tr
-                    v-for="(row, i) in kompensasiData"
+                    v-for="(row, i) in filteredKompensasiData"
                     :key="row.id"
                     class="transition-colors"
                     :class="i % 2 === 0 ? 'bg-(--bg-card)' : 'bg-(--bg-main)/40'"
@@ -197,13 +220,14 @@
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik }}</td>
                     <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ row.nik_tku }}</td>
                     <td class="px-2.5 py-2 text-center border-r border-(--border-soft)">{{ row.status_label }}</td>
+                    <td class="px-3 py-2 text-center font-mono text-(--text-muted) border-r border-(--border-soft)">{{ fmtDate(row.paid_at) }}</td>
                     <td class="px-3 py-2 text-right font-mono text-(--text-main)">{{ fmtNum(row.total_kompensasi) }}</td>
                   </tr>
                 </tbody>
 
                 <tfoot>
                   <tr class="bg-(--bg-elevated) font-bold text-(--text-main) border-t-2 border-(--border-soft)">
-                    <td class="px-2.5 py-2.5 text-right border-r border-(--border-soft)" colspan="6">
+                    <td class="px-2.5 py-2.5 text-right border-r border-(--border-soft)" colspan="7">
                       <span class="text-(--primary) uppercase">TOTAL</span>
                     </td>
                     <td class="px-3 py-2.5 text-right font-mono">{{ fmtNum(kompensasiTotals.total_kompensasi, true) }}</td>
@@ -230,7 +254,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useApi } from '@/composables/useApi'
 import ReportSettingsModal from '@/Components/ReportPage/ReportSettingsModal.vue'
 
@@ -265,8 +289,23 @@ const pphTotals = computed(() => {
   }
 })
 
+const availablePaidDates = computed(() => {
+  return [...new Set(kompensasiData.value.map(r => r.paid_at).filter(Boolean))].sort()
+})
+
+const checkedPaidDates = ref([])
+
+watch(kompensasiData, (rows) => {
+  checkedPaidDates.value = [...new Set(rows.map(r => r.paid_at).filter(Boolean))].sort()
+}, { immediate: true })
+
+const filteredKompensasiData = computed(() => {
+  if (checkedPaidDates.value.length === 0) return []
+  return kompensasiData.value.filter(r => checkedPaidDates.value.includes(r.paid_at))
+})
+
 const kompensasiTotals = computed(() => {
-  const sum = (key) => kompensasiData.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
+  const sum = (key) => filteredKompensasiData.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
   return {
     total_kompensasi: sum('total_kompensasi'),
   }
@@ -281,6 +320,12 @@ function fmtNum(v, force) {
 function fmtNumDec(v) {
   if (v === null || v === undefined || v === 0) return '-'
   return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)
+}
+
+function fmtDate(v) {
+  if (!v) return '-'
+  const [y, m, d] = String(v).split('-')
+  return `${d}-${m}-${y}`
 }
 
 // ─── API Calls ───
@@ -374,6 +419,9 @@ function exportUrl(type) {
   if (selectedExtraIds.value.length > 0) {
     params.set('extra_ids', selectedExtraIds.value.join(','))
   }
+  if (type === 'kompensasi' && checkedPaidDates.value.length > 0) {
+    params.set('paid_dates', checkedPaidDates.value.join(','))
+  }
   const endpoint = type === 'pph' ? 'export-pph' : 'export-kompensasi'
   return `/api/v1/reports/rekap-pph-kompensasi/${endpoint}?${params.toString()}`
 }
@@ -386,7 +434,7 @@ function exportPph() {
 }
 
 function exportKompensasi() {
-  if (kompensasiData.value.length === 0) return
+  if (filteredKompensasiData.value.length === 0) return
   exporting.value = 'kompensasi'
   window.open(exportUrl('kompensasi'), '_blank')
   setTimeout(() => { exporting.value = false }, 500)

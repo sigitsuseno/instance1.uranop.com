@@ -3,16 +3,13 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
-import { usePermissionStore } from '../../../../Stores/permission'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
-import ConfirmDialog from '../../../../Components/ConfirmDialog.vue'
 import Badge from '../../../../Components/Badge.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
-const permission = usePermissionStore()
-const { get, patch, post } = useApi()
+const { get, post } = useApi()
 
 // State
 const loading = ref(false)
@@ -62,14 +59,13 @@ const availableMonths = computed(() => {
 
 const selectedMonthYear = ref(`${selectedYear.value}-${String(selectedMonth.value).padStart(2, '0')}`)
 
-// Dialog State
-const showConfirmDialog = ref(false)
-const dialogAction = ref('') // 'mark-paid' or 'mark-unpaid'
-const selectedContract = ref(null)
+// Group Modal State
+const showGroupModal = ref(false)
+const groupLoading = ref(false)
+const groupForm = ref({ name: '', payment_date: '' })
 
 // Bulk State
 const selectedIds = ref(new Set())
-const bulkLoading = ref(false)
 const selectAllRef = ref(null)
 
 // Print State
@@ -141,54 +137,47 @@ function toggleSelect(id) {
     selectedIds.value = next
 }
 
-async function bulkMarkPaid() {
-    if (selectedIds.value.size === 0) return
+function openGroupModal() {
+    const d = new Date()
+    groupForm.value = {
+        name: '',
+        payment_date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+    }
+    showGroupModal.value = true
+}
 
-    bulkLoading.value = true
+function closeGroupModal() {
+    showGroupModal.value = false
+    groupForm.value = { name: '', payment_date: '' }
+}
+
+async function saveGroup() {
+    if (!groupForm.value.name.trim()) {
+        notification.addNotification('Nama group wajib diisi.', 'error')
+        return
+    }
+    if (!groupForm.value.payment_date) {
+        notification.addNotification('Tanggal pembayaran wajib diisi.', 'error')
+        return
+    }
+
+    groupLoading.value = true
     try {
         const ids = Array.from(selectedIds.value)
-        const res = await post('/api/v1/employees/compensation/bulk-mark-paid', { ids })
-        notification.addNotification(res.message || 'Kompensasi berhasil ditandai dibayar.', 'success')
+        const res = await post('/api/v1/employees/compensation/create-group', {
+            ids,
+            group_name: groupForm.value.name.trim(),
+            payment_date: groupForm.value.payment_date,
+        })
+        notification.addNotification(res.message || 'Group kompensasi berhasil dibuat.', 'success')
         selectedIds.value = new Set()
+        closeGroupModal()
         fetchData()
     } catch (e) {
-        notification.addNotification('Gagal memperbarui status kompensasi.', 'error')
+        notification.addNotification(e.message || 'Gagal membuat group kompensasi.', 'error')
     } finally {
-        bulkLoading.value = false
+        groupLoading.value = false
     }
-}
-
-function confirmMarkPaid(contract) {
-    selectedContract.value = contract
-    dialogAction.value = 'mark-paid'
-    showConfirmDialog.value = true
-}
-
-function confirmMarkUnpaid(contract) {
-    selectedContract.value = contract
-    dialogAction.value = 'mark-unpaid'
-    showConfirmDialog.value = true
-}
-
-async function handleConfirm() {
-    if (!selectedContract.value) return
-
-    try {
-        const endpoint = `/api/v1/employees/compensation/${selectedContract.value.id}/${dialogAction.value}`
-        const res = await patch(endpoint)
-        notification.addNotification(res.message || 'Status kompensasi berhasil diperbarui.', 'success')
-        fetchData()
-    } catch (e) {
-        notification.addNotification('Gagal memperbarui status kompensasi.', 'error')
-    } finally {
-        showConfirmDialog.value = false
-        selectedContract.value = null
-    }
-}
-
-function cancelConfirm() {
-    showConfirmDialog.value = false
-    selectedContract.value = null
 }
 
 async function downloadFile(url, defaultFilename) {
@@ -425,10 +414,9 @@ onMounted(() => {
                 class="h-8 px-3 text-xs text-(--text-muted) hover:text-(--text-main)">
                 <i class="bx bx-x mr-1"></i>Batal
             </BaseButton>
-            <BaseButton variant="primary" @click="bulkMarkPaid" :disabled="bulkLoading"
-                class="h-8 px-4 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white">
-                <i :class="bulkLoading ? 'bx bx-loader-alt bx-spin mr-1' : 'bx bx-check-double mr-1'"></i>
-                {{ bulkLoading ? 'Memproses...' : `Tandai ${selectedCount} Kontrak Dibayar` }}
+            <BaseButton variant="primary" @click="openGroupModal"
+                class="h-8 px-4 text-xs font-semibold">
+                <i class="bx bx-group mr-1"></i> Buat Group
             </BaseButton>
         </div>
 
@@ -518,28 +506,21 @@ onMounted(() => {
                                 Kontrak</th>
                             <th
                                 class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
-                                Gaji
-                                Pokok</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
-                                Jatuh
-                                Tempo</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
-                                Sisa
-                                Hari</th>
-                            <th
-                                class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
-                                Status Kompensasi</th>
+                                Akhir Kontrak</th>
                             <th
                                 class="px-4 py-3 text-right text-xs font-bold text-(--text-muted) uppercase tracking-wider">
-                                Aksi
-                            </th>
+                                Nominal</th>
+                            <th
+                                class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
+                                Sisa Hari</th>
+                            <th
+                                class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
+                                Status</th>
                         </tr>
                     </thead>
                     <tbody class="bg-(--bg-card) divide-y divide-(--border-soft)">
                         <tr v-if="loading">
-                            <td colspan="8" class="px-4 py-12 text-center">
+                            <td colspan="7" class="px-4 py-12 text-center">
                                 <div
                                     class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mx-auto mb-2">
                                 </div>
@@ -547,7 +528,7 @@ onMounted(() => {
                             </td>
                         </tr>
                         <tr v-else-if="contracts.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center text-(--text-muted)">
+                            <td colspan="7" class="px-4 py-12 text-center text-(--text-muted)">
                                 <i class="bx bx-check-circle text-4xl mb-2 block"></i>
                                 Tidak ada kontrak yang jatuh tempo di periode ini.
                             </td>
@@ -592,21 +573,16 @@ onMounted(() => {
                                 </p>
                             </td>
 
-                            <!-- Gaji Pokok -->
+                            <!-- Akhir Kontrak -->
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <p class="text-sm font-semibold text-(--text-main)">
-                                    {{ formatCurrency(contract.employee?.base_salary) }}
-                                </p>
+                                <p class="text-sm font-medium text-(--text-main)">{{ formatDate(contract.end_date) }}</p>
                             </td>
 
-                            <!-- Jatuh Tempo -->
-                            <td class="px-4 py-3 whitespace-nowrap">
-                                <div>
-                                    <p class="text-sm font-medium text-(--text-main)">{{ formatDate(contract.end_date)
-                                    }}</p>
-                                    <p class="text-xs text-(--text-muted)">{{ formatDate(contract.start_date) }} - {{
-                                        formatDate(contract.end_date) }}</p>
-                                </div>
+                            <!-- Nominal -->
+                            <td class="px-4 py-3 whitespace-nowrap text-right">
+                                <p class="text-sm font-semibold text-(--text-main)">
+                                    {{ formatCurrency(contract.nominal) }}
+                                </p>
                             </td>
 
                             <!-- Sisa Hari -->
@@ -625,34 +601,16 @@ onMounted(() => {
                                 <span v-else class="text-xs text-(--text-muted)">-</span>
                             </td>
 
-                            <!-- Status Kompensasi -->
+                            <!-- Status -->
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <div v-if="contract.is_compensation_paid" class="flex flex-col">
-                                    <span
-                                        class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600">
-                                        <i class="bx bx-check mr-1"></i> Dibayar
-                                    </span>
-                                    <span class="text-[10px] text-(--text-muted) mt-1">
-                                        {{ formatDate(contract.compensation_paid_at) }}
-                                    </span>
-                                </div>
+                                <span v-if="contract.is_compensation_paid"
+                                    class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600">
+                                    <i class="bx bx-check mr-1"></i> {{ formatDate(contract.compensation_paid_at) }}
+                                </span>
                                 <span v-else
                                     class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-amber-500/10 text-amber-600">
-                                    <i class="bx bx-time mr-1"></i> Belum
+                                    UNPAID
                                 </span>
-                            </td>
-
-                            <!-- Aksi -->
-                            <td class="px-4 py-3 whitespace-nowrap text-right">
-                                <BaseButton v-if="!contract.is_compensation_paid && permission.can('edit employees')" variant="ghost"
-                                    @click="confirmMarkPaid(contract)"
-                                    class="h-8 px-2 text-xs bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 hover:text-emerald-700">
-                                    <i class="bx bx-check mr-1 text-sm"></i> Tandai Dibayar
-                                </BaseButton>
-                                <BaseButton v-else-if="permission.can('edit employees')" variant="ghost" @click="confirmMarkUnpaid(contract)"
-                                    class="h-8 px-2 text-xs bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 hover:text-amber-700">
-                                    <i class="bx bx-undo mr-1 text-sm"></i> Batalkan
-                                </BaseButton>
                             </td>
                         </tr>
                     </tbody>
@@ -660,13 +618,50 @@ onMounted(() => {
             </div>
         </BaseCard>
 
-        <!-- Confirm Dialog -->
-        <ConfirmDialog :show="showConfirmDialog"
-            :title="dialogAction === 'mark-paid' ? 'Tandai Dibayar' : 'Batalkan Status Dibayar'"
-            :message="dialogAction === 'mark-paid' ? 'Apakah Anda yakin kompensasi ini sudah dibayarkan?' : 'Apakah Anda yakin ingin membatalkan status pembayaran kompensasi ini?'"
-            :confirm-text="dialogAction === 'mark-paid' ? 'Ya, Tandai Dibayar' : 'Ya, Batalkan'" cancel-text="Batal"
-            :variant="dialogAction === 'mark-paid' ? 'success' : 'warning'" @confirm="handleConfirm"
-            @cancel="cancelConfirm" />
+        <!-- Group Modal -->
+        <Teleport to="body">
+            <div v-if="showGroupModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                @click.self="closeGroupModal">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-(--border-soft)">
+                        <div class="flex items-center gap-3">
+                            <i class="bx bx-group text-2xl text-(--text-muted)"></i>
+                            <div>
+                                <h2 class="text-lg font-semibold text-(--text-main)">Group Laporan Kompensasi</h2>
+                                <p class="text-sm text-(--text-muted)">{{ selectedCount }} kontrak dipilih</p>
+                            </div>
+                        </div>
+                        <button @click="closeGroupModal" class="p-1.5 rounded-lg hover:bg-(--bg-hover) transition-colors">
+                            <i class="bx bx-x text-xl text-(--text-muted)"></i>
+                        </button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="px-6 py-4 space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-(--text-main) mb-1.5">Nama Group</label>
+                            <input type="text" v-model="groupForm.name" placeholder="cth: Kompensasi Juni 2026"
+                                class="w-full h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-(--text-main) mb-1.5">Tanggal Pembayaran</label>
+                            <input type="date" v-model="groupForm.payment_date"
+                                class="w-full h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm" />
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex items-center justify-end gap-2 px-6 py-4 border-t border-(--border-soft)">
+                        <BaseButton variant="ghost" @click="closeGroupModal" :disabled="groupLoading">Batal</BaseButton>
+                        <BaseButton variant="primary" @click="saveGroup" :disabled="groupLoading">
+                            <i :class="groupLoading ? 'bx bx-loader-alt bx-spin mr-1' : 'bx bx-check-double mr-1'"></i>
+                            {{ groupLoading ? 'Menyimpan...' : 'Simpan' }}
+                        </BaseButton>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
 
         <!-- Print Teleport Modal -->
         <Teleport to="body">

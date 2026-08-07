@@ -22,8 +22,8 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
     protected int $rowCount = 0;
     protected array $totals;
 
-    // A=No, B=NAMA BANK, C=PERHITUNGAN PPH, D=NIK, E=NIK TKU, F=STATUS, G=TOTAL KOMPENSASI
-    protected string $lastCol = 'G';
+    // A=No, B=NAMA BANK, C=PERHITUNGAN PPH, D=NIK, E=NIK TKU, F=STATUS, G=TANGGAL BAYAR, H=TOTAL KOMPENSASI
+    protected string $lastCol = 'H';
 
     public function __construct(array $rows, string $periodName, string $dateStart, string $dateEnd)
     {
@@ -49,6 +49,7 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $row['nik']              ?? '-',
                 $row['nik_tku']          ?? '-',
                 $row['status_label']     ?? '-',
+                $row['paid_at']          ?? '-',
                 (float) ($row['total_kompensasi'] ?? 0),
             ];
             $this->rowCount++;
@@ -66,7 +67,7 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
             [''],
             [
                 'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU',
-                'STATUS', 'TOTAL KOMPENSASI',
+                'STATUS', 'TANGGAL BAYAR', 'TOTAL KOMPENSASI',
             ],
         ];
     }
@@ -80,7 +81,8 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
             'D' => 16,  // NIK
             'E' => 18,  // NIK TKU
             'F' => 10,  // STATUS
-            'G' => 18,  // TOTAL KOMPENSASI
+            'G' => 14,  // TANGGAL BAYAR
+            'H' => 18,  // TOTAL KOMPENSASI
         ];
     }
 
@@ -140,7 +142,8 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $sheet->getStyle("C{$dataStart}:C{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                 $sheet->getStyle("D{$dataStart}:E{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("F{$dataStart}:F{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("H{$dataStart}:H{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                 // ─── NIK & NIK TKU sebagai teks (hindari floating-point truncation 16-digit) ───
                 $sheet->getStyle("D{$dataStart}:E{$dataEnd}")->getNumberFormat()->setFormatCode('@');
@@ -162,9 +165,9 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 // ─── TOTAL Row ───
                 $totalRow = $dataEnd + 2;
 
-                $sheet->mergeCells("A{$totalRow}:F{$totalRow}");
+                $sheet->mergeCells("A{$totalRow}:G{$totalRow}");
                 $sheet->setCellValue("A{$totalRow}", 'TOTAL');
-                $sheet->setCellValue("G{$totalRow}", $totals['total_kompensasi']);
+                $sheet->setCellValue("H{$totalRow}", $totals['total_kompensasi']);
 
                 $totalRange = "A{$totalRow}:{$lastCol}{$totalRow}";
                 $sheet->getStyle($totalRange)->getFont()->setBold(true);
@@ -174,8 +177,8 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $sheet->getStyle($totalRange)->getBorders()
                     ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
                 $sheet->getStyle("A{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("G{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle("G{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("H{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
 
                 // ─── Freeze ───
                 $sheet->freezePane("B{$dataStart}");

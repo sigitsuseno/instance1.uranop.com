@@ -45,25 +45,35 @@ class CompensationApiController extends Controller
             ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->orderBy('end_date', 'asc')
             ->get()
-            ->map(function ($contract) {
+            ->map(function ($contract) use ($year, $month) {
                 // Return necessary fields
                 $employee = current($contract->employee()->getModels());
-                $baseSalary = $employee ? $employee->baseSalary() : 0;
-                
+                $period = sprintf('%d-%02d', $year, $month);
+
+                // Nominal kompensasi, konsisten dengan export/slip:
+                // (gaji pokok + tj. masa kerja) / 12 × durasi, dibulatkan ke atas.
+                $gajiPokok = $employee ? $employee->gaji_pokok($period) : 0;
+                $tjMasaKerja = $employee ? $employee->tjMasaKerja($period) : 0;
+                $durationMonths = (int) ($contract->duration_months ?? 0);
+                $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
+                $nominal = (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
+
                 return [
                     'id' => $contract->id,
                     'contract_number' => $contract->contract_number,
                     'contract_type' => $contract->contract_type,
                     'start_date' => $contract->start_date,
                     'end_date' => $contract->end_date,
-                    'duration_months' => $contract->duration_months,
+                    'duration_months' => $durationMonths,
                     'is_compensation_paid' => $contract->is_compensation_paid,
                     'compensation_paid_at' => $contract->compensation_paid_at,
+                    'comp_group' => $contract->comp_group,
+                    'nominal' => $nominal,
                     'employee' => [
                         'name' => $employee?->name,
                         'employee_code' => $employee?->employee_code,
                         'department' => $employee?->department?->name,
-                        'base_salary' => $baseSalary
+                        'base_salary' => $employee ? $employee->baseSalary() : 0,
                     ]
                 ];
             });
@@ -81,45 +91,33 @@ class CompensationApiController extends Controller
     }
 
     /**
-     * PATCH /api/v1/employees/compensation/{contract}/mark-paid
+     * POST /api/v1/employees/compensation/create-group
+     *
+     * Kelompokkan kontrak terpilih ke dalam satu group laporan kompensasi,
+     * sekaligus menandainya sudah dibayar dengan tanggal pembayaran tertentu.
      */
-    public function markPaid(EmployeeContract $contract): JsonResponse
+    public function createGroup(Request $request): JsonResponse
     {
-        $contract->update(['compensation_paid_at' => now()]);
-
-        return response()->json([
-            'message' => "Kompensasi kontrak {$contract->contract_number} ditandai sudah dibayar.",
-            'data'    => ['compensation_paid_at' => $contract->compensation_paid_at],
+        $validated = $request->validate([
+            'ids'          => ['required', 'array', 'min:1'],
+            'ids.*'        => ['integer'],
+            'group_name'   => ['required', 'string', 'max:255'],
+            'payment_date' => ['required', 'date'],
         ]);
-    }
 
-    /**
-     * PATCH /api/v1/employees/compensation/{contract}/mark-unpaid
-     */
-    public function markUnpaid(EmployeeContract $contract): JsonResponse
-    {
-        $contract->update(['compensation_paid_at' => null]);
+        $paymentDate = Carbon::parse($validated['payment_date'])->startOfDay();
 
-        return response()->json(['message' => 'Status kompensasi dikembalikan.']);
-    }
-
-    /**
-     * POST /api/v1/employees/compensation/bulk-mark-paid
-     */
-    public function bulkMarkPaid(Request $request): JsonResponse
-    {
-        $ids = $request->input('ids', []);
-
-        if (empty($ids) || !is_array($ids)) {
-            return response()->json(['message' => 'Pilih minimal satu kontrak.'], 400);
-        }
-
-        $updated = EmployeeContract::whereIn('id', $ids)
+        $updated = EmployeeContract::whereIn('id', $validated['ids'])
             ->whereNull('compensation_paid_at')
-            ->update(['compensation_paid_at' => now()]);
+            ->update([
+                'comp_group'            => $validated['group_name'],
+                'compensation_paid_at'  => $paymentDate,
+            ]);
 
         return response()->json([
-            'message' => "$updated kontrak berhasil ditandai sudah dibayar.",
+            'message' => $updated > 0
+                ? "{$updated} kontrak berhasil digabung ke group '{$validated['group_name']}' dan ditandai dibayar."
+                : 'Tidak ada kontrak yang diperbarui (mungkin sudah dibayar sebelumnya).',
             'data'    => ['updated' => $updated],
         ]);
     }

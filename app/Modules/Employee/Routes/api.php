@@ -49,9 +49,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::get('/', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'index'])->name('employees.compensation.index');
             Route::get('/export', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'export'])->name('employees.compensation.export');
             Route::get('/print', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'print'])->name('employees.compensation.print');
-            Route::post('/bulk-mark-paid', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'bulkMarkPaid'])->name('employees.compensation.bulk-mark-paid');
-            Route::patch('/{contract}/mark-paid', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'markPaid'])->name('employees.compensation.mark-paid');
-            Route::patch('/{contract}/mark-unpaid', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'markUnpaid'])->name('employees.compensation.mark-unpaid');
+            Route::post('/create-group', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'createGroup'])->name('employees.compensation.create-group');
         });
 
         // Grouping & Kanban
