@@ -39,20 +39,30 @@ class CompensationExport implements WithMultipleSheets
         $contracts = new Collection();
 
         if ($dateInfo) {
-            $query = EmployeeContract::with(['employee'])
-                ->whereBetween('end_date', [
+            $query = EmployeeContract::with(['employee']);
+
+            if (! empty($this->groups)) {
+                // Export per group: ambil SEMUA kontrak anggota group yang sudah
+                // dibayar dalam rentang pembayaran (konsisten dengan export-groups),
+                // tanpa memotong berdasarkan end_date atau is_latest lagi.
+                $query->whereIn('comp_group', $this->groups)
+                    ->whereNotNull('compensation_paid_at')
+                    ->whereBetween('compensation_paid_at', [
+                        $dateInfo['start']->format('Y-m-d'),
+                        $dateInfo['end']->copy()->addDays(7)->format('Y-m-d'),
+                    ]);
+            } else {
+                // Fallback tanpa group (mis. supervisor): kontrak yang end_date-nya
+                // jatuh dalam rentang periode.
+                $query->whereBetween('end_date', [
                     $dateInfo['start']->format('Y-m-d'),
                     $dateInfo['end']->format('Y-m-d'),
                 ]);
 
-            // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
-            if ($this->isLatest) {
-                $query->where('is_latest', true);
-            }
-
-            // Filter opsional: batasi ke group kompensasi tertentu (comp_group)
-            if (! empty($this->groups)) {
-                $query->whereIn('comp_group', $this->groups);
+                // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
+                if ($this->isLatest) {
+                    $query->where('is_latest', true);
+                }
             }
 
             $contracts = $query

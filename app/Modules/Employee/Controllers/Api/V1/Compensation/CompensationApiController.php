@@ -252,17 +252,25 @@ class CompensationApiController extends Controller
         // Get the company
         $company = Company::first();
 
-        $query = EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+        $query = EmployeeContract::with(['employee']);
 
-        // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
-        if ($request->boolean('is_latest')) {
-            $query->where('is_latest', true);
-        }
-
-        // Filter opsional: batasi ke group kompensasi tertentu (comp_group)
         if (! empty($groups)) {
-            $query->whereIn('comp_group', $groups);
+            // Print per group: ambil SEMUA kontrak anggota group yang sudah dibayar
+            // dalam rentang pembayaran (konsisten dengan export-groups),
+            // tanpa memotong berdasarkan end_date atau is_latest lagi.
+            $query->whereIn('comp_group', $groups)
+                ->whereNotNull('compensation_paid_at')
+                ->whereBetween('compensation_paid_at', [
+                    $startDate->format('Y-m-d'),
+                    $endDate->copy()->addDays(7)->format('Y-m-d'),
+                ]);
+        } else {
+            $query->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+            // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
+            if ($request->boolean('is_latest')) {
+                $query->where('is_latest', true);
+            }
         }
 
         $contracts = $query
