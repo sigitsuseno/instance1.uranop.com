@@ -14,7 +14,6 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
 {
     protected array $data;
-    protected float $total;
     protected int $year;
     protected int $month;
 
@@ -52,8 +51,6 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
                 'keterangan'=> 'KOMPENSASI',
             ];
         }
-
-        $this->total = (float) array_sum(array_column($this->data, 'nominal'));
     }
 
     public function title(): string
@@ -85,17 +82,8 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
                     'font' => ['name' => 'Calibri', 'size' => 10],
                 ]);
 
-                // ── Row 1: Title ──
-                $sheet->setCellValue('A1', 'TRANSFER BANK KOMPENSASI');
-                $sheet->mergeCells("A1:{$lastCol}1");
-                $sheet->getStyle('A1')->applyFromArray([
-                    'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => '1F4E79']],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
-                ]);
-                $sheet->getRowDimension(1)->setRowHeight(32);
-
-                // ── Row 2: Header ──
-                $row = 2;
+                // ── Row 1: Header ──
+                $row = 1;
                 foreach (self::HEADERS as $i => $header) {
                     $col = chr(65 + $i);
                     $sheet->setCellValue("{$col}{$row}", $header);
@@ -113,9 +101,8 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
                 ]);
                 $sheet->getRowDimension($row)->setRowHeight(24);
 
-                // ── Data rows (starting row 3) ──
-                $dataStartRow = 3;
-                $dataEndRow = $dataStartRow + count($this->data) - 1;
+                // ── Data rows (starting row 2) ──
+                $dataStartRow = 2;
 
                 foreach ($this->data as $idx => $item) {
                     $r = $dataStartRow + $idx;
@@ -150,7 +137,7 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
                     }
                     $sheet->getStyle("E{$r}")->applyFromArray([
                         'font' => ['size' => 10, 'color' => ['rgb' => '333333']],
-                        'numberFormat' => ['formatCode' => '#,##0'],
+                        'numberFormat' => ['formatCode' => '0'],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER],
                         'borders' => $borderStyle,
                     ]);
@@ -167,37 +154,8 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
                     $sheet->getRowDimension($r)->setRowHeight(20);
                 }
 
-                // ── Total row ──
-                $totalRow = $dataEndRow + 1;
-                $sheet->mergeCells("A{$totalRow}:D{$totalRow}");
-                $sheet->setCellValue("A{$totalRow}", 'TOTAL');
-                $sheet->setCellValue("E{$totalRow}", $this->total);
-
-                foreach (['A', 'B', 'C', 'D'] as $col) {
-                    $sheet->getStyle("{$col}{$totalRow}")->applyFromArray([
-                        'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '1F4E79']],
-                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D6E4F0']],
-                        'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'B0B0B0']]],
-                    ]);
-                }
-                $sheet->getStyle("E{$totalRow}")->applyFromArray([
-                    'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => '1F4E79']],
-                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D6E4F0']],
-                    'numberFormat' => ['formatCode' => '#,##0'],
-                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_RIGHT, 'vertical' => Alignment::VERTICAL_CENTER],
-                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'B0B0B0']]],
-                ]);
-                foreach (['F', 'G'] as $col) {
-                    $sheet->getStyle("{$col}{$totalRow}")->applyFromArray([
-                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D6E4F0']],
-                        'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'B0B0B0']]],
-                    ]);
-                }
-                $sheet->getRowDimension($totalRow)->setRowHeight(24);
-
                 // ── Freeze pane ──
-                $sheet->freezePane('A3');
+                $sheet->freezePane('A2');
             },
         ];
     }

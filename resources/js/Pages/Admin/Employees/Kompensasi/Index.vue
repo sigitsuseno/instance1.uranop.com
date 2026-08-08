@@ -73,12 +73,14 @@ const selectAllRef = ref(null)
 
 // Print State
 const showPrintModal = ref(false)
+const showPrintGroupModal = ref(false)
 const printLoading = ref(false)
 const printData = ref({ company: null, bulan: '', hrd: '', slips: [] })
+const printSelectedGroups = ref(new Set())
 
-// Export Excel State
+// Export Excel / Group selection State
 const showExportModal = ref(false)
-const exportLoading = ref(false)
+const groupsLoading = ref(false)
 const exportGroups = ref([])
 const exportPeriod = ref({ start: '', end: '', end_plus_7: '', label: '' })
 const exportSelectedGroups = ref(new Set())
@@ -237,13 +239,12 @@ async function downloadFile(url, defaultFilename) {
 
 function exportExcel() {
     showExportModal.value = true
-    exportLoading.value = true
     exportSelectedGroups.value = new Set()
-    fetchExportGroups()
+    fetchGroups()
 }
 
-async function fetchExportGroups() {
-    exportLoading.value = true
+async function fetchGroups() {
+    groupsLoading.value = true
     try {
         const [year, month] = selectedMonthYear.value.split('-')
         const params = new URLSearchParams()
@@ -260,7 +261,7 @@ async function fetchExportGroups() {
         notification.addNotification(e.message || 'Gagal memuat daftar group kompensasi.', 'error')
         exportGroups.value = []
     } finally {
-        exportLoading.value = false
+        groupsLoading.value = false
     }
 }
 
@@ -297,7 +298,32 @@ function confirmExport() {
     downloadFile(url, `kompensasi-${year}-${month}.xlsx`)
 }
 
-async function bulkPrint() {
+function bulkPrint() {
+    showPrintGroupModal.value = true
+    printSelectedGroups.value = new Set()
+    fetchGroups()
+}
+
+function closePrintGroupModal() {
+    showPrintGroupModal.value = false
+    printSelectedGroups.value = new Set()
+}
+
+function togglePrintGroup(groupName) {
+    const next = new Set(printSelectedGroups.value)
+    if (next.has(groupName)) {
+        next.delete(groupName)
+    } else {
+        next.add(groupName)
+    }
+    printSelectedGroups.value = next
+}
+
+async function confirmPrint() {
+    if (printSelectedGroups.value.size === 0) {
+        notification.addNotification('Pilih minimal satu group untuk dicetak.', 'error')
+        return
+    }
     printLoading.value = true
     try {
         const [year, month] = selectedMonthYear.value.split('-')
@@ -306,10 +332,12 @@ async function bulkPrint() {
         params.set('year', year)
         params.set('periode', selectedPeriode.value)
         if (onlyLatest.value) params.set('is_latest', '1')
+        Array.from(printSelectedGroups.value).forEach(g => params.append('groups[]', g))
 
         const res = await get(`/api/v1/employees/compensation/print?${params}`)
         if (res.data) {
             printData.value = res.data
+            showPrintGroupModal.value = false
             showPrintModal.value = true
         }
     } catch (e) {
@@ -765,7 +793,7 @@ onMounted(() => {
 
                     <!-- Body -->
                     <div class="px-6 py-4">
-                        <div v-if="exportLoading" class="flex flex-col items-center justify-center py-10">
+                        <div v-if="groupsLoading" class="flex flex-col items-center justify-center py-10">
                             <div
                                 class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mb-2">
                             </div>
@@ -807,6 +835,82 @@ onMounted(() => {
                                     <i class="bx bx-download text-lg"></i>
                                 </template>
                                 Export
+                            </BaseButton>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Print Group Selection Modal -->
+        <Teleport to="body">
+            <div v-if="showPrintGroupModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                @click.self="closePrintGroupModal">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-(--border-soft)">
+                        <div class="flex items-center gap-3">
+                            <i class="bx bx-printer text-2xl text-(--text-muted)"></i>
+                            <div>
+                                <h2 class="text-lg font-semibold text-(--text-main)">Cetak Massal Kompensasi</h2>
+                                <p class="text-sm text-(--text-muted)">
+                                    Pilih group yang ingin dicetak
+                                    <span v-if="exportPeriod.start" class="font-semibold text-(--text-main)">
+                                        ({{ formatDate(exportPeriod.start) }} - {{ formatDate(exportPeriod.end_plus_7) }})
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <button @click="closePrintGroupModal"
+                            class="p-1.5 rounded-lg hover:bg-(--bg-hover) transition-colors">
+                            <i class="bx bx-x text-xl text-(--text-muted)"></i>
+                        </button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="px-6 py-4">
+                        <div v-if="groupsLoading" class="flex flex-col items-center justify-center py-10">
+                            <div
+                                class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mb-2">
+                            </div>
+                            <span class="text-sm text-(--text-muted)">Memuat daftar group...</span>
+                        </div>
+
+                        <div v-else-if="exportGroups.length === 0"
+                            class="py-10 text-center text-(--text-muted)">
+                            <i class="bx bx-check-circle text-4xl mb-2 block"></i>
+                            Tidak ada group kompensasi pada rentang periode ini.
+                        </div>
+
+                        <div v-else class="max-h-80 overflow-y-auto space-y-2 pr-1">
+                            <label v-for="g in exportGroups" :key="'print-' + g.comp_group"
+                                class="flex items-center gap-3 p-3 rounded-lg border border-(--border-soft) bg-(--bg-elevated) cursor-pointer hover:bg-(--bg-hover) transition-colors">
+                                <input type="checkbox" :checked="printSelectedGroups.has(g.comp_group)"
+                                    @change="togglePrintGroup(g.comp_group)"
+                                    class="w-4 h-4 rounded border-(--border-soft) text-(--primary) focus:ring-(--primary-glow) cursor-pointer">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-(--text-main) truncate">{{ g.comp_group }}</p>
+                                    <p class="text-xs text-(--text-muted)">
+                                        Dibayar {{ formatDate(g.compensation_paid_at) }} &middot; {{
+                                            g.total_contracts }} kontrak
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex items-center justify-between gap-2 px-6 py-4 border-t border-(--border-soft)">
+                        <span class="text-sm text-(--text-muted)">
+                            {{ printSelectedGroups.size }} group dipilih
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <BaseButton variant="ghost" @click="closePrintGroupModal" :disabled="printLoading">Batal</BaseButton>
+                            <BaseButton variant="primary" @click="confirmPrint" :disabled="printLoading">
+                                <template #icon-left>
+                                    <i :class="printLoading ? 'bx bx-loader-alt bx-spin text-lg' : 'bx bx-printer text-lg'"></i>
+                                </template>
+                                {{ printLoading ? 'Memuat...' : 'Cetak' }}
                             </BaseButton>
                         </div>
                     </div>

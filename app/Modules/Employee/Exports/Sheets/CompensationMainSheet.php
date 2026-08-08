@@ -43,7 +43,20 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
     {
         $grouped = $this->contracts->groupBy(fn ($c) => $c->comp_group ?: '(Tanpa Group)');
 
-        $rows = [];
+        // ── Baris 1: judul KOMPENSASI UNGARAN {bulan} {tahun} ──
+        $bulanLabel = Carbon::createFromDate($this->year, $this->month, 1)
+            ->locale('id')
+            ->isoFormat('MMMM YYYY');
+        $titleRow = array_fill(0, self::COL_COUNT, null);
+        $titleRow[0] = "KOMPENSASI UNGARAN {$bulanLabel}";
+
+        $rows = [$titleRow];
+
+        $totalGajiPokok = 0;
+        $totalRawSum = 0.0;
+        $totalPembulatan = 0;
+        $totalTerima = 0.0;
+
         foreach ($grouped as $groupName => $groupContracts) {
             // ── Section header row (nama group + tahun periode, merged F:J) ──
             $row1 = array_fill(0, self::COL_COUNT, null);
@@ -85,11 +98,25 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                     $pembulatan,
                     $totalRounded,
                 ];
+
+                $totalGajiPokok += $gajiPokok;
+                $totalRawSum += $totalRaw;
+                $totalPembulatan += $pembulatan;
+                $totalTerima += $totalRounded;
             }
 
             // ── Blank row pemisah antar section ──
             $rows[] = array_fill(0, self::COL_COUNT, null);
         }
+
+        // ── Baris terakhir: TOTAL ──
+        $totalRow = array_fill(0, self::COL_COUNT, null);
+        $totalRow[0]  = 'TOTAL';
+        $totalRow[7]  = $totalGajiPokok;
+        $totalRow[9]  = round($totalRawSum, 2);
+        $totalRow[10] = $totalPembulatan;
+        $totalRow[11] = (float) $totalTerima;
+        $rows[] = $totalRow;
 
         return $rows;
     }
@@ -126,12 +153,31 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                 $lastRow = $sheet->getHighestRow();
 
                 $sectionHeaderRows = [];
+                $titleRow = null;
+                $totalRow = null;
 
                 for ($r = 1; $r <= $lastRow; $r++) {
                     $aVal = $sheet->getCell("A{$r}")->getValue();
                     if ($aVal === 'NO') {
                         $sectionHeaderRows[] = $r;
+                    } elseif ($aVal === 'TOTAL') {
+                        $totalRow = $r;
+                    } elseif (is_string($aVal) && str_starts_with($aVal, 'KOMPENSASI UNGARAN')) {
+                        $titleRow = $r;
                     }
+                }
+
+                // ── Judul: merged A:L ──
+                if ($titleRow) {
+                    $sheet->mergeCells("A{$titleRow}:{$lastCol}{$titleRow}");
+                    $sheet->getStyle("A{$titleRow}:{$lastCol}{$titleRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'size' => 14],
+                        'alignment' => [
+                            'horizontal' => Alignment::HORIZONTAL_CENTER,
+                            'vertical'   => Alignment::VERTICAL_CENTER,
+                        ],
+                    ]);
+                    $sheet->getRowDimension($titleRow)->setRowHeight(28);
                 }
 
                 // ── Section header row: merge F:J untuk nama group ──
@@ -164,7 +210,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                 // ── Data rows: border + alignment + number format ──
                 $dataRows = [];
                 for ($r = 1; $r <= $lastRow; $r++) {
-                    if (in_array($r, $sectionHeaderRows, true)) {
+                    if ($r === $titleRow || $r === $totalRow || in_array($r, $sectionHeaderRows, true)) {
                         continue;
                     }
                     $aVal = $sheet->getCell("A{$r}")->getValue();
@@ -207,6 +253,40 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                         $sheet->getStyle("{$col}{$firstData}:{$col}{$lastData}")
                             ->getNumberFormat()->setFormatCode('#,##0');
                     }
+                }
+
+                // ── Baris TOTAL ──
+                if ($totalRow) {
+                    $sheet->mergeCells("A{$totalRow}:E{$totalRow}");
+                    $sheet->getStyle("A{$totalRow}:{$lastCol}{$totalRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'size' => 10],
+                        'fill' => [
+                            'fillType'   => Fill::FILL_SOLID,
+                            'startColor' => ['rgb' => 'FFF2CC'],
+                        ],
+                        'alignment' => [
+                            'horizontal' => Alignment::HORIZONTAL_RIGHT,
+                            'vertical'   => Alignment::VERTICAL_CENTER,
+                        ],
+                        'borders' => [
+                            'allBorders' => [
+                                'borderStyle' => Border::BORDER_THIN,
+                                'color'       => ['rgb' => '000000'],
+                            ],
+                        ],
+                    ]);
+
+                    // Label TOTAL di tengah (merged A:E)
+                    $sheet->getStyle("A{$totalRow}:E{$totalRow}")->getAlignment()
+                        ->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
+                    // Number format kolom numerik
+                    foreach (['H', 'I', 'J', 'K', 'L'] as $col) {
+                        $sheet->getStyle("{$col}{$totalRow}")
+                            ->getNumberFormat()->setFormatCode('#,##0');
+                    }
+
+                    $sheet->getRowDimension($totalRow)->setRowHeight(22);
                 }
 
                 // ── Print setup: landscape F4 ──

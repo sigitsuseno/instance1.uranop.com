@@ -226,6 +226,15 @@ class CompensationApiController extends Controller
         $year = $request->query('year', date('Y'));
         $periode = $request->query('periode', 'auto');
 
+        $groupsRaw = $request->query('groups');
+        if (is_array($groupsRaw)) {
+            $groups = collect($groupsRaw)->filter()->map('trim')->values()->all();
+        } elseif ($groupsRaw) {
+            $groups = collect(explode(',', (string) $groupsRaw))->filter()->map('trim')->values()->all();
+        } else {
+            $groups = [];
+        }
+
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
@@ -249,6 +258,11 @@ class CompensationApiController extends Controller
         // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
         if ($request->boolean('is_latest')) {
             $query->where('is_latest', true);
+        }
+
+        // Filter opsional: batasi ke group kompensasi tertentu (comp_group)
+        if (! empty($groups)) {
+            $query->whereIn('comp_group', $groups);
         }
 
         $contracts = $query

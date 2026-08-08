@@ -4,6 +4,7 @@ namespace App\Modules\Employee\Exports;
 
 use App\Modules\Employee\Exports\Sheets\CompensationBankSheet;
 use App\Modules\Employee\Exports\Sheets\CompensationMainSheet;
+use App\Modules\Employee\Exports\Sheets\CompensationResumeSheet;
 use App\Modules\Employee\Models\EmployeeContract;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\WithMultipleSheets;
@@ -65,6 +66,7 @@ class CompensationExport implements WithMultipleSheets
         return [
             new CompensationMainSheet($contracts, $year, $month),
             new CompensationBankSheet($contracts, $year, $month),
+            new CompensationResumeSheet($contracts, $year, $month),
         ];
     }
 }
