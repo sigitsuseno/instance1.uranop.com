@@ -5,8 +5,10 @@ import BaseCard from '../../../../Components/BaseCard.vue'
 import TextInput from '../../../../Components/TextInput.vue'
 import SelectInput from '../../../../Components/SelectInput.vue'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 
-const { get, post } = useApi()
+const { get, post, put } = useApi()
+const { isSuperadmin } = useAuth()
 
 const form = ref({
   cut_off_date: '',
@@ -15,6 +17,12 @@ const form = ref({
   split_days_a: '',
 })
 const loading = ref(false)
+
+// Password unlock payroll (KEPUTUSAN #10 logic_payroll_baru.md — superadmin only)
+const lockPassword = ref('')
+const hasLockPassword = ref(false)
+const savingLockPassword = ref(false)
+const lockPasswordMsg = ref('')
 
 async function fetchSettings() {
   try {
@@ -42,8 +50,36 @@ async function saveSettings() {
   }
 }
 
+async function fetchLockPassword() {
+  if (!isSuperadmin.value) return
+  try {
+    const res = await get('/api/v1/settings/payroll-lock-password')
+    hasLockPassword.value = res.data?.has_password ?? false
+  } catch (e) {
+    console.error('Failed to load lock password status', e)
+  }
+}
+
+async function saveLockPassword() {
+  if (!lockPassword.value) return
+  savingLockPassword.value = true
+  lockPasswordMsg.value = ''
+  try {
+    await put('/api/v1/settings/payroll-lock-password', { password: lockPassword.value })
+    hasLockPassword.value = true
+    lockPassword.value = ''
+    lockPasswordMsg.value = 'Password berhasil disimpan.'
+  } catch (e) {
+    console.error('Failed to save lock password', e)
+    lockPasswordMsg.value = 'Gagal menyimpan password.'
+  } finally {
+    savingLockPassword.value = false
+  }
+}
+
 onMounted(() => {
   fetchSettings()
+  fetchLockPassword()
 })
 
 </script>
@@ -98,6 +134,34 @@ onMounted(() => {
         <div class="flex justify-end">
           <BaseButton variant="primary" @click="saveSettings" :disabled="loading">Simpan Pengaturan</BaseButton>
         </div>
+      </div>
+    </BaseCard>
+
+    <!-- Password Unlock Payroll (superadmin only, KEPUTUSAN #10 logic_payroll_baru.md) -->
+    <BaseCard v-if="isSuperadmin">
+      <template #title>Password Unlock Payroll</template>
+      <div class="space-y-3">
+        <p class="text-sm text-(--text-muted)">
+          Password untuk membuka kunci (<strong>Unlock</strong>) payroll yang sudah di-<em>lock</em> di menu Gaji Karyawan.
+          Hanya superadmin yang bisa melihat &amp; mengubah.
+        </p>
+        <div class="flex flex-col sm:flex-row gap-3 items-start sm:items-end">
+          <div class="w-full sm:max-w-xs">
+            <TextInput
+              v-model="lockPassword"
+              label="Password Unlock Payroll"
+              type="password"
+              placeholder="Masukkan password baru"
+            />
+          </div>
+          <BaseButton variant="primary" @click="saveLockPassword" :disabled="savingLockPassword || !lockPassword">
+            {{ savingLockPassword ? 'Menyimpan...' : 'Simpan Password' }}
+          </BaseButton>
+        </div>
+        <p class="text-xs" :class="hasLockPassword ? 'text-(--success)' : 'text-(--warning)'">
+          {{ hasLockPassword ? '✓ Password sudah diatur.' : '⚠ Password belum diatur — tombol Unlock tidak bisa dipakai.' }}
+        </p>
+        <p v-if="lockPasswordMsg" class="text-xs text-(--success)">{{ lockPasswordMsg }}</p>
       </div>
     </BaseCard>
 

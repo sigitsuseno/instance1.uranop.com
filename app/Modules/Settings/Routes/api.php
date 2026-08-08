@@ -29,6 +29,10 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
 
     Route::get('/payroll', [SettingsApiController::class, 'getPayrollSettings']);
     Route::post('/payroll', [SettingsApiController::class, 'updatePayrollSettings']);
+
+    // Password unlock payroll (superadmin only, di-guard di controller)
+    Route::get('/payroll-lock-password', [SettingsApiController::class, 'getPayrollLockPassword']);
+    Route::put('/payroll-lock-password', [SettingsApiController::class, 'updatePayrollLockPassword']);
     
     Route::get('/work-pattern-types', [SettingsApiController::class, 'getWorkPatternTypes']);
     Route::put('/work-pattern-types/{id}', [SettingsApiController::class, 'updateWorkPatternType']);

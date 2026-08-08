@@ -5,26 +5,26 @@
       <div>
         <h1 class="text-2xl font-bold text-(--text-main)">Resume Kehadiran</h1>
         <p class="text-sm text-(--text-muted) mt-1">
-          Rekap kehadiran karyawan per periode untuk input ke payroll
+          Rekap kehadiran karyawan per periode — dihitung langsung (on-the-fly) dari att_prepares
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <BaseButton 
-          variant="primary" 
-          :loading="isGenerating" 
-          :disabled="!canRegenerate || auth.isManajemen" 
-          @click="auth.isManajemen ? null : handleGenerate()"
+        <BaseButton
+          variant="primary"
+          :disabled="!selectedPeriod || auth.isManajemen"
+          :loading="isSaving"
+          @click="auth.isManajemen ? null : handleSave()"
           :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
         >
           <template #icon-left>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/>
-              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
             </svg>
           </template>
-          Generate Resume
+          Save Resume
         </BaseButton>
-        <span v-if="!canRegenerate" class="text-xs text-(--text-muted) italic">(data sudah di-approve)</span>
         <BaseButton
           variant="secondary"
           :disabled="!selectedPeriod || auth.isManajemen"
@@ -40,35 +40,6 @@
             </svg>
           </template>
           Export Excel
-        </BaseButton>
-        <BaseButton
-          :variant="isApproving ? 'primary' : 'secondary'"
-          :class="[isApproving ? '!bg-green-600' : '', auth.isManajemen ? 'opacity-50 cursor-not-allowed' : '']"
-          @click="auth.isManajemen ? null : toggleApproveMode()"
-          :disabled="auth.isManajemen"
-        >
-          <template #icon-left>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polyline points="20 6 9 17 4 12"/>
-            </svg>
-          </template>
-          {{ isApproving ? 'Batal Approve' : 'Approve' }}
-        </BaseButton>
-        <BaseButton
-          v-if="isApproving && checkedIds.length > 0"
-          variant="primary"
-          class="!bg-green-600"
-          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
-          :loading="isProcessing"
-          @click="auth.isManajemen ? null : handleProses()"
-          :disabled="auth.isManajemen"
-        >
-          <template #icon-left>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-            </svg>
-          </template>
-          Proses ({{ checkedIds.length }})
         </BaseButton>
       </div>
     </div>
@@ -118,7 +89,7 @@
         </div>
       </div>
 
-      <!-- Baris kedua: per_page + select all shortcut -->
+      <!-- Baris kedua: per_page -->
       <div class="flex items-center gap-4 mt-3 pt-3 border-t border-(--border-soft)">
         <div class="flex items-center gap-2">
           <label class="text-xs text-(--text-muted)">Tampilkan</label>
@@ -131,8 +102,8 @@
             <option :value="500">500</option>
           </select>
         </div>
-        <span v-if="isApproving" class="text-xs text-(--text-muted)">
-          Centang semua di header untuk pilih {{ records.filter(r => r.status !== 'locked').length }} data di halaman ini
+        <span class="text-xs text-(--text-muted)">
+          Data dihitung live dari att_prepares — klik <strong>Save Resume</strong> untuk menyimpan snapshot ke att_records
         </span>
       </div>
     </div>
@@ -142,9 +113,6 @@
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-(--border-soft) bg-(--bg-elevated)">
-            <th v-if="isApproving" class="px-3 py-3 text-center w-10">
-              <input type="checkbox" :checked="allChecked" @change="toggleAll" class="w-4 h-4 rounded" />
-            </th>
             <th class="px-4 py-3 text-left text-xs font-medium text-(--text-muted) uppercase">Karyawan</th>
             <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase">H. Kerja</th>
             <th class="px-4 py-3 text-center text-xs font-medium text-(--text-muted) uppercase">Deduct</th>
@@ -161,9 +129,6 @@
         </thead>
         <tbody>
           <tr v-for="r in records" :key="r.id" class="border-b border-(--border-soft) hover:bg-(--bg-elevated)/50">
-            <td v-if="isApproving" class="px-3 py-3 text-center">
-              <input type="checkbox" :checked="checkedIds.includes(r.id)" :disabled="r.status === 'locked'" @change="toggleCheck(r.id)" class="w-4 h-4 rounded" />
-            </td>
             <td class="px-4 py-3 whitespace-nowrap">
               <div class="font-medium text-(--text-main)">{{ r.employee?.name }}</div>
               <div class="text-xs text-(--text-muted)">{{ r.employee?.employee_code }} · {{ r.employee?.department?.name }}</div>
@@ -181,13 +146,13 @@
             <td class="px-4 py-3 text-center text-indigo-600 font-medium">{{ formatMinutes(r.lembur_count) }}</td>
           </tr>
           <tr v-if="records.length === 0 && !isLoading">
-            <td :colspan="isApproving ? 13 : 12" class="px-4 py-12 text-center text-(--text-muted)">
+            <td colspan="12" class="px-4 py-12 text-center text-(--text-muted)">
               <div v-if="!selectedPeriod">Silakan pilih periode untuk melihat data.</div>
-              <div v-else>Belum ada data untuk periode ini. Klik <strong>"Generate Resume"</strong> untuk menghitung.</div>
+              <div v-else>Belum ada data kehadiran (att_prepares) untuk periode ini.</div>
             </td>
           </tr>
           <tr v-if="isLoading">
-            <td :colspan="isApproving ? 13 : 12" class="px-4 py-12 text-center text-(--text-muted)">Memuat data...</td>
+            <td colspan="12" class="px-4 py-12 text-center text-(--text-muted)">Memuat data...</td>
           </tr>
         </tbody>
       </table>
@@ -210,7 +175,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import { useApi } from '../../../../composables/useApi'
 import { useAuth } from '../../../../composables/useAuth'
@@ -221,8 +186,7 @@ const auth = useAuth()
 
 // ── State ──
 const isLoading = ref(false)
-const isGenerating = ref(false)
-const isProcessing = ref(false)
+const isSaving = ref(false)
 const isExporting = ref(false)
 const payPeriods = ref([])
 const departments = ref([])
@@ -232,14 +196,6 @@ const selectedPeriod = ref('')
 const filterDepartment = ref('')
 const filterSearch = ref('')
 const perPage = ref(50)
-
-// ── Approve Mode ──
-const isApproving = ref(false)
-const checkedIds = ref([])
-
-// Tombol Generate cuma disable kalau ada record locked & user bukan superadmin/hrmanager
-const hasLockedRecords = computed(() => records.value.some(r => r.status === 'locked'))
-const canRegenerate = computed(() => auth.isSuperadmin || auth.isHrmanager || !hasLockedRecords.value)
 
 // ── Init ──
 onMounted(async () => {
@@ -299,23 +255,23 @@ function resetFilter() {
   fetchList()
 }
 
-// ── Generate ──
-async function handleGenerate() {
+// ── Save Resume (snapshot hasil on-the-fly ke att_records) ──
+async function handleSave() {
   if (!selectedPeriod.value) {
     alert('Silakan pilih periode terlebih dahulu.')
     return
   }
-  if (!confirm('Generate resume kehadiran untuk periode ini? Data lama akan diperbarui.')) return
+  if (!confirm('Simpan resume kehadiran (hasil hitungan live) untuk periode ini ke att_records? Data lama akan diperbarui.')) return
 
-  isGenerating.value = true
+  isSaving.value = true
   try {
-    const res = await post('/api/v1/attendance/recap/generate', { period_id: selectedPeriod.value })
+    const res = await post('/api/v1/attendance/recap/save', { period_id: selectedPeriod.value })
     alert(res.message)
     await fetchList()
   } catch (e) {
-    alert('Gagal generate: ' + (e.response?.data?.message || e.message))
+    alert('Gagal simpan: ' + (e.response?.data?.message || e.message))
   }
-  finally { isGenerating.value = false }
+  finally { isSaving.value = false }
 }
 
 // ── Export ──
@@ -348,47 +304,6 @@ async function handleExport() {
     alert('Gagal export Excel: ' + e.message)
   }
   finally { isExporting.value = false }
-}
-
-// ── Approve Mode ──
-function toggleApproveMode() {
-  isApproving.value = !isApproving.value
-  checkedIds.value = []
-}
-
-function toggleCheck(id) {
-  const idx = checkedIds.value.indexOf(id)
-  if (idx >= 0) checkedIds.value.splice(idx, 1)
-  else checkedIds.value.push(id)
-}
-
-const allChecked = computed(() => {
-  const unlocked = records.value.filter(r => r.status !== 'locked')
-  return unlocked.length > 0 && unlocked.every(r => checkedIds.value.includes(r.id))
-})
-
-function toggleAll() {
-  if (allChecked.value) {
-    checkedIds.value = []
-  } else {
-    checkedIds.value = records.value.filter(r => r.status !== 'locked').map(r => r.id)
-  }
-}
-
-async function handleProses() {
-  if (!checkedIds.value.length) return
-  if (!confirm(`Proses ${checkedIds.value.length} data ke payroll? Record akan di-lock.`)) return
-
-  isProcessing.value = true
-  try {
-    const res = await post('/api/v1/attendance/recap/approve', { ids: checkedIds.value })
-    alert(res.message)
-    checkedIds.value = []
-    await fetchList()
-  } catch (e) {
-    alert('Gagal approve: ' + (e.response?.data?.message || e.message))
-  }
-  finally { isProcessing.value = false }
 }
 
 // ── Helpers ──

@@ -326,7 +326,7 @@ async function fetchRecords() {
     return
   }
   try {
-    let url = `/api/v1/payroll/gaji-karyawan?period_id=${selectedPeriodId.value}`
+    let url = `/api/v1/laporan/payroll/kirim-all?period_id=${selectedPeriodId.value}`
     if (activeSegment.value) {
       url += `&segment=${activeSegment.value}`
     }
@@ -415,7 +415,7 @@ async function exportExcel() {
   const fileName = `Kirim_ALL_${periodName}${segName}.xlsx`
 
   try {
-    const response = await fetch(`/api/v1/payroll/gaji-karyawan/export-kirim-all?${params.toString()}`, {
+    const response = await fetch(`/api/v1/laporan/payroll/kirim-all/export?${params.toString()}`, {
       credentials: 'include',
       headers: { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
     })

@@ -209,6 +209,15 @@ class BpjsEmployeeController extends Controller
             return response()->json(['message' => 'Periode tidak valid.'], 400);
         }
 
+        // GUARD LOCK: payroll sudah dikunci → tolak perubahan (logic_payroll_baru.md §5/#11)
+        if (PayRecord::where('pay_period_id', $request->pay_period_id)
+            ->where('status', 'locked')
+            ->exists()) {
+            return response()->json([
+                'message' => 'Payroll telah dikunci. Anda tidak bisa melakukan perubahan pada periode ini. Unlock payroll terlebih dahulu.',
+            ], 403);
+        }
+
         $successCount = 0;
         $errors = [];
 

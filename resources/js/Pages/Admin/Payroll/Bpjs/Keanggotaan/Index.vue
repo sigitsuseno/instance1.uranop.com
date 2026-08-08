@@ -206,16 +206,33 @@
         </div>
       </template>
     </BaseModal>
+
+    <!-- Locked Warning Modal (logic_payroll_baru.md §5/#11) -->
+    <BaseModal :show="showLockedModal" @close="showLockedModal = false" title="Payroll Terkunci">
+      <div class="p-4 space-y-4">
+        <p class="text-sm text-(--text-main)">
+          Payroll telah di kunci, anda tidak bisa melakukan perubahan pada periode ini.
+          Untuk melakukan perubahan, unlock payroll di halaman Gaji Karyawan terlebih dahulu.
+        </p>
+        <div class="flex justify-end gap-2">
+          <BaseButton variant="secondary" @click="showLockedModal = false">Tutup</BaseButton>
+          <BaseButton variant="primary" @click="goToGajiKaryawan">Unlock Payroll</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import { useAuth } from '@/composables/useAuth'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
+
+const router = useRouter()
 
 const { get, post, put, destroy } = useApi()
 const { isManajemen } = useAuth()
@@ -237,6 +254,7 @@ const showDelete = ref(false)
 const deleteTarget = ref(null)
 const deleting = ref(false)
 const isGenerating = ref(false)
+const showLockedModal = ref(false)
 
 const formData = ref({
   employee_name: '',
@@ -436,10 +454,19 @@ async function handleGenerate() {
     alert(res.message || 'Berhasil generate iuran')
     fetchData()
   } catch (e) {
-    alert(e.message || 'Gagal generate')
+    if (e.response?.status === 403) {
+      showLockedModal.value = true
+    } else {
+      alert(e.message || 'Gagal generate')
+    }
   } finally {
     isGenerating.value = false
   }
+}
+
+function goToGajiKaryawan() {
+  showLockedModal.value = false
+  router.push('/admin/payroll/gaji-karyawan')
 }
 
 function goToPage(p) { page.value = p; fetchData() }

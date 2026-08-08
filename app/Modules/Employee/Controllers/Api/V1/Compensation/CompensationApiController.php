@@ -130,7 +130,67 @@ class CompensationApiController extends Controller
     }
 
     /**
+     * GET /api/v1/employees/compensation/export-groups
+     *
+     * Daftar group kompensasi (comp_group + compensation_paid_at + jumlah kontrak)
+     * yang pembayarannya jatuh dalam rentang start_date s/d end_date + 7 dari periode terpilih.
+     */
+    public function exportGroups(Request $request): JsonResponse
+    {
+        $month = $request->query('month', date('n'));
+        $year = $request->query('year', date('Y'));
+        $periode = $request->query('periode', 'auto');
+
+        $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
+
+        try {
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+        } catch (\Exception $e) {
+            return response()->json([
+                'data' => ['period' => null, 'groups' => []],
+                'message' => $e->getMessage(),
+            ], 400);
+        }
+
+        $startDate = $dateInfo['start'];
+        $endDatePlus7 = $dateInfo['end']->copy()->addDays(7);
+
+        $groups = EmployeeContract::whereNotNull('comp_group')
+            ->whereNotNull('compensation_paid_at')
+            ->whereBetween('compensation_paid_at', [
+                $startDate->format('Y-m-d'),
+                $endDatePlus7->format('Y-m-d'),
+            ])
+            ->get(['comp_group', 'compensation_paid_at'])
+            ->groupBy('comp_group')
+            ->map(function ($items, $groupName) {
+                return [
+                    'comp_group'            => $groupName,
+                    'compensation_paid_at'  => $items->max('compensation_paid_at')->format('Y-m-d'),
+                    'total_contracts'       => $items->count(),
+                ];
+            })
+            ->sortByDesc('compensation_paid_at')
+            ->values();
+
+        return response()->json([
+            'data' => [
+                'period' => [
+                    'start'      => $startDate->format('Y-m-d'),
+                    'end'        => $dateInfo['end']->format('Y-m-d'),
+                    'end_plus_7' => $endDatePlus7->format('Y-m-d'),
+                    'label'      => $dateInfo['label'],
+                ],
+                'groups' => $groups,
+            ],
+        ]);
+    }
+
+    /**
      * GET /api/v1/employees/compensation/export
+     *
+     * Parameter opsional `groups`: daftar nama group (dipisah koma) untuk membatasi
+     * kontrak yang diekspor hanya milik group-group tersebut.
      */
     public function export(Request $request)
     {
@@ -139,10 +199,19 @@ class CompensationApiController extends Controller
         $periode = $request->query('periode', 'auto');
         $isLatest = $request->boolean('is_latest');
 
+        $groupsRaw = $request->query('groups');
+        if (is_array($groupsRaw)) {
+            $groups = collect($groupsRaw)->filter()->map('trim')->values()->all();
+        } elseif ($groupsRaw) {
+            $groups = collect(explode(',', (string) $groupsRaw))->filter()->map('trim')->values()->all();
+        } else {
+            $groups = [];
+        }
+
         $fileName = "kompensasi_{$year}_{$month}.xlsx";
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $periode, $isLatest),
+            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $periode, $isLatest, $groups),
             $fileName
         );
     }

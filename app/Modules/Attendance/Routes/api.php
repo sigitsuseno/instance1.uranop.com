@@ -82,17 +82,15 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.consecutive.destroy');
     });
 
-    // ========== RESUME KEHADIRAN (Attendance Records) ==========
+    // ========== RESUME KEHADIRAN (Attendance Records) — ON_THE_FLY ==========
 
     Route::prefix('attendance/recap')->group(function () {
         Route::get('/', [AttendanceApiController::class, 'recapList'])
             ->name('attendance.recap.list');
         Route::get('/export', [AttendanceApiController::class, 'recapExport'])
             ->name('attendance.recap.export');
-        Route::post('/generate', [AttendanceApiController::class, 'recapGenerate'])
-            ->name('attendance.recap.generate');
-        Route::post('/approve', [AttendanceApiController::class, 'recapApprove'])
-            ->name('attendance.recap.approve');
+        Route::post('/save', [AttendanceApiController::class, 'recapSave'])
+            ->name('attendance.recap.save');
     });
 
     // ========== ATTENDANCE CONFIGS — per-page settings ==========

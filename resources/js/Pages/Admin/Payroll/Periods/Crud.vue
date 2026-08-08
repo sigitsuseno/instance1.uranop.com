@@ -94,11 +94,26 @@
         </BaseButton>
       </template>
     </BaseModal>
+
+    <!-- Locked Warning Modal (logic_payroll_baru.md §5/#11) -->
+    <BaseModal :show="showLockedModal" @close="showLockedModal = false" title="Payroll Terkunci">
+      <div class="p-4 space-y-4">
+        <p class="text-sm text-(--text-main)">
+          Tidak dapat merubah periode untuk periode payroll yang sudah di lock.
+          Untuk melakukan perubahan, unlock payroll di halaman Gaji Karyawan terlebih dahulu.
+        </p>
+        <div class="flex justify-end gap-2">
+          <BaseButton variant="secondary" @click="showLockedModal = false">Tutup</BaseButton>
+          <BaseButton variant="primary" @click="goToGajiKaryawan">Unlock Payroll</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseModal from '@/Components/BaseModal.vue'
@@ -108,12 +123,14 @@ import { IconPlus } from '@/Components/Icons/index.js'
 import { useApi } from '@/composables/useApi'
 
 const { get, post, put, destroy } = useApi()
+const router = useRouter()
 
 const periods = ref([])
 const showModal = ref(false)
 const editing = ref(null)
 const saving = ref(false)
 const error = ref('')
+const showLockedModal = ref(false)
 
 const form = ref({
   name: '',
@@ -182,8 +199,17 @@ async function handleDelete(p) {
     await destroy(`/api/v1/payroll/periods/${p.id}`)
     await fetchPeriods()
   } catch (e) {
-    alert('Gagal menghapus periode')
+    if (e.response?.status === 403) {
+      showLockedModal.value = true
+    } else {
+      alert(e.message || 'Gagal menghapus periode')
+    }
   }
+}
+
+function goToGajiKaryawan() {
+  showLockedModal.value = false
+  router.push('/admin/payroll/gaji-karyawan')
 }
 
 async function fetchPeriods() {

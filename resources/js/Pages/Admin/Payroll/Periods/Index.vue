@@ -17,10 +17,18 @@
             {{ p.name }}
           </option>
         </select>
+        <!-- ⚠️ NONAKTIF 2026-08-07 — tombol Generate (recap/generate) flow LAMA.
+             Halaman ini legacy (route payroll/periods, judul "Gaji Karyawan (Legacy)") — dipakai untuk
+             buat/list periode & preview, tapi GENERATE tidak dipakai lagi.
+             recap/generate TIDAK handle is_split (selalu 1 segmen utuh, menghapus record split) dan
+             digantikan alur Payroll → Gaji Karyawan: Simpan → Finalisasi → Lock/Unlock.
+             TODO: hapus tombol & fungsi handleGenerate saat perbaikan besar (lih. logic_payroll_baru.md §6/#7). -->
         <BaseButton
           variant="primary"
-          :disabled="!selectedPeriodId || generating"
-          @click="handleGenerate"
+          :disabled="true"
+          @click="null"
+          title="Nonaktif — digantikan alur Simpan/Finalisasi/Lock di menu Payroll → Gaji Karyawan"
+          class="opacity-50 cursor-not-allowed"
         >
           <template #icon-left>
             <IconRefresh class="w-4 h-4" />
@@ -323,11 +331,15 @@ function onPeriodChange() {
   fetchRecords()
 }
 
+// ⚠️ DEPRECATED / NONAKTIF 2026-08-07 — flow lama, tombol di-disable.
+// recap/save hanya menulis att_records (snapshot on-the-fly) — TIDAK menyentuh pay_records.
+// Alur resmi: Payroll → Gaji Karyawan: Simpan → Finalisasi → Lock/Unlock.
+// TODO: hapus fungsi & tombol saat perbaikan besar (lih. logic_payroll_baru.md §6/#7).
 async function handleGenerate() {
   if (!selectedPeriodId.value) return
   generating.value = true
   try {
-    await post(`/api/v1/attendance/recap/generate`, { period_id: selectedPeriodId.value })
+    await post(`/api/v1/attendance/recap/save`, { period_id: selectedPeriodId.value })
     await fetchRecords()
   } catch (error) {
     console.error('Error generating', error)

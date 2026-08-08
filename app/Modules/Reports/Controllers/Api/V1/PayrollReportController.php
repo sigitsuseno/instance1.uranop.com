@@ -8,8 +8,10 @@ use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
+use App\Modules\Payroll\Models\PayrollConfig;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Carbon\Carbon;
 
 class PayrollReportController extends Controller
@@ -281,6 +283,133 @@ class PayrollReportController extends Controller
         return [$data, $period, $segment];
     }
 
+    // =====================================================================
+    // KIRIM ALL — daftar transfer bank gabungan (All-In + Print)
+    // GET /api/v1/laporan/payroll/kirim-all            → JSON (tab Kirim ALL)
+    // GET /api/v1/laporan/payroll/kirim-all/export     → Excel (multi-sheet)
+    //
+    // Hanya baca pay_records TERSIMPAN. Builder dipakai bersama JSON & Excel
+    // supaya angka di tabel dan di Excel tidak mungkin beda.
+    // =====================================================================
+
+    public function kirimAll(Request $request)
+    {
+        [$records, $period, $segment] = $this->buildKirimAllData($request);
+
+        return response()->json([
+            'data' => $records,
+            'period' => [
+                'id'                 => $period->id,
+                'name'               => $period->name,
+                'is_split'           => $period->is_split,
+                'segment'            => $segment,
+                'end_date'           => $period->end_date?->format('Y-m-d'),
+                'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    public function exportKirimAll(Request $request)
+    {
+        [$records, $period, $segment] = $this->buildKirimAllData($request);
+
+        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
+        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+
+        $secAData = [];
+        $secBData = [];
+        foreach ($records as $r) {
+            $groups = $r['groups'] ?? [];
+            // GRP-EXTRA (karyawan titipan) selalu masuk Section A — sama dengan grouping di tab
+            if (array_intersect($groups, $sectionA) || in_array('GRP-EXTRA', $groups)) {
+                $secAData[] = $r;
+            } elseif (array_intersect($groups, $sectionB)) {
+                $secBData[] = $r;
+            }
+        }
+
+        $periodName = $period->name;
+        if ($period->is_split && $segment) {
+            $periodName .= " (Segmen {$segment})";
+        }
+
+        $filename = 'Kirim_ALL_' . str_replace(' ', '_', $periodName) . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Modules\Payroll\Exports\KirimAllExport(
+                $secAData,
+                $secBData,
+                $period->tanggal_penggajian?->format('Y-m-d')
+            ),
+            $filename
+        );
+    }
+
+    /** Bangun daftar transfer Kirim ALL (JSON & Excel pakai builder yang sama). */
+    private function buildKirimAllData(Request $request): array
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = PayRecord::with(['employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*');
+
+        if ($period->is_split) {
+            if (!$segment) {
+                $segment = 'A';
+            }
+            $query->where('segment', $segment);
+        }
+
+        $records = $query->get()->map(function ($record) {
+            $emp = $record->employee;
+            return [
+                'id'                  => $record->id,
+                'employee_id'         => $emp?->id,
+                'employee_code'       => $emp?->employee_code ?? $emp?->nip ?? '-',
+                'name'                => $emp?->name ?? '-',
+                'bank_name'           => $emp?->bank_name ?? '-',
+                'bank_account_number' => $emp?->bank_account_number ?? '-',
+                'bank_account_name'   => $emp?->bank_account_name ?? '-',
+                'bank_cabang'         => $emp?->bank_cabang ?? '',
+                'gaji_bersih'         => (float) $record->gaji_bersih,
+                'notes'               => $record->notes ?? '',
+                'groups'              => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
+            ];
+        });
+
+        // ── Karyawan tambahan (ExtraEmployee) masuk ke All-In ──
+        $extraEmployees = ExtraEmployee::all();
+        foreach ($extraEmployees as $emp) {
+            $g = $emp->komponen_gaji ?? [];
+            $records->push([
+                'id'                  => 'ext-' . $emp->id,
+                'employee_id'         => $emp->id,
+                'employee_code'       => $emp->kode ?? '-',
+                'name'                => $emp->nama ?? '-',
+                'bank_name'           => '-',
+                'bank_account_number' => $emp->account ?? '-',
+                'bank_account_name'   => $emp->nama ?? '-',
+                'bank_cabang'         => '-',
+                'gaji_bersih'         => (float) ($g['total_terima'] ?? 0),
+                'notes'               => '',
+                'groups'              => ['GRP-EXTRA'],
+            ]);
+        }
+
+        return [$records, $period, $segment];
+    }
+
     private function buildPayrollData(Request $request)
     {
         $periodId = $request->input('period_id');
@@ -501,5 +630,300 @@ class PayrollReportController extends Controller
             'data' => collect($data)->sortBy('bagian')->values(),
             'period_name' => $periodName,
         ];
+    }
+
+    // =====================================================================
+    // LAPORAN PAYROLL (tab Payroll) — dipisah dari GajiKaryawanController
+    // GET /api/v1/laporan/payroll/laporan-payroll  &  /laporan-payroll/export
+    //
+    // Hanya baca data TERSIMPAN (pay_records). Tidak ada mode on-the-fly /
+    // status lifecycle — itu domain halaman pengelolaan (gaji-karyawan).
+    // =====================================================================
+
+    public function laporanPayroll(Request $request)
+    {
+        [$records, $period, $segment] = $this->buildLaporanPayrollData($request);
+
+        return response()->json([
+            'data' => $records,
+            'period' => [
+                'id'                 => $period->id,
+                'name'               => $period->name,
+                'is_split'           => $period->is_split,
+                'segment'            => $segment,
+                'end_date'           => $period->end_date?->format('Y-m-d'),
+                'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    public function exportLaporanPayroll(Request $request)
+    {
+        [$records, $period, $segment] = $this->buildLaporanPayrollExportData($request);
+
+        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
+        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+
+        $secAData = [];
+        $secBData = [];
+
+        foreach ($records as $r) {
+            $groups = $r['groups'] ?? [];
+            // GRP-EXTRA (karyawan titipan) selalu masuk Section A — sama dengan grouping di tab
+            if (array_intersect($groups, $sectionA) || in_array('GRP-EXTRA', $groups)) {
+                $secAData[] = $r;
+            } elseif (array_intersect($groups, $sectionB)) {
+                $secBData[] = $r;
+            }
+        }
+
+        $periodName = $period->name;
+        if ($period->is_split && $segment) {
+            $periodName .= " (Segmen {$segment})";
+        }
+
+        $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodName) . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Modules\Reports\Exports\GajiKaryawanExport($secAData, $secBData, $periodName),
+            $filename
+        );
+    }
+
+    /** Data rekap tab Payroll (JSON) — shape sama dengan GajiKaryawanController@index (on_record). */
+    private function buildLaporanPayrollData(Request $request): array
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*');
+
+        if ($period->is_split) {
+            $query->where('segment', $segment ?? 'A');
+        }
+
+        $records = $query->get()->map(function ($record) {
+            $emp = $record->employee;
+            $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+
+            return [
+                'id' => $record->id,
+                'employee_id' => $emp?->id,
+                'employee_code' => $emp?->employee_code ?? $emp?->nip ?? '-',
+                'name' => $emp?->name ?? '-',
+                'department' => $emp?->department?->name ?? '-',
+                'position' => $emp?->position?->name ?? '-',
+                'gender' => $emp?->gender ?? '-',
+                'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
+                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
+                'bank_name' => $emp?->bank_name ?? '-',
+                'bank_account_number' => $emp?->bank_account_number ?? '-',
+                'bank_account_name' => $emp?->bank_account_name ?? '-',
+                'bank_cabang' => $emp?->bank_cabang ?? '',
+                'notes' => $record->notes ?? '',
+                'gaji_pokok' => (float) $record->gaji_pokok,
+                'premi' => (float) $record->premi,
+                'tj_masa_kerja' => (float) $record->tj_masa_kerja,
+                'tunjangan' => (float) $record->tunjangan,
+                'hari_kerja' => (int) $record->hari_kerja,
+                'lm' => (int) $record->lm,
+                'lm_count' => (int) $record->lm_count,
+                'lembur_count' => (int) $record->lembur_count,
+                'gaji' => (float) $record->gaji,
+                'upah_lembur' => (float) $record->upah_lembur,
+                'revisi' => (float) $record->revisi,
+                'premi_hadir' => (float) $record->premi_hadir,
+                'pblt' => (float) $record->pblt,
+                'total' => (float) $record->gaji_kotor,
+                'bpjs_tk' => (float) $record->bpjs_tk,
+                'bpjs_ks' => (float) $record->bpjs_ks,
+                'bpjs_pen' => (float) $record->bpjs_pen,
+                'cashbon' => (float) $record->cashbon,
+                'pph' => (float) $record->pph,
+                'gaji_bersih' => (float) $record->gaji_bersih,
+            ];
+        });
+
+        // ExtraEmployee masuk (sama seperti index on_record) → konsisten utk summary/grand total
+        $records = $this->appendExtraEmployeeRecords($records);
+
+        return [$records, $period, $segment];
+    }
+
+    /** Data export tab Payroll (Excel) — shape sama dengan GajiKaryawanController@export. */
+    private function buildLaporanPayrollExportData(Request $request): array
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $validated['segment'] ?? null;
+
+        $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*');
+
+        if ($period->is_split) {
+            if (!$segment) {
+                $segment = 'A';
+            }
+            $query->where('segment', $segment);
+        }
+
+        $records = $query->get()->map(function ($record) use ($period) {
+            $emp = $record->employee;
+            $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+
+            // Masa kerja: selisih bulan dari join_date ke end_date periode (dibulatkan ke bawah)
+            $masaKerja = 0;
+            if ($joinDate && $period->end_date) {
+                $masaKerja = (int) floor($joinDate->diffInMonths(Carbon::parse($period->end_date)));
+            }
+
+            return [
+                'employee_code' => $emp?->employee_code ?? $emp?->nip ?? '-',
+                'name' => $emp?->name ?? '-',
+                'department' => $emp?->department?->name ?? '-',
+                'position' => $emp?->position?->name ?? '-',
+                'gender' => $emp?->gender ?? '-',
+                'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
+                'masa_kerja' => $masaKerja,
+                'ptkp' => $emp?->ptkp ?? '-',
+                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
+                'bank_name' => $emp?->bank_name ?? '-',
+                'bank_account_number' => $emp?->bank_account_number ?? '-',
+                'bank_account_name' => $emp?->bank_account_name ?? '-',
+                'gaji_pokok' => (float) $record->gaji_pokok,
+                'premi' => (float) $record->premi,
+                'tj_masa_kerja' => (float) $record->tj_masa_kerja,
+                'tunjangan' => (float) $record->tunjangan,
+                'hari_kerja' => (int) $record->hari_kerja,
+                'lm' => (int) $record->lm,
+                'lembur_count' => (int) $record->lembur_count,
+                'gaji' => (float) $record->gaji,
+                'upah_lembur' => (float) $record->upah_lembur,
+                'revisi' => (float) $record->revisi,
+                'premi_hadir' => (float) $record->premi_hadir,
+                'pblt' => (float) $record->pblt,
+                'total' => (float) $record->gaji_kotor,
+                'bpjs_tk' => (float) $record->bpjs_tk,
+                'bpjs_ks' => (float) $record->bpjs_ks,
+                'bpjs_pen' => (float) $record->bpjs_pen,
+                'cashbon' => (float) $record->cashbon,
+                'pph' => (float) $record->pph,
+                'gaji_bersih' => (float) $record->gaji_bersih,
+            ];
+        });
+
+        $records = $this->appendExtraEmployeeExportRecords($records);
+
+        return [$records, $period, $segment];
+    }
+
+    /** Tambah ExtraEmployee ke koleksi (shape JSON — summary/grand total). */
+    private function appendExtraEmployeeRecords(Collection $records): Collection
+    {
+        $extraEmployees = ExtraEmployee::all();
+        foreach ($extraEmployees as $emp) {
+            $g = $emp->komponen_gaji ?? [];
+            $records->push([
+                'id'                  => 'ext-' . $emp->id,
+                'employee_id'         => $emp->id,
+                'employee_code'       => $emp->kode ?? '-',
+                'name'                => $emp->nama ?? '-',
+                'department'          => '-',
+                'position'            => '-',
+                'gender'              => $emp->gender ?? '-',
+                'join_year'           => '-',
+                'groups'              => ['GRP-EXTRA'],
+                'bank_name'           => '-',
+                'bank_account_number' => $emp->account ?? '-',
+                'bank_account_name'   => $emp->nama ?? '-',
+                'bank_cabang'         => '-',
+                'notes'               => '',
+                'gaji_pokok'          => (float) ($g['gaji_pokok'] ?? 0),
+                'premi'               => (float) ($g['premi'] ?? 0),
+                'tj_masa_kerja'       => (float) ($g['tj_mk'] ?? 0),
+                'tunjangan'           => (float) ($g['tunjangan'] ?? 0),
+                'hari_kerja'          => 0,
+                'lm'                  => 0,
+                'lm_count'            => 0,
+                'lembur_count'        => 0,
+                'gaji'                => 0,
+                'upah_lembur'         => 0,
+                'revisi'              => 0,
+                'premi_hadir'         => 0,
+                'pblt'                => 0,
+                'total'               => (float) ($g['total_gaji'] ?? 0),
+                'bpjs_tk'             => 0,
+                'bpjs_ks'             => 0,
+                'bpjs_pen'            => 0,
+                'cashbon'             => (float) ($g['cashbon'] ?? 0),
+                'pph'                 => (float) ($g['ttl_pph'] ?? 0),
+                'gaji_bersih'         => (float) ($g['total_terima'] ?? 0),
+            ]);
+        }
+
+        return $records;
+    }
+
+    /** Tambah ExtraEmployee ke koleksi (shape export Excel — Section A). */
+    private function appendExtraEmployeeExportRecords(Collection $records): Collection
+    {
+        $extraEmployees = ExtraEmployee::all();
+        foreach ($extraEmployees as $emp) {
+            $g = $emp->komponen_gaji ?? [];
+            $records->push([
+                'employee_code'       => $emp->kode ?? '-',
+                'name'                => $emp->nama ?? '-',
+                'department'          => '-',
+                'position'            => '-',
+                'gender'              => $emp->gender ?? '-',
+                'join_year'           => '-',
+                'masa_kerja'          => 0,
+                'ptkp'                => $emp->status_ptkp ?? '-',
+                'groups'              => ['GRP-EXTRA'],
+                'bank_name'           => '-',
+                'bank_account_number' => $emp->account ?? '-',
+                'bank_account_name'   => $emp->nama ?? '-',
+                'gaji_pokok'          => (float) ($g['gaji_pokok'] ?? 0),
+                'premi'               => (float) ($g['premi'] ?? 0),
+                'tj_masa_kerja'       => (float) ($g['tj_mk'] ?? 0),
+                'tunjangan'           => (float) ($g['tunjangan'] ?? 0),
+                'hari_kerja'          => 0,
+                'lm'                  => 0,
+                'lembur_count'        => 0,
+                'gaji'                => 0,
+                'upah_lembur'         => 0,
+                'revisi'              => 0,
+                'premi_hadir'         => 0,
+                'pblt'                => 0,
+                'total'               => (float) ($g['total_gaji'] ?? 0),
+                'bpjs_tk'             => 0,
+                'bpjs_ks'             => 0,
+                'bpjs_pen'            => 0,
+                'cashbon'             => (float) ($g['cashbon'] ?? 0),
+                'pph'                 => (float) ($g['ttl_pph'] ?? 0),
+                'gaji_bersih'         => (float) ($g['total_terima'] ?? 0),
+            ]);
+        }
+
+        return $records;
     }
 }

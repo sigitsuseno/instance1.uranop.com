@@ -21,34 +21,8 @@
           </option>
         </select>
 
-        <!-- Generate Awal Button -->
-        <BaseButton
-          variant="secondary"
-          :disabled="!selectedPeriodId || generating || isManajemen"
-          :loading="generating"
-          @click="handleGenerate"
-        >
-          <template #icon-left>
-            <IconRefresh class="w-4 h-4" />
-          </template>
-          Generate Awal
-        </BaseButton>
-
-        <!-- Kalkulasi & Kunci Button -->
-        <BaseButton
-          v-if="hasUnlockedRecaps"
-          variant="primary"
-          :disabled="isManajemen"
-          @click="isApproveModalOpen = true"
-        >
-          <template #icon-left>
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-          </template>
-          Kalkulasi & Kunci
-        </BaseButton>
+        <!-- ⚠️ TOMBOL GENERATE AWAL DIHAPUS 2026-08-07 — digantikan alur Simpan/Finalisasi baru.
+             Fungsi backend recapGenerate() sudah dihapus 2026-08-07 (diganti recapSave = snapshot on-the-fly). -->
 
         <!-- Export Button -->
         <BaseButton
@@ -60,6 +34,54 @@
             <IconDownload class="w-4 h-4" />
           </template>
           Export
+        </BaseButton>
+
+        <!-- Simpan: snapshot on_the_fly → pay_records (status draft) -->
+        <BaseButton
+          v-if="showSimpanButton"
+          variant="primary"
+          :loading="processingSimpan"
+          :disabled="!selectedPeriodId"
+          @click="handleSimpan"
+        >
+          <template #icon-left>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+            </svg>
+          </template>
+          Simpan
+        </BaseButton>
+
+        <!-- Finalisasi: hitung ulang rumus final (muncul setelah end_date & sudah ada snapshot draft) -->
+        <BaseButton
+          v-if="showFinalisasiButton"
+          variant="warning"
+          :loading="processingFinalisasi"
+          :disabled="!selectedPeriodId"
+          @click="handleFinalisasi"
+        >
+          Finalisasi
+        </BaseButton>
+
+        <!-- Lock: kunci payroll (hanya setelah finalisasi) -->
+        <BaseButton
+          v-if="showLockButton"
+          variant="danger"
+          :loading="processingLock"
+          :disabled="!selectedPeriodId"
+          @click="handleLock"
+        >
+          Lock
+        </BaseButton>
+
+        <!-- Unlock: butuh password dari SystemSetting -->
+        <BaseButton
+          v-if="showUnlockButton"
+          variant="secondary"
+          :disabled="!selectedPeriodId"
+          @click="openUnlockModal"
+        >
+          Unlock
         </BaseButton>
 
         <!-- Setting Button -->
@@ -85,8 +107,19 @@
         <Badge :variant="selectedPeriod.is_split ? 'warning' : 'success'">
           {{ selectedPeriod.is_split ? 'Split Periode' : 'Periode Normal' }}
         </Badge>
+        <Badge v-if="isOnTheFly" variant="info">
+          ESTIMASI — periode belum berakhir
+        </Badge>
+        <Badge v-if="recordStatus === 'draft'" variant="warning">Draft (snapshot)</Badge>
+        <Badge v-else-if="recordStatus === 'generated'" variant="success">Generated</Badge>
+        <Badge v-else-if="recordStatus === 'locked'" variant="danger">Terkunci</Badge>
         <span class="text-(--text-muted) font-medium">{{ records.length }} Karyawan</span>
       </div>
+
+      <!-- Hint export: export selalu baca DB → HR disuruh Simpan dulu (#6) -->
+      <p v-if="isOnTheFly && recordStatus === null" class="text-xs text-(--text-warning) font-medium">
+        💡 Export membaca data tersimpan. Klik <strong>Simpan</strong> dulu sebelum export.
+      </p>
 
       <!-- Segment selector (only if split) -->
       <div v-if="selectedPeriod.is_split" class="flex gap-2">
@@ -336,9 +369,13 @@
                   <td class="border border-(--border-soft) px-2.5 py-2 text-right font-mono font-extrabold text-(--primary) bg-(--primary)/5">{{ formatCurrency(record.gaji_bersih) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-center">
                     <button
-                      @click="openEditModal(record)"
-                      class="text-(--primary) hover:text-(--primary-hover) transition-colors p-1 rounded hover:bg-(--primary)/10"
-                      title="Edit Upah Lembur"
+                      @click="canEditRecords ? openEditModal(record) : null"
+                      :disabled="!canEditRecords"
+                      :class="canEditRecords
+                        ? 'text-(--primary) hover:text-(--primary-hover) hover:bg-(--primary)/10'
+                        : 'text-(--text-soft) cursor-not-allowed'"
+                      class="transition-colors p-1 rounded"
+                      :title="canEditRecords ? 'Edit Upah Lembur' : (isOnTheFly ? 'Edit nonaktif di mode estimasi — klik Simpan dulu' : 'Payroll terkunci — unlock dulu untuk edit')"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -393,18 +430,14 @@
         <h3 class="text-sm font-semibold text-(--text-main)">Rincian Gaji Karyawan</h3>
       </div>
       <div class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
-        <div v-if="loadingRecap" class="flex items-center justify-center gap-2">
-          <svg class="animate-spin h-5 w-5 text-(--primary)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Memproses data...
+        <div v-if="isOnTheFly">
+          Menampilkan estimasi gaji (on-the-fly) periode ini. Klik <strong>Simpan</strong> untuk membuat snapshot draft.
         </div>
-        <div v-else-if="hasUnlockedRecaps">
-          Data kehadiran terdeteksi. Silakan klik tombol <strong>"Kalkulasi & Kunci Gaji"</strong> untuk memproses payroll.
+        <div v-else-if="recordStatus === null">
+          Belum ada data payroll tersimpan. Klik <strong>Simpan</strong> untuk membuat snapshot dari estimasi, lalu <strong>Finalisasi</strong> setelah periode berakhir.
         </div>
         <div v-else>
-          Belum ada data gaji untuk periode ini. Klik <strong>"Generate"</strong> untuk menghitung data awal kehadiran.
+          Data payroll tersedia. Gunakan tombol di atas untuk <strong>Finalisasi</strong> / <strong>Lock</strong> / <strong>Unlock</strong>.
         </div>
       </div>
     </BaseCard>
@@ -422,20 +455,27 @@
       </div>
     </BaseCard>
 
-    <!-- Modal: Kalkulasi & Kunci Gaji -->
-    <BaseModal :show="isApproveModalOpen" @close="isApproveModalOpen = false" title="Kalkulasi & Kunci Gaji">
+    <!-- Modal: Unlock Payroll -->
+    <BaseModal :show="isUnlockModalOpen" @close="closeUnlockModal" title="Buka Kunci Payroll">
       <div class="space-y-4">
         <p class="text-sm text-(--text-main)">
-          Proses ini akan mengkalkulasi ulang gaji berdasarkan data kehadiran terakhir dan <strong>mengunci</strong> data tersebut.
+          Payroll periode ini sedang <strong>terkunci</strong>. Masukkan password unlock untuk membukanya kembali (status: generated).
         </p>
 
-        <p v-if="unlockedCount > 0" class="text-sm text-(--text-muted)">
-          {{ unlockedCount }} data kehadiran siap diproses.
-        </p>
+        <div>
+          <label class="block text-xs font-medium text-(--text-muted) mb-1">Password Unlock</label>
+          <input
+            v-model="unlockPassword"
+            type="password"
+            class="w-full px-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+            placeholder="Masukkan password"
+            @keyup.enter="handleUnlock"
+          />
+        </div>
 
         <div class="flex justify-end gap-3 mt-6">
-          <BaseButton variant="ghost" @click="isApproveModalOpen = false">Batal</BaseButton>
-          <BaseButton variant="primary" :loading="approvingPayroll" @click="handleApprovePayroll">Proses & Kunci Gaji</BaseButton>
+          <BaseButton variant="ghost" @click="closeUnlockModal">Batal</BaseButton>
+          <BaseButton variant="danger" :loading="processingUnlock" @click="handleUnlock">Unlock</BaseButton>
         </div>
       </div>
     </BaseModal>
@@ -564,28 +604,29 @@ import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 import Badge from '@/Components/Badge.vue'
-import { IconDownload, IconFileInvoice, IconRefresh, IconSearch } from '@/Components/Icons/index.js'
+import { IconDownload, IconFileInvoice, IconSearch } from '@/Components/Icons/index.js'
 import GajiKaryawanSettings from '@/Components/ReportPage/settings/GajiKaryawanSettings.vue'
 import { useApi } from '@/composables/useApi'
-import { useAuth } from '@/composables/useAuth'
 import { useNotificationStore } from '@/Stores/notification'
 
-const { isManajemen } = useAuth()
 const { get, post, put } = useApi()
 const notification = useNotificationStore()
 
 const periods = ref([])
 const selectedPeriodId = ref('')
 const records = ref([])
-const generating = ref(false)
 const activeSegment = ref(null)
 const searchQuery = ref('')
 
-// Recap state
-const recapRecords = ref([])
-const loadingRecap = ref(false)
-const approvingPayroll = ref(false)
-const isApproveModalOpen = ref(false)
+// Mode & lifecycle (logic_payroll_baru.md): on_the_fly vs on_record; draft → generated → locked
+const mode = ref('on_record')
+const recordStatus = ref(null)
+const processingSimpan = ref(false)
+const processingFinalisasi = ref(false)
+const processingLock = ref(false)
+const isUnlockModalOpen = ref(false)
+const unlockPassword = ref('')
+const processingUnlock = ref(false)
 
 // Settings state
 const showSettings = ref(false)
@@ -628,13 +669,28 @@ const periodLabel = computed(() => {
   return `${start.getDate()} ${months[start.getMonth()]} - ${end.getDate()} ${months[end.getMonth()]} ${end.getFullYear().toString().slice(-2)}`
 })
 
-const unlockedCount = computed(() => {
-  return recapRecords.value.filter(r => r.status !== 'locked').length
+// ─── Mode & lifecycle (logic_payroll_baru.md) ───
+
+const isOnTheFly = computed(() => mode.value === 'on_the_fly')
+const isLocked = computed(() => recordStatus.value === 'locked')
+const canEditRecords = computed(() => !isOnTheFly.value && !isLocked.value)
+
+// Parse manual YYYY-MM-DD (hindari bug timezone `new Date(isoString)`)
+const isPeriodEnded = computed(() => {
+  if (!selectedPeriod.value?.end_date) return false
+  const [y, m, d] = selectedPeriod.value.end_date.split('-').map(Number)
+  return new Date() > new Date(y, m - 1, d)
 })
 
-const hasUnlockedRecaps = computed(() => {
-  return selectedPeriod.value && unlockedCount.value > 0
-})
+// SIMPAN visible: setelah pilih periode & belum ada pay_records / masih draft
+const showSimpanButton = computed(() => selectedPeriodId.value && (recordStatus.value === null || recordStatus.value === 'draft'))
+// FINALISASI visible: selalu muncul setelah periode berakhir, kecuali sudah locked
+// (bisa dipakai untuk re-finalisasi dari status generated)
+const showFinalisasiButton = computed(() => selectedPeriodId.value && isPeriodEnded.value && recordStatus.value !== 'locked')
+// LOCK visible: sudah final (generated)
+const showLockButton = computed(() => recordStatus.value === 'generated')
+// UNLOCK visible: terkunci
+const showUnlockButton = computed(() => recordStatus.value === 'locked')
 
 const filteredRecords = computed(() => {
   if (!searchQuery.value) return records.value
@@ -792,34 +848,11 @@ async function fetchRecords() {
     }
     const res = await get(url)
     records.value = res.data || []
+    mode.value = res.mode || 'on_record'
+    recordStatus.value = res.record_status ?? null
   } catch (error) {
     console.error('Error fetching records', error)
     records.value = []
-  }
-}
-
-async function fetchRecapRecords() {
-  if (!selectedPeriodId.value) {
-    recapRecords.value = []
-    return
-  }
-  loadingRecap.value = true
-  try {
-    let all = []
-    let page = 1
-    let lastPage = 1
-    do {
-      const res = await get(`/api/v1/attendance/recap?period_id=${selectedPeriodId.value}&per_page=100&page=${page}`)
-      all = [...all, ...(res.data || [])]
-      lastPage = res.last_page || 1
-      page++
-    } while (page <= lastPage)
-    recapRecords.value = all
-  } catch (error) {
-    console.error('Error fetching recap records', error)
-    recapRecords.value = []
-  } finally {
-    loadingRecap.value = false
   }
 }
 
@@ -832,46 +865,7 @@ async function onPeriodChange() {
   const period = periods.value.find(p => p.id === selectedPeriodId.value)
   activeSegment.value = period?.is_split ? 'A' : null
   searchQuery.value = ''
-  await Promise.all([fetchRecords(), fetchRecapRecords()])
-}
-
-async function handleGenerate() {
-  if (!selectedPeriodId.value) return
-  generating.value = true
-  try {
-    const res = await post(`/api/v1/attendance/recap/generate`, { period_id: selectedPeriodId.value })
-    notification.success(res.message || 'Berhasil men-generate resume kehadiran.')
-    await Promise.all([fetchRecords(), fetchRecapRecords()])
-  } catch (error) {
-    console.error('Error generating', error)
-    notification.error(error.message || 'Gagal men-generate resume kehadiran.')
-  } finally {
-    generating.value = false
-  }
-}
-
-async function handleApprovePayroll() {
-  const unlockedIds = recapRecords.value
-    .filter(r => r.status !== 'locked')
-    .map(r => r.id)
-
-  if (unlockedIds.length === 0) {
-    notification.warning('Tidak ada data kehadiran yang perlu diproses.')
-    return
-  }
-
-  approvingPayroll.value = true
-  try {
-    const res = await post('/api/v1/attendance/recap/approve', { ids: unlockedIds })
-    notification.success(res.message || 'Gaji karyawan berhasil dikalkulasi dan dikunci!')
-    isApproveModalOpen.value = false
-    await Promise.all([fetchRecords(), fetchRecapRecords()])
-  } catch (error) {
-    console.error('Error approving payroll', error)
-    notification.error(error.message || 'Gagal memproses payroll.')
-  } finally {
-    approvingPayroll.value = false
-  }
+  await fetchRecords()
 }
 
 function handleExport() {
@@ -880,7 +874,7 @@ function handleExport() {
   if (selectedPeriodId.value) params.append('period_id', selectedPeriodId.value)
   if (activeSegment.value) params.append('segment', activeSegment.value)
 
-  const url = `/api/v1/payroll/gaji-karyawan/export?${params.toString()}`
+  const url = `/api/v1/laporan/payroll/laporan-payroll/export?${params.toString()}`
   
   notification.info('Sedang menyiapkan file Excel...')
   
@@ -903,6 +897,95 @@ function handleExport() {
       console.error(err)
       notification.error('Gagal export Excel')
     })
+}
+
+// ─── Lifecycle Payroll: Simpan → Finalisasi → Lock → Unlock ───
+
+async function handleSimpan() {
+  if (!selectedPeriodId.value) return
+  processingSimpan.value = true
+  try {
+    const res = await post('/api/v1/payroll/gaji-karyawan/simpan', {
+      period_id: selectedPeriodId.value,
+      segment: activeSegment.value,
+    })
+    notification.success(res.message || 'Snapshot berhasil disimpan.')
+    await fetchRecords()
+  } catch (error) {
+    console.error('Error saving snapshot', error)
+    notification.error(error.message || 'Gagal menyimpan snapshot.')
+  } finally {
+    processingSimpan.value = false
+  }
+}
+
+async function handleFinalisasi() {
+  if (!selectedPeriodId.value) return
+  processingFinalisasi.value = true
+  try {
+    const res = await post('/api/v1/payroll/gaji-karyawan/finalisasi', {
+      period_id: selectedPeriodId.value,
+      segment: activeSegment.value,
+    })
+    notification.success(res.message || 'Payroll berhasil difinalisasi.')
+    await fetchRecords()
+  } catch (error) {
+    console.error('Error finalisasi', error)
+    notification.error(error.message || 'Gagal finalisasi payroll.')
+  } finally {
+    processingFinalisasi.value = false
+  }
+}
+
+async function handleLock() {
+  if (!selectedPeriodId.value) return
+  processingLock.value = true
+  try {
+    const res = await post('/api/v1/payroll/gaji-karyawan/lock', {
+      period_id: selectedPeriodId.value,
+      segment: activeSegment.value,
+    })
+    notification.success(res.message || 'Payroll berhasil dikunci.')
+    await fetchRecords()
+  } catch (error) {
+    console.error('Error lock', error)
+    notification.error(error.message || 'Gagal mengunci payroll.')
+  } finally {
+    processingLock.value = false
+  }
+}
+
+function openUnlockModal() {
+  unlockPassword.value = ''
+  isUnlockModalOpen.value = true
+}
+
+function closeUnlockModal() {
+  isUnlockModalOpen.value = false
+  unlockPassword.value = ''
+}
+
+async function handleUnlock() {
+  if (!unlockPassword.value) {
+    notification.warning('Masukkan password unlock dulu.')
+    return
+  }
+  processingUnlock.value = true
+  try {
+    const res = await post('/api/v1/payroll/gaji-karyawan/unlock', {
+      period_id: selectedPeriodId.value,
+      segment: activeSegment.value,
+      password: unlockPassword.value,
+    })
+    notification.success(res.message || 'Payroll berhasil dibuka kuncinya.')
+    closeUnlockModal()
+    await fetchRecords()
+  } catch (error) {
+    console.error('Error unlock', error)
+    notification.error(error.message || 'Gagal membuka kunci payroll.')
+  } finally {
+    processingUnlock.value = false
+  }
 }
 
 // ─── Edit Upah Lembur ───

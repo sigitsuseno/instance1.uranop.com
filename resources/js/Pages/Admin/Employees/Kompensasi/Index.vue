@@ -76,6 +76,13 @@ const showPrintModal = ref(false)
 const printLoading = ref(false)
 const printData = ref({ company: null, bulan: '', hrd: '', slips: [] })
 
+// Export Excel State
+const showExportModal = ref(false)
+const exportLoading = ref(false)
+const exportGroups = ref([])
+const exportPeriod = ref({ start: '', end: '', end_plus_7: '', label: '' })
+const exportSelectedGroups = ref(new Set())
+
 // Computed
 const paidCount = computed(() => contracts.value.filter(c => c.is_compensation_paid).length)
 const unpaidCount = computed(() => contracts.value.filter(c => !c.is_compensation_paid).length)
@@ -229,8 +236,64 @@ async function downloadFile(url, defaultFilename) {
 }
 
 function exportExcel() {
+    showExportModal.value = true
+    exportLoading.value = true
+    exportSelectedGroups.value = new Set()
+    fetchExportGroups()
+}
+
+async function fetchExportGroups() {
+    exportLoading.value = true
+    try {
+        const [year, month] = selectedMonthYear.value.split('-')
+        const params = new URLSearchParams()
+        params.set('month', month)
+        params.set('year', year)
+        params.set('periode', selectedPeriode.value)
+
+        const res = await get(`/api/v1/employees/compensation/export-groups?${params}`)
+        if (res.data) {
+            exportGroups.value = res.data.groups || []
+            exportPeriod.value = res.data.period || { start: '', end: '', end_plus_7: '', label: '' }
+        }
+    } catch (e) {
+        notification.addNotification(e.message || 'Gagal memuat daftar group kompensasi.', 'error')
+        exportGroups.value = []
+    } finally {
+        exportLoading.value = false
+    }
+}
+
+function closeExportModal() {
+    showExportModal.value = false
+    exportSelectedGroups.value = new Set()
+}
+
+function toggleExportGroup(groupName) {
+    const next = new Set(exportSelectedGroups.value)
+    if (next.has(groupName)) {
+        next.delete(groupName)
+    } else {
+        next.add(groupName)
+    }
+    exportSelectedGroups.value = next
+}
+
+function confirmExport() {
+    if (exportSelectedGroups.value.size === 0) {
+        notification.addNotification('Pilih minimal satu group untuk diekspor.', 'error')
+        return
+    }
     const [year, month] = selectedMonthYear.value.split('-')
-    const url = `/api/v1/employees/compensation/export?month=${month}&year=${year}&periode=${selectedPeriode.value}&is_latest=${onlyLatest.value ? 1 : 0}`
+    const params = new URLSearchParams()
+    params.set('month', month)
+    params.set('year', year)
+    params.set('periode', selectedPeriode.value)
+    params.set('is_latest', onlyLatest.value ? 1 : 0)
+    Array.from(exportSelectedGroups.value).forEach(g => params.append('groups[]', g))
+
+    const url = `/api/v1/employees/compensation/export?${params.toString()}`
+    closeExportModal()
     downloadFile(url, `kompensasi-${year}-${month}.xlsx`)
 }
 
@@ -670,6 +733,82 @@ onMounted(() => {
                             <i :class="groupLoading ? 'bx bx-loader-alt bx-spin mr-1' : 'bx bx-check-double mr-1'"></i>
                             {{ groupLoading ? 'Menyimpan...' : 'Simpan' }}
                         </BaseButton>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- Export Excel Modal -->
+        <Teleport to="body">
+            <div v-if="showExportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+                @click.self="closeExportModal">
+                <div class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden">
+                    <!-- Header -->
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-(--border-soft)">
+                        <div class="flex items-center gap-3">
+                            <i class="bx bx-download text-2xl text-(--text-muted)"></i>
+                            <div>
+                                <h2 class="text-lg font-semibold text-(--text-main)">Export Excel Kompensasi</h2>
+                                <p class="text-sm text-(--text-muted)">
+                                    Pilih group yang ingin diekspor
+                                    <span v-if="exportPeriod.start" class="font-semibold text-(--text-main)">
+                                        ({{ formatDate(exportPeriod.start) }} - {{ formatDate(exportPeriod.end_plus_7) }})
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <button @click="closeExportModal"
+                            class="p-1.5 rounded-lg hover:bg-(--bg-hover) transition-colors">
+                            <i class="bx bx-x text-xl text-(--text-muted)"></i>
+                        </button>
+                    </div>
+
+                    <!-- Body -->
+                    <div class="px-6 py-4">
+                        <div v-if="exportLoading" class="flex flex-col items-center justify-center py-10">
+                            <div
+                                class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mb-2">
+                            </div>
+                            <span class="text-sm text-(--text-muted)">Memuat daftar group...</span>
+                        </div>
+
+                        <div v-else-if="exportGroups.length === 0"
+                            class="py-10 text-center text-(--text-muted)">
+                            <i class="bx bx-check-circle text-4xl mb-2 block"></i>
+                            Tidak ada group kompensasi pada rentang periode ini.
+                        </div>
+
+                        <div v-else class="max-h-80 overflow-y-auto space-y-2 pr-1">
+                            <label v-for="g in exportGroups" :key="g.comp_group"
+                                class="flex items-center gap-3 p-3 rounded-lg border border-(--border-soft) bg-(--bg-elevated) cursor-pointer hover:bg-(--bg-hover) transition-colors">
+                                <input type="checkbox" :checked="exportSelectedGroups.has(g.comp_group)"
+                                    @change="toggleExportGroup(g.comp_group)"
+                                    class="w-4 h-4 rounded border-(--border-soft) text-(--primary) focus:ring-(--primary-glow) cursor-pointer">
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-semibold text-(--text-main) truncate">{{ g.comp_group }}</p>
+                                    <p class="text-xs text-(--text-muted)">
+                                        Dibayar {{ formatDate(g.compensation_paid_at) }} &middot; {{
+                                            g.total_contracts }} kontrak
+                                    </p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="flex items-center justify-between gap-2 px-6 py-4 border-t border-(--border-soft)">
+                        <span class="text-sm text-(--text-muted)">
+                            {{ exportSelectedGroups.size }} group dipilih
+                        </span>
+                        <div class="flex items-center gap-2">
+                            <BaseButton variant="ghost" @click="closeExportModal">Batal</BaseButton>
+                            <BaseButton variant="primary" @click="confirmExport">
+                                <template #icon-left>
+                                    <i class="bx bx-download text-lg"></i>
+                                </template>
+                                Export
+                            </BaseButton>
+                        </div>
                     </div>
                 </div>
             </div>

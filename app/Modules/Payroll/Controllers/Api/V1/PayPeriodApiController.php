@@ -4,6 +4,7 @@ namespace App\Modules\Payroll\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Payroll\Models\PayRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
@@ -135,6 +136,14 @@ class PayPeriodApiController extends Controller
     public function destroy($id)
     {
         $period = PayPeriod::findOrFail($id);
+
+        // GUARD LOCK: payroll periode ini sudah dikunci → tolak hapus (logic_payroll_baru.md §5/#11)
+        abort_if(
+            PayRecord::where('pay_period_id', $period->id)->where('status', 'locked')->exists(),
+            403,
+            'Tidak dapat menghapus periode untuk payroll yang sudah dikunci.'
+        );
+
         $period->delete();
 
         return response()->json([

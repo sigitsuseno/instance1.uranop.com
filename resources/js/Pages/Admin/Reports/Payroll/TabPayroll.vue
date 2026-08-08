@@ -620,7 +620,7 @@ async function fetchRecords() {
     return
   }
   try {
-    let url = `/api/v1/payroll/gaji-karyawan?period_id=${selectedPeriodId.value}`
+    let url = `/api/v1/laporan/payroll/laporan-payroll?period_id=${selectedPeriodId.value}`
     if (activeSegment.value) {
       url += `&segment=${activeSegment.value}`
     }
@@ -650,7 +650,7 @@ function handleExport() {
   if (selectedPeriodId.value) params.append('period_id', selectedPeriodId.value)
   if (activeSegment.value) params.append('segment', activeSegment.value)
 
-  const url = `/api/v1/payroll/gaji-karyawan/export?${params.toString()}`
+  const url = `/api/v1/laporan/payroll/laporan-payroll/export?${params.toString()}`
   
   notification.info('Sedang menyiapkan file Excel...')
   

@@ -3,27 +3,58 @@
 namespace App\Modules\Payroll\Controllers\Api\V1;
 
 use App\Models\ExtraEmployee;
+use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Employee\Models\Employee;
-use App\Http\Controllers\Controller;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
-use App\Modules\Payroll\Exports\KirimAllExport;
-use App\Modules\Payroll\Models\PayrollConfig;
+use App\Modules\Schedule\Models\Holiday;
+use App\Modules\Settings\Models\SystemSetting;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Carbon\Carbon;
 
 class GajiKaryawanController extends Controller
 {
+    // ─── STATUS LIFECYCLE: draft → generated → locked ───
+    private const STATUS_DRAFT     = 'draft';
+    private const STATUS_GENERATED = 'generated';
+    private const STATUS_LOCKED    = 'locked';
+
+    // ─── ZERO OVERTIME (KEPUTUSAN #4): GRP-ALLIN + GRP-GD ───
+    private const ZERO_OVERTIME_GROUPS = ['GRP-ALLIN', 'GRP-GD'];
+
+    /**
+     * GET /api/v1/payroll/gaji-karyawan?period_id=X&segment=Y
+     *
+     * Satu endpoint, dua mode (logic_payroll_baru.md §2.1):
+     *  - end_date BELUM lewat  → ON_THE_FLY (hitung live dari att_prepares)
+     *  - end_date SUDAH lewat  → ON_RECORD (baca pay_records)
+     */
     public function index(Request $request)
     {
         $validated = $request->validate([
             'period_id' => 'required|exists:pay_periods,id',
-            'segment' => 'nullable|in:A,B',
+            'segment'   => 'nullable|in:A,B',
         ]);
 
         $period = PayPeriod::findOrFail($validated['period_id']);
-        $segment = $validated['segment'] ?? null;
+        $segment = $this->resolveSegment($period, $validated['segment'] ?? null);
 
+        if ($period->end_date && Carbon::today()->lte($period->end_date)) {
+            return $this->onTheFly($period, $segment);
+        }
+
+        return $this->onRecord($period, $segment);
+    }
+
+    // =====================================================================
+    // MODE ON_RECORD — baca pay_records (logika existing, + mode/status)
+    // =====================================================================
+
+    private function onRecord(PayPeriod $period, ?string $segment)
+    {
         $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
             ->where('pay_period_id', $period->id)
             ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
@@ -32,11 +63,7 @@ class GajiKaryawanController extends Controller
             ->select('pay_records.*');
 
         if ($period->is_split) {
-            // Split: harus pilih segment
-            if (!$segment) {
-                $segment = 'A'; // default ke seg-1
-            }
-            $query->where('segment', $segment);
+            $query->where('segment', $segment ?? 'A');
         }
 
         $records = $query->get()->map(function ($record) {
@@ -85,57 +112,569 @@ class GajiKaryawanController extends Controller
         });
 
         // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke All-In ──
-        $extraEmployees = ExtraEmployee::all();
-        foreach ($extraEmployees as $emp) {
-            $g = $emp->komponen_gaji ?? [];
-            $records->push([
-                'id'             => 'ext-' . $emp->id,
-                'employee_id'    => $emp->id,
-                'employee_code'  => $emp->kode ?? '-',
-                'name'           => $emp->nama ?? '-',
-                'department'     => '-',
-                'position'       => '-',
-                'gender'         => $emp->gender ?? '-',
-                'join_year'      => '-',
-                'groups'         => ['GRP-EXTRA'],
-                'bank_name'      => '-',
-                'bank_account_number' => $emp->account ?? '-',
-                'bank_account_name'   => $emp->nama ?? '-',
-                'bank_cabang'    => '-',
-                'notes'          => '',
-                'gaji_pokok'     => (float) ($g['gaji_pokok'] ?? 0),
-                'premi'          => (float) ($g['premi'] ?? 0),
-                'tj_masa_kerja'  => (float) ($g['tj_mk'] ?? 0),
-                'tunjangan'      => (float) ($g['tunjangan'] ?? 0),
-                'hari_kerja'     => 0,
-                'lm'             => 0,
-                'lm_count'       => 0,
-                'lembur_count'   => 0,
-                'gaji'           => 0,
-                'upah_lembur'    => 0,
-                'revisi'         => 0,
-                'premi_hadir'    => 0,
-                'pblt'           => 0,
-                'total'          => (float) ($g['total_gaji'] ?? 0),
-                'bpjs_tk'        => 0,
-                'bpjs_ks'        => 0,
-                'bpjs_pen'       => 0,
-                'cashbon'        => (float) ($g['cashbon'] ?? 0),
-                'pph'            => (float) ($g['ttl_pph'] ?? 0),
-                'gaji_bersih'    => (float) ($g['total_terima'] ?? 0),
-            ]);
-        }
+        $records = $this->appendExtraEmployees($records);
 
         return response()->json([
+            'mode' => 'on_record',
+            'record_status' => $this->recordStatusFor($period, $segment),
             'data' => $records,
             'period' => [
                 'id' => $period->id,
                 'name' => $period->name,
                 'is_split' => $period->is_split,
                 'segment' => $segment,
+                'end_date' => $period->end_date?->format('Y-m-d'),
                 'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
             ],
         ]);
+    }
+
+    // =====================================================================
+    // MODE ON_THE_FLY — hitung live dari att_prepares (logic_payroll_baru.md §3)
+    // =====================================================================
+
+    private function onTheFly(PayPeriod $period, ?string $segment)
+    {
+        $computed = $this->computeOnTheFlyRows($period, $segment);
+
+        $records = collect($computed['rows'])->map(fn ($row) => $this->mapOnTheFlyRow($row));
+
+        // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke All-In ──
+        $records = $this->appendExtraEmployees($records);
+
+        return response()->json([
+            'mode' => 'on_the_fly',
+            'record_status' => $this->recordStatusFor($period, $segment),
+            'data' => $records,
+            'period' => [
+                'id' => $period->id,
+                'name' => $period->name,
+                'is_split' => $period->is_split,
+                'segment' => $segment,
+                'end_date' => $period->end_date?->format('Y-m-d'),
+                'tanggal_penggajian' => $period->tanggal_penggajian?->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    /**
+     * Hitung data on_the_fly untuk semua karyawan (isGroupGaji + activeInPeriod + roster).
+     * Dipakai bersama oleh onTheFly() (response) dan simpan() (snapshot).
+     *
+     * @return array{rows: array, fixed_days: int}
+     */
+    private function computeOnTheFlyRows(PayPeriod $period, ?string $segment): array
+    {
+        $now = Carbon::today();
+        $fixedDays = $this->fixedWorkingDay();
+
+        // KEPUTUSAN #9: holiday dari tabel sch_holidays, rentang start–end periode
+        $holidays = Holiday::whereBetween('date', [
+                $period->start_date->toDateString(),
+                $period->end_date->toDateString(),
+            ])
+            ->pluck('date')
+            ->map(fn ($d) => $d->toDateString())
+            ->toArray();
+
+        $segments = $this->buildSegments($period, $segment);
+
+        // KEPUTUSAN #5: filter isGroupGaji() — whitelist 5 group
+        $employees = Employee::with(['department', 'position', 'groups', 'bpjs'])
+            ->activeInPeriod($period->start_date->toDateString(), $period->end_date->toDateString())
+            ->whereHas('shiftRosters', fn ($q) => $q->whereBetween('date', [
+                $period->start_date->toDateString(),
+                $period->end_date->toDateString(),
+            ]))
+            ->get()
+            ->filter(fn ($emp) => $emp->isGroupGaji())
+            ->sortBy('no_urut')->sortBy('nip')
+            ->values();
+
+        $rows = [];
+
+        foreach ($employees as $employee) {
+            foreach ($segments as $seg) {
+                $segStart = $seg['start'];
+                $effEnd = Carbon::parse($seg['end'])->lt($now) ? $seg['end'] : $now->toDateString();
+
+                // KEPUTUSAN #8: count record aktual start→NOW (segmen yang lewat dihitung full)
+                $prepares = AttendancePrepare::where('employee_id', $employee->id)
+                    ->whereBetween('date', [$segStart, $effEnd])
+                    ->get();
+
+                $hariKerja = $prepares->filter(function ($p) use ($holidays) {
+                    $date = $p->date->toDateString();
+                    if (Carbon::parse($date)->isSunday()) return false;   // Minggu → skip
+                    if (in_array($date, $holidays)) return false;          // holiday → skip
+                    if ($p->status === AttendancePrepare::STATUS_ABSENT) return false; // absent → skip
+                    return true;
+                })->count();
+
+                $lm          = $prepares->sum('lm');
+                $lmCount     = $prepares->sum('lm_count');
+                $lemburCount = $prepares->sum('overtime_count');
+
+                $segmentMonth = $seg['segment'] !== null
+                    ? Carbon::parse($segStart)->format('Y-m')
+                    : $period->period_year . '-' . str_pad($period->period_month, 2, '0', STR_PAD_LEFT);
+
+                $gajiPokok   = $employee->gaji_pokok($segmentMonth);
+                $premi       = $employee->premi($segmentMonth);
+                $tjMasaKerja = $employee->tunjangan_masa_kerja($segmentMonth);
+                $tunjangan   = $employee->tunjangan($segmentMonth);
+
+                // KEPUTUSAN #1: pembagi fixed_working_day (25)
+                $gaji       = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
+                $premiHadir = round(($premi / $fixedDays) * $hariKerja, 2);
+
+                // KEPUTUSAN #4: GRP-ALLIN & GRP-GD di-0-kan; GRP-SPR hanya LM
+                $isZeroOvertime = $employee->groups()->whereIn('reference_code', self::ZERO_OVERTIME_GROUPS)->exists();
+
+                if ($isZeroOvertime) {
+                    $lm = 0; $lmCount = 0; $lemburCount = 0;
+                    $upahLembur = 0;
+                } else {
+                    $isSpr = $employee->hasGroup('GRP-SPR');
+                    if ($isSpr) {
+                        $lemburCount = 0;
+                        $totalLemburJam = $lmCount / 60;
+                    } else {
+                        $totalLemburJam = ($lmCount + $lemburCount) / 60;
+                    }
+
+                    // KEPUTUSAN #3: round-up kelipatan 100
+                    $upahLembur = $totalLemburJam > 0
+                        ? ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100
+                        : 0;
+                }
+
+                $isPart1 = ($seg['segment'] === 'A');
+                $revisi  = $isPart1 ? ($tjMasaKerja * -1) : 0;
+                $bpjsTk  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
+                $bpjsKs  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
+                $bpjsPen = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_pensiun ?? 0);
+
+                // gaji_kotor = gaji + tunjangan + upah_lembur + premi_hadir + revisi
+                // (KEPUTUSAN #2 + koreksi 2026-08-07: upah_lembur TETAP masuk; tj_mk TIDAK)
+                $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi;
+                $pph     = 0;    // beda dari final
+                $cashbon = 0;
+
+                $beforeRounding = $gajiKotor - ($bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon);
+                $rounded = ceil($beforeRounding / 100) * 100;
+                $pblt = round($rounded - $beforeRounding, 2);
+                $gajiBersih = $rounded;
+
+                $rows[] = [
+                    'employee'      => $employee,
+                    'segment'       => $seg['segment'],
+                    'gaji_pokok'    => $gajiPokok,
+                    'premi'         => $premi,
+                    'tj_masa_kerja' => $tjMasaKerja,
+                    'tunjangan'     => $tunjangan,
+                    'hari_kerja'    => $hariKerja,
+                    'lm'            => $lm,
+                    'lm_count'      => $lmCount,
+                    'lembur_count'  => $lemburCount,
+                    'gaji'          => $gaji,
+                    'upah_lembur'   => $upahLembur,
+                    'revisi'        => $revisi,
+                    'premi_hadir'   => $premiHadir,
+                    'gaji_kotor'    => $gajiKotor,
+                    'bpjs_tk'       => $bpjsTk,
+                    'bpjs_ks'       => $bpjsKs,
+                    'bpjs_pen'      => $bpjsPen,
+                    'pph'           => $pph,
+                    'cashbon'       => $cashbon,
+                    'pblt'          => $pblt,
+                    'gaji_bersih'   => $gajiBersih,
+                ];
+            }
+        }
+
+        return ['rows' => $rows, 'fixed_days' => $fixedDays];
+    }
+
+    /**
+     * Mapping row on_the_fly → shape response (id unik 'est-*' — belum ada pay_record).
+     */
+    private function mapOnTheFlyRow(array $row): array
+    {
+        $emp = $row['employee'];
+        $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+
+        return [
+            'id' => 'est-' . $emp->id,
+            'employee_id' => $emp->id,
+            'employee_code' => $emp?->employee_code ?? $emp?->nip ?? '-',
+            'name' => $emp?->name ?? '-',
+            'department' => $emp?->department?->name ?? '-',
+            'position' => $emp?->position?->name ?? '-',
+            'gender' => $emp?->gender ?? '-',
+            'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
+            'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
+            'bank_name' => $emp?->bank_name ?? '-',
+            'bank_account_number' => $emp?->bank_account_number ?? '-',
+            'bank_account_name' => $emp?->bank_account_name ?? '-',
+            'bank_cabang' => $emp?->bank_cabang ?? '',
+            'notes' => '',
+            'gaji_pokok' => (float) $row['gaji_pokok'],
+            'premi' => (float) $row['premi'],
+            'tj_masa_kerja' => (float) $row['tj_masa_kerja'],
+            'tunjangan' => (float) $row['tunjangan'],
+            'hari_kerja' => (int) $row['hari_kerja'],
+            'lm' => (int) $row['lm'],
+            'lm_count' => (int) $row['lm_count'],
+            'lembur_count' => (int) $row['lembur_count'],
+            'gaji' => (float) $row['gaji'],
+            'upah_lembur' => (float) $row['upah_lembur'],
+            'revisi' => (float) $row['revisi'],
+            'premi_hadir' => (float) $row['premi_hadir'],
+            'pblt' => (float) $row['pblt'],
+            'total' => (float) $row['gaji_kotor'],
+            'bpjs_tk' => (float) $row['bpjs_tk'],
+            'bpjs_ks' => (float) $row['bpjs_ks'],
+            'bpjs_pen' => (float) $row['bpjs_pen'],
+            'cashbon' => (float) $row['cashbon'],
+            'pph' => (float) $row['pph'],
+            'gaji_bersih' => (float) $row['gaji_bersih'],
+        ];
+    }
+
+    // =====================================================================
+    // SNAPSHOT — POST /gaji-karyawan/simpan (logic_payroll_baru.md §2.2)
+    // Copy hasil on_the_fly → pay_records (status: draft). TANPA hitung ulang.
+    // =====================================================================
+
+    public function simpan(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $this->resolveSegment($period, $validated['segment'] ?? null);
+
+        $existing = PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->get();
+
+        abort_if(
+            $existing->contains(fn ($r) => in_array($r->status, [self::STATUS_GENERATED, self::STATUS_LOCKED], true)),
+            403,
+            'Payroll sudah final/dikunci. Simpan ulang hanya untuk status draft.'
+        );
+
+        $computed = $this->computeOnTheFlyRows($period, $segment);
+        $saved = 0;
+
+        foreach ($computed['rows'] as $row) {
+            PayRecord::updateOrCreate(
+                [
+                    'employee_id'   => $row['employee']->id,
+                    'pay_period_id' => $period->id,
+                    'segment'       => $row['segment'],
+                ],
+                [
+                    'status'        => self::STATUS_DRAFT,
+                    // data masukan
+                    'gaji_pokok'    => $row['gaji_pokok'],
+                    'premi'         => $row['premi'],
+                    'tj_masa_kerja' => $row['tj_masa_kerja'],
+                    'tunjangan'     => $row['tunjangan'],
+                    'deduct_day'    => 0,
+                    // hasil hitungan on_the_fly (dicopy, bukan dihitung ulang)
+                    'hari_kerja'    => $row['hari_kerja'],
+                    'lm'            => $row['lm'],
+                    'lm_count'      => $row['lm_count'],
+                    'lembur_count'  => $row['lembur_count'],
+                    'gaji'          => $row['gaji'],
+                    'upah_lembur'   => $row['upah_lembur'],
+                    'premi_hadir'   => $row['premi_hadir'],
+                    'revisi'        => $row['revisi'],
+                    'gaji_kotor'    => $row['gaji_kotor'],
+                    'bpjs_tk'       => $row['bpjs_tk'],
+                    'bpjs_ks'       => $row['bpjs_ks'],
+                    'bpjs_pen'      => $row['bpjs_pen'],
+                    'pph'           => $row['pph'],
+                    'cashbon'       => $row['cashbon'],
+                    'pot_kehadiran' => 0,
+                    'pblt'          => $row['pblt'],
+                    'gaji_bersih'   => $row['gaji_bersih'],
+                ]
+            );
+            $saved++;
+        }
+
+        return response()->json([
+            'message' => "Snapshot berhasil disimpan untuk {$saved} karyawan (status draft).",
+            'mode' => 'on_the_fly',
+            'record_status' => self::STATUS_DRAFT,
+        ]);
+    }
+
+    // =====================================================================
+    // FINALISASI — POST /gaji-karyawan/finalisasi (logic_payroll_baru.md §2.3)
+    // Hitung ulang rumus LAMA (referensi recapApprove) + status generated.
+    // =====================================================================
+
+    public function finalisasi(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $this->resolveSegment($period, $validated['segment'] ?? null);
+
+        // Prasyarat: now() > end_date
+        abort_if($period->end_date && Carbon::today()->lte($period->end_date), 403, 'Periode belum berakhir — finalisasi hanya bisa dilakukan setelah end_date.');
+
+        $records = PayRecord::with(['employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->get();
+
+        abort_if($records->isEmpty(), 404, 'Tidak ada data payroll untuk difinalisasi. Klik Simpan dulu untuk membuat snapshot.');
+        abort_if($records->contains(fn ($r) => $r->status === self::STATUS_LOCKED), 403, 'Payroll sudah dikunci.');
+
+        $fixedDays  = $this->fixedWorkingDay();
+        $splitDays  = $this->splitDays();
+        $startDate  = $period->start_date->toDateString();
+        $endDate    = $period->end_date->toDateString();
+        $month1End  = Carbon::parse($startDate)->endOfMonth()->toDateString();
+        $month2Start = Carbon::parse($endDate)->startOfMonth()->toDateString();
+
+        $processed = 0;
+
+        foreach ($records as $record) {
+            $employee = $record->employee;
+
+            // ── Segmen (sama dengan recapApprove) ──
+            if ($period->is_split) {
+                $hkA = (int) ($splitDays['A'] ?? 5);
+                $hkB = (int) ($splitDays['B'] ?? max(0, $fixedDays - $hkA));
+                $segments = [
+                    'A' => ['start' => $startDate,  'end' => $month1End,  'hk' => $hkA],
+                    'B' => ['start' => $month2Start, 'end' => $endDate,    'hk' => $hkB],
+                ];
+                $seg     = $segments[$record->segment ?? 'A'];
+                $isPart1 = $record->segment === 'A';
+            } else {
+                $seg     = ['start' => $startDate, 'end' => $endDate, 'hk' => $fixedDays];
+                $isPart1 = false;
+            }
+
+            $segStart = $seg['start'];
+            $segEnd   = $seg['end'];
+            $hkSegment = $seg['hk'];
+
+            // ── Aggregate att_prepares (full periode/segmen) ──
+            $prepares = AttendancePrepare::where('employee_id', $employee->id)
+                ->whereBetween('date', [$segStart, $segEnd])
+                ->get();
+
+            $absen = $prepares->where('status', 'absent')->count();
+            $lm = $prepares->sum('lm');
+            $lmCount = $prepares->sum('lm_count');
+            $lemburCount = $prepares->sum('overtime_count');
+
+            // ── Aggregate leave approved dalam segmen ──
+            $leaves = LeaveRequest::where('employee_id', $employee->id)
+                ->where('status', 'approved')
+                ->where(function ($q) use ($segStart, $segEnd) {
+                    $q->whereBetween('start_date', [$segStart, $segEnd])
+                      ->orWhereBetween('end_date', [$segStart, $segEnd])
+                      ->orWhere(function ($q2) use ($segStart, $segEnd) {
+                          $q2->where('start_date', '<=', $segStart)
+                             ->where('end_date', '>=', $segEnd);
+                      });
+                })
+                ->with('leaveType')
+                ->get();
+
+            $unpaid = 0;
+            foreach ($leaves as $l) {
+                $lStart = Carbon::parse(max($l->start_date->toDateString(), $segStart));
+                $lEnd   = Carbon::parse(min($l->end_date->toDateString(), $segEnd));
+                $dur    = max(0, $lStart->diffInDays($lEnd) + 1);
+                if (optional($l->leaveType)->is_paid === false) {
+                    $unpaid += $dur;
+                }
+            }
+
+            // hari_kerja pakai hitungan LAMA: hk − (izin tak dibayar + absent)
+            $deductDay = $unpaid + $absen;
+            $hariKerja = max(0, $hkSegment - $deductDay);
+
+            // ── Data masukan ──
+            $segmentMonth = $record->segment !== null
+                ? Carbon::parse($segStart)->format('Y-m')
+                : $period->period_year . '-' . str_pad($period->period_month, 2, '0', STR_PAD_LEFT);
+
+            $gajiPokok   = $employee->gaji_pokok($segmentMonth);
+            $premi       = $employee->premi($segmentMonth);
+            $tjMasaKerja = $employee->tunjangan_masa_kerja($segmentMonth);
+            $tunjangan   = $employee->tunjangan($segmentMonth);
+
+            // ── Hitungan (rumus LAMA) ──
+            $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
+
+            $isZeroOvertime = $employee->groups()->whereIn('reference_code', self::ZERO_OVERTIME_GROUPS)->exists();
+            if ($isZeroOvertime) {
+                $upahLembur = 0;
+                $lm = 0; $lmCount = 0; $lemburCount = 0;
+            } else {
+                $isSpr = $employee->hasGroup('GRP-SPR');
+                if ($isSpr) {
+                    $lemburCount = 0;
+                    $totalLemburJam = $lmCount / 60;
+                } else {
+                    $totalLemburJam = ($lmCount + $lemburCount) / 60;
+                }
+                $upahLembur = $totalLemburJam > 0
+                    ? ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * $totalLemburJam / 100) * 100
+                    : 0;
+            }
+
+            $premiHadir = round(($premi / $fixedDays) * $hariKerja, 2);
+
+            $revisi  = $isPart1 ? ($tjMasaKerja * -1) : 0;
+            $bpjsTk  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
+            $bpjsKs  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
+            $bpjsPen = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_pensiun ?? 0);
+
+            // PPh = 0 — ditanggung pemerintah, dikelola perusahaan (sama dengan on_the_fly)
+            $pph = 0;
+            // Cashbon dipertahankan dari draft (tidak di-reset 0)
+            $cashbon = (float) $record->cashbon;
+
+            // gaji_kotor = gaji + tunjangan + upah_lembur + premi_hadir + revisi
+            // (KEPUTUSAN #2 + koreksi 2026-08-07: upah_lembur TETAP masuk; tj_mk TIDAK)
+            $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi;
+            $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
+
+            $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
+            $beforeRounding = $gajiKotor - $totalPotongan;
+            $rounded = ceil($beforeRounding / 100) * 100;
+            $pblt = round($rounded - $beforeRounding, 2);
+            $gajiBersih = $rounded;
+
+            $record->update([
+                'gaji_pokok'    => $gajiPokok,
+                'premi'         => $premi,
+                'tj_masa_kerja' => $tjMasaKerja,
+                'tunjangan'     => $tunjangan,
+                'hari_kerja'    => $hariKerja,
+                'deduct_day'    => $deductDay,
+                'lm'            => $lm,
+                'lm_count'      => $lmCount,
+                'lembur_count'  => $lemburCount,
+                'gaji'          => $gaji,
+                'upah_lembur'   => $upahLembur,
+                'premi_hadir'   => $premiHadir,
+                'revisi'        => $revisi,
+                'gaji_kotor'    => $gajiKotor,
+                'bpjs_tk'       => $bpjsTk,
+                'bpjs_ks'       => $bpjsKs,
+                'bpjs_pen'      => $bpjsPen,
+                'pph'           => $pph,
+                'cashbon'       => $cashbon,
+                'pot_kehadiran' => $potKehadiran,
+                'pblt'          => $pblt,
+                'gaji_bersih'   => $gajiBersih,
+                'status'        => self::STATUS_GENERATED,
+            ]);
+
+            $processed++;
+        }
+
+        return response()->json([
+            'message' => "Payroll berhasil difinalisasi untuk {$processed} karyawan.",
+            'mode' => 'on_record',
+            'record_status' => self::STATUS_GENERATED,
+        ]);
+    }
+
+    // =====================================================================
+    // LOCK / UNLOCK — logic_payroll_baru.md §2.4 & §2.5
+    // =====================================================================
+
+    public function lock(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $this->resolveSegment($period, $validated['segment'] ?? null);
+
+        $records = PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->get();
+
+        abort_if($records->isEmpty(), 404, 'Tidak ada data payroll untuk dikunci.');
+        abort_if(
+            $records->contains(fn ($r) => $r->status !== self::STATUS_GENERATED),
+            403,
+            'Finalisasi dulu sebelum mengunci payroll.'
+        );
+
+        PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->update(['status' => self::STATUS_LOCKED]);
+
+        return response()->json([
+            'message' => 'Payroll berhasil dikunci.',
+            'mode' => 'on_record',
+            'record_status' => self::STATUS_LOCKED,
+        ]);
+    }
+
+    public function unlock(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+            'password'  => 'required|string',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $this->resolveSegment($period, $validated['segment'] ?? null);
+
+        $records = PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->get();
+
+        abort_if($records->isEmpty(), 404, 'Tidak ada data payroll.');
+
+        // KEPUTUSAN #10: password plain text di SystemSetting key payroll_lock_password
+        $stored = SystemSetting::where('key', 'payroll_lock_password')->value('value');
+
+        abort_if(empty($stored) || !hash_equals((string) $stored, (string) $validated['password']), 403, 'Password salah.');
+
+        PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->update(['status' => self::STATUS_GENERATED]);
+
+        return response()->json([
+            'message' => 'Payroll berhasil dibuka kuncinya (status generated).',
+            'mode' => 'on_record',
+            'record_status' => self::STATUS_GENERATED,
+        ]);
+    }
+
+    // =====================================================================
+    // GUARD — semua mutasi pay_records mati saat status locked (logic_payroll_baru.md §5)
+    // =====================================================================
+
+    private function ensureEditable(PayRecord $record): void
+    {
+        abort_if($record->status === self::STATUS_LOCKED, 403, 'Payroll sudah dikunci.');
     }
 
     /**
@@ -150,6 +689,7 @@ class GajiKaryawanController extends Controller
         ]);
 
         $record = PayRecord::with('employee')->findOrFail($id);
+        $this->ensureEditable($record);
 
         if (array_key_exists('bank_cabang', $validated) && $record->employee) {
             $record->employee->bank_cabang = $validated['bank_cabang'];
@@ -192,6 +732,8 @@ class GajiKaryawanController extends Controller
             $query->where('segment', $validated['segment']);
         }
 
+        abort_if($query->where('status', 'locked')->exists(), 403, 'Payroll sudah dikunci — tidak bisa bulk update.');
+
         $employeeIds = $query->pluck('employee_id');
 
         $updated = Employee::whereIn('id', $employeeIds)->update([
@@ -218,6 +760,7 @@ class GajiKaryawanController extends Controller
         ]);
 
         $record = PayRecord::with('employee.groups')->findOrFail($id);
+        $this->ensureEditable($record);
 
         // Update field yang dikirim, sisanya pakai nilai existing
         if (array_key_exists('lm', $validated)) {
@@ -259,14 +802,13 @@ class GajiKaryawanController extends Controller
 
         $record->upah_lembur = $upahLembur;
 
-        // ── Recalculate gaji_kotor ──
+        // ── Recalculate gaji_kotor (upah_lembur tetap masuk; tj_mk tidak) ──
         $record->gaji_kotor = round(
             (float) $record->gaji
-            + (float) $record->tj_masa_kerja
+            + (float) $record->tunjangan
             + (float) $record->upah_lembur
-            + (float) $record->revisi
             + (float) $record->premi_hadir
-            + (float) $record->tunjangan,
+            + (float) $record->revisi,
             2
         );
 
@@ -300,227 +842,125 @@ class GajiKaryawanController extends Controller
         ]);
     }
 
-    public function export(Request $request)
+    // =====================================================================
+    // HELPERS
+    // =====================================================================
+
+    /** Normalisasi segment: split selalu butuh segment (default A). */
+    private function resolveSegment(PayPeriod $period, ?string $segment): ?string
     {
-        $validated = $request->validate([
-            'period_id' => 'required|exists:pay_periods,id',
-            'segment' => 'nullable|in:A,B',
-        ]);
-
-        $period = PayPeriod::findOrFail($validated['period_id']);
-        $segment = $validated['segment'] ?? null;
-
-        $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
-            ->where('pay_period_id', $period->id)
-            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
-            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
-            ->orderBy('employees.nip')
-            ->select('pay_records.*');
-
         if ($period->is_split) {
-            if (!$segment) {
-                $segment = 'A';
-            }
-            $query->where('segment', $segment);
+            return $segment ?? 'A';
         }
 
-        $records = $query->get()->map(function ($record) use ($period) {
-            $emp = $record->employee;
-            $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
-
-            // Masa kerja: selisih bulan dari join_date ke end_date periode (dibulatkan ke bawah)
-            $masaKerja = 0;
-            if ($joinDate && $period->end_date) {
-                $masaKerja = (int) floor($joinDate->diffInMonths(Carbon::parse($period->end_date)));
-            }
-
-            return [
-                'employee_code' => $emp?->employee_code ?? $emp?->nip ?? '-',
-                'name' => $emp?->name ?? '-',
-                'department' => $emp?->department?->name ?? '-',
-                'position' => $emp?->position?->name ?? '-',
-                'gender' => $emp?->gender ?? '-',
-                'join_year' => $joinDate ? $joinDate->format('d-M-Y') : '-',
-                'masa_kerja' => $masaKerja,
-                'ptkp' => $emp?->ptkp ?? '-',
-                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
-                'bank_name' => $emp?->bank_name ?? '-',
-                'bank_account_number' => $emp?->bank_account_number ?? '-',
-                'bank_account_name' => $emp?->bank_account_name ?? '-',
-                'gaji_pokok' => (float) $record->gaji_pokok,
-                'premi' => (float) $record->premi,
-                'tj_masa_kerja' => (float) $record->tj_masa_kerja,
-                'tunjangan' => (float) $record->tunjangan,
-                'hari_kerja' => (int) $record->hari_kerja,
-                'lm' => (int) $record->lm,
-                'lembur_count' => (int) $record->lembur_count,
-                'gaji' => (float) $record->gaji,
-                'upah_lembur' => (float) $record->upah_lembur,
-                'revisi' => (float) $record->revisi,
-                'premi_hadir' => (float) $record->premi_hadir,
-                'pblt' => (float) $record->pblt,
-                'total' => (float) $record->gaji_kotor,
-                'bpjs_tk' => (float) $record->bpjs_tk,
-                'bpjs_ks' => (float) $record->bpjs_ks,
-                'bpjs_pen' => (float) $record->bpjs_pen,
-                'cashbon' => (float) $record->cashbon,
-                'pph' => (float) $record->pph,
-                'gaji_bersih' => (float) $record->gaji_bersih,
-            ];
-        });
-
-        // Group by section from payroll config
-        $payrollConfig = \App\Modules\Payroll\Models\PayrollConfig::getConfig('gaji_karyawan');
-        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
-        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
-
-        $secAData = [];
-        $secBData = [];
-
-        foreach ($records as $r) {
-            $groups = $r['groups'] ?? [];
-            if (array_intersect($groups, $sectionA)) {
-                $secAData[] = $r;
-            } elseif (array_intersect($groups, $sectionB)) {
-                $secBData[] = $r;
-            }
-        }
-
-        // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke Section A ──
-        $extraEmployees = ExtraEmployee::all();
-        foreach ($extraEmployees as $emp) {
-            $g = $emp->komponen_gaji ?? [];
-            $secAData[] = [
-                'employee_code' => $emp->kode ?? '-',
-                'name'          => $emp->nama ?? '-',
-                'department'    => '-',
-                'position'      => '-',
-                'gender'        => $emp->gender ?? '-',
-                'join_year'     => '-',
-                'masa_kerja'    => 0,
-                'ptkp'          => $emp->status_ptkp ?? '-',
-                'premi'         => (float) ($g['premi'] ?? 0),
-                'gaji_pokok'    => (float) ($g['gaji_pokok'] ?? 0),
-                'tj_masa_kerja' => (float) ($g['tj_mk'] ?? 0),
-                'tunjangan'     => (float) ($g['tunjangan'] ?? 0),
-                'hari_kerja'    => 0,
-                'lm'            => 0,
-                'lembur_count'  => 0,
-                'gaji'          => 0,
-                'upah_lembur'   => 0,
-                'revisi'        => 0,
-                'premi_hadir'   => 0,
-                'pblt'          => 0,
-                'total'         => (float) ($g['total_gaji'] ?? 0),
-                'bpjs_tk'       => 0,
-                'bpjs_ks'       => 0,
-                'bpjs_pen'      => 0,
-                'cashbon'       => (float) ($g['cashbon'] ?? 0),
-                'pph'           => (float) ($g['ttl_pph'] ?? 0),
-                'gaji_bersih'   => (float) ($g['total_terima'] ?? 0),
-            ];
-        }
-
-        $periodName = $period->name;
-        if ($period->is_split && $segment) {
-            $periodName .= " (Segmen {$segment})";
-        }
-
-        $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodName) . '.xlsx';
-
-        return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Reports\Exports\GajiKaryawanExport($secAData, $secBData, $periodName),
-            $filename
-        );
+        return null;
     }
 
-    /**
-     * Export Kirim ALL (multi-sheet Excel: A=ALLIN, B=PRINT).
-     * GET /api/v1/payroll/gaji-karyawan/export-kirim-all?period_id=...&segment=...
-     */
-    public function exportKirimAll(Request $request)
+    /** fixed_working_day dari SystemSetting payroll_config (default 25). */
+    private function fixedWorkingDay(): int
     {
-        $validated = $request->validate([
-            'period_id' => 'required|exists:pay_periods,id',
-            'segment' => 'nullable|in:A,B',
-        ]);
+        return (int) (SystemSetting::where('key', 'payroll_config')->first()?->fixed_working_day ?? 25);
+    }
 
-        $period = PayPeriod::findOrFail($validated['period_id']);
-        $segment = $validated['segment'] ?? null;
+    /** Split days {"A":5,"B":20} dari SystemSetting payroll_config.value. */
+    private function splitDays(): array
+    {
+        $raw = SystemSetting::where('key', 'payroll_config')->first()?->value;
 
-        $query = PayRecord::with(['employee.groups'])
-            ->where('pay_period_id', $period->id)
-            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
-            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
-            ->orderBy('employees.nip')
-            ->select('pay_records.*');
+        return json_decode($raw ?? '{}', true) ?? [];
+    }
 
-        if ($period->is_split) {
-            if (!$segment) {
-                $segment = 'A';
-            }
-            $query->where('segment', $segment);
+    /** Status lifecycle pay_records untuk periode/segmen (null = belum ada). */
+    private function recordStatusFor(PayPeriod $period, ?string $segment): ?string
+    {
+        $statuses = PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->pluck('status');
+
+        if ($statuses->contains(self::STATUS_LOCKED)) return self::STATUS_LOCKED;
+        if ($statuses->contains(self::STATUS_GENERATED)) return self::STATUS_GENERATED;
+        if ($statuses->contains(self::STATUS_DRAFT)) return self::STATUS_DRAFT;
+
+        return $statuses->isNotEmpty() ? (string) $statuses->first() : null;
+    }
+
+    /** Segmen periode: non-split = 1 segmen; split = A/B (rentang + hk config). */
+    private function buildSegments(PayPeriod $period, ?string $segment): array
+    {
+        $fixedDays = $this->fixedWorkingDay();
+
+        if (! $period->is_split) {
+            return [[
+                'segment' => null,
+                'start'   => $period->start_date->toDateString(),
+                'end'     => $period->end_date->toDateString(),
+                'hk'      => $fixedDays,
+            ]];
         }
 
-        $records = $query->get()->map(function ($record) {
-            $emp = $record->employee;
-            return [
-                'id' => $record->id,
-                'name' => $emp?->name ?? '-',
-                'bank_name' => $emp?->bank_name ?? '-',
-                'bank_account_number' => $emp?->bank_account_number ?? '-',
-                'bank_account_name' => $emp?->bank_account_name ?? '-',
-                'bank_cabang' => $emp?->bank_cabang ?? '',
-                'gaji_bersih' => (float) $record->gaji_bersih,
-                'notes' => $record->notes ?? '',
-                'groups' => $emp?->groups?->pluck('reference_code')->toArray() ?? [],
-            ];
-        });
+        $split = $this->splitDays();
+        $hkA = (int) ($split['A'] ?? 5);
+        $hkB = (int) ($split['B'] ?? max(0, $fixedDays - $hkA));
 
-        // Group by section from payroll config
-        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
-        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
-        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+        $month1End  = Carbon::parse($period->start_date)->endOfMonth()->toDateString();
+        $month2Start = Carbon::parse($period->end_date)->startOfMonth()->toDateString();
 
-        $dataAllIn = [];
-        $dataPrint = [];
+        $segments = [
+            ['segment' => 'A', 'start' => $period->start_date->toDateString(), 'end' => $month1End,  'hk' => $hkA],
+            ['segment' => 'B', 'start' => $month2Start,                          'end' => $period->end_date->toDateString(), 'hk' => $hkB],
+        ];
 
-        foreach ($records as $r) {
-            $groups = $r['groups'] ?? [];
-            if (array_intersect($groups, $sectionA)) {
-                $dataAllIn[] = $r;
-            } elseif (array_intersect($groups, $sectionB)) {
-                $dataPrint[] = $r;
-            }
+        if ($segment) {
+            $segments = array_values(array_filter($segments, fn ($s) => $s['segment'] === $segment));
         }
 
-        // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke All-In ──
+        return $segments;
+    }
+
+    /** Tambahkan ExtraEmployee ke koleksi records (masuk ke All-In). */
+    private function appendExtraEmployees(Collection $records): Collection
+    {
         $extraEmployees = ExtraEmployee::all();
         foreach ($extraEmployees as $emp) {
             $g = $emp->komponen_gaji ?? [];
-            $dataAllIn[] = [
-                'id'                  => 'ext-' . $emp->id,
-                'name'                => $emp->nama ?? '-',
-                'bank_name'           => '-',
+            $records->push([
+                'id'             => 'ext-' . $emp->id,
+                'employee_id'    => $emp->id,
+                'employee_code'  => $emp->kode ?? '-',
+                'name'           => $emp->nama ?? '-',
+                'department'     => '-',
+                'position'       => '-',
+                'gender'         => $emp->gender ?? '-',
+                'join_year'      => '-',
+                'groups'         => ['GRP-EXTRA'],
+                'bank_name'      => '-',
                 'bank_account_number' => $emp->account ?? '-',
                 'bank_account_name'   => $emp->nama ?? '-',
-                'bank_cabang'         => '-',
-                'gaji_bersih'         => (float) ($g['total_terima'] ?? 0),
-                'notes'               => '',
-                'groups'              => ['GRP-EXTRA'],
-            ];
+                'bank_cabang'    => '-',
+                'notes'          => '',
+                'gaji_pokok'     => (float) ($g['gaji_pokok'] ?? 0),
+                'premi'          => (float) ($g['premi'] ?? 0),
+                'tj_masa_kerja'  => (float) ($g['tj_mk'] ?? 0),
+                'tunjangan'      => (float) ($g['tunjangan'] ?? 0),
+                'hari_kerja'     => 0,
+                'lm'             => 0,
+                'lm_count'       => 0,
+                'lembur_count'   => 0,
+                'gaji'           => 0,
+                'upah_lembur'    => 0,
+                'revisi'         => 0,
+                'premi_hadir'    => 0,
+                'pblt'           => 0,
+                'total'          => (float) ($g['total_gaji'] ?? 0),
+                'bpjs_tk'        => 0,
+                'bpjs_ks'        => 0,
+                'bpjs_pen'       => 0,
+                'cashbon'        => (float) ($g['cashbon'] ?? 0),
+                'pph'            => (float) ($g['ttl_pph'] ?? 0),
+                'gaji_bersih'    => (float) ($g['total_terima'] ?? 0),
+            ]);
         }
 
-        $periodName = $period->name;
-        if ($period->is_split && $segment) {
-            $periodName .= " (Segmen {$segment})";
-        }
-
-        $filename = 'Kirim_ALL_' . str_replace(' ', '_', $periodName) . '.xlsx';
-
-        return \Maatwebsite\Excel\Facades\Excel::download(
-            new KirimAllExport($dataAllIn, $dataPrint, $period->tanggal_penggajian?->format('Y-m-d')),
-            $filename
-        );
+        return $records;
     }
 }

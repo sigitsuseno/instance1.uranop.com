@@ -156,6 +156,49 @@ class SettingsApiController extends Controller
         return response()->json(['message' => 'Payroll settings updated successfully']);
     }
 
+    /**
+     * GET /api/v1/settings/payroll-lock-password — hanya superadmin.
+     * Cek apakah password unlock payroll sudah diatur (tidak mengembalikan isinya).
+     */
+    public function getPayrollLockPassword()
+    {
+        abort_unless(auth()->user()?->hasRole('superadmin'), 403, 'Hanya superadmin yang bisa melihat pengaturan ini.');
+
+        $setting = SystemSetting::where('key', 'payroll_lock_password')->first();
+
+        return response()->json([
+            'data' => [
+                'has_password' => $setting && !empty($setting->value),
+            ],
+        ]);
+    }
+
+    /**
+     * PUT /api/v1/settings/payroll-lock-password — hanya superadmin.
+     * Simpan password unlock payroll (plain text, KEPUTUSAN #10 logic_payroll_baru.md).
+     */
+    public function updatePayrollLockPassword(Request $request)
+    {
+        abort_unless(auth()->user()?->hasRole('superadmin'), 403, 'Hanya superadmin yang bisa mengubah pengaturan ini.');
+
+        $validated = $request->validate([
+            'password' => 'required|string|min:4|max:100',
+        ]);
+
+        SystemSetting::updateOrCreate(
+            ['key' => 'payroll_lock_password'],
+            [
+                'uuid'       => (string) Str::uuid(),
+                'group'      => 'payroll',
+                'value'      => $validated['password'],
+                'type'       => 'string',
+                'updated_by' => auth()->id() ?? 1,
+            ]
+        );
+
+        return response()->json(['message' => 'Password unlock payroll berhasil disimpan.']);
+    }
+
     public function getWorkPatternTypes()
     {
         $types = WorkPatternType::all();

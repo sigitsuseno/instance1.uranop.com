@@ -9,11 +9,17 @@ use App\Modules\Payroll\Controllers\Api\V1\PayslipController;
 Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::apiResource('periods', PayPeriodApiController::class);
     Route::get('gaji-karyawan', [GajiKaryawanController::class, 'index']);
-    Route::get('gaji-karyawan/export', [GajiKaryawanController::class, 'export']);
+
+    // Lifecycle payroll 2-mode: Simpan (snapshot) → Finalisasi → Lock → Unlock
+    // Ditaruh SEBELUM route {id} (specific routes before wildcard)
+    Route::post('gaji-karyawan/simpan', [GajiKaryawanController::class, 'simpan']);
+    Route::post('gaji-karyawan/finalisasi', [GajiKaryawanController::class, 'finalisasi']);
+    Route::post('gaji-karyawan/lock', [GajiKaryawanController::class, 'lock']);
+    Route::post('gaji-karyawan/unlock', [GajiKaryawanController::class, 'unlock']);
+
     Route::put('gaji-karyawan/{id}/upah-lembur', [GajiKaryawanController::class, 'updateUpahLembur']);
     Route::put('gaji-karyawan/{id}/transfer-info', [GajiKaryawanController::class, 'updateTransferInfo']);
     Route::put('gaji-karyawan/bulk-update-cabang', [GajiKaryawanController::class, 'bulkUpdateCabang']);
-    Route::get('gaji-karyawan/export-kirim-all', [GajiKaryawanController::class, 'exportKirimAll']);
 
     // Konfigurasi Payroll
     Route::get('configs/{type}', [PayrollConfigApiController::class, 'show']);

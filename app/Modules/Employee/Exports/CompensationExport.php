@@ -19,13 +19,15 @@ class CompensationExport implements FromCollection, WithHeadings, WithMapping, S
     protected $year;
     protected $periode;
     protected $isLatest;
+    protected $groups;
 
-    public function __construct($month, $year, $periode, $isLatest = false)
+    public function __construct($month, $year, $periode, $isLatest = false, array $groups = [])
     {
         $this->month = $month;
         $this->year = $year;
         $this->periode = $periode;
         $this->isLatest = $isLatest;
+        $this->groups = $groups;
     }
 
     public function collection()
@@ -47,6 +49,11 @@ class CompensationExport implements FromCollection, WithHeadings, WithMapping, S
         // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
         if ($this->isLatest) {
             $query->where('is_latest', true);
+        }
+
+        // Filter opsional: batasi ke group kompensasi tertentu (comp_group)
+        if (! empty($this->groups)) {
+            $query->whereIn('comp_group', $this->groups);
         }
 
         return $query
