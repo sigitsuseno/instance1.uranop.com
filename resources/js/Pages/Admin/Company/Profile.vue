@@ -5,9 +5,11 @@ import BaseButton from '../../../Components/BaseButton.vue'
 import TextInput from '../../../Components/TextInput.vue'
 import { useApi } from '../../../composables/useApi'
 import { useNotification } from '../../../composables/useNotification'
+import { useCompanyStore } from '../../../Stores/company'
 
 const { get, post, loading } = useApi()
 const notification = useNotification()
+const companyStore = useCompanyStore()
 
 const form = ref({
   company_name: '',
@@ -89,6 +91,8 @@ async function saveProfile() {
     }
     // reload to get exact path from server
     await fetchProfile()
+    // refresh store company agar logo & nama langsung ter-update di landing/login/sidebar
+    companyStore.fetchCompany(true)
   } catch (error) {
     notification.error(error.response?.data?.message || 'Terjadi kesalahan')
   }

@@ -2,6 +2,8 @@
 import { ref, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
+import { useCompanyStore } from '../../Stores/company'
+import BrandLogo from '../../Components/BrandLogo.vue'
 
 const props = defineProps({
   collapsed: Boolean,
@@ -12,6 +14,7 @@ const emit = defineEmits(['toggle'])
 const route = useRoute()
 
 const auth = useAuth()
+const company = useCompanyStore()
 
 const supervisorMenus = computed(() => [
   {
@@ -154,12 +157,10 @@ watch(
           collapsed ? 'justify-center' : 'justify-start',
         ]"
       >
-        <div class="w-10 h-10 bg-(--primary) rounded-md flex items-center justify-center font-black text-white shadow-lg shrink-0">
-          U
-        </div>
+        <BrandLogo size="md" />
         <transition name="fade">
-          <span v-show="!collapsed" class="ml-3 text-lg font-bold text-(--text-main) whitespace-nowrap">
-            Uranop
+          <span v-show="!collapsed" class="ml-3 text-lg font-bold text-(--text-main) truncate min-w-0">
+            {{ company.name }}
           </span>
         </transition>
       </div>

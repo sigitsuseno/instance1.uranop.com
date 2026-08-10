@@ -17,6 +17,9 @@ Route::get('/', function () {
     ]);
 });
 
+// Public company info (nama & logo) untuk landing page, login, dan sidebar dashboard
+Route::get('/company', [\App\Modules\Organization\Controllers\Api\V1\CompanyProfileApiController::class, 'publicShow']);
+
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });

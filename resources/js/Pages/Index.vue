@@ -1,20 +1,22 @@
 <script setup>
 import { ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useCompanyStore } from '../Stores/company'
+import BrandLogo from '../Components/BrandLogo.vue'
 
 const showPrivacy = ref(false)
 const showTerms = ref(false)
+
+const company = useCompanyStore()
 </script>
 
 <template>
   <div class="bg-(--bg-main) text-(--text-main) selection:bg-(--primary) selection:text-white w-full min-h-screen">
     <nav class="flex items-center justify-between px-8 py-6 max-w-7xl mx-auto">
-      <div class="flex items-center space-x-2">
-        <div class="w-10 h-10 bg-(--primary) rounded-md flex items-center justify-center font-black text-white shadow-lg shadow-(--primary-glow)">
-          U
-        </div>
-        <div class="flex flex-col">
-          <span class="text-xl font-bold tracking-tighter text-(--text-main)">Uranop Enterprise</span>
+      <div class="flex items-center space-x-3 min-w-0">
+        <BrandLogo size="md" glow />
+        <div class="flex flex-col min-w-0">
+          <span class="text-xl font-bold tracking-tighter text-(--text-main) truncate">{{ company.name }}</span>
         </div>
       </div>
 
@@ -31,7 +33,7 @@ const showTerms = ref(false)
         <h1 class="text-6xl md:text-7xl font-black text-(--text-main) leading-[1.1] tracking-tight">
           Aplikasi Payroll <br />
           <span class="text-(--primary) mt-8 block">
-            Uranop Enterprise
+            {{ company.name }}
           </span>
         </h1>
         <div class="flex flex-col sm:flex-row gap-4">
@@ -71,7 +73,7 @@ const showTerms = ref(false)
 
     <footer class="border-t border-(--border-soft) py-12 mt-12 lg:mt-0">
       <div class="max-w-7xl mx-auto px-8 flex flex-col md:flex-row justify-between items-center text-(--text-muted) text-sm">
-        <p>&copy; {{ new Date().getFullYear() }} Uranop Enterprise. All rights reserved.</p>
+        <p>&copy; {{ new Date().getFullYear() }} {{ company.name }}. All rights reserved.</p>
         <div class="flex space-x-8 mt-4 md:mt-0">
           <button @click="showPrivacy = true" class="hover:text-(--text-main) transition-colors duration-200">Kebijakan Privasi</button>
           <button @click="showTerms = true" class="hover:text-(--text-main) transition-colors duration-200">Syarat & Ketentuan</button>
@@ -88,7 +90,7 @@ const showTerms = ref(false)
         </button>
         <h2 class="text-2xl font-bold text-(--text-main) mb-6">Kebijakan Privasi</h2>
         <div class="prose prose-sm text-(--text-muted) space-y-4">
-          <p>Kami di Uranop Enterprise sangat menghargai privasi data Anda. Kebijakan ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi informasi pribadi Anda.</p>
+          <p>Kami di {{ company.name }} sangat menghargai privasi data Anda. Kebijakan ini menjelaskan bagaimana kami mengumpulkan, menggunakan, dan melindungi informasi pribadi Anda.</p>
           <h3 class="text-(--text-main) font-semibold">1. Pengumpulan Data</h3>
           <p>Kami mengumpulkan data yang diperlukan untuk operasional payroll, termasuk namun tidak terbatas pada nama, jabatan, gaji, dan data kehadiran.</p>
           <h3 class="text-(--text-main) font-semibold">2. Penggunaan Data</h3>
@@ -108,7 +110,7 @@ const showTerms = ref(false)
         </button>
         <h2 class="text-2xl font-bold text-(--text-main) mb-6">Syarat & Ketentuan Penggunaan</h2>
         <div class="prose prose-sm text-(--text-muted) space-y-4">
-          <p>Selamat datang di sistem Uranop Enterprise. Dengan menggunakan aplikasi ini, Anda setuju untuk mematuhi syarat berikut:</p>
+          <p>Selamat datang di sistem {{ company.name }}. Dengan menggunakan aplikasi ini, Anda setuju untuk mematuhi syarat berikut:</p>
           <h3 class="text-(--text-main) font-semibold">1. Hak Akses</h3>
           <p>Akses ke sistem ini hanya diberikan kepada karyawan resmi perusahaan.</p>
           <h3 class="text-(--text-main) font-semibold">2. Tanggung Jawab Akun</h3>

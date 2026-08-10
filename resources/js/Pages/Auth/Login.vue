@@ -2,9 +2,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
+import { useCompanyStore } from '../../Stores/company'
+import BrandLogo from '../../Components/BrandLogo.vue'
 
 const router = useRouter()
 const auth = useAuth()
+const company = useCompanyStore()
 
 const form = ref({
   email: '',
@@ -48,11 +51,8 @@ async function submit() {
 
     <div class="max-w-sm w-full relative z-10">
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center space-x-3 mb-4">
-          <div class="w-14 h-14 bg-(--primary) rounded-xl flex items-center justify-center font-black text-white text-3xl shadow-lg shadow-(--primary-glow)">
-            U
-          </div>
-          <span class="text-2xl font-bold tracking-tight text-(--text-main)">Uranop</span>
+        <div class="flex justify-center mb-4">
+          <BrandLogo size="lg" glow rounded="rounded-xl" />
         </div>
         <h2 class="text-lg font-medium text-(--text-muted)">Enterprise HRIS System</h2>
       </div>
@@ -137,14 +137,14 @@ async function submit() {
           <div class="text-center">
             <p class="text-xs text-(--text-soft)">
               <i class="bx bx-shield-quarter text-sm mr-1"></i>
-              Secured by Uranop Enterprise
+              Secured by {{ company.name }}
             </p>
           </div>
         </form>
       </div>
 
       <p class="text-center text-xs text-(--text-soft) mt-6">
-        &copy; {{ new Date().getFullYear() }} Uranop Enterprise. All rights reserved.
+        &copy; {{ new Date().getFullYear() }} {{ company.name }}. All rights reserved.
       </p>
     </div>
   </div>

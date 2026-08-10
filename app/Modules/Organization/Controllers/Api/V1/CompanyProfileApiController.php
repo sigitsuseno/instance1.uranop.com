@@ -10,6 +10,22 @@ use Illuminate\Support\Facades\Storage;
 
 class CompanyProfileApiController extends Controller
 {
+    /**
+     * Public endpoint (tanpa auth) untuk mengambil nama & logo perusahaan.
+     * Dipakai oleh halaman landing, login, dan sidebar dashboard.
+     */
+    public function publicShow()
+    {
+        $company = Company::first();
+
+        return response()->json([
+            'data' => [
+                'name' => $company->name ?? null,
+                'logo_path' => $company->logo_path ?? null,
+            ]
+        ]);
+    }
+
     public function show()
     {
         $company = Company::with('branches')->first();
