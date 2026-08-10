@@ -308,7 +308,7 @@
                   <td class="px-2 py-2 text-right">{{ fmtShort(r.netto_income) }}</td>
                   <td class="px-2 py-2 text-right text-(--text-muted)">{{ r.pph_rate }}%</td>
                   <td class="px-2 py-2 text-right font-semibold" :class="r.is_dtp ? 'text-green-600' : 'text-(--danger)'">
-                    {{ fmtShort(r.pph_deducted) }}
+                    {{ fmtShort(r.pph_amount) }}
                   </td>
                   <td class="px-2 py-2 text-center">
                     <span v-if="r.is_dtp" class="text-xs px-1.5 py-0.5 bg-green-100 text-green-700 rounded">DTP</span>
