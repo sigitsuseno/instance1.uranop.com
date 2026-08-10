@@ -33,7 +33,7 @@ class PayslipController extends Controller
 
         $query = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
             ->where('pay_period_id', $period->id)
-            ->where('status', 'generated');
+            ->whereIn('status', ['generated', 'locked']);
 
         if ($period->is_split) {
             if (!$segment) {
@@ -109,7 +109,7 @@ class PayslipController extends Controller
             $otherSegment = $segment === 'A' ? 'B' : 'A';
             $otherSegmentRecords = PayRecord::with(['employee'])
                 ->where('pay_period_id', $period->id)
-                ->where('status', 'generated')
+                ->whereIn('status', ['generated', 'locked'])
                 ->where('segment', $otherSegment)
                 ->get()
                 ->keyBy('employee_id');

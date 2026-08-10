@@ -548,6 +548,7 @@ function buildSplitPartData(r, part) {
 
   return {
     part,
+    gajiPokok: r.gaji_pokok,
     ratePerHari: Math.round(ratePerHari),
     hkDays: hk,
     hkAmount: Math.round(hkAmount),
@@ -640,7 +641,7 @@ function generateBulkPrintHtml(slips, isSplitMode) {
     if (!p) return ''
     return `
 <div class="split-part-title">${label}</div>
-<div class="row b"><span>GAJI POKOK</span><span></span>${amt(p.hkAmount, {noDot: true})}</div>
+<div class="row b"><span>GAJI POKOK</span><span></span>${amt(p.gajiPokok, {noDot: true})}</div>
 <div class="row"><span class="lbl">HK</span><span> ${p.hkDays} x Rp ${f(p.ratePerHari)}</span>${amt(p.hkAmount)}</div>
 <div class="row"><span class="lbl">TJ MASA KERJA</span><span></span>${amt(p.tjMasaKerja)}</div>
 <div class="row"><span class="lbl">TUNJANGAN</span><span></span>${amt(p.tunjangan)}</div>

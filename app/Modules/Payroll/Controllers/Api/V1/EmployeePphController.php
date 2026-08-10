@@ -79,8 +79,10 @@ class EmployeePphController extends Controller
      * POST /api/v1/payroll/pph/generate
      *
      * Generate employee_pph untuk semua karyawan group gaji di periode ini.
-     * Membaca dari: employee_salary_components, employee_bpjs, att_prepares.
-     * Tidak bergantung pada pay_records.
+     * Sumber data komponen gaji dibaca via accessor Employee (gaji_pokok,
+     * premi, tunjangan, tunjangan_masa_kerja) yang mengambil dari
+     * employee_salaries (sama seperti payroll utama), plus employee_bpjs
+     * dan att_prepares. Tidak bergantung pada pay_records.
      */
     public function generate(Request $request): JsonResponse
     {

@@ -43,6 +43,10 @@ return new class extends Migration
 
     private function dropFk(string $fkName): void
     {
+        if (DB::connection()->getDriverName() !== 'mysql') {
+            return;
+        }
+
         $exists = DB::selectOne(
             "SELECT COUNT(*) AS cnt FROM information_schema.TABLE_CONSTRAINTS
              WHERE CONSTRAINT_TYPE = 'FOREIGN KEY'

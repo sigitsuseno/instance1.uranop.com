@@ -93,8 +93,17 @@ return new class extends Migration
 
     // ── Helpers ──
 
+    private function isMySql(): bool
+    {
+        return DB::connection()->getDriverName() === 'mysql';
+    }
+
     private function safeDropForeign(string $fkName): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         $exists = DB::selectOne(
             "SELECT COUNT(*) AS cnt FROM information_schema.TABLE_CONSTRAINTS
              WHERE CONSTRAINT_TYPE = 'FOREIGN KEY'
@@ -109,6 +118,10 @@ return new class extends Migration
 
     private function safeDropIndex(string $table, string $indexName): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         $exists = DB::selectOne(
             "SELECT COUNT(*) AS cnt FROM information_schema.STATISTICS
              WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?",
@@ -121,6 +134,10 @@ return new class extends Migration
 
     private function safeCreateForeign(string $table, string $column, string $refTable): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         $fkName = "{$table}_{$column}_foreign";
         $exists = DB::selectOne(
             "SELECT COUNT(*) AS cnt FROM information_schema.TABLE_CONSTRAINTS
@@ -138,6 +155,10 @@ return new class extends Migration
 
     private function safeCreateUnique(string $table, array $columns, string $name): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         $exists = DB::selectOne(
             "SELECT COUNT(*) AS cnt FROM information_schema.TABLE_CONSTRAINTS
              WHERE CONSTRAINT_TYPE = 'UNIQUE'
@@ -152,6 +173,10 @@ return new class extends Migration
 
     private function safeCreateIndex(string $table, string|array $columns, ?string $name = null): void
     {
+        if (! $this->isMySql()) {
+            return;
+        }
+
         $indexName = $name ?? (is_array($columns) ? implode('_', $columns) . '_index' : $columns . '_index');
         // Laravel auto-generates index name: {table}_{columns}_{index}
         $autoName = $table . '_' . (is_array($columns) ? implode('_', $columns) : $columns) . '_index';
