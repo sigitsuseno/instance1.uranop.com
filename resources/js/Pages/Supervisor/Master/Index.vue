@@ -2,9 +2,9 @@
   <div class="space-y-6 py-2">
     <!-- Header -->
     <div>
-      <h1 class="text-2xl font-bold tracking-tight text-(--text-main)">Data Master Supervisor</h1>
+      <h1 class="text-2xl font-bold tracking-tight text-(--text-main)">Data Master</h1>
       <p class="text-sm text-(--text-muted) mt-1">
-        Kelola konfigurasi dan referensi bayangan (shadow app) yang digunakan untuk penghitungan absensi dan payroll supervisor.
+        Kelola konfigurasi dan referensi yang digunakan untuk penghitungan absensi dan payroll.
       </p>
     </div>
 
@@ -18,7 +18,7 @@
           <div>
             <h3 class="font-bold text-(--text-main) group-hover:text-(--primary) transition-colors">Aturan Jam Kerja & Denda</h3>
             <p class="text-xs text-(--text-muted) mt-1">
-              Konfigurasi deteksi keterlambatan, pulang cepat, dan nominal denda bayangan.
+              Konfigurasi deteksi keterlambatan, pulang cepat, dan nominal denda.
             </p>
           </div>
         </div>
@@ -33,7 +33,7 @@
           <div>
             <h3 class="font-bold text-(--text-main) group-hover:text-(--success) transition-colors">Konfigurasi BPJS</h3>
             <p class="text-xs text-(--text-muted) mt-1">
-              Aturan perhitungan BPJS bayangan (JHT, JP, Kesehatan) khusus kalkulasi supervisor.
+              Aturan perhitungan BPJS (JHT, JP, Kesehatan) khusus kalkulasi payroll.
             </p>
           </div>
         </div>
@@ -48,7 +48,7 @@
           <div>
             <h3 class="font-bold text-(--text-main) group-hover:text-(--warning) transition-colors">Konfigurasi Pajak (PPh 21)</h3>
             <p class="text-xs text-(--text-muted) mt-1">
-              Aturan perhitungan PPh21 (TER/Tahunan) bayangan untuk slip gaji supervisor.
+              Aturan perhitungan PPh21 (TER/Tahunan) untuk slip gaji.
             </p>
           </div>
         </div>
@@ -63,7 +63,7 @@
           <div>
             <h3 class="font-bold text-(--text-main) group-hover:text-(--primary-hover) transition-colors">Konfigurasi THR</h3>
             <p class="text-xs text-(--text-muted) mt-1">
-              Parameter untuk menghitung nilai Tunjangan Hari Raya versi supervisor.
+              Parameter untuk menghitung nilai Tunjangan Hari Raya.
             </p>
           </div>
         </div>
@@ -77,7 +77,7 @@
           <div>
             <h3 class="font-bold text-(--text-main) group-hover:text-(--info) transition-colors">Departemen</h3>
             <p class="text-xs text-(--text-muted) mt-1">
-              Kelola struktur departemen (organisasi bayangan) perusahaan.
+              Kelola struktur departemen perusahaan.
             </p>
           </div>
         </div>
@@ -92,7 +92,7 @@
           <div>
             <h3 class="font-bold text-(--text-main) group-hover:text-(--primary-hover) transition-colors">Jabatan</h3>
             <p class="text-xs text-(--text-muted) mt-1">
-              Kelola data jabatan, tingkatan level dan peran supervisor.
+              Kelola data jabatan, tingkatan level, dan peran.
             </p>
           </div>
         </div>

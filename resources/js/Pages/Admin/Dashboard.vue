@@ -265,7 +265,7 @@ import {
 const { get } = useApi()
 
 const loading = ref(true)
-const stats = ref({ totalKaryawan: 0, cutiPeriodeIni: 0, izinPeriodeIni: 0, totalPayroll: 'Rp 0' })
+const stats = ref({ totalKaryawan: 0, cutiPeriodeIni: 0, izinPeriodeIni: 0, totalPayroll: 'Rp 0', totalPayrollMode: 'on_record' })
 const contractsExpiring = ref([])
 const recentAuditLogs = ref([])
 const birthdays = ref([])
@@ -324,7 +324,7 @@ const statCards = computed(() => [
   {
     label: 'Total Payroll',
     value: stats.value.totalPayroll,
-    sub: 'Bulan ini',
+    sub: stats.value.totalPayrollMode === 'on_the_fly' ? 'Estimasi bulan ini' : 'Bulan ini',
     icon: IconDollarSign,
     accent: 'bg-(--primary-hover)',
     accentRGB: 'rgba(29, 78, 216, 0.12)',

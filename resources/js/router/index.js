@@ -192,6 +192,7 @@ const routes = [
       { path: 'payroll/bpjs/iuran', name: 'payroll.bpjs.iuran', component: BpjsIuranIndex, meta: { title: 'Iuran BPJS' } },
       { path: 'payroll/bpjs/konfigurasi', name: 'payroll.bpjs.konfigurasi', component: BpjsKonfigurasiIndex, meta: { title: 'Konfigurasi BPJS' } },
       { path: 'pph/ter', name: 'pph.ter', component: PphConfigIndex, meta: { title: 'Pengelolaan PPh 21' } },
+      { path: 'pph/bulanan', name: 'pph.bulanan', component: PphConfigIndex, meta: { title: 'PPH 21 Bulanan' } },
       { path: 'pph/tahunan', name: 'pph.tahunan', component: PphConfigIndex, meta: { title: 'Pengelolaan PPh 21' } },
       { path: 'pph/employees', name: 'pph.employees', component: PphEmployeesIndex, meta: { title: 'Pajak Karyawan' } },
       { path: 'schedule/work-patterns', name: 'schedule.work-patterns', component: WorkPatternsIndex, meta: { title: 'Pola Kerja' } },
@@ -227,7 +228,7 @@ const routes = [
     component: () => import('../Layouts/Supervisor/SupervisorLayout.vue'),
     meta: { requiresAuth: true, requiresSupervisor: true },
     children: [
-      { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard, meta: { title: 'Dashboard Supervisor' } },
+      { path: '', name: 'supervisor.dashboard', component: SupervisorDashboard, meta: { title: 'Dashboard' } },
       { path: 'attendance', name: 'supervisor.attendance', component: SupervisorAttendance, meta: { title: 'Data Absensi' } },
       { path: 'attendance/autolog/:id', name: 'supervisor.attendance.autolog', component: SupervisorAttendanceAutologShow, meta: { title: 'Detail Autolog Absensi' } },
       { path: 'attendance/import', name: 'supervisor.attendance.import', component: SupervisorAttendanceImport, meta: { title: 'Import Kehadiran' } },

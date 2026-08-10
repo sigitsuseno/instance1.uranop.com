@@ -7,8 +7,8 @@
           <i class="bx bx-buildings text-2xl"></i>
         </div>
         <div>
-          <h1 class="text-2xl font-bold text-(--text-main)">Departemen (Supervisor)</h1>
-          <p class="text-sm text-(--text-muted) mt-1">Kelola struktur organisasi dan departemen bayangan</p>
+          <h1 class="text-2xl font-bold text-(--text-main)">Departemen</h1>
+          <p class="text-sm text-(--text-muted) mt-1">Kelola struktur organisasi dan departemen</p>
         </div>
       </div>
       <BaseButton variant="primary" @click="openCreateModal" class="shadow-lg shadow-(--primary-glow)">

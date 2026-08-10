@@ -2,7 +2,7 @@
   <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-(--text-main)">Konfigurasi THR (Supervisor)</h1>
+        <h1 class="text-2xl font-bold text-(--text-main)">Konfigurasi THR</h1>
         <p class="text-sm text-(--text-muted) mt-1">
           Atur persentase perhitungan THR berdasarkan masa kerja (dalam bulan)
         </p>

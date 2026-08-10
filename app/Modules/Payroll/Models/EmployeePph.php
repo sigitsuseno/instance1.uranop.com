@@ -5,6 +5,8 @@ namespace App\Modules\Payroll\Models;
 use Illuminate\Database\Eloquent\Model;
 use App\Modules\Shared\Traits\HasAuditLog;
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Employee\Models\EmployeeBpjs;
+use App\Modules\Employee\Models\EmployeeSalary;
 
 class EmployeePph extends Model
 {
@@ -36,5 +38,21 @@ class EmployeePph extends Model
     public function payRecord()
     {
         return $this->belongsTo(PayRecord::class);
+    }
+
+    /**
+     * Referensi ke data gaji sumber perhitungan (employee_salaries).
+     */
+    public function sourceSalary()
+    {
+        return $this->belongsTo(EmployeeSalary::class, 'source_salary_id');
+    }
+
+    /**
+     * Referensi ke data BPJS per periode yang menjadi sumber perhitungan.
+     */
+    public function sourceBpjs()
+    {
+        return $this->belongsTo(EmployeeBpjs::class, 'source_bpjs_id');
     }
 }

@@ -4,7 +4,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 class="text-2xl font-bold tracking-tight text-(--text-main)">
-          {{ greetingText }}, Supervisor!
+          {{ greetingText }}!
         </h1>
         <p class="text-sm text-(--text-muted) flex items-center gap-1.5 mt-0.5">
           <span class="inline-block w-2 h-2 rounded-full bg-(--success)"></span>
@@ -138,56 +138,9 @@
       </div>
     </div>
 
-    <!-- Row 2: Pending Cuti + Kontrak Expiring -->
+    <!-- Row 2: Kontrak Expiring (full width) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div class="lg:col-span-2">
-        <BaseCard class="h-full flex flex-col">
-          <template #title>
-            <div class="flex items-center gap-2">
-              <IconUmbrella class="w-5 h-5 text-(--primary)" />
-              <span>Permohonan Cuti Menunggu Approval</span>
-            </div>
-          </template>
-          <template #actions>
-            <router-link
-              to="/supervisor/leave"
-              class="text-xs font-semibold text-(--primary) hover:text-(--primary-hover) hover:underline flex items-center gap-1 transition-colors"
-            >
-              <span>Kelola Cuti</span>
-              <IconChevronRight class="w-3.5 h-3.5" />
-            </router-link>
-          </template>
-
-          <div v-if="loading" class="py-8 text-center text-(--text-muted)">Memuat data...</div>
-          <div v-else-if="pendingLeaves.length === 0" class="py-8 text-center text-(--text-muted)">Tidak ada pengajuan cuti yang menunggu approval.</div>
-          <DataTable v-else :headers="leaveHeaders" :items="pendingLeaves">
-            <template #item.employee_name="{ item }">
-              <div class="flex items-center gap-3 py-1">
-                <div class="w-8 h-8 rounded-md bg-gradient-to-tr from-(--primary)/15 to-(--primary)/5 text-(--primary) border border-(--primary)/10 shadow-sm flex items-center justify-center font-bold text-xs shrink-0 uppercase">
-                  {{ getInitials(item.employee_name) }}
-                </div>
-                <div class="min-w-0">
-                  <div class="font-semibold text-(--text-main) truncate text-sm">{{ item.employee_name }}</div>
-                  <div class="text-xs text-(--text-muted) truncate">{{ item.department }}</div>
-                </div>
-              </div>
-            </template>
-            <template #item.start_date="{ item }">
-              <div class="text-xs text-(--text-main) font-medium">
-                {{ formatDateShort(item.start_date) }} - {{ formatDateShort(item.end_date) }}
-              </div>
-            </template>
-            <template #item.days="{ value }">
-              <span class="font-medium text-(--text-main)">{{ value }} Hari</span>
-            </template>
-            <template #item.status>
-              <Badge variant="warning">Menunggu Approval</Badge>
-            </template>
-          </DataTable>
-        </BaseCard>
-      </div>
-
-      <div>
+      <div class="lg:col-span-3">
         <BaseCard class="h-full flex flex-col">
           <template #title>
             <div class="flex items-center gap-2">
@@ -316,7 +269,6 @@ import {
   IconClock, 
   IconRefresh,
   IconChevronRight,
-  IconUmbrella,
   IconGift,
   IconFileInvoice,
   IconChartBar
@@ -325,8 +277,7 @@ import {
 const { get } = useApi()
 
 const loading = ref(true)
-const stats = ref({ totalKaryawan: 0, hadirHariIni: 0, menungguCuti: 0, totalPayroll: 'Rp 0' })
-const pendingLeaves = ref([])
+const stats = ref({ totalKaryawan: 0, hadirHariIni: 0, menungguCuti: 0, totalPayroll: 'Rp 0', totalPayrollMode: 'on_record' })
 const contractsExpiring = ref([])
 const recentAuditLogs = ref([])
 const birthdays = ref([])
@@ -390,7 +341,7 @@ const statCards = computed(() => [
   {
     label: 'Total Payroll',
     value: stats.value.totalPayroll,
-    sub: 'Bulan ini',
+    sub: stats.value.totalPayrollMode === 'on_the_fly' ? 'Estimasi bulan ini' : 'Bulan ini',
     icon: IconFileInvoice,
     accent: 'bg-(--primary-hover)',
     accentRGB: 'rgba(29, 78, 216, 0.12)',
@@ -399,14 +350,6 @@ const statCards = computed(() => [
     sparkline: 'M 5 22 Q 25 20, 50 12 T 95 5',
   },
 ])
-
-const leaveHeaders = [
-  { key: 'employee_name', label: 'Nama Karyawan' },
-  { key: 'leave_type', label: 'Jenis Cuti' },
-  { key: 'start_date', label: 'Periode Cuti' },
-  { key: 'days', label: 'Durasi' },
-  { key: 'status', label: 'Status' },
-]
 
 const auditHeaders = [
   { key: 'user_name', label: 'User' },
@@ -471,7 +414,6 @@ async function fetchDashboard() {
   try {
     const res = await get('/api/v1/supervisor/dashboard')
     stats.value = res.stats
-    pendingLeaves.value = res.pendingLeaves
     contractsExpiring.value = res.contractsExpiring
     recentAuditLogs.value = res.recentAuditLogs
     birthdays.value = res.birthdays

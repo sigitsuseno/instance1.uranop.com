@@ -126,7 +126,8 @@ const allMenus = [
     visible: isSuperadmin.value || isHrmanager.value || isManajemen.value,
     children: [
       { title: 'Pajak Karyawan', icon: 'bx bx-user-pin', route: '/admin/pph/employees' },
-      { title: 'TER Bulanan', icon: 'bx bx-calendar-edit', route: '/admin/pph/ter' },
+      { title: 'Konfigurasi PPH', icon: 'bx bx-cog', route: '/admin/pph/ter' },
+      { title: 'PPH 21 Bulanan', icon: 'bx bx-receipt', route: '/admin/pph/bulanan' },
       { title: 'PPh 21 Tahunan', icon: 'bx bx-bar-chart-alt-2', route: '/admin/pph/tahunan' },
     ],
   },

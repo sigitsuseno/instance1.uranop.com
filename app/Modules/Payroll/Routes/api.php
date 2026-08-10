@@ -32,6 +32,12 @@ Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::get('pph/employees', [\App\Modules\Payroll\Controllers\Api\V1\EmployeeTaxController::class, 'index']);
     Route::put('pph/employees/{id}', [\App\Modules\Payroll\Controllers\Api\V1\EmployeeTaxController::class, 'update']);
 
+    // Data PPh — Generate & Kelola PPh per periode
+    Route::get('pph/data', [\App\Modules\Payroll\Controllers\Api\V1\EmployeePphController::class, 'index']);
+    Route::post('pph/generate', [\App\Modules\Payroll\Controllers\Api\V1\EmployeePphController::class, 'generate']);
+    Route::put('pph/data/{id}', [\App\Modules\Payroll\Controllers\Api\V1\EmployeePphController::class, 'update']);
+    Route::delete('pph/data/{id}', [\App\Modules\Payroll\Controllers\Api\V1\EmployeePphController::class, 'destroy']);
+
     // THR
     Route::get('thr', [\App\Modules\Payroll\Controllers\Api\V1\ThrApiController::class, 'index']);
     Route::post('thr/generate', [\App\Modules\Payroll\Controllers\Api\V1\ThrApiController::class, 'generate']);

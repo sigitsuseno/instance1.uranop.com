@@ -2,7 +2,7 @@
   <div>
     <div class="flex items-center justify-between mb-6">
       <div>
-        <h1 class="text-2xl font-bold text-(--text-main)">Pengaturan Cuti (Supervisor)</h1>
+        <h1 class="text-2xl font-bold text-(--text-main)">Pengaturan Cuti</h1>
         <p class="text-sm text-(--text-muted) mt-1">Konfigurasi tipe cuti, kebijakan, dan periode cuti</p>
       </div>
     </div>

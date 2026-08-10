@@ -1,9 +1,9 @@
 <template>
   <div>
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-(--text-main)">Konfigurasi Pajak PPh 21 (Supervisor)</h1>
-      <p class="text-sm text-(--text-muted) mt-1">
-        Aturan perhitungan PPh21 (TER/Tahunan) bayangan untuk supervisor
+      <h1 class="text-2xl font-bold text-(--text-main)">Konfigurasi Pajak PPh 21</h1>
+      <p class="text-sm text-(--text-muted)">
+        Aturan perhitungan PPh21 (TER/Tahunan)
       </p>
     </div>
 

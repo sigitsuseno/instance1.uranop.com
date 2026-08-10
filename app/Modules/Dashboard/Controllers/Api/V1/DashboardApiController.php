@@ -8,6 +8,7 @@ use App\Modules\AuditLog\Models\AuditLog;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Leave\Models\LeaveRequest;
+use App\Modules\Payroll\Controllers\Api\V1\GajiKaryawanController;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use Illuminate\Http\JsonResponse;
@@ -36,19 +37,17 @@ class DashboardApiController extends Controller
             ->whereMonth('end_date', now()->month)
             ->count();
 
-        // Total payroll bulan ini: sum gaji_kotor dari pay_records bulan aktif
-        $totalPayroll = 0;
-        $activePeriod = PayPeriod::where('status', 'active')->first();
-        if ($activePeriod) {
-            $totalPayroll = (int) PayRecord::where('pay_period_id', $activePeriod->id)
-                ->sum('gaji_kotor');
-        }
+        // Total payroll bulan ini: konsisten dengan mode Gaji Karyawan
+        //  - periode aktif masih berjalan → ESTIMASI on-the-fly (att_prepares)
+        //  - periode aktif sudah lewat     → baca pay_records
+        $payroll = $this->totalPayrollBulanIni();
 
         $stats = [
-            'totalKaryawan'   => $totalKaryawan,
-            'cutiPeriodeIni'  => $cutiPeriodeIni,
-            'izinPeriodeIni'  => $izinPeriodeIni,
-            'totalPayroll'    => $this->formatRupiah($totalPayroll),
+            'totalKaryawan'    => $totalKaryawan,
+            'cutiPeriodeIni'   => $cutiPeriodeIni,
+            'izinPeriodeIni'   => $izinPeriodeIni,
+            'totalPayroll'     => $this->formatRupiah($payroll['total']),
+            'totalPayrollMode' => $payroll['mode'],
         ];
 
         // ── Pending Leave Requests ────────────────────────────────────
@@ -140,19 +139,17 @@ class DashboardApiController extends Controller
 
         $menungguCuti = LeaveRequest::where('status', 'pending')->count();
 
-        // Total payroll bulan ini: sum gaji_kotor dari pay_records bulan aktif
-        $totalPayroll = 0;
-        $activePeriod = PayPeriod::where('status', 'active')->first();
-        if ($activePeriod) {
-            $totalPayroll = (int) PayRecord::where('pay_period_id', $activePeriod->id)
-                ->sum('gaji_kotor');
-        }
+        // Total payroll bulan ini: konsisten dengan mode Gaji Karyawan
+        //  - periode aktif masih berjalan → ESTIMASI on-the-fly (att_prepares)
+        //  - periode aktif sudah lewat     → baca pay_records
+        $payroll = $this->totalPayrollBulanIni();
 
         $stats = [
-            'totalKaryawan'  => $totalKaryawan,
-            'hadirHariIni'   => $hadirHariIni,
-            'menungguCuti'   => $menungguCuti,
-            'totalPayroll'   => $this->formatRupiah($totalPayroll),
+            'totalKaryawan'    => $totalKaryawan,
+            'hadirHariIni'     => $hadirHariIni,
+            'menungguCuti'     => $menungguCuti,
+            'totalPayroll'     => $this->formatRupiah($payroll['total']),
+            'totalPayrollMode' => $payroll['mode'],
         ];
 
         // ── Pending Leave Requests ────────────────────────────────────
@@ -232,6 +229,52 @@ class DashboardApiController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────
+
+    /**
+     * Periode yang sedang berjalan (start_date <= hari ini <= end_date).
+     * Fallback ke periode berstatus active kalau tidak ada yang mencakup hari ini.
+     * (Tidak bergantung status active — di DB periode yang lagi jalan tidak selalu ditandai active.)
+     */
+    private function periodeBerjalan(): ?PayPeriod
+    {
+        $running = PayPeriod::where('start_date', '<=', now()->toDateString())
+            ->where('end_date', '>=', now()->toDateString())
+            ->first();
+
+        if ($running) {
+            return $running;
+        }
+
+        return PayPeriod::active()->first();
+    }
+
+    /**
+     * Total payroll bulan berjalan — konsisten dengan mode Gaji Karyawan
+     * (logic_payroll_baru.md §2.1):
+     *  - end_date periode berjalan BELUM lewat → ESTIMASI on-the-fly dari att_prepares
+     *  - end_date periode berjalan SUDAH lewat → baca pay_records (on_record)
+     *
+     * @return array{total: int, mode: 'on_the_fly'|'on_record'}
+     */
+    private function totalPayrollBulanIni(): array
+    {
+        $activePeriod = $this->periodeBerjalan();
+
+        if (! $activePeriod) {
+            return ['total' => 0, 'mode' => 'on_record'];
+        }
+
+        if ($activePeriod->end_date && now()->lte($activePeriod->end_date)) {
+            $total = app(GajiKaryawanController::class)->estimateGajiKotorTotal($activePeriod);
+
+            return ['total' => (int) $total, 'mode' => 'on_the_fly'];
+        }
+
+        return [
+            'total' => (int) PayRecord::where('pay_period_id', $activePeriod->id)->sum('gaji_kotor'),
+            'mode'  => 'on_record',
+        ];
+    }
 
     private function formatRupiah(int $nominal): string
     {

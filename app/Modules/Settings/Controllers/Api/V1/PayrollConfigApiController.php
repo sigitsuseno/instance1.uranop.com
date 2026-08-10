@@ -117,6 +117,8 @@ class PayrollConfigApiController extends Controller
             'pph_method' => 'required|in:gross,gross_up,net',
             'non_npwp_penalty' => 'boolean',
             'non_npwp_multiplier' => 'numeric',
+            'nik_as_npwp' => 'boolean',
+            'is_dtp' => 'boolean',
             'description' => 'nullable|string',
         ]);
 

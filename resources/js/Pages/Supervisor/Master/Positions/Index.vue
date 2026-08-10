@@ -7,8 +7,8 @@
           <i class="bx bx-briefcase-alt-2 text-2xl"></i>
         </div>
         <div>
-          <h1 class="text-2xl font-bold text-(--text-main)">Jabatan (Supervisor)</h1>
-          <p class="text-sm text-(--text-muted) mt-1">Kelola data jabatan bayangan</p>
+          <h1 class="text-2xl font-bold text-(--text-main)">Jabatan</h1>
+          <p class="text-sm text-(--text-muted) mt-1">Kelola data jabatan</p>
         </div>
       </div>
       <BaseButton variant="primary" @click="openCreateModal" class="shadow-lg shadow-(--primary-glow)">
@@ -134,7 +134,7 @@
           </div>
           <div>
             <h4 class="text-sm font-semibold text-(--text-main)">Informasi Jabatan</h4>
-            <p class="text-xs text-(--text-muted) mt-1">Jabatan manajerial akan memiliki akses berbeda terhadap data staf bawahannya di supervisor dashboard.</p>
+            <p class="text-xs text-(--text-muted) mt-1">Jabatan manajerial akan memiliki akses berbeda terhadap data staf bawahannya.</p>
           </div>
         </div>
 

@@ -49,6 +49,18 @@ class GajiKaryawanController extends Controller
         return $this->onRecord($period, $segment);
     }
 
+    /**
+     * Total estimasi gaji_kotor seluruh segmen periode (on-the-fly dari att_prepares).
+     * Dipakai dashboard (card Total Payroll) — konsisten dengan tabel Gaji Karyawan.
+     * Catatan: tidak menyertakan ExtraEmployee (sama seperti sum pay_records di dashboard).
+     */
+    public function estimateGajiKotorTotal(PayPeriod $period): float
+    {
+        $computed = $this->computeOnTheFlyRows($period, null);
+
+        return (float) collect($computed['rows'])->sum('gaji_kotor');
+    }
+
     // =====================================================================
     // MODE ON_RECORD — baca pay_records (logika existing, + mode/status)
     // =====================================================================
