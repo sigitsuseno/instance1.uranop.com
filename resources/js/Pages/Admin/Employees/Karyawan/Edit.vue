@@ -22,6 +22,7 @@ const employee = ref(null)
 
 const form = ref({
   employee_code: '',
+  nip: '',
   nik: '',
   name: '',
   email: '',
@@ -113,7 +114,7 @@ async function fetchEmployee() {
   try {
     const res = await get(`/api/v1/employees/${employeeId.value}`)
     employee.value = res.data
-    
+
     // Populate form
     Object.keys(form.value).forEach(key => {
       if (res.data[key] !== undefined) {
