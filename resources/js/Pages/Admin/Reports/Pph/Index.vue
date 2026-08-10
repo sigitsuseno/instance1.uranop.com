@@ -452,7 +452,12 @@ function fmtPct(val) {
 }
 
 function monthTotal(m) {
-  return (rows.value || []).reduce((s, r) => s + (r.monthly_pph[m]?.report || 0), 0)
+  return (rows.value || []).reduce((s, r) => {
+    const d = r.monthly_pph?.[m]
+    // Bulan DTP tidak dipotong dari gaji, jadi tidak ikut dalam total payroll
+    if (!d?.has_data || d.is_dtp) return s
+    return s + (d.report || 0)
+  }, 0)
 }
 
 async function fetchData() {
