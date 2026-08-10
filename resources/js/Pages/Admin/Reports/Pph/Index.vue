@@ -153,8 +153,10 @@
                   }"
                 >
                   <template v-if="row.monthly_pph[m]?.has_data">
-                    <span v-if="row.monthly_pph[m]?.is_dtp" class="font-medium" title="DTP">DTP</span>
-                    <span v-else class="font-medium">{{ fmtShort(row.monthly_pph[m]?.report) }}</span>
+                    <span
+                      class="font-medium"
+                      :title="row.monthly_pph[m]?.is_dtp ? 'DTP (Ditanggung Pemerintah)' : undefined"
+                    >{{ fmtShort(row.monthly_pph[m]?.report) }}</span>
                   </template>
                   <span v-else class="text-(--text-soft)">–</span>
                 </td>
@@ -171,7 +173,7 @@
                 <td v-for="m in 12" :key="m" class="px-2 py-3 text-right text-(--text-main) border-r border-(--border-soft)">
                   {{ fmtShort(monthTotal(m)) }}
                 </td>
-                <td class="px-3 py-3 text-right text-(--primary)">{{ fmt(stats?.total_pph_payroll) }}</td>
+                <td class="px-3 py-3 text-right text-(--primary)">{{ fmt(stats?.total_pph_report) }}</td>
               </tr>
             </tfoot>
           </table>
@@ -232,7 +234,6 @@
                   <td v-for="m in 12" :key="m" class="px-2 py-2 text-right whitespace-nowrap border-r border-(--border-soft)" :class="{ 'text-(--text-muted)': !monthlyDetail[m]?.has_data, 'text-green-600': monthlyDetail[m]?.has_data && br.field === 'pph_report' && monthlyDetail[m]?.is_dtp }">
                     <template v-if="monthlyDetail[m]?.has_data">
                       <span v-if="br.isPct">{{ fmtPct(monthlyDetail[m]?.[br.field]) }}</span>
-                      <span v-else-if="br.field === 'pph_report' && monthlyDetail[m]?.is_dtp" title="DTP">DTP</span>
                       <span v-else>{{ fmt(monthlyDetail[m]?.[br.field]) }}</span>
                     </template>
                     <span v-else class="text-(--text-soft)">–</span>
@@ -454,8 +455,7 @@ function fmtPct(val) {
 function monthTotal(m) {
   return (rows.value || []).reduce((s, r) => {
     const d = r.monthly_pph?.[m]
-    // Bulan DTP tidak dipotong dari gaji, jadi tidak ikut dalam total payroll
-    if (!d?.has_data || d.is_dtp) return s
+    if (!d?.has_data) return s
     return s + (d.report || 0)
   }, 0)
 }

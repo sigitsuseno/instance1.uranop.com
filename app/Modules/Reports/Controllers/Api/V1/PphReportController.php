@@ -5,11 +5,11 @@ namespace App\Modules\Reports\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Payroll\Models\EmployeePph;
 use App\Modules\Payroll\Models\PayPeriod;
-use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Reports\Exports\PphReportExport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
+use Symfony\Component\HttpFoundation\Response;
 
 class PphReportController extends Controller
 {
@@ -21,7 +21,7 @@ class PphReportController extends Controller
      *
      * Query param `export=1` → download Excel.
      */
-    public function index(Request $request): JsonResponse
+    public function index(Request $request): Response
     {
         $year = (int) ($request->input('year') ?? date('Y'));
         $search = $request->input('search');
@@ -48,15 +48,8 @@ class PphReportController extends Controller
             ->orderBy('period_year', 'desc')
             ->pluck('period_year');
 
-        // Cek apakah ada data employee_pph
-        $hasEpph = EmployeePph::whereHas('payPeriod', fn($q) => $q->where('period_year', $year))->exists();
-
-        if ($hasEpph) {
-            return $this->fromEmployeePph($year, $search, $employeeId, $groups, $monthNames, $availableYears);
-        }
-
-        // Fallback ke pay_records
-        return $this->fromPayRecords($year, $search, $employeeId, $groups, $monthNames, $availableYears);
+        // Data selalu diambil dari tabel employee_pph (hasil generate PPh 21 bulanan).
+        return $this->fromEmployeePph($year, $search, $employeeId, $groups, $monthNames, $availableYears);
     }
 
     /**
@@ -92,7 +85,7 @@ class PphReportController extends Controller
                 $rec = $records->first(fn($r) => $r->payPeriod?->period_month === $m);
                 $monthly[$m] = $rec ? [
                     'has_data'   => true,
-                    'report'     => (float) $rec->pph_deducted,
+                    'report'     => (float) $rec->pph_amount,
                     'is_dtp'     => (bool) $rec->is_dtp,
                     'pph_amount' => (float) $rec->pph_amount,
                 ] : ['has_data' => false, 'report' => 0, 'is_dtp' => false, 'pph_amount' => 0];
@@ -106,13 +99,13 @@ class PphReportController extends Controller
                 'has_npwp'         => (bool) ($records->first()->has_npwp ?? false),
                 'nik'              => $records->first()->npwp ?? null,
                 'monthly_pph'      => $monthly,
-                'total_pph_report' => collect($monthly)->sum(fn($m) => $m['is_dtp'] ? 0 : $m['report']),
+                'total_pph_report' => collect($monthly)->sum('report'),
             ];
         })->values();
 
         $stats = [
             'total_karyawan'    => $rows->count(),
-            'total_pph_payroll' => $rows->sum('total_pph_report'),
+            'total_pph_payroll' => $allRecords->sum('pph_deducted'),
             'total_pph_report'  => $allRecords->sum('pph_amount'),
         ];
 
@@ -180,7 +173,7 @@ class PphReportController extends Controller
                 'bpjs_kes_perusahaan' => (float) $rec->bpjs_kes_perusahaan,
                 'gross_income'        => (float) $rec->gross_income,
                 'pph_rate'            => (float) $rec->pph_rate,
-                'pph_report'          => (float) $rec->pph_deducted,
+                'pph_report'          => (float) $rec->pph_amount,
                 'jht_karyawan'        => $jht,
                 'jp_karyawan'         => $jp,
                 'bpjs_kes_karyawan'   => max(0, $totalPengurang - $biayaJabatan - $jht - $jp),
@@ -212,7 +205,7 @@ class PphReportController extends Controller
             $pphSetahun = round($pphSetahun * 1.2, 2);
         }
 
-        $pphJanNov = $records->filter(fn($r) => in_array($r->payPeriod?->period_month, range(1, 11)))->sum('pph_deducted');
+        $pphJanNov = $records->filter(fn($r) => in_array($r->payPeriod?->period_month, range(1, 11)))->sum('pph_amount');
 
         $decemberBreakdown = [
             'is_complete'        => $monthsWithData >= 11,
@@ -290,17 +283,16 @@ class PphReportController extends Controller
     }
 
     /**
-     * Fallback dari pay_records.pph (data minimal — cuma nominal PPh).
+     * Export Excel: matrix PPh per karyawan × 12 bulan.
      */
-    private function fromPayRecords(int $year, ?string $search, ?string $employeeId, array $groups, array $monthNames, $availableYears): JsonResponse
+    private function exportExcel(int $year, ?string $search, array $groups, array $monthNames)
     {
-        $query = PayRecord::with(['employee', 'employee.groups', 'payPeriod'])
+        $query = EmployeePph::with(['employee', 'payPeriod'])
             ->whereHas('payPeriod', fn($q) => $q->where('period_year', $year));
 
         if (!empty($groups)) {
             $query->whereHas('employee.groups', fn($q) => $q->whereIn('reference_code', $groups));
         }
-
         if ($search) {
             $query->whereHas('employee', fn($q) => $q
                 ->where('name', 'like', "%{$search}%")
@@ -311,184 +303,24 @@ class PphReportController extends Controller
         $allRecords = $query->get();
         $grouped = $allRecords->groupBy('employee_id');
 
-        $rows = $grouped->map(function ($records, $empId) use ($year) {
-            $employee = $records->first()->employee;
-            $monthly = [];
-
-            foreach (range(1, 12) as $m) {
-                $rec = $records->first(fn($r) => $r->payPeriod?->period_month === $m);
-                $hasData = $rec !== null;
-                $pphVal = $hasData ? (float) $rec->pph : 0;
-                $monthly[$m] = [
-                    'has_data'   => $hasData,
-                    'report'     => $pphVal,
-                    'is_dtp'     => false,
-                    'pph_amount' => $pphVal,
-                ];
-            }
-
-            return [
-                'employee_id'      => $empId,
-                'employee_name'    => $employee->name ?? '-',
-                'employee_code'    => $employee->employee_code ?? '-',
-                'ptkp_status'      => '-',
-                'has_npwp'         => false,
-                'nik'              => null,
-                'monthly_pph'      => $monthly,
-                'total_pph_report' => collect($monthly)->sum('report'),
-            ];
-        })->values();
-
-        $stats = [
-            'total_karyawan'    => $rows->count(),
-            'total_pph_payroll' => $rows->sum('total_pph_report'),
-            'total_pph_report'  => $rows->sum('total_pph_report'),
-        ];
-
-        $detailEmployee = null;
-        $monthlyDetail = [];
-        $decemberBreakdown = null;
-
-        if ($employeeId && $grouped->has($employeeId)) {
-            $empRecords = $grouped->get($employeeId);
-            $emp = $empRecords->first();
-            $empModel = $emp->employee;
-            $ptkpStatus = $empModel->ptkp ?? 'TK/0';
-            $hasNpwp = (bool) ($empModel->has_npwp ?? false);
-
-            $detailEmployee = [
-                'employee_id'   => (int) $employeeId,
-                'employee_name' => $empModel->name ?? '-',
-                'employee_code' => $empModel->employee_code ?? '-',
-                'ptkp_status'   => $ptkpStatus,
-                'has_npwp'      => $hasNpwp,
-                'nik'           => $empModel->npwp ?? null,
-            ];
-
-            foreach (range(1, 12) as $m) {
-                $rec = $empRecords->first(fn($r) => $r->payPeriod?->period_month === $m);
-                $hasData = $rec !== null;
-                $monthlyDetail[$m] = $hasData ? [
-                    'has_data'            => true,
-                    'is_dtp'              => false,
-                    'gaji_pokok'          => (float) $rec->gaji_pokok,
-                    'tunjangan'           => (float) $rec->tunjangan,
-                    'lembur_bonus_thr'    => 0,
-                    'jkk'                 => 0,
-                    'jkm'                 => 0,
-                    'bpjs_kes_perusahaan' => 0,
-                    'gross_income'        => (float) $rec->gaji_kotor,
-                    'pph_rate'            => 0,
-                    'pph_report'          => (float) $rec->pph,
-                    'jht_karyawan'        => (float) $rec->bpjs_tk,
-                    'jp_karyawan'         => (float) $rec->bpjs_pen,
-                    'bpjs_kes_karyawan'   => (float) $rec->bpjs_ks,
-                    'biaya_jabatan'       => 0,
-                    'net_salary'          => (float) $rec->gaji_bersih,
-                    'total_pengurang'     => (float) ($rec->bpjs_tk + $rec->bpjs_pen + $rec->bpjs_ks),
-                    'pkp'                 => 0,
-                ] : ['has_data' => false];
-            }
-
-            $monthsWithData = $empRecords->count();
-
-            $brutoSetahun = $empRecords->sum('gaji_kotor');
-            $jhtTahunan = $empRecords->sum('bpjs_tk');
-            $jpTahunan = $empRecords->sum('bpjs_pen');
-            $nettoSetahun = max(0, $empRecords->sum('gaji_bersih'));
-
-            // PTKP diambil dari status karyawan (bukan hardcode).
-            $ptkpValue = $this->getPtkpValue($ptkpStatus);
-            $pkp = max(0, $nettoSetahun - $ptkpValue);
-            $pphSetahun = $this->calculateProgressivePph($pkp);
-
-            if (!$hasNpwp) {
-                $pphSetahun = round($pphSetahun * 1.2, 2);
-            }
-
-            $pphJanNov = $empRecords->filter(fn($r) => in_array($r->payPeriod?->period_month, range(1, 11)))->sum('pph');
-
-            $decemberBreakdown = [
-                'is_complete'        => $monthsWithData >= 11,
-                'months_with_data'   => $monthsWithData,
-                'gaji_pokok_setahun' => $empRecords->sum('gaji_pokok'),
-                'tunjangan_setahun'  => $empRecords->sum('tunjangan'),
-                'lembur_bonus_thr'   => 0,
-                'bruto_setahun'      => $brutoSetahun,
-                'biaya_jabatan'      => 0,
-                'jht_tahunan'        => $jhtTahunan,
-                'jp_tahunan'         => $jpTahunan,
-                'netto_setahun'      => $nettoSetahun,
-                'ptkp_value'         => $ptkpValue,
-                'pkp'                => $pkp,
-                'pph_setahun'        => $pphSetahun,
-                'pph_jan_nov'        => $pphJanNov,
-                'pph_desember'       => max(0, round($pphSetahun - $pphJanNov, 2)),
-            ];
-        }
-
-        return response()->json([
-            'rows'               => $rows,
-            'stats'              => $stats,
-            'monthNames'         => array_values($monthNames),
-            'availableYears'     => $availableYears,
-            'filters'            => ['year' => $year, 'search' => $search, 'employee_id' => $employeeId ? (int) $employeeId : null],
-            'detailEmployee'     => $detailEmployee,
-            'monthlyDetail'      => $monthlyDetail,
-            'december_breakdown' => $decemberBreakdown,
-        ]);
-    }
-
-    /**
-     * Export Excel: matrix PPh per karyawan × 12 bulan.
-     */
-    private function exportExcel(int $year, ?string $search, array $groups, array $monthNames)
-    {
-        $hasEpph = EmployeePph::whereHas('payPeriod', fn($q) => $q->where('period_year', $year))->exists();
-
-        if ($hasEpph) {
-            $query = EmployeePph::with(['employee', 'payPeriod'])
-                ->whereHas('payPeriod', fn($q) => $q->where('period_year', $year));
-        } else {
-            $query = PayRecord::with(['employee', 'payPeriod'])
-                ->whereHas('payPeriod', fn($q) => $q->where('period_year', $year));
-        }
-
-        if (!empty($groups)) {
-            $query->whereHas('employee.groups', fn($q) => $q->whereIn('reference_code', $groups));
-        }
-        if ($search) {
-            $query->whereHas('employee', fn($q) => $q
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('employee_code', 'like', "%{$search}%")
-            );
-        }
-
-        $allRecords = $query->get();
-        $grouped = $allRecords->groupBy('employee_id');
-
-        $rows = $grouped->map(function ($records) use ($hasEpph) {
+        $rows = $grouped->map(function ($records) {
             $employee = $records->first()->employee;
             $monthly = [];
             foreach (range(1, 12) as $m) {
                 $rec = $records->first(fn($r) => $r->payPeriod?->period_month === $m);
                 $hasData = $rec !== null;
-                $val = $hasData
-                    ? ($hasEpph ? (float) $rec->pph_deducted : (float) $rec->pph)
-                    : 0;
-                $isDtp = $hasEpph && $rec ? (bool) $rec->is_dtp : false;
                 $monthly[$m] = [
                     'has_data' => $hasData,
-                    'report'   => $val,
-                    'is_dtp'   => $isDtp,
+                    'report'   => $hasData ? (float) $rec->pph_amount : 0,
+                    'is_dtp'   => $hasData ? (bool) $rec->is_dtp : false,
                 ];
             }
             return [
                 'employee_name'    => $employee->name ?? '-',
                 'employee_code'    => $employee->employee_code ?? '-',
-                'ptkp_status'      => $hasEpph ? ($records->first()->ptkp_status ?? '-') : '-',
+                'ptkp_status'      => $records->first()->ptkp_status ?? '-',
                 'monthly_pph'      => $monthly,
-                'total_pph_report' => collect($monthly)->sum(fn($m) => $m['is_dtp'] ? 0 : $m['report']),
+                'total_pph_report' => collect($monthly)->sum('report'),
             ];
         })->values()->toArray();
 

@@ -39,8 +39,8 @@ class PphReportExport implements FromArray, WithHeadings, WithStyles, WithColumn
 
             foreach (range(1, 12) as $m) {
                 $mData = $row['monthly_pph'][$m] ?? null;
-                $line[] = $mData && $mData['has_data'] 
-                    ? ($mData['is_dtp'] ? 'DTP' : (float) $mData['report'])
+                $line[] = $mData && $mData['has_data']
+                    ? (float) $mData['report']
                     : 0;
             }
 
@@ -55,7 +55,7 @@ class PphReportExport implements FromArray, WithHeadings, WithStyles, WithColumn
             $sum = 0;
             foreach ($this->rows as $row) {
                 $mData = $row['monthly_pph'][$m] ?? null;
-                if ($mData && $mData['has_data'] && !$mData['is_dtp']) {
+                if ($mData && $mData['has_data']) {
                     $sum += (float) $mData['report'];
                 }
             }
