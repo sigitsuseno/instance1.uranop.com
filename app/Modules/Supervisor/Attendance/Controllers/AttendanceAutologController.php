@@ -892,7 +892,7 @@ class AttendanceAutologController extends Controller
      * dari jadwal shift di roster untuk karyawan terpilih dalam periode.
      *
      * Rule per autolog:
-     *  - roster->work_pattern_type = SHIFT            → skip
+     *  - roster->work_pattern_type = SHIFT            → check_in/check_out/actual_in/actual_out diambil apa adanya dari att_prepares
      *  - roster->work_pattern_type FIXED / FLEX-SHIFT:
      *      - Minggu & holiday                          → semua waktu kosong
      *      - status leave / izin / sakit               → check kosong, actual = jadwal
@@ -938,6 +938,14 @@ class AttendanceAutologController extends Controller
             ->get()
             ->keyBy(fn ($r) => $r->employee_id.'|'.$r->date->toDateString());
 
+        // att_prepares by (employee_id, date) untuk work_pattern_type SHIFT
+        // → check_in/check_out/actual_in/actual_out diambil apa adanya dari data scan asli
+        $preparesByEmpDate = DB::table('att_prepares')
+            ->whereIn('employee_id', $employeeIds)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy(fn ($p) => $p->employee_id.'|'.$p->date);
+
         $updated = 0;
         $skipped = 0;
 
@@ -953,9 +961,34 @@ class AttendanceAutologController extends Controller
                     $roster = $rostersByEmpDate->get($autolog->employee_id.'|'.$dateStrKey);
                 }
 
-                // b.2 SHIFT → skip
-                if (! $roster || $roster->work_pattern_type === 'SHIFT') {
+                if (! $roster) {
                     $skipped++;
+                    continue;
+                }
+
+                // b.2 SHIFT → ambil check_in/check_out apa adanya dari att_prepares
+                if ($roster->work_pattern_type === 'SHIFT') {
+                    $dateStr = Carbon::parse($autolog->date)->toDateString();
+                    $prepare = $preparesByEmpDate->get($autolog->employee_id.'|'.$dateStr);
+
+                    if (! $prepare) {
+                        $skipped++;
+                        continue;
+                    }
+
+                    $prepareCheckIn  = $prepare->check_in ? Carbon::parse($prepare->check_in) : null;
+                    $prepareCheckOut = $prepare->check_out ? Carbon::parse($prepare->check_out) : null;
+
+                    $autolog->update([
+                        'check_in'       => $prepareCheckIn,
+                        'check_out'      => $prepareCheckOut,
+                        'actual_in'      => $prepareCheckIn,
+                        'actual_out'     => $prepareCheckOut,
+                        'is_manual_edit' => true,
+                        'last_edited_at' => now(),
+                        'last_edited_by' => Auth::id(),
+                    ]);
+                    $updated++;
                     continue;
                 }
 
@@ -1626,17 +1659,19 @@ class AttendanceAutologController extends Controller
                 $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
                 $totalOvertimeRaw += $lemburMin;
 
-                // Nilai count dari att_prepares: hari kerja → overtime_count, Minggu/libur → lm_count.
-                // FIXED & FLEX-SHIFT: lm_count (Minggu/libur) selalu ditampilkan '-'
+                // Nilai count dari att_prepares.
+                // FIXED & FLEX-SHIFT: lm_count selalu '-' dan Sabtu overtime_count selalu '-'
+                // SHIFT: overtime_count (hari kerja, termasuk Sabtu) / lm_count (Minggu & libur)
                 $isSunOrHoliday = $currentDate->isSunday() || isset($holidaySet[$dateStr]);
+                $isSaturday = $currentDate->isSaturday();
                 $prepare = $prepares->get($dateStr);
+                $workPatternType = $log?->employeeShiftRoster?->work_pattern_type;
                 $countDisplay = '-';
-                if ($prepare && ! $isSunOrHoliday) {
-                    $countMinutes = (int) $prepare->overtime_count;
+                if ($prepare && $workPatternType === 'SHIFT') {
+                    $countMinutes = (int) ($isSunOrHoliday ? $prepare->lm_count : $prepare->overtime_count);
                     $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
-                } elseif ($prepare && $isSunOrHoliday
-                    && $log?->employeeShiftRoster?->work_pattern_type === 'SHIFT') {
-                    $countMinutes = (int) $prepare->lm_count;
+                } elseif ($prepare && ! $isSunOrHoliday && ! $isSaturday) {
+                    $countMinutes = (int) $prepare->overtime_count;
                     $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
                 }
 
@@ -1718,17 +1753,19 @@ class AttendanceAutologController extends Controller
             $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
             $totalOvertimeRaw += $lemburMin;
 
-            // Nilai count dari att_prepares: hari kerja → overtime_count, Minggu/libur → lm_count.
-            // FIXED & FLEX-SHIFT: lm_count (Minggu/libur) selalu ditampilkan '-'
+            // Nilai count dari att_prepares.
+            // FIXED & FLEX-SHIFT: lm_count selalu '-' dan Sabtu overtime_count selalu '-'
+            // SHIFT: overtime_count (hari kerja, termasuk Sabtu) / lm_count (Minggu & libur)
             $isSunOrHoliday = $currentDate->isSunday() || isset($holidaySet[$dateStr]);
+            $isSaturday = $currentDate->isSaturday();
             $prepare = $prepares->get($dateStr);
+            $workPatternType = $log?->employeeShiftRoster?->work_pattern_type;
             $countDisplay = '-';
-            if ($prepare && ! $isSunOrHoliday) {
-                $countMinutes = (int) $prepare->overtime_count;
+            if ($prepare && $workPatternType === 'SHIFT') {
+                $countMinutes = (int) ($isSunOrHoliday ? $prepare->lm_count : $prepare->overtime_count);
                 $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
-            } elseif ($prepare && $isSunOrHoliday
-                && $log?->employeeShiftRoster?->work_pattern_type === 'SHIFT') {
-                $countMinutes = (int) $prepare->lm_count;
+            } elseif ($prepare && ! $isSunOrHoliday && ! $isSaturday) {
+                $countMinutes = (int) $prepare->overtime_count;
                 $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
             }
 
