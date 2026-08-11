@@ -135,8 +135,9 @@ class AttendanceReportController extends Controller
         }
 
         // 2. Ambil data karyawan + groups + autologs
+        //    Semua karyawan yang punya supervisor_employee_group di periode ini
+        //    ditampilkan; section ditentukan dari reference_code GRP-* nanti.
         $employees = Employee::whereIn('id', $groupedIds)
-            ->where('is_active', 1)
             ->with([
                 'department:id,name',
                 'groups:employee_id,reference_code',
