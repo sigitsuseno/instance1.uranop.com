@@ -111,7 +111,7 @@ class AttendanceDetailExport implements FromArray, ShouldAutoSize, WithHeadings,
 
         // Center-align
         $sheet->getStyle('A5:A' . $lastDataRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-        $sheet->getStyle('D5:F' . $lastDataRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('D5:G' . $lastDataRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         // Freeze header
         $sheet->freezePane('A5');

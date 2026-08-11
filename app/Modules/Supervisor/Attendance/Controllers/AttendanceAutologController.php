@@ -896,7 +896,7 @@ class AttendanceAutologController extends Controller
      *  - roster->work_pattern_type FIXED / FLEX-SHIFT:
      *      - Minggu & holiday                          → semua waktu kosong
      *      - status leave / izin / sakit               → check kosong, actual = jadwal
-     *      - status present + external_code 'S'        → check_in = jadwal + lembur + random, check_out = jadwal
+     *      - status present + external_code 'S'        → check_in = jadwal - lembur - random, check_out = jadwal
      *      - status present + external_code 'P'        → check_in = jadwal, check_out = jadwal + lembur + random
      *      - status lainnya                            → tidak diubah
      *
@@ -1007,8 +1007,8 @@ class AttendanceAutologController extends Controller
                     $randomOffset = random_int(-3, 10);
 
                     if ($externalCode === 'S') {
-                        // S → lembur & random ditambahkan ke check_in
-                        $checkIn  = $start->copy()->addMinutes($lembur + $randomOffset);
+                        // S → lembur & random dikurangkan dari check_in
+                        $checkIn  = $start->copy()->subMinutes($lembur + $randomOffset);
                         $checkOut = $end;
                     } else {
                         // P → lembur & random ditambahkan ke check_out
@@ -1589,6 +1589,11 @@ class AttendanceAutologController extends Controller
 
         $employeesData = [];
 
+        // Set tanggal holiday dalam range (hari libur → nilai count pakai lm_count)
+        $holidaySet = \App\Modules\Schedule\Models\Holiday::whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->mapWithKeys(fn ($h) => [Carbon::parse($h->date)->toDateString() => true]);
+
         foreach ($request->input('employee_ids') as $employeeId) {
             $employee = $employees->get($employeeId);
             if (! $employee) {
@@ -1600,6 +1605,13 @@ class AttendanceAutologController extends Controller
                 ->whereBetween('date', [$startDate, $endDate])
                 ->orderBy('date')
                 ->get();
+
+            // Data att_prepares per tanggal untuk nilai count lembur
+            $prepares = DB::table('att_prepares')
+                ->where('employee_id', $employeeId)
+                ->whereBetween('date', [$startDate, $endDate])
+                ->get()
+                ->keyBy('date');
 
             $rows = [];
             $currentDate = Carbon::parse($startDate);
@@ -1614,6 +1626,20 @@ class AttendanceAutologController extends Controller
                 $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
                 $totalOvertimeRaw += $lemburMin;
 
+                // Nilai count dari att_prepares: hari kerja → overtime_count, Minggu/libur → lm_count.
+                // FIXED & FLEX-SHIFT: lm_count (Minggu/libur) selalu ditampilkan '-'
+                $isSunOrHoliday = $currentDate->isSunday() || isset($holidaySet[$dateStr]);
+                $prepare = $prepares->get($dateStr);
+                $countDisplay = '-';
+                if ($prepare && ! $isSunOrHoliday) {
+                    $countMinutes = (int) $prepare->overtime_count;
+                    $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+                } elseif ($prepare && $isSunOrHoliday
+                    && $log?->employeeShiftRoster?->work_pattern_type === 'SHIFT') {
+                    $countMinutes = (int) $prepare->lm_count;
+                    $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+                }
+
                 $rows[] = [
                     $employee->employee_code,
                     $employee->name,
@@ -1621,6 +1647,7 @@ class AttendanceAutologController extends Controller
                     $log?->check_in ? $log->check_in->format('H:i') : '--:--',
                     $log?->check_out ? $log->check_out->format('H:i') : '--:--',
                     $lemburDisplay,
+                    $countDisplay,
                 ];
 
                 $currentDate->addDay();
@@ -1667,6 +1694,18 @@ class AttendanceAutologController extends Controller
             ->orderBy('date')
             ->get();
 
+        // Data att_prepares per tanggal untuk nilai count lembur
+        $prepares = DB::table('att_prepares')
+            ->where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy('date');
+
+        // Set tanggal holiday dalam range (hari libur → nilai count pakai lm_count)
+        $holidaySet = \App\Modules\Schedule\Models\Holiday::whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->mapWithKeys(fn ($h) => [Carbon::parse($h->date)->toDateString() => true]);
+
         $rows = [];
         $currentDate = Carbon::parse($startDate);
         $lastDate = Carbon::parse($endDate);
@@ -1679,6 +1718,20 @@ class AttendanceAutologController extends Controller
             $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
             $totalOvertimeRaw += $lemburMin;
 
+            // Nilai count dari att_prepares: hari kerja → overtime_count, Minggu/libur → lm_count.
+            // FIXED & FLEX-SHIFT: lm_count (Minggu/libur) selalu ditampilkan '-'
+            $isSunOrHoliday = $currentDate->isSunday() || isset($holidaySet[$dateStr]);
+            $prepare = $prepares->get($dateStr);
+            $countDisplay = '-';
+            if ($prepare && ! $isSunOrHoliday) {
+                $countMinutes = (int) $prepare->overtime_count;
+                $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+            } elseif ($prepare && $isSunOrHoliday
+                && $log?->employeeShiftRoster?->work_pattern_type === 'SHIFT') {
+                $countMinutes = (int) $prepare->lm_count;
+                $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+            }
+
             $rows[] = [
                 $employee->employee_code,
                 $employee->name,
@@ -1686,6 +1739,7 @@ class AttendanceAutologController extends Controller
                 $log?->check_in ? $log->check_in->format('H:i') : '--:--',
                 $log?->check_out ? $log->check_out->format('H:i') : '--:--',
                 $lemburDisplay,
+                $countDisplay,
             ];
 
             $currentDate->addDay();

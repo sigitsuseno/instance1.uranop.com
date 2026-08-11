@@ -13,7 +13,8 @@ class AttendanceMultipleDetailExport implements WithMultipleSheets
      *      [
      *          [
      *              'employee'     => ['name','code','department','position'],
-     *              'rows'         => [ [NIP, Nama, Hari/Tanggal, Actual In, Actual Out, Lembur], ... ],
+     *              'rows'         => [ [NIP, Nama, Hari/Tanggal, Actual In, Actual Out, Lembur, Count], ... ],
+     *                             Count = att_prepares lm_count (Minggu/libur) / overtime_count (hari kerja), '-' jika 0
      *              'periodStart'  => string,
      *              'periodEnd'    => string,
      *              'totalOvertime'=> float,
