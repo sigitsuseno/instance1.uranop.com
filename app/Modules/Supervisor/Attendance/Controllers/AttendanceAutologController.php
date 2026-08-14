@@ -1651,6 +1651,7 @@ class AttendanceAutologController extends Controller
             $currentDate = Carbon::parse($startDate);
             $lastDate = Carbon::parse($endDate);
             $totalOvertimeRaw = 0;
+            $totalCountMinutes = 0;
 
             while ($currentDate <= $lastDate) {
                 $dateStr = $currentDate->toDateString();
@@ -1671,9 +1672,11 @@ class AttendanceAutologController extends Controller
                 if ($prepare && $workPatternType === 'SHIFT') {
                     $countMinutes = (int) ($isSunOrHoliday ? $prepare->lm_count : $prepare->overtime_count);
                     $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+                    $totalCountMinutes += $countMinutes;
                 } elseif ($prepare && ! $isSunOrHoliday && ! $isSaturday) {
                     $countMinutes = (int) $prepare->overtime_count;
                     $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+                    $totalCountMinutes += $countMinutes;
                 }
 
                 $rows[] = [
@@ -1700,6 +1703,7 @@ class AttendanceAutologController extends Controller
                 'periodStart' => Carbon::parse($startDate)->format('d F Y'),
                 'periodEnd' => Carbon::parse($endDate)->format('d F Y'),
                 'totalOvertime' => round($totalOvertimeRaw / 60, 1),
+                'totalCount' => round($totalCountMinutes / 60, 1),
             ];
         }
 
@@ -1746,6 +1750,7 @@ class AttendanceAutologController extends Controller
         $currentDate = Carbon::parse($startDate);
         $lastDate = Carbon::parse($endDate);
         $totalOvertimeRaw = 0;
+        $totalCountMinutes = 0;
         while ($currentDate <= $lastDate) {
             $dateStr = $currentDate->toDateString();
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
@@ -1765,9 +1770,11 @@ class AttendanceAutologController extends Controller
             if ($prepare && $workPatternType === 'SHIFT') {
                 $countMinutes = (int) ($isSunOrHoliday ? $prepare->lm_count : $prepare->overtime_count);
                 $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+                $totalCountMinutes += $countMinutes;
             } elseif ($prepare && ! $isSunOrHoliday && ! $isSaturday) {
                 $countMinutes = (int) $prepare->overtime_count;
                 $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
+                $totalCountMinutes += $countMinutes;
             }
 
             $rows[] = [
@@ -1803,6 +1810,7 @@ class AttendanceAutologController extends Controller
                 periodStart: \Carbon\Carbon::parse($startDate)->format('d F Y'),
                 periodEnd: \Carbon\Carbon::parse($endDate)->format('d F Y'),
                 totalOvertime: $totalOvertimeHours,
+                totalCount: round($totalCountMinutes / 60, 1),
             ),
             $filename
         );

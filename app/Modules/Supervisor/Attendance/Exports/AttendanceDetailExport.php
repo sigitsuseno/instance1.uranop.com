@@ -19,15 +19,17 @@ class AttendanceDetailExport implements FromArray, ShouldAutoSize, WithHeadings,
     protected string $periodStart;
     protected string $periodEnd;
     protected float $totalOvertime;
+    protected float $totalCount;
     protected string $sheetTitle;
 
-    public function __construct(array $data, array $employee, string $periodStart, string $periodEnd, float $totalOvertime = 0, string $sheetTitle = 'Detail Absensi')
+    public function __construct(array $data, array $employee, string $periodStart, string $periodEnd, float $totalOvertime = 0, float $totalCount = 0, string $sheetTitle = 'Detail Absensi')
     {
         $this->data = $data;
         $this->employee = $employee;
         $this->periodStart = $periodStart;
         $this->periodEnd = $periodEnd;
         $this->totalOvertime = $totalOvertime;
+        $this->totalCount = $totalCount;
         $this->sheetTitle = $sheetTitle;
     }
 
@@ -71,6 +73,7 @@ class AttendanceDetailExport implements FromArray, ShouldAutoSize, WithHeadings,
         $sheet->getRowDimension($totalRow)->setRowHeight(22);
         $sheet->setCellValue('A' . $totalRow, 'TOTAL');
         $sheet->setCellValue('F' . $totalRow, $this->totalOvertime . ' jam');
+        $sheet->setCellValue('G' . $totalRow, $this->totalCount . ' jam');
 
         // ── APPLY BORDER SETELAH SEMUA MERGE ──
         $fullRange = 'A1:' . $lastCol . $lastDataRow;
@@ -103,7 +106,7 @@ class AttendanceDetailExport implements FromArray, ShouldAutoSize, WithHeadings,
         $sheet->getRowDimension(4)->setRowHeight(20);
 
         // TOTAL
-        $sheet->getStyle('A' . $totalRow . ':' . $lastCol . $totalRow)->applyFromArray([
+        $sheet->getStyle('A' . $totalRow . ':G' . $totalRow)->applyFromArray([
             'font' => ['bold' => true],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F3F4F6']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],

@@ -27,6 +27,7 @@ class AttendanceSingleSheetExport implements FromArray, ShouldAutoSize, WithStyl
      *              'employee'     => ['name','code','department','position'],
      *              'rows'         => [ [NIP, Nama, Hari/Tanggal, Actual In, Actual Out, Lembur, Count], ... ],
      *              'totalOvertime'=> float,
+     *              'totalCount'   => float, // sum kolom count (jam, kolom G tanpa header)
      *          ], ...
      *      ]
      */
@@ -61,7 +62,7 @@ class AttendanceSingleSheetExport implements FromArray, ShouldAutoSize, WithStyl
             $lastDataRow = $row - 1;
 
             $totalRow = $row;
-            $out[] = ['TOTAL', '', '', '', '', ($data['totalOvertime'] ?? 0) . ' jam'];
+            $out[] = ['TOTAL', '', '', '', '', ($data['totalOvertime'] ?? 0) . ' jam', ($data['totalCount'] ?? 0) . ' jam'];
             $row++;
 
             // Jarak 2 baris kosong sebelum blok karyawan berikutnya
@@ -106,7 +107,7 @@ class AttendanceSingleSheetExport implements FromArray, ShouldAutoSize, WithStyl
             // TOTAL row
             $sheet->mergeCells('A' . $totalRow . ':E' . $totalRow);
             $sheet->getRowDimension($totalRow)->setRowHeight(22);
-            $sheet->getStyle('A' . $totalRow . ':' . $lastCol . $totalRow)->applyFromArray([
+            $sheet->getStyle('A' . $totalRow . ':G' . $totalRow)->applyFromArray([
                 'font' => ['bold' => true],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F3F4F6']],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
