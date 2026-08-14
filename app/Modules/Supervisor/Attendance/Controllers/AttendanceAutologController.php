@@ -1601,7 +1601,8 @@ class AttendanceAutologController extends Controller
     }
 
     /**
-     * Export detail beberapa karyawan ke satu file Excel, 1 karyawan 1 sheet.
+     * Export detail beberapa karyawan ke satu file Excel 1 sheet,
+     * karyawan berikutnya ditumpuk ke bawah dengan jarak 2 baris.
      * POST /api/v1/supervisor/attendance/absensi/export-selected
      * body: { employee_ids: [..], start_date, end_date }
      */
@@ -1706,7 +1707,7 @@ class AttendanceAutologController extends Controller
         $filename = 'Absensi_Detail_' . $periodLabel . '.xlsx';
 
         return Excel::download(
-            new \App\Modules\Supervisor\Attendance\Exports\AttendanceMultipleDetailExport($employeesData),
+            new \App\Modules\Supervisor\Attendance\Exports\AttendanceSingleSheetExport($employeesData),
             $filename
         );
     }
