@@ -357,3 +357,97 @@ flow.
    -> actual_in = roster->shift->work_hour_start
    -> actual_out = roster->shift->work_hour_end
    b.2 Jika roster->work_pattern_type->SHIFT - skip
+
+# Cara ambil random_minutes
+
+- random_minutes (-15 sampai 3)
+
+# FIXED
+
+1. Hari senin - jumat
+
+- check_in = att_prepares->check_in
+- check_out = att_prepare->check_out + random_minutes + att_prepare->overtime
+- actual_in = rosters->shift->work_hour_start
+- actual_out = rosters->shift->work_hour_end
+- status = att_prepare->status
+
+2. Hari sabtu
+
+- check_in = att_prepares->check_in + random_minute
+- check_out = att_prepare->check_out + random_minute
+- actual_in = rosters->shift->work_hour_start
+- actual_out = rosters->shift->work_hour_end
+- status = att_prepare->status
+
+3. Hari minggu dan holiday
+
+- check_in = ""
+- check_out = ""
+- actual_in = ""
+- actual_out = ""
+- status = off
+
+# FLEX-SHIFT
+
+1. Hari senin - jumat
+   a. jika roster->external_code === "P"
+    - check_in = att_prepares->check_in
+    - check_out = att_prepare->check_out + random_minutes + att_prepare->overtime
+    - actual_in = rosters->shift->work_hour_start
+    - actual_out = rosters->shift->work_hour_end
+    - status = att_prepare->status
+      b. jika roster->external_code === "S"
+    - check_in = 22.50 - ( att_prepare->(work_patterns->work_hour_day \* 60) + random_minutes + att_prepare->overtime)
+    - check_out = 22.50 + random_minutes
+    - actual_in = rosters->shift->work_hour_start
+    - actual_out = rosters->shift->work_hour_end
+    - status = att_prepare->status
+2. Hari sabtu
+
+    a. jika roster->external_code === "P"
+    - check_in = att_prepares->check_in
+    - check_out = att_prepare->check_out + random_minutes + att_prepare->overtime
+    - actual_in = rosters->shift->work_hour_start
+    - actual_out = rosters->shift->work_hour_end
+    - status = att_prepare->status
+      b. jika roster->external_code === "S"
+    - check_in = rosters->shift->work_hour_start + random_minutes
+    - check_out = rosters->shift->work_hour_end + random_minutes
+    - actual_in = rosters->shift->work_hour_start
+    - actual_out = rosters->shift->work_hour_end
+    - status = att_prepare->status
+
+3. Hari minggu dan holiday
+
+- check_in = ""
+- check_out = ""
+- actual_in = ""
+- actual_out = ""
+- status = off
+
+# SHIFT
+
+1. jika hari sabtu
+
+- check_in = att_prepares->check_in
+- check_out = att_prepare->check_out
+- actual_in = rosters->shift->work_hour_start
+- actual_out = rosters->shift->work_hour_end
+- status = att_prepare->status
+
+2. Hari minggu dan holiday
+
+- check_in = att_prepares->check_in
+- check_out = att_prepare->check_out
+- actual_in = rosters->shift->work_hour_start
+- actual_out = rosters->shift->work_hour_end
+- status = att_prepare->status
+
+3. jika roster->external_code === "L"
+
+- check_in = ""
+- check_out = ""
+- actual_in = ""
+- actual_out = ""
+- status = off

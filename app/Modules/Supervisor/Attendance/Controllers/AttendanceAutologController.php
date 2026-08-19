@@ -1623,11 +1623,6 @@ class AttendanceAutologController extends Controller
 
         $employeesData = [];
 
-        // Set tanggal holiday dalam range (hari libur → nilai count pakai lm_count)
-        $holidaySet = \App\Modules\Schedule\Models\Holiday::whereBetween('date', [$startDate, $endDate])
-            ->get()
-            ->mapWithKeys(fn ($h) => [Carbon::parse($h->date)->toDateString() => true]);
-
         foreach ($request->input('employee_ids') as $employeeId) {
             $employee = $employees->get($employeeId);
             if (! $employee) {
@@ -1640,18 +1635,11 @@ class AttendanceAutologController extends Controller
                 ->orderBy('date')
                 ->get();
 
-            // Data att_prepares per tanggal untuk nilai count lembur
-            $prepares = DB::table('att_prepares')
-                ->where('employee_id', $employeeId)
-                ->whereBetween('date', [$startDate, $endDate])
-                ->get()
-                ->keyBy('date');
-
             $rows = [];
             $currentDate = Carbon::parse($startDate);
             $lastDate = Carbon::parse($endDate);
             $totalOvertimeRaw = 0;
-            $totalCountMinutes = 0;
+            $totalCountHours = 0;
 
             while ($currentDate <= $lastDate) {
                 $dateStr = $currentDate->toDateString();
@@ -1661,23 +1649,10 @@ class AttendanceAutologController extends Controller
                 $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
                 $totalOvertimeRaw += $lemburMin;
 
-                // Nilai count dari att_prepares.
-                // FIXED & FLEX-SHIFT: lm_count selalu '-' dan Sabtu overtime_count selalu '-'
-                // SHIFT: overtime_count (hari kerja, termasuk Sabtu) / lm_count (Minggu & libur)
-                $isSunOrHoliday = $currentDate->isSunday() || isset($holidaySet[$dateStr]);
-                $isSaturday = $currentDate->isSaturday();
-                $prepare = $prepares->get($dateStr);
-                $workPatternType = $log?->employeeShiftRoster?->work_pattern_type;
-                $countDisplay = '-';
-                if ($prepare && $workPatternType === 'SHIFT') {
-                    $countMinutes = (int) ($isSunOrHoliday ? $prepare->lm_count : $prepare->overtime_count);
-                    $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
-                    $totalCountMinutes += $countMinutes;
-                } elseif ($prepare && ! $isSunOrHoliday && ! $isSaturday) {
-                    $countMinutes = (int) $prepare->overtime_count;
-                    $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
-                    $totalCountMinutes += $countMinutes;
-                }
+                // Nilai count dari attendance_autologs.lembur_calc (sudah dalam satuan jam).
+                $countHours = (float) ($log?->lembur_calc ?? 0);
+                $countDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
+                $totalCountHours += $countHours;
 
                 $rows[] = [
                     $employee->employee_code,
@@ -1703,7 +1678,7 @@ class AttendanceAutologController extends Controller
                 'periodStart' => Carbon::parse($startDate)->format('d F Y'),
                 'periodEnd' => Carbon::parse($endDate)->format('d F Y'),
                 'totalOvertime' => round($totalOvertimeRaw / 60, 1),
-                'totalCount' => round($totalCountMinutes / 60, 1),
+                'totalCount' => round($totalCountHours, 1),
             ];
         }
 
@@ -1734,23 +1709,11 @@ class AttendanceAutologController extends Controller
             ->orderBy('date')
             ->get();
 
-        // Data att_prepares per tanggal untuk nilai count lembur
-        $prepares = DB::table('att_prepares')
-            ->where('employee_id', $employeeId)
-            ->whereBetween('date', [$startDate, $endDate])
-            ->get()
-            ->keyBy('date');
-
-        // Set tanggal holiday dalam range (hari libur → nilai count pakai lm_count)
-        $holidaySet = \App\Modules\Schedule\Models\Holiday::whereBetween('date', [$startDate, $endDate])
-            ->get()
-            ->mapWithKeys(fn ($h) => [Carbon::parse($h->date)->toDateString() => true]);
-
         $rows = [];
         $currentDate = Carbon::parse($startDate);
         $lastDate = Carbon::parse($endDate);
         $totalOvertimeRaw = 0;
-        $totalCountMinutes = 0;
+        $totalCountHours = 0;
         while ($currentDate <= $lastDate) {
             $dateStr = $currentDate->toDateString();
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
@@ -1759,23 +1722,10 @@ class AttendanceAutologController extends Controller
             $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
             $totalOvertimeRaw += $lemburMin;
 
-            // Nilai count dari att_prepares.
-            // FIXED & FLEX-SHIFT: lm_count selalu '-' dan Sabtu overtime_count selalu '-'
-            // SHIFT: overtime_count (hari kerja, termasuk Sabtu) / lm_count (Minggu & libur)
-            $isSunOrHoliday = $currentDate->isSunday() || isset($holidaySet[$dateStr]);
-            $isSaturday = $currentDate->isSaturday();
-            $prepare = $prepares->get($dateStr);
-            $workPatternType = $log?->employeeShiftRoster?->work_pattern_type;
-            $countDisplay = '-';
-            if ($prepare && $workPatternType === 'SHIFT') {
-                $countMinutes = (int) ($isSunOrHoliday ? $prepare->lm_count : $prepare->overtime_count);
-                $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
-                $totalCountMinutes += $countMinutes;
-            } elseif ($prepare && ! $isSunOrHoliday && ! $isSaturday) {
-                $countMinutes = (int) $prepare->overtime_count;
-                $countDisplay = $countMinutes > 0 ? round($countMinutes / 60, 1) . ' jam' : '-';
-                $totalCountMinutes += $countMinutes;
-            }
+            // Nilai count dari attendance_autologs.lembur_calc (sudah dalam satuan jam).
+            $countHours = (float) ($log?->lembur_calc ?? 0);
+            $countDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
+            $totalCountHours += $countHours;
 
             $rows[] = [
                 $employee->employee_code,
@@ -1810,7 +1760,7 @@ class AttendanceAutologController extends Controller
                 periodStart: \Carbon\Carbon::parse($startDate)->format('d F Y'),
                 periodEnd: \Carbon\Carbon::parse($endDate)->format('d F Y'),
                 totalOvertime: $totalOvertimeHours,
-                totalCount: round($totalCountMinutes / 60, 1),
+                totalCount: round($totalCountHours, 1),
             ),
             $filename
         );
