@@ -442,8 +442,8 @@ let searchTimeout = null
 
 // --- Computed ---
 const isHrOrAdmin = computed(() => {
-  const allowed = ['superadmin', 'hrmanager', 'hr_manager', 'hr']
-  return allowed.includes(auth.userRole) || auth.isSuperadmin || auth.isHrmanager
+  const allowed = ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']
+  return allowed.includes(auth.userRole) || auth.isSuperadmin || auth.isHrmanager || auth.isHrbranch
 })
 
 const leaveTypeOptions = computed(() =>

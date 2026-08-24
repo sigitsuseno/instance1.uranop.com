@@ -39,7 +39,7 @@ class LeaveApiController extends Controller
 
         $user = Auth::user();
         $roles = $user->roles->pluck('name')->toArray();
-        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
 
         if (!$isHr) {
             // Jika punya employee profile terkait, filter hanya data miliknya.
@@ -397,7 +397,7 @@ class LeaveApiController extends Controller
 
         $user = Auth::user();
         $roles = $user->roles->pluck('name')->toArray();
-        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
 
         if (!$isHr) {
             if (isset($user->employee_id)) {
@@ -578,7 +578,7 @@ class LeaveApiController extends Controller
         // Pengecekan role HR/Admin
         $user = Auth::user();
         $roles = $user->roles->pluck('name')->toArray();
-        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
         if (!$isHr) {
             return response()->json(['message' => 'Anda tidak memiliki akses untuk generate kuota cuti.'], 403);
         }
@@ -655,7 +655,7 @@ class LeaveApiController extends Controller
     {
         $user = Auth::user();
         $roles = $user->roles->pluck('name')->toArray();
-        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
         if (!$isHr) {
             return response()->json(['message' => 'Anda tidak memiliki akses untuk mengakhiri periode cuti.'], 403);
         }
@@ -926,7 +926,7 @@ class LeaveApiController extends Controller
     {
         $user = Auth::user();
         $roles = $user->roles->pluck('name')->toArray();
-        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
         if (!$isHr) {
             return response()->json(['message' => 'Anda tidak memiliki akses untuk kalibrasi cuti.'], 403);
         }
@@ -955,7 +955,7 @@ class LeaveApiController extends Controller
     {
         $user = Auth::user();
         $roles = $user->roles->pluck('name')->toArray();
-        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr']));
+        $isHr = !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
         if (!$isHr) {
             return response()->json(['message' => 'Anda tidak memiliki akses.'], 403);
         }
