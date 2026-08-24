@@ -19,6 +19,7 @@
     <!-- Tab Bar -->
     <div class="border-b border-(--border-soft) mb-6">
       <nav class="flex gap-0 -mb-px">
+        <!--
         <button
           :class="[
             'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
@@ -30,6 +31,7 @@
         >
           Detail
         </button>
+        -->
         <button
           :class="[
             'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md',
@@ -56,7 +58,7 @@
     </div>
 
     <!-- Tab Content -->
-    <TabDetail v-if="activeTab === 'detail'" :groups="selectedGroups" />
+    <!-- <TabDetail v-if="activeTab === 'detail'" :groups="selectedGroups" /> -->
     <TabDetailPre v-if="activeTab === 'detail_pre'" :groups="selectedGroups" :available-groups="groupCodes" />
     <TabResume v-if="activeTab === 'resume'" :groups="selectedGroups" />
 
@@ -108,7 +110,7 @@ import UpdateDataModal from './UpdateDataModal.vue'
 
 const { get } = useApi()
 
-const activeTab = ref('detail')
+const activeTab = ref('detail_pre')
 const selectedGroups = ref([])
 const availableGroups = ref([])
 const showSettings = ref(false)
