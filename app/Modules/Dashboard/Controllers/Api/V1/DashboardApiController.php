@@ -114,12 +114,16 @@ class DashboardApiController extends Controller
                 'dob'        => $e->date_of_birth?->format('d M'),
             ]);
 
+        // ── Payroll Monthly Chart (pay_records grouped by pay_period) ──
+        $payrollChart = $this->payrollMonthlyChart();
+
         return response()->json([
             'stats'             => $stats,
             'pendingLeaves'     => $pendingLeaves,
             'contractsExpiring' => $contractsExpiring,
             'recentAuditLogs'   => $recentAuditLogs,
             'birthdays'         => $birthdays,
+            'payrollChart'      => $payrollChart,
         ]);
     }
 
@@ -229,6 +233,52 @@ class DashboardApiController extends Controller
     }
 
     // ── Helpers ───────────────────────────────────────────────────
+
+    /**
+     * Payroll monthly chart — sum pay_records per pay_period (6 bulan terakhir).
+     * Kembalikan array kronologis: [{ label, period_name, total_kotor, total_bersih, count }]
+     */
+    private function payrollMonthlyChart(): array
+    {
+        $periods = PayPeriod::where('start_date', '<=', now()->toDateString())
+            ->orderBy('start_date', 'desc')
+            ->limit(6)
+            ->get()
+            ->sortBy('start_date')
+            ->values();
+
+        if ($periods->isEmpty()) {
+            return [];
+        }
+
+        $ids = $periods->pluck('id');
+
+        $sums = PayRecord::whereIn('pay_period_id', $ids)
+            ->selectRaw('pay_period_id, COUNT(*) as jml, SUM(gaji_kotor) as total_kotor, SUM(gaji_bersih) as total_bersih')
+            ->groupBy('pay_period_id')
+            ->get()
+            ->keyBy('pay_period_id');
+
+        return $periods->map(function ($p) use ($sums) {
+            $row = $sums->get($p->id);
+            if ($p->period_year && $p->period_month) {
+                $label = \Carbon\Carbon::create($p->period_year, $p->period_month, 1)->locale('id')->translatedFormat('M y');
+            } else {
+                $label = $p->start_date
+                    ? $p->start_date->locale('id')->translatedFormat('M y')
+                    : $p->name;
+            }
+
+            return [
+                'period_id'    => $p->id,
+                'period_name'  => $p->name,
+                'label'        => $label,
+                'total_kotor'  => (float) ($row->total_kotor ?? 0),
+                'total_bersih' => (float) ($row->total_bersih ?? 0),
+                'count'        => (int) ($row->jml ?? 0),
+            ];
+        })->values()->toArray();
+    }
 
     /**
      * Periode yang sedang berjalan (start_date <= hari ini <= end_date).

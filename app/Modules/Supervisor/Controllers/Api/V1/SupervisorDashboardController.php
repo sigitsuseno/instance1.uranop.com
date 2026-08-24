@@ -7,9 +7,12 @@ use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\AuditLog\Models\AuditLog;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeContract;
+use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance;
+use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -120,6 +123,144 @@ class SupervisorDashboardController extends Controller
             'recentAuditLogs'   => $recentAuditLogs,
             'birthdays'         => $birthdays,
         ]);
+    }
+
+    /**
+     * Statistik ringkas dashboard supervisor (kehadiran + komposisi gaji per jabatan).
+     * GET /api/v1/supervisor/dashboard/statistik?kehadiran_month=YYYY-MM&payroll_month=YYYY-MM
+     */
+    public function statistik(Request $request): JsonResponse
+    {
+        // ── KEHADIRAN (attendance_autologs) ─────────────────────────
+        $kehadiranMonths = SupervisorAttendance::query()
+            ->selectRaw('DATE_FORMAT(date, "%Y-%m") as ym, COUNT(*) as jml')
+            ->groupBy('ym')
+            ->orderByDesc('ym')
+            ->get()
+            ->map(fn ($r) => $this->monthOption($r->ym, (int) $r->jml));
+
+        $khMonth = $request->query('kehadiran_month', $kehadiranMonths->first()['ym'] ?? now()->format('Y-m'));
+        [$khYear, $khMonthNum] = array_pad(explode('-', $khMonth), 2, null);
+        $khYear = (int) $khYear;
+        $khMonthNum = max(1, min(12, (int) $khMonthNum));
+
+        $khStart = Carbon::create($khYear, $khMonthNum, 1)->toDateString();
+        $khEnd = Carbon::create($khYear, $khMonthNum, 1)->endOfMonth()->toDateString();
+        $khBase = SupervisorAttendance::whereBetween('date', [$khStart, $khEnd]);
+
+        $khCounts = (clone $khBase)
+            ->selectRaw('status, COUNT(*) as jml')
+            ->groupBy('status')
+            ->pluck('jml', 'status')
+            ->map(fn ($v) => (int) $v);
+
+        $statusMeta = [
+            'present'  => ['label' => 'Hadir',  'color' => '#10b981'],
+            'absent'   => ['label' => 'Absen',  'color' => '#ef4444'],
+            'leave'    => ['label' => 'Cuti',   'color' => '#3b82f6'],
+            'sakit'    => ['label' => 'Sakit',  'color' => '#eab308'],
+            'izin'     => ['label' => 'Izin',   'color' => '#f97316'],
+            'off'      => ['label' => 'Off',    'color' => '#64748b'],
+            'holiday'  => ['label' => 'Libur',  'color' => '#9ca3af'],
+            'pending'  => ['label' => 'Pending','color' => '#a855f7'],
+        ];
+
+        $summary = ['total' => $khCounts->sum()];
+        $chart = [];
+        foreach ($statusMeta as $key => $meta) {
+            $val = $khCounts->get($key, 0);
+            $summary[$key] = $val;
+            if ($val > 0) {
+                $chart[] = ['label' => $meta['label'], 'value' => $val, 'color' => $meta['color']];
+            }
+        }
+
+        // trend harian: hadir vs total (bukan hadir) per tanggal
+        $khDaily = (clone $khBase)
+            ->selectRaw('date, COUNT(*) as total, SUM(CASE WHEN status="present" THEN 1 ELSE 0 END) as present')
+            ->groupBy('date')
+            ->orderBy('date')
+            ->get()
+            ->keyBy('date');
+
+        $dailyTrend = [];
+        $daysInMonth = Carbon::create($khYear, $khMonthNum, 1)->daysInMonth;
+        for ($d = 1; $d <= $daysInMonth; $d++) {
+            $dt = Carbon::create($khYear, $khMonthNum, $d)->toDateString();
+            $row = $khDaily->get($dt);
+            $dailyTrend[] = [
+                'date'    => $dt,
+                'label'   => sprintf('%02d', $d),
+                'total'   => $row ? (int) $row->total : 0,
+                'present' => $row ? (int) $row->present : 0,
+            ];
+        }
+
+        // ── PAYROLL (supervisor_breakdowns) ─────────────────────────
+        $payrollMonths = SupervisorBreakdown::query()
+            ->join('pay_periods', 'pay_periods.id', '=', 'supervisor_breakdowns.pay_period_id')
+            ->whereNotNull('pay_periods.period_year')
+            ->whereNotNull('pay_periods.period_month')
+            ->selectRaw('pay_periods.period_year as y, pay_periods.period_month as m, COUNT(*) as jml')
+            ->groupBy('pay_periods.period_year', 'pay_periods.period_month')
+            ->orderByRaw('pay_periods.period_year DESC, pay_periods.period_month DESC')
+            ->get()
+            ->map(fn ($r) => $this->monthOption(sprintf('%04d-%02d', $r->y, $r->m), (int) $r->jml));
+
+        $payMonth = $request->query('payroll_month', $payrollMonths->first()['ym'] ?? now()->format('Y-m'));
+        [$payYear, $payMonthNum] = array_pad(explode('-', $payMonth), 2, null);
+        $payYear = (int) $payYear;
+        $payMonthNum = max(1, min(12, (int) $payMonthNum));
+
+        $periodIds = PayPeriod::where('period_year', $payYear)
+            ->where('period_month', $payMonthNum)
+            ->pluck('id');
+
+        $payData = [];
+        $payTotal = 0;
+        if (! $periodIds->isEmpty()) {
+            $payRows = SupervisorBreakdown::whereIn('pay_period_id', $periodIds)
+                ->selectRaw('COALESCE(position_name, "Tanpa Jabatan") as position, COUNT(*) as jml, SUM(gaji_kotor) as gaji')
+                ->groupBy('position')
+                ->orderByDesc('gaji')
+                ->get();
+            $payTotal = (float) $payRows->sum('gaji');
+            $payData = $payRows
+                ->map(fn ($r) => [
+                    'position' => $r->position,
+                    'gaji' => (float) $r->gaji,
+                    'count' => (int) $r->jml,
+                ])
+                ->values();
+        }
+
+        return response()->json([
+            'kehadiran' => [
+                'month'       => $khMonth,
+                'month_label' => Carbon::create($khYear, $khMonthNum, 1)->locale('id')->translatedFormat('F Y'),
+                'months'      => $kehadiranMonths,
+                'summary'     => $summary,
+                'chart'       => $chart,
+                'daily_trend' => $dailyTrend,
+            ],
+            'payroll' => [
+                'month'       => $payMonth,
+                'month_label' => Carbon::create($payYear, $payMonthNum, 1)->locale('id')->translatedFormat('F Y'),
+                'months'      => $payrollMonths,
+                'total'       => $payTotal,
+                'data'        => $payData,
+            ],
+        ]);
+    }
+
+    private function monthOption(string $ym, int $count): array
+    {
+        [$y, $m] = array_pad(explode('-', $ym), 2, null);
+        return [
+            'ym'    => $ym,
+            'label' => Carbon::create((int) $y, (int) $m, 1)->locale('id')->translatedFormat('F Y'),
+            'count' => $count,
+        ];
     }
 
     private function formatRupiah(int $nominal): string

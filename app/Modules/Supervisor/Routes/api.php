@@ -18,6 +18,7 @@ Route::prefix('v1/supervisor')
     ->group(function () {
         Route::prefix('dashboard')->group(function () {
             Route::get('/', [SupervisorDashboardController::class, 'index']);
+            Route::get('statistik', [SupervisorDashboardController::class, 'statistik']);
         });
 
         Route::prefix('master')->group(function () {

@@ -63,6 +63,7 @@ const CalendarsShow = () => import('../Pages/Admin/Schedule/Calendars/Show.vue')
 const ScheduleRoster = () => import('../Pages/Admin/Schedule/Roster/Index.vue')
 const RosterGenerate = () => import('../Pages/Admin/Schedule/Roster/Generate.vue')
 const RosterImport = () => import('../Pages/Admin/Schedule/Roster/Import.vue')
+const StatistikIndex = () => import('../Pages/Admin/Statistik/Index.vue')
 const ReportsIndex = () => import('../Pages/Admin/Reports/Index.vue')
 const KasbonRequests = () => import('../Pages/Admin/Kasbon/Requests.vue')
 const KasbonApprovals = () => import('../Pages/Admin/Kasbon/Approvals.vue')
@@ -203,6 +204,7 @@ const routes = [
       { path: 'schedule/roster', name: 'schedule.roster', component: ScheduleRoster, meta: { title: 'Roster' } },
       { path: 'schedule/roster/generate', name: 'schedule.roster.generate', component: RosterGenerate, meta: { title: 'Generate Roster' } },
       { path: 'schedule/roster/import', name: 'schedule.roster.import', component: RosterImport, meta: { title: 'Import Roster' } },
+      { path: 'statistik', name: 'statistik', component: StatistikIndex, meta: { title: 'Statistik' } },
       { path: 'reports', name: 'reports', component: ReportsIndex, meta: { title: 'Laporan' } },
       { path: 'reports/uang-makan', name: 'reports.uang-makan', component: UangMakanReport, meta: { title: 'Laporan Uang Makan' } },
       { path: 'reports/lembur', name: 'reports.lembur', component: LaporanLemburIndex, meta: { title: 'Laporan Lembur' } },

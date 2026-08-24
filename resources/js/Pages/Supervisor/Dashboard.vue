@@ -12,7 +12,7 @@
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <BaseButton variant="secondary" size="md" @click="fetchDashboard" :loading="loading">
+        <BaseButton variant="secondary" size="md" @click="refreshAll" :loading="loading">
           <template #icon-left>
             <IconRefresh class="w-4 h-4" :class="{ 'animate-spin': loading }" />
           </template>
@@ -138,6 +138,106 @@
       </div>
     </div>
 
+    <!-- Statistik: Kehadiran + Komposisi Gaji per Jabatan -->
+    <BaseCard>
+      <template #title>
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-lg bg-(--primary)/10 border border-(--primary)/15 flex items-center justify-center text-(--primary)"><IconChartBar class="w-4 h-4" /></span>
+          <div>
+            <div class="text-[13px] font-bold tracking-tight text-(--text-main)">Statistik Tim</div>
+            <div class="text-[11px] text-(--text-muted) font-medium">Sumber: attendance_autologs & supervisor_breakdowns</div>
+          </div>
+        </div>
+      </template>
+
+      <div v-if="loadingStatistik" class="py-14 text-center text-sm text-(--text-muted)">Memuat statistik...</div>
+      <template v-else>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Kehadiran -->
+          <div class="lg:col-span-2 rounded-xl border border-(--border-soft)/50 bg-(--bg-elevated)/20 p-4 flex flex-col">
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <span class="text-xs font-bold tracking-widest uppercase text-(--text-muted)">Kehadiran — {{ kehadiranMonthLabel }}</span>
+              <select v-model="kehadiranBulan" @change="fetchStatistik" class="px-2 py-1 rounded-md border border-(--border-soft) bg-(--bg-elevated) text-xs font-semibold text-(--text-main) focus:outline-none">
+                <option v-for="m in kehadiranMonths" :key="m.ym" :value="m.ym">{{ m.label }}</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+              <div v-for="c in kehadiranChips" :key="c.label" class="rounded-lg border border-(--border-soft) bg-(--bg-card) p-2.5">
+                <div class="text-[10px] font-bold tracking-widest uppercase" :style="{ color: c.color }">{{ c.label }}</div>
+                <div class="text-xl font-extrabold text-(--text-main)">{{ c.value }}</div>
+              </div>
+            </div>
+
+            <div class="space-y-2.5">
+              <div v-for="bar in kehadiranChart" :key="bar.label" class="flex items-center gap-3">
+                <span class="w-16 text-xs font-semibold text-(--text-main) text-right shrink-0">{{ bar.label }}</span>
+                <div class="flex-1 h-6 rounded-full bg-(--bg-card) border border-(--border-soft) overflow-hidden relative">
+                  <div class="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2" :style="{ width: khBarPct(bar.value) + '%', background: bar.color }">
+                    <span v-if="bar.value>0" class="text-[11px] font-bold text-white drop-shadow">{{ bar.value }}</span>
+                  </div>
+                </div>
+                <span class="w-12 text-xs font-medium text-(--text-muted) shrink-0">{{ khBarPct(bar.value) }}%</span>
+              </div>
+            </div>
+
+            <div class="mt-6 flex-1 min-h-0 flex flex-col">
+              <div class="text-xs font-bold tracking-widest uppercase text-(--text-muted) mb-3">Hadir per hari</div>
+              <div class="flex-1 min-h-0 overflow-x-auto -mx-1 px-1">
+                <div class="flex items-end gap-[2px] min-w-max h-full pb-4 border-b border-(--border-soft)/60">
+                  <div v-for="d in kehadiranDaily" :key="d.date" class="flex flex-col items-center gap-1 w-[16px] shrink-0 h-full" :title="`${d.date}: ${d.present}/${d.total} hadir`">
+                    <div class="flex flex-col justify-end w-full flex-1">
+                      <div v-if="d.total>0" class="w-full rounded-t-sm bg-[#10b981]" :style="{ height: Math.max(2, (d.present / kehadiranMaxDaily) * 100) + '%' }"></div>
+                      <div v-if="d.total===0" class="w-full h-[3px] bg-(--border-soft)/60 rounded-sm"></div>
+                    </div>
+                    <span class="text-[8px] font-medium" :class="d.total>0 ? 'text-(--text-muted)' : 'text-(--text-soft)'">{{ d.label }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payroll donut -->
+          <div class="rounded-xl border border-(--border-soft) bg-(--bg-card) p-4 flex flex-col">
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <div class="text-xs font-bold tracking-widest uppercase text-(--text-muted)">Gaji per Jabatan</div>
+              <select v-model="payrollBulan" @change="fetchStatistik" class="px-2 py-1 rounded-md border border-(--border-soft) bg-(--bg-elevated) text-xs font-semibold text-(--text-main) focus:outline-none">
+                <option v-for="m in payrollMonths" :key="m.ym" :value="m.ym">{{ m.label }}</option>
+              </select>
+            </div>
+            <div v-if="!payrollPie.length" class="py-8 text-center text-sm text-(--text-soft)">Belum ada data breakdown bulan ini.</div>
+            <template v-else>
+              <div class="relative w-full max-w-[200px] mx-auto">
+                <svg viewBox="0 0 120 120" class="w-full">
+                  <g transform="rotate(-90 60 60)">
+                    <circle v-for="(seg,i) in payrollPie" :key="i" cx="60" cy="60" :r="PIE_R" fill="none"
+                      :stroke="seg.color" :stroke-width="PIE_STROKE"
+                      :stroke-dasharray="`${seg.len} ${seg.gap}`" :stroke-dashoffset="seg.offset"
+                      class="transition-[stroke-dasharray,stroke-dashoffset] duration-500" />
+                  </g>
+                </svg>
+                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                  <div class="text-[10px] font-bold tracking-widest uppercase text-(--text-muted)">Total Gaji</div>
+                  <div class="text-[13px] font-extrabold text-(--text-main) leading-tight" dir="ltr">{{ formatRupiahShort(payrollTotal) }}</div>
+                  <div class="text-[10px] text-(--text-soft) mt-0.5">{{ payrollMonthLabel }}</div>
+                </div>
+              </div>
+              <div class="mt-4 space-y-2 flex-1 min-h-0 overflow-y-auto pr-1">
+                <div v-for="(seg,i) in payrollPie" :key="i" class="flex items-center justify-between gap-2 text-sm">
+                  <span class="flex items-center gap-2 font-medium text-(--text-main) min-w-0">
+                    <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ background: seg.color }"></span>
+                    <span class="truncate">{{ seg.position }}</span>
+                    <span class="text-[10px] text-(--text-soft) shrink-0">({{ seg.count }})</span>
+                  </span>
+                  <span class="font-bold text-(--text-main) shrink-0" dir="ltr">{{ formatRupiahShort(seg.gaji) }}</span>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+    </BaseCard>
+
     <!-- Row 2: Kontrak Expiring (full width) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div class="lg:col-span-3">
@@ -257,7 +357,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useApi } from '../../composables/useApi.js'
 import BaseCard from '../../Components/BaseCard.vue'
 import DataTable from '../../Components/Table/DataTable.vue'
@@ -281,6 +381,11 @@ const stats = ref({ totalKaryawan: 0, hadirHariIni: 0, menungguCuti: 0, totalPay
 const contractsExpiring = ref([])
 const recentAuditLogs = ref([])
 const birthdays = ref([])
+
+const statistik = ref(null)
+const kehadiranBulan = ref(new Date().toISOString().slice(0,7))
+const payrollBulan = ref(new Date().toISOString().slice(0,7))
+const loadingStatistik = ref(false)
 
 const greetingText = computed(() => {
   const hr = new Date().getHours()
@@ -424,5 +529,89 @@ async function fetchDashboard() {
   }
 }
 
-onMounted(fetchDashboard)
+async function fetchStatistik() {
+  loadingStatistik.value = true
+  try {
+    const res = await get(`/api/v1/supervisor/dashboard/statistik?kehadiran_month=${kehadiranBulan.value}&payroll_month=${payrollBulan.value}`)
+    statistik.value = res
+    // snap ke bulan valid kalau bulan default belum ada data
+    const khValid = res.kehadiran.months?.some(m => m.ym === kehadiranBulan.value)
+    if (!khValid && res.kehadiran.months?.length) kehadiranBulan.value = res.kehadiran.months[0].ym
+    const payValid = res.payroll.months?.some(m => m.ym === payrollBulan.value)
+    if (!payValid && res.payroll.months?.length) payrollBulan.value = res.payroll.months[0].ym
+  } catch (err) {
+    console.error('Gagal memuat statistik:', err)
+  } finally {
+    loadingStatistik.value = false
+  }
+}
+
+function refreshAll(){ fetchDashboard(); fetchStatistik() }
+
+function formatRupiahShort(n) {
+  if (!n) return 'Rp 0'
+  if (n >= 1_000_000_000) return 'Rp ' + (n/1_000_000_000).toFixed(1).replace('.', ',') + ' M'
+  if (n >= 1_000_000) return 'Rp ' + Math.round(n/1_000_000) + ' Jt'
+  if (n >= 1000) return 'Rp ' + Math.round(n/1000) + ' Rb'
+  return 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n))
+}
+
+// ===== Statistik helpers =====
+const kehadiranMonths = computed(()=> statistik.value?.kehadiran?.months || [])
+const kehadiranMonthLabel = computed(()=> statistik.value?.kehadiran?.month_label || '')
+const kehadiranChart = computed(()=> statistik.value?.kehadiran?.chart || [])
+const kehadiranDaily = computed(()=> statistik.value?.kehadiran?.daily_trend || [])
+const kehadiranMaxDaily = computed(()=>{
+  const t = kehadiranDaily.value.map(d=>d.total)
+  return Math.max(1, ...t)
+})
+const kehadiranChips = computed(()=>{
+  const s = statistik.value?.kehadiran?.summary
+  if (!s) return []
+  const total = s.total || 1
+  return [
+    { label:'Total', value: s.total, color:'#94a3b8' },
+    { label:'Hadir', value: s.present, color:'#10b981' },
+    { label:'Absen', value: s.absent, color:'#ef4444' },
+    { label:'Cuti', value: s.leave, color:'#3b82f6' },
+    { label:'Sakit/Izin', value: (s.sakit||0) + (s.izin||0), color:'#f59e0b' },
+  ]
+})
+function khBarPct(v){
+  const t = statistik.value?.kehadiran?.summary?.total || 1
+  if (!t) return 0
+  return Math.round(v/t*100)
+}
+
+// Payroll donut
+const payrollMonths = computed(()=> statistik.value?.payroll?.months || [])
+const payrollMonthLabel = computed(()=> statistik.value?.payroll?.month_label || '')
+const payrollTotal = computed(()=> statistik.value?.payroll?.total || 0)
+const PIE_R = 40
+const PIE_STROKE = 18
+const PIE_COLORS = ['#2563eb','#10b981','#f59e0b','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16','#f97316','#64748b','#14b8a6','#a855f7','#eab308','#3b82f6','#22c55e','#f43f5e','#6366f1','#0ea5e9','#d946ef','#a3e635','#fb7185','#a78bfa','#34d399','#fbbf24']
+const payrollPie = computed(()=>{
+  if(!statistik.value?.payroll?.data?.length) return []
+  const total = statistik.value.payroll.total || 1
+  const C = 2 * Math.PI * PIE_R
+  let running = 0
+  return statistik.value.payroll.data.map((d, i)=>{
+    const frac = total > 0 ? Math.max(0, d.gaji / total) : 0
+    const len = frac * C
+    const seg = {
+      ...d,
+      color: PIE_COLORS[i % PIE_COLORS.length],
+      len,
+      gap: Math.max(0, C - len),
+      offset: -running,
+    }
+    running += len
+    return seg
+  })
+})
+
+watch(kehadiranBulan, fetchStatistik)
+watch(payrollBulan, fetchStatistik)
+
+onMounted(refreshAll)
 </script>

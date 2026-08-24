@@ -124,47 +124,154 @@
       </div>
     </div>
 
-    <!-- Row 2: Kontrak Akan Segera Berakhir -->
-    <div>
-      <BaseCard class="h-full flex flex-col">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <IconFileInvoice class="w-5 h-5 text-(--primary)" />
-            <span>Kontrak Akan Segera Berakhir</span>
-          </div>
-        </template>
-        <template #actions>
-          <router-link
-            to="/admin/employees/contracts"
-            class="text-xs font-semibold text-(--primary) hover:text-(--primary-hover) hover:underline flex items-center gap-1 transition-colors"
-          >
-            <span>Lihat Semua</span>
-            <IconChevronRight class="w-3.5 h-3.5" />
-          </router-link>
-        </template>
-
-        <div v-if="loading" class="py-8 text-center text-(--text-muted)">Memuat data...</div>
-        <div v-else-if="contractsExpiring.length === 0" class="py-8 text-center text-(--text-muted)">Tidak ada kontrak yang akan berakhir dalam 30 hari.</div>
-        <DataTable v-else :headers="contractHeaders" :items="contractsExpiring">
-          <template #item.employee_name="{ item }">
-            <div class="flex items-center gap-3 py-1">
-              <div class="w-8 h-8 rounded-md bg-gradient-to-tr from-(--primary)/15 to-(--primary)/5 text-(--primary) border border-(--primary)/10 shadow-sm flex items-center justify-center font-bold text-xs shrink-0 uppercase">
-                {{ getInitials(item.employee_name) }}
-              </div>
-              <div class="min-w-0">
-                <div class="font-semibold text-(--text-main) truncate text-sm">{{ item.employee_name }}</div>
-                <div class="text-xs text-(--text-muted) truncate">{{ item.department }}</div>
+    <!-- Row 2: Chart Gaji (2/3) + Kontrak (1/3) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+      <!-- Chart Progress Gaji Bulanan 2/3 (kiri) -->
+      <div class="lg:col-span-2 flex">
+        <BaseCard class="h-full flex flex-col w-full">
+          <template #title>
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-lg bg-(--success)/10 border border-(--success)/15 flex items-center justify-center text-(--success)">
+                <IconChartBar class="w-4 h-4" />
+              </span>
+              <div>
+                <div class="text-[13px] font-bold tracking-tight text-(--text-main)">Progress Gaji Bulanan</div>
+                <div class="text-[11px] text-(--text-muted) font-medium">Ringkasan 6 periode terakhir</div>
               </div>
             </div>
           </template>
-          <template #item.end_date="{ item }">
-            <span class="text-xs text-(--text-main) font-medium">{{ formatDateLong(item.end_date) }}</span>
+          <template #actions>
+            <router-link
+              to="/admin/statistik"
+              class="inline-flex items-center gap-1 text-xs font-semibold text-(--primary) hover:text-(--primary-hover) bg-(--primary)/8 hover:bg-(--primary)/12 px-2.5 py-1 rounded-full transition-colors"
+            >
+              <span>Lihat Statistik</span>
+              <IconChevronRight class="w-3 h-3" />
+            </router-link>
           </template>
-          <template #item.days_left="{ value }">
-            <Badge :variant="sisaVariant(value)">{{ value }} hari</Badge>
+
+          <div v-if="loading" class="py-14 text-center text-sm text-(--text-muted)">Memuat chart...</div>
+          <div v-else-if="payrollChart.length === 0" class="py-14 text-center text-sm text-(--text-muted)">Belum ada data payroll.</div>
+          <div v-else class="flex flex-col gap-4 flex-1">
+            <!-- Legend + Max -->
+            <div class="flex flex-wrap items-center gap-3 text-xs">
+              <span class="inline-flex items-center gap-2 font-medium text-(--text-main)"><span class="w-2.5 h-2.5 rounded-full bg-[#2563eb] shadow-sm"></span> Gaji Kotor</span>
+              <span class="inline-flex items-center gap-2 font-medium text-(--text-main)"><span class="w-2.5 h-2.5 rounded-full bg-[#10b981] shadow-sm"></span> Gaji Bersih</span>
+              <span class="ml-auto text-[11px] font-semibold text-(--text-muted) bg-(--bg-elevated) border border-(--border-soft) px-2 py-0.5 rounded-full">max {{ chartMaxLabel }}</span>
+            </div>
+
+            <!-- Chart area (mengisi sisa tinggi card) -->
+            <div class="relative bg-(--bg-elevated)/30 rounded-xl border border-(--border-soft)/50 p-4 sm:p-5 flex flex-col flex-1 min-h-[240px]">
+              <!-- Bars -->
+              <div class="relative flex items-stretch justify-between gap-2.5 sm:gap-4 flex-1">
+                <div
+                  v-for="p in payrollChart"
+                  :key="p.period_id"
+                  class="flex-1 flex flex-col items-center justify-end min-w-0 group"
+                >
+                  <!-- plot wrapper (bars anchored to bottom, gridlines overlap) -->
+                  <div class="relative flex items-end justify-center gap-1.5 w-full flex-1 min-h-[170px]">
+                    <!-- gridlines overlay -->
+                    <div class="absolute inset-x-0 top-8 bottom-0 pointer-events-none flex flex-col justify-between">
+                      <div class="border-t border-dashed border-(--border-soft)/50"></div>
+                      <div class="border-t border-dashed border-(--border-soft)/50"></div>
+                      <div class="border-t border-dashed border-(--border-soft)/50"></div>
+                      <div class="border-t border-(--border-soft)/40"></div>
+                    </div>
+
+                    <!-- floating tooltip -->
+                    <div class="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 hidden group-hover:flex flex-col items-center gap-0.5 z-10">
+                      <div class="bg-(--bg-card) border border-(--border-soft) rounded-lg shadow-lg px-2.5 py-1.5 whitespace-nowrap">
+                        <div class="text-[11px] font-bold text-[#2563eb]">Kotor {{ formatRupiahShort(p.total_kotor) }}</div>
+                        <div class="text-[11px] font-bold text-[#059669]">Bersih {{ formatRupiahShort(p.total_bersih) }}</div>
+                      </div>
+                      <div class="w-2 h-2 rotate-45 bg-(--bg-card) border-r border-b border-(--border-soft) -mt-1.5"></div>
+                    </div>
+
+                    <!-- Kotor bar -->
+                    <div class="flex flex-col items-center justify-end w-[26px] h-full">
+                      <div v-if="p.total_kotor > 0" class="w-full rounded-t-md bg-[#2563eb] bg-gradient-to-t from-[#1d4ed8] to-[#3b82f6] shadow-[0_2px_10px_rgba(37,99,235,0.28)] transition-all duration-300 group-hover:shadow-[0_4px_14px_rgba(37,99,235,0.40)]" :style="{ height: barPx(p.total_kotor) }" :title="`${p.period_name}: Kotor ${formatRupiahFull(p.total_kotor)}`"></div>
+                      <div v-else class="w-full rounded-t-md border border-dashed border-(--border-soft) bg-(--bg-card)/50" style="height: 8px"></div>
+                    </div>
+
+                    <!-- Bersih bar -->
+                    <div class="flex flex-col items-center justify-end w-[26px] h-full">
+                      <div v-if="p.total_bersih > 0" class="w-full rounded-t-md bg-[#059669] bg-gradient-to-t from-[#059669] to-[#34d399] shadow-[0_2px_10px_rgba(16,185,129,0.24)] transition-all duration-300 group-hover:shadow-[0_4px_14px_rgba(16,185,129,0.36)]" :style="{ height: barPx(p.total_bersih) }" :title="`${p.period_name}: Bersih ${formatRupiahFull(p.total_bersih)}`"></div>
+                      <div v-else class="w-full rounded-t-md border border-dashed border-(--border-soft) bg-(--bg-card)/50" style="height: 8px"></div>
+                    </div>
+                  </div>
+
+                  <!-- labels -->
+                  <div class="text-center leading-tight mt-3">
+                    <div class="text-[11px] font-bold text-(--text-main) tracking-wide">{{ p.label }}</div>
+                    <div class="text-[10px] font-medium mt-0.5" :class="p.count > 0 ? 'text-(--text-muted)' : 'text-(--text-soft)'">{{ p.count > 0 ? p.count + ' org' : '—' }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer summary (di-pin ke bawah) -->
+            <div class="flex items-center justify-between pt-3 border-t border-(--border-soft)/50 mt-auto">
+              <span class="text-xs text-(--text-muted)">Total 6 periode <span class="font-bold text-(--text-main)">{{ formatRupiahShort(chartTotalKotor) }}</span> <span class="text-(--text-soft)">· {{ payrollChart.reduce((a,c)=>a+c.count,0) }} data gaji</span></span>
+              <router-link to="/admin/payroll/gaji-karyawan" class="inline-flex items-center gap-1 text-xs font-bold text-(--primary) hover:text-(--primary-hover) hover:gap-1.5 transition-all">
+                Detail Gaji <IconChevronRight class="w-3.5 h-3.5" />
+              </router-link>
+            </div>
+          </div>
+        </BaseCard>
+      </div>
+
+      <!-- Kontrak Segera Berakhir 1/3 (kanan) -->
+      <div class="lg:col-span-1 flex">
+        <BaseCard class="h-full flex flex-col w-full">
+          <template #title>
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-lg bg-(--primary)/10 border border-(--primary)/15 flex items-center justify-center text-(--primary)">
+                <IconFileInvoice class="w-4 h-4" />
+              </span>
+              <span class="text-[13px] font-bold tracking-tight text-(--text-main)">Kontrak Segera Berakhir</span>
+            </div>
           </template>
-        </DataTable>
-      </BaseCard>
+          <template #actions>
+            <router-link
+              to="/admin/employees/contracts"
+              class="inline-flex items-center gap-1 text-xs font-semibold text-(--primary) hover:text-(--primary-hover) bg-(--primary)/8 hover:bg-(--primary)/12 px-2.5 py-1 rounded-full transition-colors"
+            >
+              <span>Lihat Semua</span>
+              <IconChevronRight class="w-3 h-3" />
+            </router-link>
+          </template>
+
+          <div v-if="loading" class="py-10 text-center text-sm text-(--text-muted)">Memuat data...</div>
+          <div v-else-if="contractsExpiring.length === 0" class="py-10 text-center text-sm text-(--text-muted)">Tidak ada kontrak yang akan berakhir dalam 30 hari.</div>
+          <div v-else class="divide-y divide-(--border-soft)/60 -mx-6 flex-1">
+            <div
+              v-for="item in contractsExpiring.slice(0, 6)"
+              :key="item.id"
+              class="flex items-center gap-3 px-6 py-3.5 hover:bg-(--bg-elevated)/40 transition-colors"
+            >
+              <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-(--primary)/15 to-(--primary)/5 text-(--primary) border border-(--primary)/10 flex items-center justify-center font-bold text-[11px] shrink-0 uppercase shadow-sm">
+                {{ getInitials(item.employee_name) }}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="font-semibold text-[13px] leading-tight text-(--text-main) truncate">{{ item.employee_name }}</div>
+                <div class="text-[11px] text-(--text-muted) truncate flex items-center gap-1.5">
+                  <span>{{ item.department }}</span>
+                  <span class="w-1 h-1 rounded-full bg-(--border-soft)"></span>
+                  <span class="truncate">{{ item.contract_type }}</span>
+                </div>
+                <div class="text-[11px] text-(--text-soft)">{{ formatDateLong(item.end_date) }}</div>
+              </div>
+              <div class="shrink-0">
+                <Badge :variant="sisaVariant(item.days_left)" class="text-[11px] px-2 py-0.5">{{ item.days_left }} hari</Badge>
+              </div>
+            </div>
+          </div>
+          <div v-if="contractsExpiring.length > 6" class="pt-3 mt-auto border-t border-(--border-soft)/50 text-center">
+            <span class="text-xs text-(--text-muted)">+{{ contractsExpiring.length - 6 }} kontrak lainnya</span>
+          </div>
+        </BaseCard>
+      </div>
     </div>
 
     <!-- Row 3: Audit Log + Ultah -->
@@ -269,6 +376,29 @@ const stats = ref({ totalKaryawan: 0, cutiPeriodeIni: 0, izinPeriodeIni: 0, tota
 const contractsExpiring = ref([])
 const recentAuditLogs = ref([])
 const birthdays = ref([])
+const payrollChart = ref([])
+
+// ── Payroll Chart computed ──
+const chartMax = computed(() => Math.max(1, ...payrollChart.value.map(p => p.total_kotor)))
+const chartMaxLabel = computed(() => formatRupiahShort(chartMax.value))
+const chartTotalKotor = computed(() => payrollChart.value.reduce((s, p) => s + (p.total_kotor || 0), 0))
+// Plot area tinggi bar (px) — bar di-anchor ke bottom, jadi pakai px biar konsisten
+const PLOT_H = 150
+function barPx(val) {
+  if (!val || chartMax.value <= 1) return '4px'
+  return Math.max(4, Math.round((val / chartMax.value) * PLOT_H)) + 'px'
+}
+function formatRupiahShort(n) {
+  if (!n) return 'Rp 0'
+  if (n >= 1_000_000_000) return 'Rp ' + (n / 1_000_000_000).toFixed(1).replace('.', ',') + ' M'
+  if (n >= 1_000_000) return 'Rp ' + Math.round(n / 1_000_000) + ' Jt'
+  if (n >= 1000) return 'Rp ' + Math.round(n / 1000) + ' Rb'
+  return 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n))
+}
+function formatRupiahFull(n) {
+  if (!n) return 'Rp 0'
+  return 'Rp ' + new Intl.NumberFormat('id-ID').format(Math.round(n))
+}
 
 const greetingText = computed(() => {
   const hr = new Date().getHours()
@@ -414,6 +544,7 @@ async function fetchDashboard() {
     contractsExpiring.value = res.contractsExpiring
     recentAuditLogs.value = res.recentAuditLogs
     birthdays.value = res.birthdays
+    payrollChart.value = res.payrollChart ?? []
   } catch (err) {
     console.error('Gagal memuat dashboard:', err)
   } finally {
