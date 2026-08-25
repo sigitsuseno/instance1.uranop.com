@@ -903,6 +903,9 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $endInput   = $request->input('end_date');
         $groups     = $request->input('groups', []);
 
+        // ── Rentang tanggal? (mode date range, bukan periode) ──────
+        $isRangeMode = !empty($startInput) && !empty($endInput);
+
         // ── Date range ─────────────────────────────────────────────
         $period = null;
         if ($startInput && $endInput) {
@@ -1018,6 +1021,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             // Build days map from each per-date record
             $days = [];
             $activeDayCount = 0;
+            $hadirCount     = 0;
             $totalHariKerja = 0;
             $totalOvertime  = 0;
             $totalUangMakan = 0;
@@ -1027,6 +1031,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             foreach ($records as $rec) {
                 $komponen = $rec->komponen ?? [];
                 $status   = $komponen['status'] ?? '-';
+                if ($status === 'hadir') $hadirCount++;
 
                 $dateStr = $rec->date instanceof Carbon
                     ? $rec->date->format('Y-m-d')
@@ -1112,7 +1117,11 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             $periodEndDate = $period?->end_date;
             $isAfterEndDate = $periodEndDate && Carbon::today()->gte($periodEndDate);
             $dailyRate = $gaji / 25;
-            if ($isAfterEndDate) {
+            if ($isRangeMode) {
+                // Rentang tanggal: hari_kerja = jumlah hari status 'hadir' × upah/hari
+                // Supaya Total Hari Kerja & Total Terima proporsional dgn rentang yang dipilih
+                $totalHariKerja = $hadirCount * $upahPerHari;
+            } elseif ($isAfterEndDate) {
                 $absentCount = 0;
                 $izinCount   = 0;
                 foreach ($days as $day) {
@@ -1158,7 +1167,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $totalUangMakan = 0;
             }
 
-            if ($isAfterEndDate) {
+            if ($isAfterEndDate || $isRangeMode) {
                 $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakan + $totalInsentif + $premiHadir;
             } else {
                 $totalTerima = $totalOvertime + $totalUangMakan + $totalInsentif;
@@ -1780,6 +1789,12 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
         $period = null;
         if ($periodId = $request->input('period_id')) {
             $period = PayPeriod::find($periodId);
+        } elseif ($request->input('start_date') && $request->input('end_date')) {
+            // Mode rentang tanggal: resolve period dari start_date (sama spt Detail Pre)
+            // supaya SpcHelper::shouldShow() konsisten antar tab
+            $period = PayPeriod::where('start_date', '<=', Carbon::parse($request->input('start_date')))
+                ->where('end_date', '>=', Carbon::parse($request->input('start_date')))
+                ->first();
         }
 
         if (SpcHelper::shouldShow($period?->id)) {
