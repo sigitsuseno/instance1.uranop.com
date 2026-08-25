@@ -51,7 +51,9 @@ class PayslipController extends Controller
             });
         }
 
-        $records = $query->orderBy('id')->get();
+        $records = $query->orderBy('id')
+            ->get()
+            ->sortBy(fn ($r) => strtolower($r->employee?->name ?? ''));
 
         // Get remaining leave per employee — cari leave period yang mencakup payroll period
         $leavePeriod = \App\Modules\Leave\Models\LeavePeriod::where('status', 'active')
