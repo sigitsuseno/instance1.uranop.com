@@ -451,3 +451,24 @@ flow.
 - actual_in = ""
 - actual_out = ""
 - status = off
+
+jo. untuk perbaharui status, flownya di ubah total
+
+1. saat klik tombol perharui status muncul modal
+2. di dalam modal ada pilih rentang tanggal dalam periode (dari tabel pay_period) dan search dan checklist karyawan.
+3. kemudian klik tombol perbaharui status.
+4. prosesnya :
+
+- di setiap tanggal periode untuk karyawan terpilih
+- jika di att_prepare tidak ada record maka buat record, jika minggu dan holiday null att_prepare->status = off, jika hari biasa null att_prepare->status = absent.
+- jika di att_prepare ada record kemudian jika hari minggu dan holiday att_prepare->check_in / check_out tidak null maka null att_prepare->status = off, jika tidak null att_prepare->status = hadir,
+- jika di att_prepare ada record kemudian jika ada leave_request maka status = leave_request->type->code
+- jika di att_prepare ada record kemudian jika ada consecutive (att_consecutive_day) maka status = hadir
+
+cek bila ada conflik dengan perhitungan sekarang, dan sampaikan kepada saya
+
+jo di /admin/payroll/gaji-karyawan tombol finalisasi. untuk mendapatkan absent seperti di bawah.
+absent = count status='absent' + missing
+missing = jika di tanggal att_prepare tidak ada record dan sch_employee_shift_rosters === ['P', 'S', 'ML'] dan sch_employee_shift_rosters !== null
+
+jadi nanti hari_kerja adalah fixed_work_day dikurangi cuti tidak dibayar dan absent

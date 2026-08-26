@@ -5,9 +5,11 @@ namespace App\Modules\Payroll\Controllers\Api\V1;
 use App\Models\ExtraEmployee;
 use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
+use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Schedule\Models\Holiday;
 use App\Modules\Settings\Models\SystemSetting;
 use App\Http\Controllers\Controller;
@@ -460,6 +462,12 @@ class GajiKaryawanController extends Controller
         $month1End  = Carbon::parse($startDate)->endOfMonth()->toDateString();
         $month2Start = Carbon::parse($endDate)->startOfMonth()->toDateString();
 
+        // Holiday periode (buat hitung "hari kerja" pro-rata, konsisten dengan fixed_working_day)
+        $holidays = Holiday::whereBetween('date', [$startDate, $endDate])
+            ->pluck('date')
+            ->map(fn ($d) => $d->toDateString())
+            ->toArray();
+
         $processed = 0;
 
         foreach ($records as $record) {
@@ -489,7 +497,59 @@ class GajiKaryawanController extends Controller
                 ->whereBetween('date', [$segStart, $segEnd])
                 ->get();
 
-            $absen = $prepares->where('status', 'absent')->count();
+            // Roster map: tanggal → external_code utk segmen ini (deteksi missing)
+            $rosterMap = EmployeeShiftRoster::where('employee_id', $employee->id)
+                ->whereBetween('date', [$segStart, $segEnd])
+                ->get(['date', 'external_code'])
+                ->mapWithKeys(fn ($r) => [$r->date->toDateString() => $r->external_code]);
+
+            // ── Tanggal mulai kerja efektif (pro-rata dari tanggal awal kontrak) ──
+            $periodStartDate = Carbon::parse($period->start_date->toDateString());
+            $joinDate = $employee->join_date ? Carbon::parse($employee->join_date) : null;
+            $contractStart = EmployeeContract::where('employee_id', $employee->id)
+                ->where('start_date', '<=', $segEnd)
+                ->where(function ($q) use ($segStart) {
+                    $q->whereNull('end_date')->orWhere('end_date', '>=', $segStart);
+                })
+                ->min('start_date'); // string Y-m-d | null
+
+            // Pro-rata HANYA kalau karyawan baru masuk di tengah periode (join_date > period start)
+            $hasProRata = $joinDate && $joinDate->gt($periodStartDate);
+            $workStart = ($hasProRata && ($contractStart || $joinDate))
+                ? Carbon::parse($contractStart ?? $joinDate->toDateString())
+                : Carbon::parse($segStart);
+
+            $missing = 0;
+            $hasPrepare = $prepares->pluck('date')->map(fn ($d) => $d->toDateString())->flip();
+
+            // (1) PRO-RATA: hari kerja kalender (Senin-Sabtu, non-holiday) sebelum mulai kerja = "hilang"
+            if ($hasProRata) {
+                $rangeStart = Carbon::parse($segStart);
+                $rangeEnd = $workStart->copy()->subDay();
+                if ($rangeStart->lte($rangeEnd)) {
+                    for ($c = $rangeStart; $c->lte($rangeEnd); $c->addDay()) {
+                        $d = $c->toDateString();
+                        if ($c->isSunday()) continue;
+                        if (in_array($d, $holidays, true)) continue;
+                        $missing++;
+                    }
+                }
+            }
+
+            // (2) MISSING ROSTER: hari kerja (P/S/ML) yang TIDAK punya att_prepare, mulai dari workStart
+            $cursor = Carbon::parse($segStart);
+            if ($cursor->lt($workStart)) $cursor = $workStart->copy();
+            $endCursor = Carbon::parse($segEnd);
+            while ($cursor->lte($endCursor)) {
+                $date = $cursor->toDateString();
+                if (!isset($hasPrepare[$date]) && in_array($rosterMap[$date] ?? null, ['P', 'S', 'ML'], true)) {
+                    $missing++;
+                }
+                $cursor->addDay();
+            }
+
+            // absent = count status absent + missing (hari kerja roster tak ada record / baru masuk pro-rata)
+            $absen = $prepares->where('status', 'absent')->count() + $missing;
             $lm = $prepares->sum('lm');
             $lmCount = $prepares->sum('lm_count');
             $lemburCount = $prepares->sum('overtime_count');

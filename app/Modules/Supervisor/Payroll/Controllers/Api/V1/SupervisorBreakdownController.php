@@ -7,7 +7,6 @@ use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Payroll\Models\PayrollConfig;
-use App\Modules\Payroll\Services\PphCalculationService;
 use App\Modules\Settings\Models\SystemSetting;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance as AttendanceAutolog;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendanceSnapshot;
@@ -236,7 +235,6 @@ class SupervisorBreakdownController extends Controller
 
         // ── Group config (section A/B) ──
         $gajiConfig = PayrollConfig::getConfig('gaji_karyawan');
-        $sectionAGroups = $gajiConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
 
         // ── Ambil PayRecord untuk lookup hari_kerja ──
         $payRecords = PayRecord::where('pay_period_id', $period->id)
@@ -260,11 +258,9 @@ class SupervisorBreakdownController extends Controller
 
                 // ── Tentukan segmen ──
                 if ($period->is_split) {
-                    if (!isset($splitDays['A']) || !isset($splitDays['B'])) {
-                        throw new \Exception('Nilai hari kerja untuk split periode (A dan B) belum diatur.');
-                    }
-                    $hkA = (int) $splitDays['A'];
-                    $hkB = (int) $splitDays['B'];
+                    // Default: A=5, B=20 (25-5) — sama dgn admin GajiKaryawan
+                    $hkA = (int) ($splitDays['A'] ?? 5);
+                    $hkB = (int) ($splitDays['B'] ?? max(0, $fixedDays - $hkA));
                     $month1End = Carbon::parse($startDate)->endOfMonth()->toDateString();
                     $month2Start = Carbon::parse($endDate)->startOfMonth()->toDateString();
 
@@ -329,7 +325,7 @@ class SupervisorBreakdownController extends Controller
                         $deductDay   = $statusAbsen + $leaveIzin;
                         $prKey     = $employee->id . '|' . ($segCode ?? '');
                         $pr        = $payRecords->get($prKey);
-                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, 25 - $deductDay);
+                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, $hkSegment - $deductDay);
                     } else {
                         // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
                         // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
@@ -344,7 +340,7 @@ class SupervisorBreakdownController extends Controller
                         $deductDay   = $statusAbsen + $leaveIzin;
                         $prKey     = $employee->id . '|' . ($segCode ?? '');
                         $pr        = $payRecords->get($prKey);
-                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, 25 - $deductDay);
+                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, $hkSegment - $deductDay);
                     }
 
                     // ── Data masukan (salary lookup) ──
@@ -361,15 +357,14 @@ class SupervisorBreakdownController extends Controller
                     $tunjangan    = $employee->tunjangan($segmentMonth);
 
                     // ── Hitungan: Gaji ──
-                    $gaji = round(($gajiPokok / 25) * $hariKerja, 2);
+                    $gaji = round(($gajiPokok / $fixedDays) * $hariKerja, 2);
 
                     // ── Hitungan: Upah Lembur ──
                     $totalLemburJam = $lmCount + $lemburCount;
 
-                    // Zero overtime untuk section A (ALL IN, kecuali GRP-SPR)
+                    // Zero overtime: GRP-ALLIN + GRP-GD (sama dgn admin GajiKaryawan)
                     $isZeroOvertime = $employee->groups()
-                        ->whereIn('reference_code', $sectionAGroups)
-                        ->where('reference_code', '!=', 'GRP-SPR')
+                        ->whereIn('reference_code', ['GRP-ALLIN', 'GRP-GD'])
                         ->exists();
 
                     if ($isZeroOvertime) {
@@ -393,7 +388,7 @@ class SupervisorBreakdownController extends Controller
                     }
 
                     // ── Hitungan: Premi Hadir ──
-                    $premiHadir = round(($premi / 25) * $hariKerja, 2);
+                    $premiHadir = round(($premi / $fixedDays) * $hariKerja, 2);
 
                     // ── Split logic: Part 1 (seg-A) vs Part 2 (seg-B) ──
                     $isPart1 = ($segCode === 'A');
@@ -401,14 +396,14 @@ class SupervisorBreakdownController extends Controller
                     $bpjsTk  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_tk_karyawan ?? 0);
                     $bpjsKs  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
                     $bpjsPen = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_pensiun ?? 0);
-                    $pph     = app(PphCalculationService::class)->calculate($employee, $period, $gajiPokok, $tunjangan, $upahLembur, $premiHadir, $gaji, $isPart1);
+                    $pph     = 0; // PPh ditanggung pemerintah — sama dgn admin (GajiKaryawan)
                     $cashbon = 0;
 
                     // ── Gaji Kotor ──
-                    $gajiKotor = $gaji + $tjMasaKerja + $upahLembur + $revisi + $premiHadir + $tunjangan;
+                    $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi;
 
                     // ── Potongan ──
-                    $potKehadiran = round($deductDay * ($gajiPokok / 25), 2);
+                    $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
                     $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
 
                     // ── Pembulatan 100 ──

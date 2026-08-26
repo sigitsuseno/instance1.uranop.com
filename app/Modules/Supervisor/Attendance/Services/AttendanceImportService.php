@@ -344,8 +344,8 @@ class AttendanceImportService
         $externalCode = strtoupper(trim($shift?->external_code ?? ''));
 
         if ($externalCode === 'S') {
-            // a.2 / a.3 'S' — lembur ditambahkan ke check_in
-            $checkIn  = $start ? (clone $start)->addMinutes($lembur + random_int(-10, 3)) : null;
+            // a.2 / a.3 'S' — lembur dikurangkan dari check_in (mulai lebih awal)
+            $checkIn  = $start ? (clone $start)->subMinutes($lembur + random_int(-10, 3)) : null;
             $checkOut = $end   ? (clone $end)->addMinutes(random_int(-3, 10)) : null;
         } else {
             // a.1 / a.3 'P' (default utk external_code lain) — lembur di check_out
@@ -409,12 +409,12 @@ class AttendanceImportService
             ]);
         }
 
-        // Present — check_in dari att_prepares, check_out & actual dari jadwal shift
+        // Present — check_in & check_out dari att_prepares (apa adanya), actual dari jadwal shift
         $lembur = (int) ($prepare->overtime ?? 0);
         $lm     = (int) ($prepare->lm ?? 0);
 
         $checkIn  = $prepare->check_in ? Carbon::parse($prepare->check_in) : null;
-        $checkOut = $end ? (clone $end)->addMinutes($lembur + random_int(-3, 10)) : null;
+        $checkOut = $prepare->check_out ? Carbon::parse($prepare->check_out) : null;
 
         return $this->buildRecord(
             $employeeId,
