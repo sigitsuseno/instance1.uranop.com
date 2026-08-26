@@ -16,6 +16,7 @@ Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::post('gaji-karyawan/finalisasi', [GajiKaryawanController::class, 'finalisasi']);
     Route::post('gaji-karyawan/lock', [GajiKaryawanController::class, 'lock']);
     Route::post('gaji-karyawan/unlock', [GajiKaryawanController::class, 'unlock']);
+    Route::post('gaji-karyawan/sync-missing', [GajiKaryawanController::class, 'syncMissingRecords']);
 
     Route::put('gaji-karyawan/{id}/upah-lembur', [GajiKaryawanController::class, 'updateUpahLembur']);
     Route::put('gaji-karyawan/{id}/transfer-info', [GajiKaryawanController::class, 'updateTransferInfo']);

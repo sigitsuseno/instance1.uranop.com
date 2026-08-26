@@ -680,6 +680,91 @@ class GajiKaryawanController extends Controller
         ]);
     }
 
+    /**
+     * POST /api/v1/payroll/gaji-karyawan/sync-missing
+     *
+     * FUNGSI BARU: tambahkan baris pay_record HANYA untuk karyawan yang BELUM ada
+     * (skip yang sudah ada). Dipakai untuk menambal karyawan yang kelewat di-snapshot
+     * (mis. baru di-assign group / baru aktif). Tidak mengubah data existing.
+     * Record baru dibuat status DRAFT, biar bisa ikut finalisasi (rumus lama) menyusul.
+     */
+    public function syncMissingRecords(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period = PayPeriod::findOrFail($validated['period_id']);
+        $segment = $this->resolveSegment($period, $validated['segment'] ?? null);
+
+        // Guard: jangan tambah record ke payroll yang sudah di-lock
+        $isLocked = PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->where('status', self::STATUS_LOCKED)
+            ->exists();
+        abort_if($isLocked, 403, 'Payroll periode ini sudah dikunci. Buka kunci dulu sebelum menambahkan record.');
+
+        $computed = $this->computeOnTheFlyRows($period, $segment);
+
+        // Set employee_id yang SUDAH ada pay_record pada periode ini
+        $existing = PayRecord::where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->pluck('employee_id')
+            ->map(fn ($id) => (int) $id)
+            ->toArray();
+
+        $created = 0;
+        $skipped = 0;
+
+        foreach ($computed['rows'] as $row) {
+            $empId = (int) $row['employee']->id;
+
+            if (in_array($empId, $existing, true)) {
+                $skipped++; // sudah ada → abaikan
+                continue;
+            }
+
+            PayRecord::create([
+                'employee_id'   => $empId,
+                'pay_period_id' => $period->id,
+                'segment'       => $row['segment'],
+                'status'        => self::STATUS_DRAFT,
+                // data masukan
+                'gaji_pokok'    => $row['gaji_pokok'],
+                'premi'         => $row['premi'],
+                'tj_masa_kerja' => $row['tj_masa_kerja'],
+                'tunjangan'     => $row['tunjangan'],
+                'deduct_day'    => 0,
+                // hasil hitungan on_the_fly (dicopy, bukan dihitung ulang)
+                'hari_kerja'    => $row['hari_kerja'],
+                'lm'            => $row['lm'],
+                'lm_count'      => $row['lm_count'],
+                'lembur_count'  => $row['lembur_count'],
+                'gaji'          => $row['gaji'],
+                'upah_lembur'   => $row['upah_lembur'],
+                'premi_hadir'   => $row['premi_hadir'],
+                'revisi'        => $row['revisi'],
+                'gaji_kotor'    => $row['gaji_kotor'],
+                'bpjs_tk'       => $row['bpjs_tk'],
+                'bpjs_ks'       => $row['bpjs_ks'],
+                'bpjs_pen'      => $row['bpjs_pen'],
+                'pph'           => $row['pph'],
+                'cashbon'       => $row['cashbon'],
+                'pot_kehadiran' => 0,
+                'pblt'          => $row['pblt'],
+                'gaji_bersih'   => $row['gaji_bersih'],
+            ]);
+            $created++;
+        }
+
+        return response()->json([
+            'message' => "{$created} karyawan baru ditambahkan; {$skipped} sudah ada (diabaikan).",
+            'created' => $created,
+            'skipped' => $skipped,
+        ]);
+    }
+
     // =====================================================================
     // GUARD — semua mutasi pay_records mati saat status locked (logic_payroll_baru.md §5)
     // =====================================================================

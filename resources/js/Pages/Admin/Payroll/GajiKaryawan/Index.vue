@@ -498,9 +498,26 @@
             Menggunakan pengaturan default
           </div>
           <div class="flex gap-2">
+            <BaseButton variant="secondary" :loading="processingSync" @click="openSyncModal">Update Data</BaseButton>
             <BaseButton variant="ghost" @click="showSettings = false">Batal</BaseButton>
             <BaseButton variant="primary" :loading="savingConfig" @click="saveConfig">Simpan</BaseButton>
           </div>
+        </div>
+      </div>
+    </BaseModal>
+
+    <!-- Modal: Konfirmasi Update Data (sync-missing) -->
+    <BaseModal :show="showSyncModal" @close="showSyncModal = false" title="Konfirmasi Update Data">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-main)">
+          Dengan klik tombol ini anda akan menambahkan record baru ke tabel payroll periode:
+          <strong class="text-(--primary)">{{ selectedPeriodDisplay }}</strong>. Karyawan yang sudah ada akan
+          diabaikan, hanya yang belum tercatat yang akan ditambahkan.
+        </p>
+
+        <div class="flex justify-end gap-3 mt-6">
+          <BaseButton variant="ghost" @click="showSyncModal = false">Batal</BaseButton>
+          <BaseButton variant="primary" :loading="processingSync" @click="handleSyncMissing">Yakin</BaseButton>
         </div>
       </div>
     </BaseModal>
@@ -636,6 +653,10 @@ const savingConfig = ref(false)
 const configUpdatedBy = ref('')
 const configUpdatedAt = ref('')
 
+// Update Data (sync-missing) state
+const showSyncModal = ref(false)
+const processingSync = ref(false)
+
 // Edit Upah Lembur state
 const isEditModalOpen = ref(false)
 const editingRecord = ref(null)
@@ -659,6 +680,12 @@ const hitungPerkiraanTrima = computed(() => {
 
 const selectedPeriod = computed(() => {
   return periods.value.find(p => p.id === selectedPeriodId.value)
+})
+
+const selectedPeriodDisplay = computed(() => {
+  if (!selectedPeriod.value) return '—'
+  if (selectedPeriod.value.name) return selectedPeriod.value.name
+  return periodLabel.value
 })
 
 const periodLabel = computed(() => {
@@ -985,6 +1012,35 @@ async function handleUnlock() {
     notification.error(error.message || 'Gagal membuka kunci payroll.')
   } finally {
     processingUnlock.value = false
+  }
+}
+
+// ─── Update Data (sync-missing): tambah karyawan yang belum ada di pay_record ───
+
+function openSyncModal() {
+  if (!selectedPeriodId.value) {
+    notification.warning('Pilih periode terlebih dahulu.')
+    return
+  }
+  showSyncModal.value = true
+}
+
+async function handleSyncMissing() {
+  if (!selectedPeriodId.value) return
+  processingSync.value = true
+  try {
+    const res = await post('/api/v1/payroll/gaji-karyawan/sync-missing', {
+      period_id: selectedPeriodId.value,
+      segment: activeSegment.value,
+    })
+    notification.success(res.message || 'Data berhasil diupdate.')
+    showSyncModal.value = false
+    await fetchRecords()
+  } catch (error) {
+    console.error('Error sync missing records', error)
+    notification.error(error.message || 'Gagal update data.')
+  } finally {
+    processingSync.value = false
   }
 }
 
