@@ -316,31 +316,88 @@ class SupervisorBreakdownController extends Controller
                         }
                     }
 
-                    // Untuk normal (non-split), ambil langsung dari snapshot
+                    // ── Hitung hari_kerja: mirror logika /admin (roster-missing + pro-rata),
+                    //    tapi sumber record = attendance_autolog (bukan att_prepares).
+                    // [DINONAKTIFKAN sementara 2026-08-27 — user minta pakai pay_records->hari_kerja lagi]
+                    // Roaster map: tanggal → external_code utk segmen ini
+                    // $rosterMap = EmployeeShiftRoster::where('employee_id', $employee->id)
+                    //     ->whereBetween('date', [$segStart, $segEnd])
+                    //     ->get(['date', 'external_code'])
+                    //     ->mapWithKeys(fn ($r) => [$r->date->toDateString() => $r->external_code]);
+                    //
+                    // // Record autolog dalam segmen (sumber reliabilitas supervisor)
+                    // $segAutologs = AttendanceAutolog::where('employee_id', $employee->id)
+                    //     ->whereBetween('date', [$segStart, $segEnd])
+                    //     ->get();
+                    //
+                    // // ── Tanggal mulai kerja efektif (pro-rata dari awal kontrak) ──
+                    // $periodStartDate = Carbon::parse($segStart);
+                    // $joinDate = $employee->join_date ? Carbon::parse($employee->join_date) : null;
+                    // $contractStart = EmployeeContract::where('employee_id', $employee->id)
+                    //     ->where('start_date', '<=', $segEnd)
+                    //     ->where(function ($q) use ($segStart) {
+                    //         $q->whereNull('end_date')->orWhere('end_date', '>=', $segStart);
+                    //     })
+                    //     ->min('start_date'); // string Y-m-d | null
+                    //
+                    // // Pro-rata HANYA kalau karyawan baru masuk tengah periode (join_date > seg start)
+                    // $hasProRata = $joinDate && $joinDate->gt($periodStartDate);
+                    // $workStart = ($hasProRata && ($contractStart || $joinDate))
+                    //     ? Carbon::parse($contractStart ?? $joinDate->toDateString())
+                    //     : Carbon::parse($segStart);
+                    //
+                    // $missing = 0;
+                    // $hasAutolog = $segAutologs->pluck('date')->map(fn ($d) => $d->toDateString())->flip();
+                    //
+                    // // (1) PRO-RATA: hari kerja kalender (Senin-Sabtu, non-holiday) sebelum mulai kerja = "hilang"
+                    // if ($hasProRata) {
+                    //     $rangeStart = Carbon::parse($segStart);
+                    //     $rangeEnd = $workStart->copy()->subDay();
+                    //     if ($rangeStart->lte($rangeEnd)) {
+                    //         for ($c = $rangeStart; $c->lte($rangeEnd); $c->addDay()) {
+                    //             $d = $c->toDateString();
+                    //             if ($c->isSunday()) continue;
+                    //             if (in_array($d, $holidays, true)) continue;
+                    //             $missing++;
+                    //         }
+                    //     }
+                    // }
+                    //
+                    // // (2) MISSING ROSTER: hari kerja (P/S/ML) yang TIDAK punya record autolog, mulai dari workStart
+                    // $cursor = Carbon::parse($segStart);
+                    // if ($cursor->lt($workStart)) $cursor = $workStart->copy();
+                    // $endCursor = Carbon::parse($segEnd);
+                    // while ($cursor->lte($endCursor)) {
+                    //     $date = $cursor->toDateString();
+                    //     if (!isset($hasAutolog[$date]) && in_array($rosterMap[$date] ?? null, ['P', 'S', 'ML'], true)) {
+                    //         $missing++;
+                    //     }
+                    //     $cursor->addDay();
+                    // }
+                    //
+                    // $statusAbsen = $segAutologs->where('status', 'absent')->count() + $missing;
+                    // $deductDay   = $statusAbsen + $leaveIzin;
+                    // $hariKerja   = max(0, $hkSegment - $deductDay);
+
+                    // ── Hari kerja dari PayRecord (lookup by employee_id|segment) ──
+                    $prKey     = $employee->id . '|' . ($segCode ?? '');
+                    $pr        = $payRecords->get($prKey);
+                    $deductDay = $pr ? (float) $pr->deduct_day
+                                   : ($leaveIzin + ($segCode === null ? (int) $snapshot->absen : 0));
+                    $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, $hkSegment - $deductDay);
+
+                    // ── LM / lembur (non-split dari snapshot, split dari autolog) ──
                     if ($segCode === null) {
                         $lm          = (float) $snapshot->lm;
                         $lmCount     = (float) $snapshot->lm_count;
                         $lemburCount = (float) $snapshot->lembur_count;
-                        $statusAbsen = (int) $snapshot->absen;
-                        $deductDay   = $statusAbsen + $leaveIzin;
-                        $prKey     = $employee->id . '|' . ($segCode ?? '');
-                        $pr        = $payRecords->get($prKey);
-                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, $hkSegment - $deductDay);
                     } else {
-                        // Split: ambil LM & lembur langsung dari attendance_autologs per segmen
-                        // Part 1 (A): tgl 25-31, Part 2 (B): tgl 1-24
-                        $segLogs = AttendanceAutolog::where('employee_id', $employee->id)
+                        $segAutologs = AttendanceAutolog::where('employee_id', $employee->id)
                             ->whereBetween('date', [$segStart, $segEnd])
                             ->get();
-
-                        $lm          = $segLogs->sum('lm') / 60;
-                        $lmCount     = (float) $segLogs->sum('lm_calc');
-                        $lemburCount = (float) $segLogs->sum('lembur_calc');
-                        $statusAbsen = $segLogs->where('deduct_attendance', 1)->count();
-                        $deductDay   = $statusAbsen + $leaveIzin;
-                        $prKey     = $employee->id . '|' . ($segCode ?? '');
-                        $pr        = $payRecords->get($prKey);
-                        $hariKerja = $pr ? (int) $pr->hari_kerja : max(0, $hkSegment - $deductDay);
+                        $lm          = $segAutologs->sum('lm') / 60;
+                        $lmCount     = (float) $segAutologs->sum('lm_calc');
+                        $lemburCount = (float) $segAutologs->sum('lembur_calc');
                     }
 
                     // ── Data masukan (salary lookup) ──
