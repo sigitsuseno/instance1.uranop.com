@@ -325,7 +325,7 @@
                   <span class="flex items-center gap-2 font-medium text-(--text-main) min-w-0">
                     <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ background: seg.color }"></span>
                     <span class="truncate">{{ seg.position }}</span>
-                    <span class="text-[10px] text-(--text-soft) shrink-0">({{ seg.count }})</span>
+                    <span class="text-[13px] font-semibold text-(--text-main) shrink-0">({{ seg.count }})</span>
                   </span>
                   <span class="font-bold text-(--text-main) shrink-0" dir="ltr">{{ formatRupiahShort(seg.gaji) }}</span>
                 </div>
