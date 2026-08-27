@@ -269,9 +269,8 @@ class GajiKaryawanController extends Controller
                 $bpjsKs  = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_kes_karyawan ?? 0);
                 $bpjsPen = $isPart1 ? 0 : (float) ($employee->bpjs?->bpjs_pensiun ?? 0);
 
-                // gaji_kotor = gaji + tunjangan + upah_lembur + premi_hadir + revisi
-                // (KEPUTUSAN #2 + koreksi 2026-08-07: upah_lembur TETAP masuk; tj_mk TIDAK)
-                $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi;
+                // gaji_kotor = gaji + tunjangan + upah_lembur + premi_hadir + revisi + tj_masa_kerja
+                $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi + $tjMasaKerja;
                 $pph     = 0;    // beda dari final
                 $cashbon = 0;
 
@@ -624,9 +623,8 @@ class GajiKaryawanController extends Controller
             // Cashbon dipertahankan dari draft (tidak di-reset 0)
             $cashbon = (float) $record->cashbon;
 
-            // gaji_kotor = gaji + tunjangan + upah_lembur + premi_hadir + revisi
-            // (KEPUTUSAN #2 + koreksi 2026-08-07: upah_lembur TETAP masuk; tj_mk TIDAK)
-            $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi;
+            // gaji_kotor = gaji + tunjangan + upah_lembur + premi_hadir + revisi + tj_masa_kerja
+            $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi + $tjMasaKerja;
             $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
 
             $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
@@ -959,13 +957,14 @@ class GajiKaryawanController extends Controller
 
         $record->upah_lembur = $upahLembur;
 
-        // ── Recalculate gaji_kotor (upah_lembur tetap masuk; tj_mk tidak) ──
+        // ── Recalculate gaji_kotor (tj_masa_kerja masuk) ──
         $record->gaji_kotor = round(
             (float) $record->gaji
             + (float) $record->tunjangan
             + (float) $record->upah_lembur
             + (float) $record->premi_hadir
-            + (float) $record->revisi,
+            + (float) $record->revisi
+            + (float) $record->tj_masa_kerja,
             2
         );
 

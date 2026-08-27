@@ -126,7 +126,7 @@ for each karyawan (isGroupGaji() + activeInPeriod):
 //   upah_lembur = ceil(((gapok+tjmk+tunj)/173) * jam / 100) * 100
 //   premi_hadir = (premi / fixed_working_day) * hari_kerja
 //   pph         = PphCalculationService (dihitung beneran)
-//   gaji_kotor  = gaji + tunjangan + premi_hadir + revisi   ← KEPUTUSAN #2 (tanpa upah_lembur & tj_mk)
+//   gaji_kotor  = gaji + tunjangan + upah_lembur + premi_hadir + revisi + tj_masa_kerja
 //   pblt / gaji_bersih → pembulatan 100, rumus existing
 // Lalu status: generated
 
@@ -212,7 +212,7 @@ $gaji        = round(($gajiPokok / $fixedDays) * $hariKerja, 2);   // #1: fixed_
 $premiHadir  = round(($premi / $fixedDays) * $hariKerja, 2);
 $upahLembur  = ceil((($gajiPokok + $tjMasaKerja + $tunjangan) / 173) * ($lmCount + $lemburCount) / 60 / 100) * 100; // #3: round-up 100
 $revisi      = 0;
-$gajiKotor   = $gaji + $tunjangan + $premiHadir + $revisi;   // #2: TANPA upah_lembur & tj_mk
+$gajiKotor   = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi + $tjMasaKerja;
 $pph         = 0;        // ← beda dari final
 $cashbon     = 0;
 // pblt & gaji_bersih → pembulatan 100, rumus existing
@@ -325,7 +325,7 @@ Pilih periode
 | #   | Item                           | Keputusan                                                                        |
 | --- | ------------------------------ | -------------------------------------------------------------------------------- |
 | 1   | Pembagi `gaji` & `premi_hadir` | **`fixed_working_day`** (25)                                                     |
-| 2   | Komposisi `gaji_kotor`         | **`gaji + lembur (upah_lembur) + tunjangan + premi_hadir + revisi`**             |
+| 2   | Komposisi `gaji_kotor`         | **`gaji + tunjangan + upah_lembur + premi_hadir + revisi + tj_masa_kerja`**      |
 | 3   | `upah_lembur`                  | **Round-up kelipatan 100** (`ceil(x/100)*100`)                                   |
 | 4   | GRP-GD                         | **Ikut di-0-kan** (lm, lm_count, lembur_count) ⚠️ beda dgn kode sekarang         |
 | 5   | Filter karyawan                | **`isGroupGaji()`** (whitelist 5 group), sama utk kedua mode                     |

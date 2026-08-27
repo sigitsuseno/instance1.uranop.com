@@ -450,7 +450,7 @@ class SupervisorBreakdownController extends Controller
                     $cashbon = 0;
 
                     // ── Gaji Kotor ──
-                    $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi;
+                    $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi + $tjMasaKerja;
 
                     // ── Potongan ──
                     $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
