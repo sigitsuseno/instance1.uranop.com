@@ -130,6 +130,32 @@ class CompensationApiController extends Controller
     }
 
     /**
+     * POST /api/v1/employees/compensation/delete-group
+     *
+     * Hapus satu group kompensasi: null-kan comp_group + compensation_paid_at
+     * untuk SEMUA kontrak anggota group tersebut (reset ke status belum dibayar).
+     */
+    public function deleteGroup(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'group_name' => ['required', 'string', 'max:255'],
+        ]);
+
+        $updated = EmployeeContract::where('comp_group', $validated['group_name'])
+            ->update([
+                'comp_group'           => null,
+                'compensation_paid_at' => null,
+            ]);
+
+        return response()->json([
+            'message' => $updated > 0
+                ? "Group '{$validated['group_name']}' berhasil dihapus ({$updated} kontrak dikembalikan ke belum dibayar)."
+                : "Tidak ada kontrak di group '{$validated['group_name']}'.",
+            'data'    => ['updated' => $updated],
+        ]);
+    }
+
+    /**
      * GET /api/v1/employees/compensation/export-groups
      *
      * Daftar group kompensasi (comp_group + compensation_paid_at + jumlah kontrak)

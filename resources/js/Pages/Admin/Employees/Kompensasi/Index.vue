@@ -66,6 +66,7 @@ const selectedMonthYear = ref(`${selectedYear.value}-${String(selectedMonth.valu
 const showGroupModal = ref(false)
 const groupLoading = ref(false)
 const groupForm = ref({ name: '', payment_date: '' })
+const deletingGroup = ref(null)
 
 // Bulk State
 const selectedIds = ref(new Set())
@@ -99,6 +100,17 @@ const someSelected = computed(() => {
 })
 
 const selectedCount = computed(() => selectedIds.value.size)
+
+// Group kompensasi unik yang ada di kontrak periode terpilih (comp_group + paid_at)
+const compGroups = computed(() => {
+    const map = new Map()
+    contracts.value.forEach(c => {
+        if (c.comp_group) {
+            map.set(c.comp_group, c.compensation_paid_at || null)
+        }
+    })
+    return Array.from(map.entries()).map(([name, paid_at]) => ({ name, paid_at }))
+})
 
 // ========== API CALLS ==========
 async function fetchData() {
@@ -159,9 +171,23 @@ function openGroupModal() {
     showGroupModal.value = true
 }
 
-function closeGroupModal() {
+async function closeGroupModal() {
     showGroupModal.value = false
     groupForm.value = { name: '', payment_date: '' }
+}
+
+async function confirmDeleteGroup(group) {
+    if (!window.confirm(`Hapus group "${group.name}"? Semua kontrak di dalamnya akan dikembalikan ke status belum dibayar.`)) return
+    deletingGroup.value = group.name
+    try {
+        const res = await post('/api/v1/employees/compensation/delete-group', { group_name: group.name })
+        notification.addNotification(res.message || 'Group berhasil dihapus.', 'success')
+        fetchData()
+    } catch (e) {
+        notification.addNotification(e.message || 'Gagal menghapus group.', 'error')
+    } finally {
+        deletingGroup.value = null
+    }
 }
 
 async function saveGroup() {
@@ -483,25 +509,36 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <div class="w-48 relative">
-                    <select v-model="selectedPeriode" @change="applyFilter"
-                        class="w-full pl-3 pr-8 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm appearance-none cursor-pointer">
-                        <option value="auto">Otomatis (Hari ini)</option>
-                        <option value="awal">Awal (25-7)</option>
-                        <option value="akhir">Akhir (8-24)</option>
-                    </select>
-                    <div
-                        class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-(--text-muted)">
-                        <i class="bx bx-chevron-down text-lg"></i>
-                    </div>
-                </div>
-
                 <label class="flex items-center gap-2 h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) cursor-pointer select-none text-sm text-(--text-main)"
                     title="Jika dicentang, hanya menampilkan kontrak terakhir (is_latest) dari tiap karyawan">
                     <input type="checkbox" v-model="onlyLatest" @change="applyFilter"
                         class="w-4 h-4 rounded border-(--border-soft) text-(--primary) focus:ring-(--primary-glow) cursor-pointer">
                     Hanya Kontrak Terakhir
                 </label>
+            </div>
+        </BaseCard>
+
+        <!-- Group Kompensasi (muncul hanya jika ada group di periode terpilih) -->
+        <BaseCard v-if="compGroups.length > 0" padding="p-3" class="border-(--border-soft) shadow-sm bg-(--bg-card)">
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold bg-(--primary)/10 text-(--primary)">
+                    <i class="bx bx-group"></i> Group Kompensasi
+                </span>
+                <div v-for="g in compGroups" :key="g.name"
+                    class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-(--primary)/20 bg-(--bg-elevated)">
+                    <div>
+                        <p class="text-sm font-semibold text-(--text-main) leading-tight">{{ g.name }}</p>
+                        <p v-if="g.paid_at" class="text-xs text-emerald-600 leading-tight">
+                            <i class="bx bx-check mr-0.5"></i>{{ formatDate(g.paid_at) }}
+                        </p>
+                    </div>
+                    <button @click="confirmDeleteGroup(g)"
+                        :disabled="deletingGroup === g.name"
+                        title="Hapus group (kembalikan ke belum dibayar)"
+                        class="ml-1 w-7 h-7 flex items-center justify-center rounded-md text-red-500 hover:bg-red-500/10 hover:text-red-600 transition-colors disabled:opacity-50">
+                        <i :class="deletingGroup === g.name ? 'bx bx-loader-alt bx-spin' : 'bx bx-trash'"></i>
+                    </button>
+                </div>
             </div>
         </BaseCard>
 
