@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Payroll\Models\PayPeriod;
+use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Payroll\Models\PayrollConfig;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Schedule\Models\Holiday;
@@ -247,6 +248,14 @@ class SupervisorBreakdownController extends Controller
             ->map(fn ($d) => $d->toDateString())
             ->toArray();
 
+        // ── Map HK dari pay_records periode terpilih (fallback kalkulasi mirror kalau kosong) ──
+        $payRecordHk = PayRecord::where('pay_period_id', $period->id)
+            ->whereIn('employee_id', $groupEmployeeIds)
+            ->get(['employee_id', 'segment', 'hari_kerja'])
+            ->mapWithKeys(fn ($pr) => [
+                (string) $pr->employee_id . '|' . ($pr->segment ?? '') => (int) $pr->hari_kerja,
+            ]);
+
         $processed = 0;
         $errors = [];
 
@@ -378,6 +387,12 @@ class SupervisorBreakdownController extends Controller
 
                     $deductDay = $segAutologs->where('status', 'absent')->count() + $missing + $leaveIzin;
                     $hariKerja = max(0, $hkSegment - $deductDay);
+
+                    // ── KHUSUS HK: ambil dari pay_records periode terpilih (kalau ada) ──
+                    $prKey = (string) $employee->id . '|' . ($segCode ?? '');
+                    if (isset($payRecordHk[$prKey])) {
+                        $hariKerja = max(0, $payRecordHk[$prKey]);
+                    }
 
                     // ── LM / lembur (non-split dari snapshot, split dari autolog) ──
                     if ($segCode === null) {
