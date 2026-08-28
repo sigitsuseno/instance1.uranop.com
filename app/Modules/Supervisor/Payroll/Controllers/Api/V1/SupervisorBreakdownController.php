@@ -210,16 +210,15 @@ class SupervisorBreakdownController extends Controller
             ], 400);
         }
 
-        // ── Ambil snapshot attendance ──
-        $snapshots = SupervisorAttendanceSnapshot::where('pay_period_id', $period->id)
-            ->whereIn('employee_id', $groupEmployeeIds)
-            ->with('employee.groups', 'employee.department', 'employee.position', 'employee.bpjs')
+        // ── Ambil data karyawan (sumber autolog langsung — split & non-split sama) ──
+        $employees = Employee::whereIn('id', $groupEmployeeIds)
+            ->with(['groups', 'department', 'position', 'bpjs'])
             ->get();
 
-        if ($snapshots->isEmpty()) {
+        if ($employees->isEmpty()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Belum ada data snapshot untuk periode ini. Generate snapshot terlebih dahulu.',
+                'message' => 'Tidak ada data karyawan untuk periode ini.',
             ], 400);
         }
 
@@ -261,8 +260,7 @@ class SupervisorBreakdownController extends Controller
 
         DB::beginTransaction();
         try {
-            foreach ($snapshots as $snapshot) {
-                $employee = $snapshot->employee;
+            foreach ($employees as $employee) {
                 if (!$employee) continue;
 
                 // Filter: hanya karyawan yang isGroupGaji()
@@ -394,19 +392,12 @@ class SupervisorBreakdownController extends Controller
                         $hariKerja = max(0, $payRecordHk[$prKey]);
                     }
 
-                    // ── LM / lembur (non-split dari snapshot, split dari autolog) ──
-                    if ($segCode === null) {
-                        $lm          = (float) $snapshot->lm;
-                        $lmCount     = (float) $snapshot->lm_count;
-                        $lemburCount = (float) $snapshot->lembur_count;
-                    } else {
-                        $segAutologs = AttendanceAutolog::where('employee_id', $employee->id)
-                            ->whereBetween('date', [$segStart, $segEnd])
-                            ->get();
-                        $lm          = $segAutologs->sum('lm') / 60;
-                        $lmCount     = (float) $segAutologs->sum('lm_calc');
-                        $lemburCount = (float) $segAutologs->sum('lembur_calc');
-                    }
+                    // ── LM / lembur: unified — split & non-split sama dari attendance_autologs ──
+                    // LM (jam) = SUM(lm)/60, LBR JAM = SUM(lembur_calc), upah = lm_calc + lembur_calc
+                    // $segAutologs sudah di-fetch di atas untuk hitung hari_kerja, re-use
+                    $lm          = $segAutologs->sum('lm') / 60;
+                    $lmCount     = (float) $segAutologs->sum('lm_calc');
+                    $lemburCount = (float) $segAutologs->sum('lembur_calc');
 
                     // ── Data masukan (salary lookup) ──
                     $segmentMonth = $segCode !== null
