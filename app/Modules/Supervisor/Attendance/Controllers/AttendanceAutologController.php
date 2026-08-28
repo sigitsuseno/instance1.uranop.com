@@ -356,6 +356,15 @@ class AttendanceAutologController extends Controller
                 ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
                 : ($rosterFallback[$dateStr]['shift_end'] ?? null);
 
+            // Tentukan LM day per work_pattern (konsep baru)
+            $wpType = $log?->employeeShiftRoster?->workPattern?->employee_type;
+            $isLmDay = $wpType === 'SHIFT' ? (bool) ($log?->is_holiday ?? false) : ((bool) ($log?->is_holiday ?? false) || (bool) ($log?->is_sun ?? false));
+            // Fallback roster type jika log tidak ada roster (ambil dari fallback yang sudah di-load)
+            if (!$wpType && isset($rosterFallback[$dateStr])) {
+                // fallback tidak punya workPattern, tetap pakai is_holiday/is_sun saja
+                $isLmDay = (bool) ($log?->is_holiday ?? false) || (bool) ($log?->is_sun ?? false);
+            }
+
             $dailyData[] = [
                 'date' => $dateStr,
                 'day' => $currentDate->translatedFormat('D'),
@@ -379,7 +388,10 @@ class AttendanceAutologController extends Controller
                 'shift_end' => $shiftEnd,
                 'is_sat' => $log?->is_sat ?? false,
                 'is_holiday' => $log?->is_holiday ?? false,
+                'is_sun' => $log?->is_sun ?? false,
                 'is_fixed' => $isFixed,
+                'work_pattern_type' => $wpType,
+                'is_lm_day' => $isLmDay,
             ];
 
             $currentDate->addDay();
@@ -397,8 +409,12 @@ class AttendanceAutologController extends Controller
             'dailyData' => $dailyData,
             'summary' => [
                 'hadir' => $logs->where('status', 'present')->count(),
-                'lembur' => $logs->sum('lembur'),
+                'lembur' => $logs->sum('lembur') + $logs->sum('lm'), // total mentah (lembur Mon-Sab + lm holiday)
+                'lembur_only' => $logs->sum('lembur'),
+                'lm' => $logs->sum('lm'),
                 'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
+                'lembur_calc_only' => round($logs->sum('lembur_calc'), 1),
+                'lm_calc' => round($logs->sum('lm_calc'), 1),
                 'cuti' => $logs->where('status', 'leave')->count(),
                 'izin' => $logs->where('izin_duration', 1)->count(),
                 'sakit' => $logs->where('sakit_duration', 1)->count(),
@@ -523,6 +539,9 @@ class AttendanceAutologController extends Controller
                 ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
                 : ($rosterFallback[$dateStr]['shift_end'] ?? null);
 
+            $wpTypePrint = $log?->employeeShiftRoster?->workPattern?->employee_type;
+            $isLmDayPrint = $wpTypePrint === 'SHIFT' ? (bool) ($log?->is_holiday ?? false) : ((bool) ($log?->is_holiday ?? false) || (bool) ($log?->is_sun ?? false));
+
             $dailyData[] = [
                 'date' => $dateStr,
                 'day' => $currentDate->translatedFormat('D'),
@@ -542,7 +561,10 @@ class AttendanceAutologController extends Controller
                 'shift_end' => $shiftEnd,
                 'is_sat' => $log?->is_sat ?? false,
                 'is_holiday' => $log?->is_holiday ?? false,
+                'is_sun' => $log?->is_sun ?? false,
                 'is_fixed' => $isFixed,
+                'work_pattern_type' => $wpTypePrint,
+                'is_lm_day' => $isLmDayPrint,
             ];
 
             $currentDate->addDay();
@@ -550,8 +572,11 @@ class AttendanceAutologController extends Controller
 
         $summary = [
             'hadir' => $logs->where('status', 'present')->count(),
-            'lembur' => $logs->sum('lembur') / 60,
+            'lembur' => ($logs->sum('lembur') + $logs->sum('lm')) / 60,
             'lembur_calc' => round($logs->sum('lembur_calc') + $logs->sum('lm_calc'), 1),
+            'lembur_only' => $logs->sum('lembur') / 60,
+            'lm' => $logs->sum('lm') / 60,
+            'lm_calc' => round($logs->sum('lm_calc'), 1),
             'cuti' => $logs->where('status', 'leave')->count(),
             'izin' => $logs->where('status', 'permit')->where('deduct_attendance', 1)->count(),
             'sakit' => $logs->where('status', 'permit')->where('deduct_attendance', 0)->count(),
@@ -651,31 +676,68 @@ class AttendanceAutologController extends Controller
                 }
 
                 // --- LEMBUR ---
-                // Hitung lembur_calc & lm pake AttendanceCalculatorService
-                // (multiplier dari OvertimeRule per work_pattern_id, fallback ke hardcoded)
-                if ($autolog->lembur > 0) {
-                    $roster = $autolog->employeeShiftRoster;
-                    $workPatternId = $roster?->work_pattern_id;
-                    $workPatternType = $roster?->workPattern?->employee_type;
+                // Konsep baru:
+                // - lembur = Senin-Sabtu (untuk SHIFT termasuk Minggu non-holiday)
+                // - lm     = holiday (SHIFT) / holiday+Minggu (non-SHIFT)
+                // - lm_calc = multiplier(lm), lembur_calc = multiplier(lembur) di tabel autolog itu sendiri
+                $roster = $autolog->employeeShiftRoster;
+                $workPatternId = $roster?->work_pattern_id;
+                $workPatternType = $roster?->workPattern?->employee_type;
+                $isHoliday = (bool) $autolog->is_holiday;
+                $isSunday = (bool) $autolog->is_sun;
+                $isSaturday = (bool) $autolog->is_sat;
 
-                    $calc = $calculator->calculateManual(
-                        manualOvertimeMinutes: $autolog->lembur,
-                        workPatternId: $workPatternId,
-                        isHoliday: (bool) $autolog->is_holiday,
-                        isSunday: (bool) $autolog->is_sun,
-                        isSaturday: (bool) $autolog->is_sat,
-                        workPatternType: $workPatternType,
-                    );
+                // Tentukan apakah hari ini termasuk LM per work_pattern
+                $isLmDay = $workPatternType === 'SHIFT' ? $isHoliday : ($isHoliday || $isSunday);
 
-                    // overtime_count = menit terkonversi (pake multiplier)
-                    // lembur_calc disimpan dalam format jam (float)
-                    $updateData['lembur_calc'] = round($calc['overtime_count'] / 60, 2);
-                    $updateData['lm']          = $calc['lm'];
-                    $updateData['lm_calc']     = round($calc['lm_count'] / 60, 2);
+                if ($isLmDay) {
+                    // Hari LM: hitung dari kolom lm (fallback ke lembur untuk data lama yang masih gabung)
+                    $rawLm = $autolog->lm > 0 ? (int) $autolog->lm : (int) $autolog->lembur;
+                    if ($rawLm > 0) {
+                        $calc = $calculator->calculateManual(
+                            manualOvertimeMinutes: $rawLm,
+                            workPatternId: $workPatternId,
+                            isHoliday: $isHoliday,
+                            isSunday: $isSunday,
+                            isSaturday: $isSaturday,
+                            workPatternType: $workPatternType,
+                        );
+                        $updateData['lm']          = $rawLm;
+                        $updateData['lm_calc']     = round($calc['lm_count'] / 60, 2);
+                        $updateData['lembur_calc'] = 0;
+                        // Migrasi data lama: jika lm kosong tapi lembur terisi di hari LM, pindahkan
+                        if ($autolog->lm == 0 && $autolog->lembur > 0) {
+                            $updateData['lembur'] = 0;
+                        }
+                    } else {
+                        $updateData['lm']          = 0;
+                        $updateData['lm_calc']     = null;
+                        $updateData['lembur_calc'] = null;
+                    }
                 } else {
-                    $updateData['lembur_calc'] = null;
-                    $updateData['lm']          = 0;
-                    $updateData['lm_calc']     = null;
+                    // Hari kerja Senin-Sabtu (SHIFT: termasuk Minggu non-holiday)
+                    $rawOvertime = $autolog->lembur > 0 ? (int) $autolog->lembur : (int) $autolog->lm;
+                    if ($rawOvertime > 0) {
+                        $calc = $calculator->calculateManual(
+                            manualOvertimeMinutes: $rawOvertime,
+                            workPatternId: $workPatternId,
+                            isHoliday: $isHoliday,
+                            isSunday: $isSunday,
+                            isSaturday: $isSaturday,
+                            workPatternType: $workPatternType,
+                        );
+                        $updateData['lembur']      = $rawOvertime;
+                        $updateData['lembur_calc'] = round($calc['overtime_count'] / 60, 2);
+                        $updateData['lm_calc']     = 0;
+                        // Migrasi data lama terbalik
+                        if ($autolog->lembur == 0 && $autolog->lm > 0) {
+                            $updateData['lm'] = 0;
+                        }
+                    } else {
+                        $updateData['lembur_calc'] = null;
+                        $updateData['lm_calc']     = null;
+                        $updateData['lm']          = 0;
+                    }
                 }
 
                 $autolog->update($updateData);
@@ -1439,7 +1501,9 @@ class AttendanceAutologController extends Controller
                 ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
                 : null;
 
-            $lemburJam = $log->lembur > 0 ? round($log->lembur / 60, 1) : 0;
+            // Konsep baru: lembur Mon-Sab (SHIFT+Minggu non-holiday), lm holiday
+            $totalRawMin = (int) ($log->lembur ?? 0) + (int) ($log->lm ?? 0);
+            $lemburJam = $totalRawMin > 0 ? round($totalRawMin / 60, 1) : 0;
 
             $rows[] = [
                 'no'              => $no++,
@@ -1718,12 +1782,13 @@ class AttendanceAutologController extends Controller
             $dateStr = $currentDate->toDateString();
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
 
-            $lemburMin = $log?->lembur ?? 0;
+            // Konsep baru: total mentah = lembur+lm, total hitung = lembur_calc+lm_calc
+            $lemburMin = (int) ($log?->lembur ?? 0) + (int) ($log?->lm ?? 0);
             $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
             $totalOvertimeRaw += $lemburMin;
 
-            // Nilai count dari attendance_autologs.lembur_calc (sudah dalam satuan jam).
-            $countHours = (float) ($log?->lembur_calc ?? 0);
+            // Nilai count dari attendance_autologs.lembur_calc+lm_calc (jam)
+            $countHours = (float) ($log?->lembur_calc ?? 0) + (float) ($log?->lm_calc ?? 0);
             $countDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
             $totalCountHours += $countHours;
 

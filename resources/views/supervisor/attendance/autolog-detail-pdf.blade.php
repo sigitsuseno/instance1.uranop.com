@@ -132,20 +132,28 @@
                 while ($currentDate <= $lastDate) {
                     $dateStr = $currentDate->toDateString();
                     $day = $logsByDate[$dateStr] ?? null;
+                    // Konsep baru: lembur Mon-Sab, lm holiday
+                    $isLmDay = $day['is_lm_day'] ?? (($day['work_pattern_type'] ?? null) === 'SHIFT' ? !empty($day['is_holiday']) : (!empty($day['is_holiday']) || !empty($day['is_sun'])));
+                    $rawMin = $isLmDay ? (($day['lm'] ?? 0) ?: ($day['lembur'] ?? 0)) : (($day['lembur'] ?? 0) ?: ($day['lm'] ?? 0));
                     $allDays[] = [
                         'date' => $dateStr,
                         'day' => $currentDate->translatedFormat('D'),
                         'date_display' => $currentDate->format('d/m/Y'),
                         'check_in' => $day['check_in'] ?? null,
                         'check_out' => $day['check_out'] ?? null,
-                        'lembur_min' => $day['lembur'] ?? 0,
-                        'lembur_calc' => $day['lembur_total_calc'] ?? 0,
+                        'lembur_min' => $rawMin,
+                        'lembur_calc' => $day['lembur_total_calc'] ?? (($day['lembur_calc'] ?? 0)+($day['lm_calc'] ?? 0)),
                         'status' => $day['status'] ?? 'pending',
                         'shift_start' => $day['shift_start'] ?? null,
                         'shift_end' => $day['shift_end'] ?? null,
                         'is_fixed' => $day['is_fixed'] ?? false,
                         'is_sat' => $day['is_sat'] ?? false,
                         'is_holiday' => $day['is_holiday'] ?? false,
+                        'is_sun' => $day['is_sun'] ?? false,
+                        'work_pattern_type' => $day['work_pattern_type'] ?? null,
+                        'is_lm_day' => $isLmDay,
+                        'lm' => $day['lm'] ?? 0,
+                        'lembur_raw' => $day['lembur'] ?? 0,
                     ];
                     $currentDate->addDay();
                 }
@@ -158,15 +166,39 @@
                     $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
                     $totalCalcDisplay = $day['lembur_calc'] > 0 ? number_format($day['lembur_calc'], 1, ',', '.') . ' j' : '-';
 
-                    // Multiplier detail
+                    // Multiplier detail per konsep baru
                     $pengaliLines = [];
                     if ($lemburMin > 0) {
-                        if ($day['is_fixed'] && $day['is_holiday']) {
-                            $sisa = max(0, $lemburH - 1);
-                            if ($lemburH > 1) {
-                                $pengaliLines[] = '(' . number_format($lemburH, 2, ',', '.') . ' - 1) = ' . number_format($sisa, 2, ',', '.') . ' jam';
+                        $isLmDay = $day['is_lm_day'] ?? false;
+                        $wpType = $day['work_pattern_type'] ?? null;
+                        if ($isLmDay) {
+                            if ($wpType === 'SHIFT') {
+                                $sisa = max(0, $lemburH - 1);
+                                if ($lemburH > 1) {
+                                    $pengaliLines[] = '(' . number_format($lemburH, 2, ',', '.') . ' - 1) = ' . number_format($sisa, 2, ',', '.') . ' jam';
+                                }
+                                if (!empty($day['is_sat'])) {
+                                    // Progressive Sabtu
+                                    $remaining = $sisa;
+                                    for ($i=1; $i<=ceil($remaining); $i++) {
+                                        $seg = min(1, max(0, $remaining-($i-1)));
+                                        $mult = $i<=5 ? 2 : ($i===6 ? 3 : 4);
+                                        $pengaliLines[] = 'Jam ke-'.$i.': '.number_format($seg,2,',','.').' x '.$mult.' = '.number_format($seg*$mult,2,',','.');
+                                    }
+                                } else {
+                                    $pengaliLines[] = number_format($sisa, 2, ',', '.') . ' x 2 = ' . number_format($sisa * 2, 2, ',', '.');
+                                }
+                            } else {
+                                // non-SHIFT LM: potong 60 menit
+                                $effectiveM = max(0, $lemburMin - 60);
+                                $effectiveH = $effectiveM / 60;
+                                if ($effectiveH <= 0) {
+                                    $pengaliLines[] = number_format($lemburH,2,',','.').' -1j istirahat = 0 jam';
+                                } else {
+                                    if ($lemburMin > 60) $pengaliLines[] = '('.number_format($lemburH,2,',','.').' -1j) = '.number_format($effectiveH,2,',','.').' jam';
+                                    $pengaliLines[] = number_format($effectiveH,2,',','.').' x 2 = '.number_format($effectiveH*2,2,',','.');
+                                }
                             }
-                            $pengaliLines[] = number_format($sisa, 2, ',', '.') . ' x 2 = ' . number_format($sisa * 2, 2, ',', '.');
                         } else {
                             $first = min($lemburH, 1);
                             $pengaliLines[] = number_format($first, 2, ',', '.') . ' x 1.5 = ' . number_format($first * 1.5, 2, ',', '.');

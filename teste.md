@@ -475,3 +475,14 @@ jadi nanti hari_kerja adalah fixed_work_day dikurangi cuti tidak dibayar dan abs
 
 666.921.500
 25.083.527
+
+gini jo,
+JALUR 1 untuk work_pattern = SHIFT :
+
+- attendance_autolog->check_in = att_prepare->check_in
+- attendance_autolog->check_out = att_prepare->check_out
+- attendance_autolog->actual_in = roster->shift->work_hour_start
+- attendance_autolog->actual_out = roster->shift->work_hour_end
+- attendance_autolog->lm = att_prepare->lm
+- attendance_autolog->lembur = att_prepare->overtime
+  **KAMU PAHAM TIDAK JO** ?

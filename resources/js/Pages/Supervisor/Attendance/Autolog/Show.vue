@@ -362,6 +362,42 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
 
     return details;
 }
+
+// Wrapper baru per konsep: lembur=Mon-Sab, lm=holiday(SHIFT)/holiday+Minggu(non-SHIFT)
+function getMultiplierForDay(day) {
+    if (!day) return [];
+    const isLmDay = day.is_lm_day ?? (day.work_pattern_type === 'SHIFT' ? !!day.is_holiday : (!!day.is_holiday || !!day.is_sun));
+    const raw = isLmDay ? (day.lm || day.lembur) : (day.lembur || day.lm);
+    if (!raw) return [];
+    const hours = raw / 60;
+    // LM
+    if (isLmDay) {
+        if (day.work_pattern_type === 'SHIFT') {
+            return getMultiplierDetails(raw, true, !!day.is_sat, true);
+        } else {
+            // non-SHIFT LM: potong 60 menit istirahat, flat x2
+            const effectiveMinutes = Math.max(0, raw - 60);
+            const effectiveHours = effectiveMinutes / 60;
+            if (effectiveHours <= 0) return [`${formatDecimal(hours)} -1j istirahat = 0 jam`];
+            const details = [];
+            if (raw > 60) details.push(`(${formatDecimal(hours)} -1j) = ${formatDecimal(effectiveHours)} jam`);
+            details.push(`${formatDecimal(effectiveHours)} x 2 = ${formatDecimal(effectiveHours*2)}`);
+            return details;
+        }
+    }
+    // Lembur hari kerja
+    return getMultiplierDetails(raw, false, !!day.is_sat, false);
+}
+
+function getRawForDay(day) {
+    if (!day) return 0;
+    const isLmDay = day.is_lm_day ?? (day.work_pattern_type === 'SHIFT' ? !!day.is_holiday : (!!day.is_holiday || !!day.is_sun));
+    return isLmDay ? (day.lm || day.lembur) : (day.lembur || day.lm);
+}
+
+function isLmDayForRow(day) {
+    return day.is_lm_day ?? (day.work_pattern_type === 'SHIFT' ? !!day.is_holiday : (!!day.is_holiday || !!day.is_sun));
+}
 </script>
 
 <template>
@@ -478,22 +514,41 @@ function getMultiplierDetails(minutes, isFixed = false, isSat = false, isHoliday
                                 {{ day.check_out || '--:--' }}
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <span v-if="day.lembur > 0" class="text-orange-600 font-medium">
-                                    <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.lembur) }}
-                                </span>
-                                <span v-else class="text-gray-300">-</span>
+                                <template v-if="isLmDayForRow(day)">
+                                    <span v-if="day.lm > 0" class="text-purple-600 font-medium">
+                                        <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.lm) }} <span class="text-[10px] bg-purple-100 px-1 rounded">LM</span>
+                                    </span>
+                                    <span v-else-if="day.lembur > 0" class="text-orange-600 font-medium">
+                                        <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.lembur) }} <span class="text-[10px] bg-orange-100 px-1 rounded">LM*</span>
+                                    </span>
+                                    <span v-else class="text-gray-300">-</span>
+                                </template>
+                                <template v-else>
+                                    <span v-if="day.lembur > 0" class="text-orange-600 font-medium">
+                                        <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.lembur) }}
+                                    </span>
+                                    <span v-else-if="day.lm > 0" class="text-purple-600 font-medium">
+                                        <i class="bx bx-time mr-1"></i>{{ formatOvertime(day.lm) }} <span class="text-[10px] bg-purple-100 px-1 rounded">LM</span>
+                                    </span>
+                                    <span v-else class="text-gray-300">-</span>
+                                </template>
                             </td>
                             <td class="px-6 py-4 text-center">
-                                <div v-if="day.lembur > 0" class="text-[10px] leading-tight text-(--text-soft) font-mono">
-                                    <p v-for="(detail, index) in getMultiplierDetails(day.lembur, day.is_fixed, day.is_sat, day.is_holiday)" :key="index">
+                                <div v-if="getRawForDay(day) > 0" class="text-[10px] leading-tight text-(--text-soft) font-mono">
+                                    <p v-for="(detail, index) in getMultiplierForDay(day)" :key="index">
                                         {{ detail }}
                                     </p>
+                                    <p v-if="isLmDayForRow(day)" class="text-[9px] text-purple-500 mt-1">LM: {{ day.work_pattern_type==='SHIFT' ? 'holiday' : 'holiday/Minggu' }}</p>
+                                    <p v-else class="text-[9px] text-orange-500 mt-1">Lembur: Senin-Sabtu{{ day.work_pattern_type==='SHIFT' ? '+Minggu' : '' }}</p>
                                 </div>
                                 <span v-else class="text-gray-300">-</span>
                             </td>
                             <td class="px-6 py-4 text-center">
                                 <span v-if="day.lembur_total_calc > 0" class="text-indigo-600 font-bold">
                                     {{ formatConvertedHours(day.lembur_total_calc) }}
+                                </span>
+                                <span v-else-if="day.lm_calc > 0 || day.lembur_calc > 0" class="text-indigo-600 font-bold">
+                                    {{ formatConvertedHours((day.lm_calc||0)+(day.lembur_calc||0)) }}
                                 </span>
                                 <span v-else class="text-gray-300">-</span>
                             </td>

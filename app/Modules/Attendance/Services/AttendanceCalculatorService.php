@@ -46,9 +46,10 @@ class AttendanceCalculatorService
             : $this->calculateRawOvertime($prepare, $isHoliday, $isSunday, $workPatternType, $isSaturday, $config, $shift, $settingConfig, $workPatternId);
 
         // ── LM vs Regular Overtime ────────────────────────────
-        $isOffDay = $isHoliday || $isSunday;
+        // Konsep baru: lembur = Senin-Sabtu, LM = holiday (SHIFT) / holiday+Minggu (non-SHIFT)
+        $isLmDay = $workPatternType === 'SHIFT' ? $isHoliday : ($isHoliday || $isSunday);
 
-        if ($isOffDay) {
+        if ($isLmDay) {
             $lm             = $rawOvertime;
             $overtime       = 0;
             $lmCount        = $this->calculateLmMultiplier($lm, $workPatternId, $isSaturday, $config);
@@ -429,9 +430,10 @@ class AttendanceCalculatorService
         bool $isSaturday = false,
         ?string $workPatternType = null,
     ): array {
-        $isOffDay = $isHoliday || $isSunday;
+        // Konsep baru: lembur = Senin-Sabtu (SHIFT termasuk Minggu non-holiday), LM = holiday (SHIFT) / holiday+Minggu (non-SHIFT)
+        $isLmDay = $workPatternType === 'SHIFT' ? $isHoliday : ($isHoliday || $isSunday);
 
-        if ($isOffDay && $workPatternType === 'SHIFT') {
+        if ($isLmDay && $workPatternType === 'SHIFT') {
             // ── SHIFT khusus: holiday / libur ──
             $overtimeHours = $manualOvertimeMinutes / 60;
             $remainingHours = max(0, $overtimeHours - 1);
@@ -459,7 +461,7 @@ class AttendanceCalculatorService
             ];
         }
 
-        if ($isOffDay) {
+        if ($isLmDay) {
             // ── Non-SHIFT off-day: pake OvertimeRule / fallback ──
             return [
                 'late_minutes'   => 0,
