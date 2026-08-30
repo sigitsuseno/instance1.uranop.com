@@ -253,14 +253,20 @@ const allGroupsSelected = computed(() => {
 
 const printableRecords = computed(() => {
   // Tidak ada filter aktif → cetak semua (perilaku lama)
+  let base
   if (selectedGroups.value.length === 0 && !includeNoGroup.value) {
-    return printSource.value
+    base = printSource.value
+  } else {
+    base = printSource.value.filter(r => {
+      const codes = r.group_codes || []
+      if (!codes.length) return includeNoGroup.value
+      return codes.some(c => selectedGroups.value.includes(c))
+    })
   }
-  return printSource.value.filter(r => {
-    const codes = r.group_codes || []
-    if (!codes.length) return includeNoGroup.value
-    return codes.some(c => selectedGroups.value.includes(c))
-  })
+  // Urutkan cetak berdasarkan Nama (alfabet A-Z) — backend sudah orderBy employee_name, ini pengaman di frontend
+  return [...base].sort((a, b) =>
+    String(a.employee_name || '').localeCompare(String(b.employee_name || ''), 'id', { sensitivity: 'base' })
+  )
 })
 
 const totals = computed(() => {

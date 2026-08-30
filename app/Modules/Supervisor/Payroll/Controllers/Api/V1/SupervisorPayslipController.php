@@ -63,10 +63,11 @@ class SupervisorPayslipController extends Controller
         }
 
         // Mode "all": kembalikan seluruh data (tanpa pagination) untuk cetak massal
+        // Diurutkan berdasarkan Nama (employee_name asc, id sebagai tie-breaker) agar cetak berurutan alfabet
         $allMode = (bool) ($validated['all'] ?? false);
         $records = $allMode
-            ? $query->orderBy('id')->get()
-            : $query->orderBy('id')->paginate($perPage);
+            ? $query->orderBy('employee_name')->orderBy('id')->get()
+            : $query->orderBy('employee_name')->orderBy('id')->paginate($perPage);
 
         // --- Leave quota per employee ---
         $leavePeriod = \App\Modules\Leave\Models\LeavePeriod::where('status', 'active')
@@ -131,6 +132,9 @@ class SupervisorPayslipController extends Controller
         $data = $records->map(function ($record) use ($period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances) {
             return $this->formatRow($record, $period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances);
         });
+
+        // Pastikan urutan final berdasarkan Nama (alfabet, case-insensitive) — fallback aman bila employee_name kosong
+        $data = $data->sortBy(fn ($row) => mb_strtolower($row['employee_name'] ?? ''))->values();
 
         // --- Stats: semua record (bukan cuma current page) ---
         $allRecordsQuery = SupervisorBreakdown::where('pay_period_id', $period->id);
