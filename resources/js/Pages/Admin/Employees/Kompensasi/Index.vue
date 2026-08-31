@@ -1026,14 +1026,14 @@ onMounted(() => {
                             <!-- GAJI POKOK -->
                             <div class="body-row">
                                 <span class="label">GAJI POKOK</span>
-                                <span class="rp">Rp</span>
-                                <span class="amount-box green">{{ formatNumber(slip.gajiPokok) }}</span>
+                                <span class="rp">: Rp.</span>
+                                <span class="amount-box green"> {{ formatNumber(slip.gajiPokok) }}</span>
                             </div>
 
                             <!-- TJ. MASA KERJA -->
                             <div class="body-row">
                                 <span class="label">TJ. MASA KERJA</span>
-                                <span class="rp">Rp</span>
+                                <span class="rp">: Rp.</span>
                                 <span class="amount-box yellow">{{ formatNumber(slip.tjMasaKerja) }}</span>
                             </div>
 
@@ -1066,13 +1066,13 @@ onMounted(() => {
                             <div class="total-section">
                                 <div v-if="slip.pembulatan > 0" class="pblt-row">
                                     <span class="pblt-label">Pblt</span>
-                                    <span style="font-size:6px">Rp</span>
+                                    <span style="font-size:10px">Rp</span>
                                     <span class="pblt-amount">{{ formatNumber(slip.pembulatan) }}</span>
                                     <span class="plus">+</span>
                                 </div>
                                 <div class="total-row">
                                     <span class="total-label">TOTAL</span>
-                                    <span style="font-size:6px">Rp</span>
+                                    <span style="font-size:10px">Rp</span>
                                     <span class="total-amount">{{ formatNumber(slip.totalRounded) }}</span>
                                 </div>
                             </div>
@@ -1080,22 +1080,22 @@ onMounted(() => {
                             <!-- TOTAL TERIMA -->
                             <div class="total-terima">
                                 <span>T O T A L &nbsp; T E R I M A</span>
-                                <span>Rp {{ formatNumber(slip.totalRounded) }}</span>
+                                <span style="padding-right:4px;">Rp {{ formatNumber(slip.totalRounded) }}</span>
                             </div>
 
                             <!-- SIGNATURE -->
                             <div class="signature-row">
                                 <div class="sig-col">
                                     <div>HRD,</div>
-                                    <div class="sig-name">{{ (printData.hrd || '').toUpperCase() }}</div>
+                                    <div class="sig-name">ONG KRISTIN</div>
                                 </div>
                                 <div class="sig-col sig-mid">
                                     <div>Diterima oleh,</div>
                                     <div class="sig-name">{{ (slip.employee_name || '').toUpperCase() }}</div>
                                 </div>
                                 <div class="sig-col">
-                                    <div>TGL</div>
-                                    <div class="sig-name">&nbsp;</div>
+                                    <div>TGL :</div>
+                                    <div >{{ slip.compensation_paid_at ? formatDateShort(slip.compensation_paid_at) : '&nbsp;' }}</div>
                                 </div>
                             </div>
                         </div>
@@ -1186,8 +1186,8 @@ onMounted(() => {
     padding: 1px;
     display: flex;
     flex-direction: column;
-    font-family: Arial, sans-serif;
-    font-size: 6.5px;
+    font-family: "Roboto Condensed", sans-serif;
+    font-size: 12px;
     color: #000;
     background: #fff;
 }
@@ -1310,12 +1310,12 @@ onMounted(() => {
 }
 
 .body-row .label {
-    width: 68px;
+    width: 150px;
 }
 
 .body-row .rp {
-    width: 12px;
-    font-size: 6px;
+    width: 30px;
+    font-size: 10px;
 }
 
 .body-row .amount-box {
@@ -1333,7 +1333,7 @@ onMounted(() => {
 }
 
 .body-row .date-label {
-    width: 48px;
+    width: 150px;
 }
 
 .body-row .date-colon {
@@ -1352,7 +1352,7 @@ onMounted(() => {
 }
 
 .bulan-row .blabel {
-    width: 36px;
+    width: 150px;
 }
 
 .bulan-row .bcolon {
@@ -1371,7 +1371,7 @@ onMounted(() => {
 
 .bulan-row .rp {
     width: 12px;
-    font-size: 6px;
+    font-size: 10px;
 }
 
 .bulan-row .rate {
@@ -1399,12 +1399,12 @@ onMounted(() => {
 }
 
 .pblt-row .pblt-label {
-    font-size: 6px;
+    font-size: 12px;
 }
 
 .pblt-row .pblt-amount {
     border-bottom: 0.5px solid #000;
-    min-width: 50px;
+    min-width: 92px;
     text-align: right;
     padding-right: 1px;
 }
@@ -1423,8 +1423,9 @@ onMounted(() => {
 }
 
 .total-row .total-amount {
-    min-width: 50px;
+    min-width: 100px;
     text-align: right;
+    padding-right: 5px;
 }
 
 .total-terima {
@@ -1433,7 +1434,7 @@ onMounted(() => {
     align-items: center;
     border-top: 0.5px solid #000;
     border-bottom: 0.5px solid #000;
-    padding: 0.5px 3px;
+    padding: 0.5px 5px;
     font-weight: bold;
 }
 
@@ -1461,9 +1462,9 @@ onMounted(() => {
 }
 
 .sig-name {
-    margin-top: 12px;
+    margin-top: 30px;
     font-weight: bold;
-    font-size: 6px;
+    font-size: 12px;
     border-top: 0.5px solid #000;
     padding-top: 1px;
 }

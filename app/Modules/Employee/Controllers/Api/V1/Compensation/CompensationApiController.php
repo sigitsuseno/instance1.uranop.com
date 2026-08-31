@@ -327,6 +327,7 @@ class CompensationApiController extends Controller
                 'contract_number' => $contract->contract_number,
                 'start_date' => $contract->start_date?->format('Y-m-d'),
                 'end_date' => $contract->end_date?->format('Y-m-d'),
+                'compensation_paid_at' => $contract->compensation_paid_at?->format('Y-m-d'),
                 'employee_name' => $employee->name,
                 'bank_account_number' => $employee->bank_account_number ?? '-',
                 'gajiPokok' => $gajiPokok,
