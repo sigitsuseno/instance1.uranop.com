@@ -1001,7 +1001,7 @@ onMounted(() => {
                             <!-- INFO ROW -->
                             <div class="info-row">
                                 <div class="info-left">
-                                    <div style="font-weight:bold; font-size:7px;">{{ (slip.employee_name ||
+                                    <div style="font-weight:bold; font-size:12px;">{{ (slip.employee_name ||
                                         '').toUpperCase() }}
                                     </div>
                                 </div>
