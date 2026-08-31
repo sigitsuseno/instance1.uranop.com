@@ -1298,7 +1298,7 @@ onMounted(() => {
     border-bottom: 0.5px solid #000;
     padding: 0.5px 3px;
     font-weight: bold;
-    font-size: 6.5px;
+    font-size: 10px;
 }
 
 /* ---- BODY ROWS ---- */
