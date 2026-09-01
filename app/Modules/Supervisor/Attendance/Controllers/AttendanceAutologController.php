@@ -1709,12 +1709,12 @@ class AttendanceAutologController extends Controller
                 $dateStr = $currentDate->toDateString();
                 $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
 
-                $lemburMin = $log?->lembur ?? 0;
+                $lemburMin = (int) ($log?->lembur ?? 0) + (int) ($log?->lm ?? 0);
                 $lemburDisplay = $lemburMin > 0 ? round($lemburMin / 60, 1) . ' jam' : '-';
                 $totalOvertimeRaw += $lemburMin;
 
-                // Nilai count dari attendance_autologs.lembur_calc (sudah dalam satuan jam).
-                $countHours = (float) ($log?->lembur_calc ?? 0);
+                // Nilai count dari attendance_autologs.lembur_calc+lm_calc (sudah dalam satuan jam).
+                $countHours = (float) ($log?->lembur_calc ?? 0) + (float) ($log?->lm_calc ?? 0);
                 $countDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
                 $totalCountHours += $countHours;
 
