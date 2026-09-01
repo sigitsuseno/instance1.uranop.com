@@ -22,6 +22,44 @@ use Maatwebsite\Excel\Facades\Excel;
 class AttendanceAutologController extends Controller
 {
     /**
+     * Jam jadwal efektif (H:i) untuk sebuah roster.
+     * Keluarga S (S/MK/S1/S2/S3/MS/MSS) → jam tetap pola shift sore:
+     *   Sabtu 12:50/18:50, hari lain 14:50/22:50 — supaya tidak melewati 23:59
+     *   (jadwal roster 'MK' mis. 22:50→06:50 menerobos tengah malam, KETERLARANG).
+     * Selain keluarga S → jam shift roster apa adanya.
+     *
+     * @param string $dateStr
+     * @param \App\Modules\Schedule\Models\EmployeeShiftRoster|null $roster
+     * @return array{start: ?string, end: ?string} format 'H:i'
+     */
+    protected function effectiveShiftTime(string $dateStr, $roster): array
+    {
+        if (! $roster || ! $roster->shift) {
+            return ['start' => null, 'end' => null];
+        }
+
+        $externalCode = strtoupper(trim((string) $roster->external_code));
+        $isSFlex      = in_array($externalCode, ['S', 'MK', 'S1', 'S2', 'S3', 'MS', 'MSS'], true);
+
+        if ($isSFlex) {
+            if (Carbon::parse($dateStr)->isSaturday()) {
+                return ['start' => '12:50', 'end' => '18:50'];
+            }
+
+            return ['start' => '14:50', 'end' => '22:50'];
+        }
+
+        return [
+            'start' => $roster->shift->work_hour_start
+                ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
+                : null,
+            'end' => $roster->shift->work_hour_end
+                ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
+                : null,
+        ];
+    }
+
+    /**
      * Display auditor logs summary per employee
      */
     public function index(Request $request)
@@ -326,13 +364,10 @@ class AttendanceAutologController extends Controller
                 ->keyBy(fn ($r) => $r->date->toDateString());
 
             foreach ($rosters as $dateStr => $roster) {
+                $shiftTime = $this->effectiveShiftTime($dateStr, $roster);
                 $rosterFallback[$dateStr] = [
-                    'shift_start' => $roster->shift?->work_hour_start
-                        ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
-                        : null,
-                    'shift_end' => $roster->shift?->work_hour_end
-                        ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
-                        : null,
+                    'shift_start' => $shiftTime['start'],
+                    'shift_end'   => $shiftTime['end'],
                 ];
             }
         }
@@ -348,13 +383,10 @@ class AttendanceAutologController extends Controller
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
 
             // Priority: 1) dari relasi roster di autolog, 2) dari fallback roster lookup
-            $shiftStart = $log?->employeeShiftRoster?->shift?->work_hour_start
-                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
-                : ($rosterFallback[$dateStr]['shift_start'] ?? null);
-
-            $shiftEnd = $log?->employeeShiftRoster?->shift?->work_hour_end
-                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
-                : ($rosterFallback[$dateStr]['shift_end'] ?? null);
+            $roster     = $log?->employeeShiftRoster ?? null;
+            $shiftTime  = $this->effectiveShiftTime($dateStr, $roster);
+            $shiftStart = $shiftTime['start'] ?? ($rosterFallback[$dateStr]['shift_start'] ?? null);
+            $shiftEnd   = $shiftTime['end']   ?? ($rosterFallback[$dateStr]['shift_end'] ?? null);
 
             // Tentukan LM day per work_pattern (konsep baru)
             $wpType = $log?->employeeShiftRoster?->workPattern?->employee_type;
@@ -509,13 +541,10 @@ class AttendanceAutologController extends Controller
                 ->keyBy(fn ($r) => $r->date->toDateString());
 
             foreach ($rosters as $dateStr => $roster) {
+                $shiftTime = $this->effectiveShiftTime($dateStr, $roster);
                 $rosterFallback[$dateStr] = [
-                    'shift_start' => $roster->shift?->work_hour_start
-                        ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
-                        : null,
-                    'shift_end' => $roster->shift?->work_hour_end
-                        ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
-                        : null,
+                    'shift_start' => $shiftTime['start'],
+                    'shift_end'   => $shiftTime['end'],
                 ];
             }
         }
@@ -531,13 +560,10 @@ class AttendanceAutologController extends Controller
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
 
             // Priority: 1) dari relasi roster di autolog, 2) dari fallback roster lookup
-            $shiftStart = $log?->employeeShiftRoster?->shift?->work_hour_start
-                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_start)->format('H:i')
-                : ($rosterFallback[$dateStr]['shift_start'] ?? null);
-
-            $shiftEnd = $log?->employeeShiftRoster?->shift?->work_hour_end
-                ? Carbon::parse($log->employeeShiftRoster->shift->work_hour_end)->format('H:i')
-                : ($rosterFallback[$dateStr]['shift_end'] ?? null);
+            $roster     = $log?->employeeShiftRoster ?? null;
+            $shiftTime  = $this->effectiveShiftTime($dateStr, $roster);
+            $shiftStart = $shiftTime['start'] ?? ($rosterFallback[$dateStr]['shift_start'] ?? null);
+            $shiftEnd   = $shiftTime['end']   ?? ($rosterFallback[$dateStr]['shift_end'] ?? null);
 
             $wpTypePrint = $log?->employeeShiftRoster?->workPattern?->employee_type;
             $isLmDayPrint = $wpTypePrint === 'SHIFT' ? (bool) ($log?->is_holiday ?? false) : ((bool) ($log?->is_holiday ?? false) || (bool) ($log?->is_sun ?? false));
@@ -1304,6 +1330,7 @@ class AttendanceAutologController extends Controller
             foreach ($logs as $log) {
                 $dateStr = $log->date->toDateString();
                 $roster = $empRosters->first(fn($r) => $r->date->toDateString() === $dateStr);
+                $shiftTime = $this->effectiveShiftTime($dateStr, $roster);
                 $autologData[$empId][$dateStr] = [
                     'id'          => $log->id,
                     'check_in'    => $log->check_in ? $log->check_in->format('H:i') : null,
@@ -1311,12 +1338,8 @@ class AttendanceAutologController extends Controller
                     'lembur'      => (int) $log->lembur,
                     'lm'          => (int) $log->lm,
                     'status'      => $log->status,
-                    'shift_start' => $roster?->shift?->work_hour_start
-                        ? Carbon::parse($roster->shift->work_hour_start)->format('H:i')
-                        : null,
-                    'shift_end'   => $roster?->shift?->work_hour_end
-                        ? Carbon::parse($roster->shift->work_hour_end)->format('H:i')
-                        : null,
+                    'shift_start' => $shiftTime['start'],
+                    'shift_end'   => $shiftTime['end'],
                     'is_locked'   => (bool) $log->is_locked,
                     'is_holiday'  => (bool) $log->is_holiday,
                     'is_sat'      => (bool) $log->is_sat,
