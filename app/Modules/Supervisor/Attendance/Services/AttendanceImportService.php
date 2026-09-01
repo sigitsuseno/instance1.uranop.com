@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Log;
  *     a. FIXED / FLEX-SHIFT (dan pola lain → default office):
  *        a.1 Senin-Jumat external 'P' → check_in = start + rand(-10..3),
  *            check_out = end + lembur + rand(-3..10), lembur cap 3 jam
- *        a.2 Senin-Jumat external 'S' → check_in = start + lembur + rand(-10..3),
+ *        a.2 Senin-Jumat external 'S' → check_in = start - lembur + rand(-10..3),
  *            check_out = end + rand(-3..10), lembur cap 3 jam
  *        a.3 Sabtu → sama seperti hari kerja, tapi lm & lembur selalu 0
  *        a.4 Minggu & holiday → semua waktu kosong, status 'off'
@@ -299,6 +299,21 @@ class AttendanceImportService
             ? Carbon::parse($dateStr . ' ' . $shift->work_hour_end)
             : null;
 
+        $externalCode = strtoupper(trim($shift?->external_code ?? ''));
+        // Keluarga shift sore S (termasuk MK dll) → ikut pola shift sore TETAP.
+        // Tidak boleh ada jam melewati 23:59, jadi jangan pakai jam roster
+        // (utk 'MK' jam roster 22:50→06:50 menerobos tengah malam).
+        $isSFlex = in_array($externalCode, ['S', 'MK', 'S1', 'S2', 'S3', 'MS', 'MSS'], true);
+        if ($isSFlex) {
+            if ($isSaturday) {
+                $start = Carbon::parse($dateStr . ' 12:50:00');
+                $end   = Carbon::parse($dateStr . ' 18:50:00');
+            } else {
+                $start = Carbon::parse($dateStr . ' 14:50:00');
+                $end   = Carbon::parse($dateStr . ' 22:50:00');
+            }
+        }
+
         // Status dari att_prepares (normalisasi)
         $status = $this->normalizeStatus($prepare->status ?? '');
 
@@ -341,9 +356,7 @@ class AttendanceImportService
             $lembur = 0;
         }
 
-        $externalCode = strtoupper(trim($shift?->external_code ?? ''));
-
-        if ($externalCode === 'S') {
+        if ($isSFlex) {
             // a.2 / a.3 'S' — lembur dikurangkan dari check_in (mulai lebih awal)
             $checkIn  = $start ? (clone $start)->subMinutes($lembur + random_int(-10, 3)) : null;
             $checkOut = $end   ? (clone $end)->addMinutes(random_int(-3, 10)) : null;

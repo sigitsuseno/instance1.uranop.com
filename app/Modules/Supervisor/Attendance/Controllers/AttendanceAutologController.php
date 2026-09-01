@@ -958,7 +958,8 @@ class AttendanceAutologController extends Controller
      *  - roster->work_pattern_type FIXED / FLEX-SHIFT:
      *      - Minggu & holiday                          → semua waktu kosong
      *      - status leave / izin / sakit               → check kosong, actual = jadwal
-     *      - status present + external_code 'S'        → check_in = jadwal - lembur - random, check_out = jadwal
+     *      - status present + keluarga S (S/MK/S1/S2/S3/MS/MSS) → check_in = jadwal - lembur - jitter,
+     *      check_out = jadwal + jitter; jam jadwal tetap 14:50/22:50 (Sabtu 12:50/18:50)
      *      - status present + external_code 'P'        → check_in = jadwal, check_out = jadwal + lembur + random
      *      - status lainnya                            → tidak diubah
      *
@@ -1060,9 +1061,10 @@ class AttendanceAutologController extends Controller
                     continue;
                 }
 
-                // Hanya external_code P / S
+                // Hanya external_code P dan keluarga S (S/MK/S1/S2/S3/MS/MSS) yang diproses
                 $externalCode = strtoupper(trim((string) $roster->external_code));
-                if (! in_array($externalCode, ['P', 'S'], true)) {
+                $isSFlex      = in_array($externalCode, ['S', 'MK', 'S1', 'S2', 'S3', 'MS', 'MSS'], true);
+                if (! in_array($externalCode, ['P', 'S', 'MK', 'S1', 'S2', 'S3', 'MS', 'MSS'], true)) {
                     $skipped++;
                     continue;
                 }
@@ -1078,6 +1080,18 @@ class AttendanceAutologController extends Controller
 
                 $start = Carbon::parse($dateStr.' '.Carbon::parse($shift->work_hour_start)->format('H:i'));
                 $end   = Carbon::parse($dateStr.' '.Carbon::parse($shift->work_hour_end)->format('H:i'));
+
+                // Keluarga S → jam tetap pola shift sore (tidak boleh melewati 23:59):
+                // jangan pakai jam roster (utk 'MK' jam roster 22:50→06:50 menerobos tengah malam)
+                if ($isSFlex) {
+                    if ($date->isSaturday()) {
+                        $start = Carbon::parse($dateStr.' 12:50:00');
+                        $end   = Carbon::parse($dateStr.' 18:50:00');
+                    } else {
+                        $start = Carbon::parse($dateStr.' 14:50:00');
+                        $end   = Carbon::parse($dateStr.' 22:50:00');
+                    }
+                }
 
                 $isSunOrHoliday = $date->isSunday() || isset($holidaySet[$dateStr]);
 
@@ -1098,17 +1112,16 @@ class AttendanceAutologController extends Controller
                         'actual_out' => $end,
                     ];
                 } elseif ($autolog->status === 'present') {
-                    $lembur       = (int) $autolog->lembur;
-                    $randomOffset = random_int(-3, 10);
+                    $lembur = (int) $autolog->lembur;
 
-                    if ($externalCode === 'S') {
-                        // S → lembur & random dikurangkan dari check_in
-                        $checkIn  = $start->copy()->subMinutes($lembur + $randomOffset);
-                        $checkOut = $end;
+                    if ($isSFlex) {
+                        // S → lembur dikurangkan dari check_in, check_out = jadwal + jitter
+                        $checkIn  = $start->copy()->subMinutes($lembur + random_int(-10, 3));
+                        $checkOut = $end->copy()->addMinutes(random_int(-3, 10));
                     } else {
-                        // P → lembur & random ditambahkan ke check_out
+                        // P → check_in = jadwal, lembur & random ditambahkan ke check_out
                         $checkIn  = $start;
-                        $checkOut = $end->copy()->addMinutes($lembur + $randomOffset);
+                        $checkOut = $end->copy()->addMinutes($lembur + random_int(-3, 10));
                     }
 
                     $updates = [
