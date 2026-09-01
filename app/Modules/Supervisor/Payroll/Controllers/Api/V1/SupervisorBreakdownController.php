@@ -803,9 +803,9 @@ class SupervisorBreakdownController extends Controller
             $joinDate = $r->emp_join_date ?? $r->join_date;
 
             // Masa kerja (bulan) — 3 kondisi:
-            // 1) join_date SESUDAH start_date periode & kontrak NON-freelance berakhir sebelum end_date periode
+            // 1) join_date SESUDAH start_date periode & kontrak NON-freelance berakhir SESUDAH start_date periode
             //    → dihitung dari origin_join_date (tanggal masuk asal / sistem lama).
-            // 2) join_date SESUDAH start_date periode & kontrak FREELANCE berakhir sebelum end_date periode
+            // 2) join_date SESUDAH start_date periode & kontrak FREELANCE berakhir SESUDAH start_date periode
             //    → masa_kerja = 0.
             // 3) else → hitungan lama: join_date → end_date periode.
             $masaKerja = 0;
@@ -813,11 +813,11 @@ class SupervisorBreakdownController extends Controller
                 $joinDateParsed = Carbon::parse($joinDate);
                 $contract = $latestContracts->get($r->employee_id);
                 $joinedAfterPeriodStart = $periodeStart && $joinDateParsed->gt($periodeStart);
-                $contractEndedBeforePeriodEnd = $contract?->end_date && $contract->end_date->lt($periodeEnd);
+                $contractEndsAfterPeriodStart = $contract?->end_date && $periodeStart && $contract->end_date->gt($periodeStart);
 
-                if ($joinedAfterPeriodStart && $contractEndedBeforePeriodEnd) {
+                if ($joinedAfterPeriodStart && $contractEndsAfterPeriodStart) {
                     if ($contract->contract_type === 'freelance') {
-                        // Kondisi 2 — kontrak freelance yang sudah berakhir
+                        // Kondisi 2 — kontrak freelance
                         $masaKerja = 0;
                     } else {
                         // Kondisi 1 — fallback ke join_date bila origin_join_date kosong

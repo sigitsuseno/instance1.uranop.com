@@ -793,20 +793,20 @@ class PayrollReportController extends Controller
             $periodEnd = $period->end_date ? Carbon::parse($period->end_date) : null;
 
             // Masa kerja (bulan, dibulatkan ke bawah):
-            // 1) join_date SESUDAH start_date periode & kontrak NON-freelance berakhir sebelum end_date periode
+            // 1) join_date SESUDAH start_date periode & kontrak NON-freelance berakhir SESUDAH start_date periode
             //    → dihitung dari origin_join_date (tanggal masuk asal / sistem lama).
-            // 2) join_date SESUDAH start_date periode & kontrak FREELANCE berakhir sebelum end_date periode
+            // 2) join_date SESUDAH start_date periode & kontrak FREELANCE berakhir SESUDAH start_date periode
             //    → masa_kerja = 0.
             // 3) else → hitungan lama: join_date → end_date periode.
             $masaKerja = 0;
             if ($joinDate && $periodEnd) {
                 $contract = $emp?->latestContract;
                 $joinedAfterPeriodStart = $periodStart && $joinDate->gt($periodStart);
-                $contractEndedBeforePeriodEnd = $contract?->end_date && $periodEnd && $contract->end_date->lt($periodEnd);
+                $contractEndsAfterPeriodStart = $contract?->end_date && $periodStart && $contract->end_date->gt($periodStart);
 
-                if ($joinedAfterPeriodStart && $contractEndedBeforePeriodEnd) {
+                if ($joinedAfterPeriodStart && $contractEndsAfterPeriodStart) {
                     if ($contract->contract_type === 'freelance') {
-                        // Kondisi 2 — kontrak freelance yang sudah berakhir
+                        // Kondisi 2 — kontrak freelance
                         $masaKerja = 0;
                     } else {
                         // Kondisi 1 — fallback ke join_date bila origin_join_date kosong
