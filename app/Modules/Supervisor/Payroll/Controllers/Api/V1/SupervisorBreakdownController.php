@@ -919,7 +919,7 @@ class SupervisorBreakdownController extends Controller
             ->join('employees', 'supervisor_breakdowns.employee_id', '=', 'employees.id')
             ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
             ->orderBy('employees.nip')
-            ->select('supervisor_breakdowns.*', 'employees.ptkp', 'employees.nip', 'employees.join_date as emp_join_date');
+            ->select('supervisor_breakdowns.*', 'employees.ptkp', 'employees.nip', 'employees.join_date as emp_join_date', 'employees.origin_join_date as emp_origin_join_date');
 
         if ($period->is_split) {
             $segment = $segment ?: 'A';
@@ -928,14 +928,45 @@ class SupervisorBreakdownController extends Controller
 
         $records = $query->get();
 
+        // Pre-load kontrak terakhir (is_latest) semua karyawan di PDF ini — konsisten dgn export
+        $latestContracts = EmployeeContract::whereIn('employee_id', $records->pluck('employee_id')->filter())
+            ->where('is_latest', true)
+            ->get()
+            ->keyBy('employee_id');
+
         $periodeEnd = Carbon::parse($period->end_date);
+        $periodeStart = $period->start_date ? Carbon::parse($period->start_date) : null;
 
         $data = [];
         foreach ($records as $r) {
-            $masaKerja = 0;
             $joinDate = $r->emp_join_date ?? $r->join_date;
-            if ($joinDate) {
-                $masaKerja = (int) Carbon::parse($joinDate)->diffInMonths($periodeEnd);
+
+            // Masa kerja (bulan) — mirror logika export (3 kondisi):
+            // 1) join_date SESUDAH start_date periode & kontrak NON-freelance berakhir SESUDAH start_date periode
+            //    → dihitung dari origin_join_date (tanggal masuk asal / sistem lama).
+            // 2) join_date SESUDAH start_date periode & kontrak FREELANCE berakhir SESUDAH start_date periode
+            //    → masa_kerja = 0.
+            // 3) else → hitungan lama: join_date → end_date periode.
+            $masaKerja = 0;
+            if ($joinDate && $periodeEnd) {
+                $joinDateParsed = Carbon::parse($joinDate);
+                $contract = $latestContracts->get($r->employee_id);
+                $joinedAfterPeriodStart = $periodeStart && $joinDateParsed->gt($periodeStart);
+                $contractEndsAfterPeriodStart = $contract?->end_date && $periodeStart && $contract->end_date->gt($periodeStart);
+
+                if ($joinedAfterPeriodStart && $contractEndsAfterPeriodStart) {
+                    if ($contract->contract_type === 'freelance') {
+                        // Kondisi 2 — kontrak freelance
+                        $masaKerja = 0;
+                    } else {
+                        // Kondisi 1 — fallback ke join_date bila origin_join_date kosong
+                        $originDate = $r->emp_origin_join_date ? Carbon::parse($r->emp_origin_join_date) : $joinDateParsed;
+                        $masaKerja = (int) $originDate->diffInMonths($periodeEnd);
+                    }
+                } else {
+                    // Kondisi 3 — hitungan sekarang
+                    $masaKerja = (int) $joinDateParsed->diffInMonths($periodeEnd);
+                }
             }
 
             $joinDateStr = '-';
