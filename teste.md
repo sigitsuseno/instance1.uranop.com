@@ -486,3 +486,14 @@ JALUR 1 untuk work_pattern = SHIFT :
 - attendance_autolog->lm = att_prepare->lm
 - attendance_autolog->lembur = att_prepare->overtime
   **KAMU PAHAM TIDAK JO** ?
+
+di /admin/payroll/gaji-karyawan pada tombol export excel, di kolom masa kerja itu hitungannya seperti apa ?
+
+hitungan yang sekarang benar, tapi untuk kondisi kedua.
+karena untuk menentukan kolom masa kerja ini di ganti jadi 3 kondisi,
+
+1. jika join_date sesudah pay_periods->start_date yang di pilih, dan jika (employee_contracts->end_date sebelum pay_periods->end_date & employee_contracts->contract->type !== 'freelance') maka perhitungan masa kerja dihitung dari original_join_date
+2. jika join_date sesudah pay_periods->start_date yang di pilih, dan jika (employee_contracts->end_date sebelum pay_periods->end_date & employee_contracts->contract->type !== 'freelance') maka masa_kerja = 0
+3. else baru hitungan yang sekarang ini.
+
+paham tidak ?

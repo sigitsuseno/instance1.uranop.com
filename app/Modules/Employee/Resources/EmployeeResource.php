@@ -40,6 +40,7 @@ class EmployeeResource extends JsonResource
             'employment_status_label'=> $this->employment_status_label,
             'payroll_cycle'          => $this->payroll_cycle,
             'join_date'              => $this->join_date?->format('Y-m-d'),
+            'origin_join_date'       => $this->origin_join_date?->format('Y-m-d'),
             'end_date'               => $this->end_date?->format('Y-m-d'),
             'permanent_date'         => $this->permanent_date?->format('Y-m-d'),
             'resign_date'            => $this->resign_date?->format('Y-m-d'),

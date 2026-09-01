@@ -180,6 +180,10 @@ onMounted(async () => {
               <dd class="text-sm font-medium text-(--text-main)">{{ formatDate(employee.join_date) }}</dd>
             </div>
             <div class="flex justify-between">
+              <dt class="text-sm text-(--text-muted)">Tanggal Asal Masuk</dt>
+              <dd class="text-sm font-medium text-(--text-main)">{{ employee.origin_join_date ? formatDate(employee.origin_join_date) : '-' }}</dd>
+            </div>
+            <div class="flex justify-between">
               <dt class="text-sm text-(--text-muted)">Masa Kerja</dt>
               <dd class="text-sm font-medium text-(--text-main)">{{ employee.years_of_service }} Tahun {{ employee.months_of_service }} Bulan</dd>
             </div>

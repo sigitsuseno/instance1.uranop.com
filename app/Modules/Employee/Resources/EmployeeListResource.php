@@ -20,6 +20,7 @@ class EmployeeListResource extends JsonResource
             'employment_status_label'=> $this->employment_status_label,
             'payroll_cycle'          => $this->payroll_cycle,
             'join_date'              => $this->join_date?->format('Y-m-d'),
+            'origin_join_date'       => $this->origin_join_date?->format('Y-m-d'),
             'is_active'              => $this->is_active,
             'years_of_service'       => $this->years_of_service,
             'department'             => $this->whenLoaded('department', fn () => [

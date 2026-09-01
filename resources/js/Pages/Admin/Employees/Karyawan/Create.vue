@@ -30,6 +30,7 @@ const form = ref({
   position_id: '',
   employment_status: '',
   join_date: '',
+  origin_join_date: '',
   bank_name: '',
   bank_account_number: '',
   bank_account_name: '',
@@ -258,6 +259,7 @@ onMounted(() => {
           />
           <SelectInput v-model="form.employment_status" label="Status Kepegawaian" :options="employmentStatusOptions" placeholder="Pilih status" required />
           <TextInput v-model="form.join_date" label="Tanggal Masuk" type="date" required />
+          <TextInput v-model="form.origin_join_date" label="Tanggal Asal Masuk" type="date" />
           <SelectInput v-model="form.ptkp" label="Status PTKP" :options="ptkpOptions" placeholder="Pilih PTKP" />
         </div>
         <div class="mt-4">

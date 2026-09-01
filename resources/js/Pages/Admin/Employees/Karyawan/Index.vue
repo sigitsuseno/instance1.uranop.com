@@ -527,6 +527,9 @@ onMounted(() => {
                 <span class="text-[12px] text-(--text-soft) flex items-center gap-1">
                   <i class="bx bx-time-five"></i> {{ calculateMasaKerja(emp.join_date) }}
                 </span>
+                <span v-if="emp.origin_join_date" class="text-[12px] text-(--text-soft) flex items-center gap-1" :title="`Tanggal asal masuk: ${emp.origin_join_date}`">
+                  <i class="bx bx-calendar-star"></i> Asal: {{ emp.origin_join_date }}
+                </span>
               </div>
               <BaseButton variant="ghost" @click="viewEmployee(emp.id)" class="h-7 px-3 text-xs bg-(--bg-elevated)">
                 Detail

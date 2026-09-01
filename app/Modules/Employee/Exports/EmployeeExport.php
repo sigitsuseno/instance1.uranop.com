@@ -23,7 +23,7 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
      * Harus disimpan sebagai teks agar Excel tidak mengubahnya menjadi angka dan
      * menghilangkan digit terakhir (batas presisi double Excel hanya 15 digit).
      */
-    private const TEXT_COLUMNS = ['B', 'X', 'AA', 'AB', 'AC'];
+    private const TEXT_COLUMNS = ['B', 'Y', 'AB', 'AC', 'AD'];
 
     protected array $filters;
 
@@ -116,6 +116,7 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
             'Status Kepegawaian',
             'Status Aktif',
             'Tanggal Bergabung',
+            'Tanggal Awal Bergabung',
             'Tanggal Berakhir',
             'Tanggal Pengangkatan',
             'Tanggal Resign',
@@ -172,6 +173,7 @@ class EmployeeExport implements FromQuery, WithHeadings, WithMapping, ShouldAuto
             $employmentStatusMap[$employee->employment_status] ?? $employee->employment_status,
             $employee->is_active ? 'Aktif' : 'Non-Aktif',
             $employee->join_date ? \Carbon\Carbon::parse($employee->join_date)->format('Y-m-d') : '-',
+            $employee->origin_join_date ? \Carbon\Carbon::parse($employee->origin_join_date)->format('Y-m-d') : '-',
             $employee->end_date ? \Carbon\Carbon::parse($employee->end_date)->format('Y-m-d') : '-',
             $employee->permanent_date ? \Carbon\Carbon::parse($employee->permanent_date)->format('Y-m-d') : '-',
             $employee->resign_date ? \Carbon\Carbon::parse($employee->resign_date)->format('Y-m-d') : '-',

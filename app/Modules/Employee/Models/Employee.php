@@ -47,6 +47,7 @@ class Employee extends Model
         'employment_status',
         'payroll_cycle',
         'join_date',
+        'origin_join_date',
         'end_date',
         'permanent_date',
         'resign_date',
@@ -66,6 +67,7 @@ class Employee extends Model
     protected $casts = [
         'date_of_birth'  => 'date',
         'join_date'      => 'date',
+        'origin_join_date' => 'date',
         'end_date'       => 'date',
         'permanent_date' => 'date',
         'resign_date'    => 'date',
