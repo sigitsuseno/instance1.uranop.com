@@ -1262,7 +1262,6 @@ onMounted(() => {
 /* ---- INFO ROW ---- */
 .info-row {
     display: flex;
-    border-bottom: 0.5px solid #000;
 }
 
 .info-left {
