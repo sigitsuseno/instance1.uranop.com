@@ -969,50 +969,40 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <!-- Slip Pages -->
-                <div class="print-area w-full max-w-4xl mx-auto">
+                <!-- Slip Pages (F4: 210 x 330mm, pad 7mm, gap 14mm, 6 slip/halaman) -->
+                <div class="print-area">
                     <div v-for="(chunk, pageIdx) in chunkArray(printData.slips || [], 6)" :key="pageIdx"
                         class="slip-page">
                         <div v-for="(slip, slipIdx) in chunk" :key="slip.contract_id" class="slip">
-                            <!-- HEADER -->
-                            <div class="slip-header">
-                                <div class="kop-left" v-if="printData.company?.logo_url">
-                                    <img :src="printData.company.logo_url" alt="Logo" class="kop-logo" />
+                            <!-- KOP (nama & alamat dari tabel cabang) -->
+                            <div class="kop">
+                                <div class="kop-sub" v-if="printData.company?.name && printData.branch?.name && printData.company.name !== printData.branch.name">
+                                    {{ (printData.company?.name || '').toUpperCase() }}
                                 </div>
-                                <div class="kop-main" :class="{'w-full text-center items-center': !printData.company?.logo_url}">
-                                    <div class="company-name">{{ (printData.company?.name || '').toUpperCase() }}</div>
-                                    <div class="company-addr">{{ printData.company?.address || '' }}</div>
-                                    <div class="company-contact" v-if="printData.company?.phone || printData.company?.email || printData.company?.website">
-                                        <span v-if="printData.company?.phone">Telp: {{ printData.company.phone }}</span>
-                                        <span v-if="printData.company?.phone && (printData.company?.email || printData.company?.website)"> | </span>
-                                        <span v-if="printData.company?.email">Email: {{ printData.company.email }}</span>
-                                        <span v-if="printData.company?.email && printData.company?.website"> | </span>
-                                        <span v-if="printData.company?.website">Web: {{ printData.company.website }}</span>
-                                    </div>
-                                </div>
+                                <div class="kop-name">EMBROIDERY & PRINTING FACTORY</div>
+                                <div class="kop-addr">{{ printData.branch?.address || printData.company?.address || '' }}</div>
+                                <div class="kop-phone">{{ printData.branch?.phone || printData.company?.phone || '' }}</div>
                             </div>
 
                             <!-- TITLE BAR -->
                             <div class="title-bar">
-                                <div class="title-text">K O M P E N S A S I</div>
+                                <div class="title-text">KOMPENSASI</div>
                                 <div class="slip-num">{{ pageIdx * 6 + slipIdx + 1 }}</div>
                             </div>
 
                             <!-- INFO ROW -->
                             <div class="info-row">
-                                <div class="info-left">
-                                    <div style="font-weight:bold; font-size:12px;">{{ (slip.employee_name ||
-                                        '').toUpperCase() }}
-                                    </div>
-                                </div>
+                                <div class="info-left">{{ (slip.employee_name || '').toUpperCase() }}</div>
                                 <div class="info-right">
-                                    <div class="info-grid">
-                                        <span>BULAN</span>
+                                    <div class="info-line">
+                                        <span class="info-key">BULAN</span>
                                         <span class="colon">:</span>
-                                        <span>{{ (printData.bulan || '').toUpperCase() }}</span>
-                                        <span>No ACCOUNT</span>
+                                        <span class="info-val">{{ (printData.bulan || '').toUpperCase() }}</span>
+                                    </div>
+                                    <div class="info-line">
+                                        <span class="info-key">No ACCOUNT</span>
                                         <span class="colon">:</span>
-                                        <span>{{ slip.bank_account_number || '-' }}</span>
+                                        <span class="info-val">{{ slip.bank_account_number || '-' }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1023,79 +1013,91 @@ onMounted(() => {
                                 <span>Jumlah</span>
                             </div>
 
-                            <!-- GAJI POKOK -->
-                            <div class="body-row">
-                                <span class="label">GAJI POKOK</span>
-                                <span class="rp">: Rp.</span>
-                                <span class="amount-box green"> {{ formatNumber(slip.gajiPokok) }}</span>
-                            </div>
-
-                            <!-- TJ. MASA KERJA -->
-                            <div class="body-row">
-                                <span class="label">TJ. MASA KERJA</span>
-                                <span class="rp">: Rp.</span>
-                                <span class="amount-box yellow">{{ formatNumber(slip.tjMasaKerja) }}</span>
-                            </div>
-
-                            <!-- TGL AWAL -->
-                            <div class="body-row">
-                                <span class="date-label">TGL AWAL</span>
-                                <span class="date-colon">:</span>
-                                <span class="date-value">{{ formatDateShort(slip.start_date) }}</span>
-                            </div>
-
-                            <!-- TGL AKHIR -->
-                            <div class="body-row">
-                                <span class="date-label">TGL AKHIR</span>
-                                <span class="date-colon">:</span>
-                                <span class="date-value">{{ formatDateShort(slip.end_date) }}</span>
-                            </div>
-
-                            <!-- BULAN (duration × rate) -->
-                            <div class="bulan-row">
-                                <span class="blabel">BULAN</span>
-                                <span class="bcolon">:</span>
-                                <span class="dur">{{ slip.durationMonths }}</span>
-                                <span class="bx-sign">x</span>
-                                <span class="rp">Rp</span>
-                                <span class="rate">{{ formatNumber(slip.monthlyRate) }}</span>
-                                <span class="subtotal">Rp {{ formatNumber(slip.totalRaw) }}</span>
-                            </div>
-
-                            <!-- TOTAL SECTION -->
-                            <div class="total-section">
-                                <div v-if="slip.pembulatan > 0" class="pblt-row">
-                                    <span class="pblt-label">Pblt</span>
-                                    <span style="font-size:10px">Rp</span>
-                                    <span class="pblt-amount">{{ formatNumber(slip.pembulatan) }}</span>
-                                    <span class="plus">+</span>
+                            <!-- BODY -->
+                            <div class="body">
+                                <!-- GAJI POKOK -->
+                                <div class="flex items-center justify-start">
+                                    <span class="w-1/2">GAJI POKOK</span>
+                                    <span class="rp pr-2">Rp</span>
+                                    <span class="w-1/4 text-right">{{ formatNumber(slip.gajiPokok, 2) }}</span>
                                 </div>
-                                <div class="total-row">
-                                    <span class="total-label">TOTAL</span>
-                                    <span style="font-size:10px">Rp</span>
-                                    <span class="total-amount">{{ formatNumber(slip.totalRounded) }}</span>
+                                <!-- TJ. MASA KERJA -->
+                                <div class="flex items-center justify-start">
+                                    <span class="w-1/2">TJ. MASA KERJA</span>
+                                    <span class="rp pr-2">Rp</span>
+                                    <span class="w-1/4 text-right">{{ formatNumber(slip.tjMasaKerja, 0) }}</span>
+                                </div>
+                                <!-- TGL AWAL -->
+                                <div class="flex items-center justify-start">
+                                    <span class="w-1/3 pl-6">TGL.AWAL</span>
+                                    <span class="colon">:</span>
+                                    <span class="value">{{ formatDate(slip.start_date) }}</span>
+                                </div>
+                                <!-- TGL AKHIR -->
+                                <div class="flex items-center justify-start">
+                                    <span class="w-1/3 pl-6">TGL.AKHIR</span>
+                                    <span class="colon">:</span>
+                                    <span class="value">{{ formatDate(slip.end_date) }}</span>
+                                </div>
+                                <!-- BULAN (duration × rate) -->
+                                <div class="flex items-center justify-start">
+                                    <span class="w-1/3 pl-6">BULAN</span>
+                                    <div class="w-1/3">
+                                        <span class="colon">:</span>
+                                        <span class="pr-1 w-6">{{ slip.durationMonths }}</span>
+                                        <span class="pr-1">x</span>
+                                        <span class="rp">Rp</span>
+                                        <span class="rate">{{ formatNumber(slip.monthlyRate, 2) }}</span>
+                                    </div>
+                                    <div class="w-1/4 flex justify-between items-center">
+                                        <span class="pr-2">Rp.</span>
+                                        <span class="subtotal">{{ formatNumber(slip.totalRaw, 2) }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- TOTAL SECTION -->
+                                <div class="mt-8">
+                                    <div class="flex items-center justify-start">
+                                        <span class="w-1/3"></span>
+                                        <span class="w-1/3 text-end pr-4">Pblt</span>
+                                        <div class="w-1/4 flex justify-between items-center border-b">
+                                            <span class="rp">Rp</span>
+                                            <span class="pblt-amount">{{ formatNumber(slip.pembulatan, 0) }} +</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center justify-start py-1">
+                                        <span class="w-1/3"></span>
+                                        <span class="w-1/3 text-end pr-4">TOTAL</span>
+                                        <div class="w-1/4 flex justify-between items-center">
+                                            <span class="rp">Rp</span>
+                                            <span class="total-amount">{{ formatNumber(slip.totalRounded, 2) }}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- TOTAL TERIMA -->
-                            <div class="total-terima">
-                                <span>T O T A L &nbsp; T E R I M A</span>
-                                <span style="padding-right:4px;">Rp {{ formatNumber(slip.totalRounded) }}</span>
+                            <div class="flex items-center justify-start border-t border-b px-2.5 text-[10px] font-bold">
+                                <span class="w-2/3 text-center py-1">TOTAL &nbsp; TERIMA</span>
+                                <div class="w-1/4 flex justify-between items-center">
+                                    <span class="rp">Rp</span>
+                                    <span class="">{{ formatNumber(slip.totalRounded, 2) }}</span>
+                                </div>
                             </div>
 
                             <!-- SIGNATURE -->
-                            <div class="signature-row">
-                                <div class="sig-col">
-                                    <div>HRD,</div>
-                                    <div class="sig-name">ONG KRISTIN</div>
+                            <div class="flex justify-between">
+                                <div class="w-[38%] h-16 flex flex-col items-center pb-1 ">
+                                    <div class="mt-6">HRD</div>
+                                    <div class="text-[9px] font-bold mt-3">{{ (printData.hrd || '').toUpperCase() }}</div>
                                 </div>
-                                <div class="sig-col sig-mid">
-                                    <div>Diterima oleh,</div>
-                                    <div class="sig-name">{{ (slip.employee_name || '').toUpperCase() }}</div>
+                                <div class="w-[38%] h-16 flex flex-col items-center pb-1 relative">
+                                    <div class="mt-6">Diterima oleh :</div>
+                                    <div class="text-[9px] font-bold absolute bottom-1 left-0 right-0 text-center">{{ (slip.employee_name || '').toUpperCase() }}</div>
                                 </div>
-                                <div class="sig-col">
-                                    <div>TGL :</div>
-                                    <div >{{ slip.compensation_paid_at ? formatDateShort(slip.compensation_paid_at) : '&nbsp;' }}</div>
+                                <div class="w-[24%] h-16 flex flex-col items-center pb-1 ">
+                                    <div class="mt-6">TGL.</div>
+                                    <div class="text-[8px] mt-3">{{ slip.compensation_paid_at ? formatDate(slip.compensation_paid_at) : '' }}</div>
                                 </div>
                             </div>
                         </div>
@@ -1156,22 +1158,22 @@ onMounted(() => {
 
 /* ============================== */
 /* SLIP PAGE — F4 (210×330mm)     */
-/* 2 columns × 3 rows = 6 slips  */
+/* 2 cols × 3 rows = 6 slips      */
+/* padding 7mm, gap 14mm          */
 /* ============================== */
 .print-area {
-    padding: 10px;
+    padding: 8px;
 }
 
 .slip-page {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr 1fr;
-    gap: 24px;
-    width: 100%;
-    min-height: 318mm;
+    grid-template-columns: 91mm 91mm;
+    grid-template-rows: 96mm 96mm 96mm;
+    gap: 14mm;
+    width: 196mm;
+    height: 316mm;
+    margin: 0 auto;
     page-break-after: always;
-    margin-bottom: 20px;
-    padding: 16px;
 }
 
 .slip-page:last-child {
@@ -1183,61 +1185,55 @@ onMounted(() => {
 /* ============================== */
 .slip {
     border: 0.5px solid #000;
-    padding: 1px;
+    padding: 1.2mm;
+    height: 96mm;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    font-family: "Roboto Condensed", sans-serif;
-    font-size: 12px;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 7pt;
+    line-height: 1.25;
     color: #000;
     background: #fff;
+    overflow: hidden;
 }
 
 .slip-empty {
     border: 0.5px solid #ccc;
+    background: #fafafa;
 }
 
-/* ---- HEADER ---- */
-.slip-header {
+/* ---- KOP ---- */
+.kop {
     display: flex;
-    align-items: center;
-    padding: 2px 3px;
+    flex-direction: column;
+    padding: 0 0.5mm 0.5mm 3mm;
     border-bottom: 0.5px solid #000;
 }
 
-.kop-left {
-    margin-right: 6px;
-}
+.kop-name {
 
-.kop-logo {
-    max-width: 22px;
-    max-height: 22px;
-    object-fit: contain;
-}
-
-.kop-main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-.kop-main.text-center {
-    align-items: center;
-    text-align: center;
-}
-
-.company-name {
-    font-size: 7px;
+    font-size: 7pt;
     font-weight: bold;
-    color: #cc0000;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+        font-style: italic;
 }
 
-.company-addr {
-    font-size: 5px;
+.kop-sub {
+    font-size: 10pt;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
 }
 
-.company-contact {
-    font-size: 4.5px;
-    color: #444;
+.kop-addr {
+    font-size: 6pt;
+    margin-top: 0.4mm;
+}
+
+.kop-phone {
+    font-size: 6pt;
 }
 
 /* ---- TITLE BAR ---- */
@@ -1246,20 +1242,21 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     border-bottom: 0.5px solid #000;
-    padding: 1px 3px;
+    padding: 1mm 3mm 0.9mm;
 }
 
 .title-text {
-    font-size: 8px;
+    flex: 1;
+    font-size: 10pt;
     font-weight: bold;
-    letter-spacing: 2px;
+    text-align: center;
 }
 
 .slip-num {
     border: 0.5px solid #000;
-    padding: 0 4px;
+    padding: 0.4mm 3mm;
     font-weight: bold;
-    font-size: 7px;
+    font-size: 9pt;
 }
 
 /* ---- INFO ROW ---- */
@@ -1269,25 +1266,43 @@ onMounted(() => {
 }
 
 .info-left {
-    flex: 1;
-    padding: 1px 3px;
+    flex: 0 0 34mm;
     border-right: 0.5px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-weight: bold;
+    font-size: 8pt;
+    text-transform: uppercase;
+    line-height: 1.15;
+    padding: 1mm 1mm;
+    word-break: break-word;
 }
 
 .info-right {
     flex: 1;
-    padding: 1px 3px;
+    padding: 1mm 3mm;
+    display: flex;
+    flex-direction: column;
+    font-size: 7pt;
 }
 
-.info-grid {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    gap: 0 2px;
-    line-height: 1.4;
+.info-line {
+    display: flex;
 }
 
-.info-grid .colon {
+.info-key {
+    flex: 0 0 24mm;
+}
+
+.info-line .colon {
+    width: 3mm;
     text-align: center;
+}
+
+.info-val {
+    flex: 1;
 }
 
 /* ---- SECTION HEADER ---- */
@@ -1296,82 +1311,89 @@ onMounted(() => {
     justify-content: space-between;
     border-top: 0.5px solid #000;
     border-bottom: 0.5px solid #000;
-    padding: 0.5px 3px;
+    padding: 0.8mm 3mm;
     font-weight: bold;
-    font-size: 10px;
+    font-size: 7.5pt;
+    text-transform: uppercase;
 }
 
-/* ---- BODY ROWS ---- */
+/* ---- BODY ---- */
+.body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    padding: 1mm 3mm 0;
+}
+
 .body-row {
     display: flex;
     align-items: baseline;
-    padding: 0.5px 3px;
-    min-height: 11px;
+    font-size: 7pt;
+    min-height: 3.2mm;
 }
 
 .body-row .label {
-    width: 150px;
+    flex: 0 0 34mm;
+    text-transform: uppercase;
 }
 
 .body-row .rp {
-    width: 30px;
-    font-size: 10px;
+    flex: 0 0 8mm;
 }
 
-.body-row .amount-box {
-    min-width: 55px;
-    text-align: right;
-    padding: 0 2px;
+.body-row .colon {
+    width: 3mm;
+    text-align: center;
 }
 
-.body-row .amount-box.green {
-    background: #b8ffb8;
-}
-
-.body-row .amount-box.yellow {
-    background: #ffff66;
-}
-
-.body-row .date-label {
-    width: 150px;
-}
-
-.body-row .date-colon {
-    width: 6px;
-}
-
-.body-row .date-value {
+.body-row .value {
     flex: 1;
+}
+
+.body-row .amt {
+    flex: 1;
+    text-align: right;
+    padding: 0 1mm 0.2mm;
+}
+
+.body-row .amt.gaji {
+    background: #d5d9c8;
+}
+
+.body-row .amt.tj {
+    background: #fff27a;
 }
 
 .bulan-row {
     display: flex;
-    padding: 0.5px 3px;
     align-items: baseline;
-    min-height: 11px;
+    padding: 0.7mm 0;
+    font-size: 7pt;
+    min-height: 3.2mm;
 }
 
-.bulan-row .blabel {
-    width: 150px;
+.bulan-row .label {
+    flex: 0 0 34mm;
+    text-transform: uppercase;
 }
 
-.bulan-row .bcolon {
-    width: 6px;
+.bulan-row .colon {
+    width: 3mm;
+    text-align: center;
 }
 
 .bulan-row .dur {
-    width: 12px;
+    flex: 0 0 7mm;
     text-align: right;
 }
 
 .bulan-row .bx-sign {
-    width: 8px;
+    flex: 0 0 5mm;
     text-align: center;
 }
 
 .bulan-row .rp {
-    width: 12px;
-    font-size: 10px;
+    flex: 0 0 8mm;
 }
 
 .bulan-row .rate {
@@ -1379,94 +1401,155 @@ onMounted(() => {
 }
 
 .bulan-row .subtotal {
-    margin-left: auto;
+    flex: none;
     text-align: right;
-    min-width: 50px;
+    min-width: 26mm;
+    margin-left: auto;
+    padding-left: 3mm;
 }
 
 /* ---- TOTAL SECTION ---- */
 .total-section {
     border-top: 0.5px solid #000;
     margin-top: auto;
+    padding-top: 0.5mm;
 }
 
 .pblt-row {
     display: flex;
     justify-content: flex-end;
-    align-items: center;
-    padding: 0.5px 3px;
-    gap: 4px;
+    align-items: baseline;
+    padding: 0.5mm 0;
+    font-weight: bold;
+    font-size: 8pt;
 }
 
 .pblt-row .pblt-label {
-    font-size: 12px;
+    font-weight: normal;
+    margin-right: 4mm;
+}
+
+.pblt-row .rp {
+    font-size: 7pt;
+    margin-right: 3mm;
 }
 
 .pblt-row .pblt-amount {
     border-bottom: 0.5px solid #000;
-    min-width: 92px;
+    min-width: 24mm;
     text-align: right;
-    padding-right: 1px;
+    padding-right: 1mm;
 }
 
 .pblt-row .plus {
-    font-size: 7px;
+    margin-left: 2mm;
+    font-size: 8pt;
 }
 
 .total-row {
     display: flex;
     justify-content: flex-end;
-    align-items: center;
-    padding: 0.5px 3px;
-    gap: 4px;
+    align-items: baseline;
+    padding: 0.5mm 0;
     font-weight: bold;
+    font-size: 8pt;
+}
+
+.total-row .total-label {
+    margin-right: 4mm;
+    text-transform: uppercase;
+}
+
+.total-row .rp {
+    font-size: 7pt;
+    margin-right: 3mm;
 }
 
 .total-row .total-amount {
-    min-width: 100px;
+    min-width: 26mm;
     text-align: right;
-    padding-right: 5px;
+    padding-right: 1mm;
 }
 
+/* ---- TOTAL TERIMA ---- */
 .total-terima {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    justify-content: space-between;
     border-top: 0.5px solid #000;
     border-bottom: 0.5px solid #000;
-    padding: 0.5px 5px;
+    padding: 1mm 3mm;
     font-weight: bold;
+    font-size: 9pt;
+    text-transform: uppercase;
+}
+
+.total-terima .tt-label {
+    flex: 1;
+    text-align: center;
+}
+
+.total-terima .tt-amount {
+    flex: none;
+    padding-right: 1mm;
 }
 
 /* ---- SIGNATURE ---- */
 .signature-row {
     display: flex;
-    padding: 2px 3px 1px;
-    gap: 0;
-    min-height: 28px;
+    flex: none;
+    min-height: 18mm;
+    padding-top: 1mm;
 }
 
 .sig-col {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
     text-align: center;
-    padding: 0 2px;
+    padding: 1mm 1mm 0.5mm;
+    font-size: 6.5pt;
 }
 
-.sig-col.sig-mid {
+.sig-col.sig-mid,
+.sig-col.sig-tgl {
     border-left: 0.5px solid #000;
-    border-right: 0.5px solid #000;
 }
 
-.sig-col:first-child {
-    /* no left border */
+.sig-label {
+    align-self: flex-start;
+    margin: 0 0 1mm 0.5mm;
+    font-size: 7pt;
+}
+
+.sig-space {
+    flex: 1;
+}
+
+.sig-stamp {
+    border: 1px solid #2b5cbf;
+    border-radius: 2mm;
+    color: #2b5cbf;
+    font-weight: bold;
+    font-size: 6pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1mm 2mm;
+    transform: rotate(-8deg);
+    opacity: 0.9;
+    max-width: 92%;
+    margin: 1mm auto 0;
 }
 
 .sig-name {
-    margin-top: 30px;
     font-weight: bold;
-    font-size: 12px;
+    font-size: 9pt;
+    text-transform: uppercase;
     border-top: 0.5px solid #000;
-    padding-top: 1px;
+    padding: 0.5mm 1mm 0;
+    width: 100%;
 }
 
 /* ============================== */
@@ -1495,6 +1578,8 @@ onMounted(() => {
 
     .print-area {
         padding: 0;
+        width: 196mm;
+        margin: 0 auto;
     }
 
     .slip-page {
@@ -1504,7 +1589,7 @@ onMounted(() => {
     @page {
         size: 210mm 330mm;
         /* F4 portrait */
-        margin: 6mm;
+        margin: 7mm;
     }
 }
 </style>

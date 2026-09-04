@@ -273,10 +273,12 @@ class CompensationApiController extends Controller
         $endDate = $dateInfo['end'];
 
         $bulan = Carbon::createFromDate($year, $month, 1)->locale('id')->isoFormat('MMMM YYYY');
-        $hrd = Auth::user()->name;
 
-        // Get the company
-        $company = Company::first();
+        // Nama & alamat kop diambil dari data cabang (tabel branches),
+        // sedangkan nama HR / PIC / Pimpinan Cabang diambil dari kolom pic_name.
+        $company = Company::with('branches')->first();
+        $branch = $company ? $company->branches()->first() : \App\Modules\Organization\Models\Branch::first();
+        $hrd = ($branch && $branch->pic_name) ? $branch->pic_name : Auth::user()->name;
 
         $query = EmployeeContract::with(['employee']);
 
@@ -349,6 +351,13 @@ class CompensationApiController extends Controller
                     'email' => $company->email ?? '',
                     'website' => $company->website ?? '',
                     'logo_url' => $company->logo_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($company->logo_path) : null,
+                ] : null,
+                'branch' => $branch ? [
+                    'name' => $branch->name ?? '',
+                    'address' => $branch->address ?? '',
+                    'phone' => $branch->phone ?? '',
+                    'email' => $branch->email ?? '',
+                    'pic_name' => $branch->pic_name ?? '',
                 ] : null,
                 'bulan' => $bulan,
                 'hrd' => $hrd,
