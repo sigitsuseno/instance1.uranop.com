@@ -317,7 +317,11 @@ class CompensationApiController extends Controller
                 ->first();
 
             $gajiPokok = $salaryData ? (float) $salaryData->gaji_pokok : (float) ($employee->base_salary ?? 0);
-            $tjMasaKerja = $salaryData ? (float) $salaryData->tunjangan_masa_kerja : 0;
+            // Tj. masa kerja dihitung dinamis dari join_date per periode (konsisten
+            // dengan tabel daftar & export kompensasi), bukan nilai tersimpan
+            // di employee_salary_components.
+            $period = sprintf('%d-%02d', $year, $month);
+            $tjMasaKerja = $employee->tjMasaKerja($period);
             $durationMonths = (int) ($contract->duration_months ?? 0);
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;

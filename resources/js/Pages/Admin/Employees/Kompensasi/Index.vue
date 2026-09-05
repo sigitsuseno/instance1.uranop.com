@@ -1159,19 +1159,23 @@ onMounted(() => {
 /* ============================== */
 /* SLIP PAGE — F4 (210×330mm)     */
 /* 2 cols × 3 rows = 6 slips      */
-/* padding 7mm, gap 14mm          */
+/* padding 5mm, gap 8mm          */
 /* ============================== */
 .print-area {
     padding: 8px;
+    background: #f3f4f6;
 }
 
 .slip-page {
+    background: #fff;
     display: grid;
-    grid-template-columns: 91mm 91mm;
-    grid-template-rows: 96mm 96mm 96mm;
-    gap: 14mm;
-    width: 196mm;
-    height: 316mm;
+    /* grid-template-columns: 96mm 96mm;
+    grid-template-rows: 100mm 100mm 100mm; */
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+    gap: 8mm;
+    width: 200mm;
+    height: 320mm;
     margin: 0 auto;
     page-break-after: always;
 }
@@ -1185,8 +1189,8 @@ onMounted(() => {
 /* ============================== */
 .slip {
     border: 0.5px solid #000;
-    padding: 1.2mm;
-    height: 96mm;
+    /* padding: 1.2mm; */
+    min-height: 96mm;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -1577,7 +1581,8 @@ onMounted(() => {
 
     .print-area {
         padding: 0;
-        width: 196mm;
+        width: 200mm;
+        height: 320mm;
         margin: 0 auto;
     }
 
@@ -1588,7 +1593,8 @@ onMounted(() => {
     @page {
         size: 210mm 330mm;
         /* F4 portrait */
-        margin: 7mm;
+        /* margin: 5mm; */
+        padding: 5mm;
     }
 }
 </style>
