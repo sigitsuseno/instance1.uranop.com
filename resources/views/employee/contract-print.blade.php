@@ -1,7 +1,7 @@
 @php
     /*
      * Print template: PERJANJIAN KERJA (UNTUK WAKTU TERTENTU)
-     * Mengikuti layout dokumen "docs/kontrak kerja.pdf" (1 halaman), dicetak di kertas F4 210mm x 330mm.
+     * Mengikuti layout dokumen "docs/kontrak kerja.pdf" (Legal 8.5" x 14", 1 halaman).
      */
 
     $c = $company;
@@ -91,15 +91,14 @@
     <meta charset="utf-8">
     <title>Perjanjian Kerja - {{ $employee->name }}</title>
     <style>
-        /* Kertas F4 (210mm x 330mm) — area cetak 190mm x 314mm. */
-        @page { size: 210mm 330mm; margin: 8mm 10mm; }
+        /* Kertas Legal (216mm x 356mm) — area cetak 196mm x 340mm. */
+        @page { size: 216mm 356mm; margin: 8mm 10mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 8.8pt;
             line-height: 1.115;
             color: #000;
-            zoom: 0.92;
         }
 
         /* ═══════ HEADER PERUSAHAAN ═══════ */

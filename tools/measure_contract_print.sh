@@ -1,9 +1,9 @@
 #!/bin/bash
 # Dev helper: render the employee.contract-print blade and measure its rendered
-# height at the print content width (210mm page - 20mm side margins = 190mm).
+# height at the print content width (216mm page - 20mm side margins = 196mm).
 #
-# The printed contract must fit ONE page on F4 paper (210mm x 330mm), like
-# docs/kontrak kerja.pdf. Target: height <= 1186px (314mm) at width 718px.
+# The printed contract must fit ONE page on Legal paper (216mm x 356mm), like
+# docs/kontrak kerja.pdf. Target: height <= 1285px (340mm) at width 740px.
 #
 # Usage: bash tools/measure_contract_print.sh
 set -e
@@ -30,8 +30,8 @@ file_put_contents("'"$TMP"'/probe.html", $h);
 
 CHROME="/c/Program Files/Google/Chrome/Application/chrome.exe"
 "$CHROME" --headless=new --disable-gpu --hide-scrollbars \
-  --virtual-time-budget=5000 --window-size=734,6000 --dump-dom \
+  --virtual-time-budget=5000 --window-size=756,6000 --dump-dom \
   "file:///${ROOT//\/c\//C:\/}/$TMP/probe.html" 2>/dev/null \
   | grep -o "<title>H=[0-9]* W=[0-9]*</title>" | head -1
 
-echo "print content box: 718 x 1186 px (190mm x 314mm) — must be <= 1186"
+echo "print content box: 740 x 1285 px (196mm x 340mm) — must be <= 1285"
