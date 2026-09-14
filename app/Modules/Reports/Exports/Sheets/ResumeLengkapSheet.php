@@ -49,6 +49,17 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
     protected string $kompSheetTitle;
     protected int $kompLastRow;
 
+    /**
+     * Rentang baris tiap blok (header → baris TOTAL) yang diberi border kotak
+     * penuh A–U. Diisi saat array() dibangun, dipakai lagi di registerEvents().
+     *
+     * @var array<int, array{start: int, end: int}>
+     */
+    protected array $blockRanges = [];
+
+    /** Baris TOTAL gabungan A+B — hanya kolom B dan F–U yang diborder, seperti sample. */
+    protected ?int $grandTotalRow = null;
+
     public function __construct(
         array $allIn,
         array $print,
@@ -115,6 +126,8 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
     public function array(): array
     {
         $rows = [];
+        $this->blockRanges = [];
+        $this->grandTotalRow = null;
 
         // ═══ Judul ═══
         $rows[] = self::rowAt(['A' => 'PT. KEMILAU UNGARAN SUKSES']);            // 1
@@ -125,6 +138,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
         // ═══ Blok 1: RESUME GAJI — A. KARYAWAN ALL IN ═══
         $rows[] = self::rowAt(['A' => 'A. KARYAWAN ALL IN']);                      // 5
         $headers = $this->headerRows();
+        $block1Header = count($rows) + 1;
         $rows[] = $headers[0];                                                     // 6
         $rows[] = $headers[1];                                                     // 7
 
@@ -137,6 +151,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
 
         $totalARow = count($rows) + 1;
         $rows[] = $this->gajiTotalRow('TOTAL A. KARYAWAN ALL IN', $dataStartA, $dataEndA);
+        $this->blockRanges[] = ['start' => $block1Header, 'end' => $totalARow];
 
         // Baris kontrol: bandingkan dengan total sheet Gaji Karyawan (Section A).
         $rows[] = self::rowAt(['U' => $this->gkTotalA]);
@@ -148,6 +163,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
 
         // ═══ Blok 2: RESUME GAJI — B. KARYAWAN BULANAN PRINT ═══
         $rows[] = self::rowAt(['A' => 'B. KARYAWAN BULANAN PRINT']);
+        $block2Header = count($rows) + 1;
         $rows[] = $headers[0];
         $rows[] = $headers[1];
 
@@ -160,6 +176,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
 
         $totalBRow = count($rows) + 1;
         $rows[] = $this->gajiTotalRow('TOTAL B. KARYAWAN BULANAN PRINT', $dataStartB, $dataEndB);
+        $this->blockRanges[] = ['start' => $block2Header, 'end' => $totalBRow];
 
         // Baris kontrol: bandingkan dengan total sheet Gaji Karyawan (Section B).
         $rows[] = self::rowAt(['U' => $this->gkTotalB]);
@@ -175,6 +192,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
             $grandCells[$col] = "={$col}{$totalARow}+{$col}{$totalBRow}";
         }
         $rows[] = self::rowAt($grandCells);
+        $this->grandTotalRow = $grandRow;
 
         $rows[] = self::rowAt(['U' => $this->gkGrandTotal]);
         $checkG = count($rows);
@@ -183,6 +201,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
         // ═══ Blok 3: RESUME UANG MAKAN & LEMBUR ═══
         $rows[] = self::rowAt(['A' => 'RESUME UANG MAKAN & LEMBUR — ' . strtoupper($this->umLabel)]);
         $rows[] = self::blank();
+        $block3Header = count($rows) + 1;
         $rows[] = self::rowAt([
             'A' => 'No', 'B' => 'BAGIAN',
             'F' => 'UANG MAKAN', 'G' => 'LEMBUR SABTU', 'H' => 'LEMBUR MINGGU',
@@ -212,6 +231,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
             $umCells[$col] = "=SUM({$col}{$umStart}:{$col}{$umEnd})";
         }
         $rows[] = self::rowAt($umCells);
+        $this->blockRanges[] = ['start' => $block3Header, 'end' => $umTotalRow];
 
         $rows[] = self::rowAt(['U' => $this->umTotal]);
         $checkU = count($rows);
@@ -223,6 +243,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
         // ═══ Blok 4: RESUME UANG KOMPENSASI ═══
         $rows[] = self::rowAt(['A' => 'RESUME UANG KOMPENSASI']);
         $rows[] = self::blank();
+        $block4Header = count($rows) + 1;
         $rows[] = self::rowAt([
             'A' => 'NO', 'B' => 'POSISI',
             'C' => 'TOTAL KARYAWAN (L)', 'D' => 'TOTAL KARYAWAN (P)',
@@ -248,6 +269,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
             'D' => "=SUM(D{$kStart}:D{$kEnd})",
             'U' => "=SUM(U{$kStart}:U{$kEnd})",
         ]);
+        $this->blockRanges[] = ['start' => $block4Header, 'end' => $kTotalRow];
 
         // ═══ Penutup ═══
         $rows[] = self::blank();
@@ -466,7 +488,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
                             'vertical'   => Alignment::VERTICAL_CENTER,
                             'wrapText'   => true,
                         ],
-                    ] + $border);
+                    ]);
                     $sheet->getRowDimension($r)->setRowHeight(20);
                 }
 
@@ -479,10 +501,29 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
                             'vertical'   => Alignment::VERTICAL_CENTER,
                             'wrapText'   => true,
                         ],
-                    ] + $border);
+                    ]);
                 }
 
-                // Baris TOTAL: bold + merge label
+                // ── Border kotak penuh per kolom (A–U) untuk tiap blok ──
+                // Rentangnya sudah dicatat saat array() dibangun: dari baris header
+                // sampai baris TOTAL. Baris judul, label blok, dan baris kontrol
+                // sengaja dibiarkan tanpa border — sama seperti file sample.
+                foreach ($this->blockRanges as $range) {
+                    $sheet->getStyle("A{$range['start']}:{$lastCol}{$range['end']}")->applyFromArray($border);
+                }
+
+                // Baris TOTAL gabungan A+B: hanya kolom B dan F–U (kolom A, C, D, E
+                // kosong), mengikuti sample.
+                if ($this->grandTotalRow) {
+                    $r = $this->grandTotalRow;
+                    $sheet->getStyle("B{$r}")->applyFromArray($border);
+                    $sheet->getStyle("F{$r}:{$lastCol}{$r}")->applyFromArray($border);
+                }
+
+                // Baris TOTAL: bold + abu-abu.
+                // Border-nya tidak di sini — baris TOTAL blok 1–4 sudah tercakup
+                // rentang blok di atas, sedangkan baris TOTAL penutup memang tanpa
+                // border (sama seperti sample).
                 foreach ($totalRows as $r) {
                     $sheet->getStyle("A{$r}:{$lastCol}{$r}")->applyFromArray([
                         'font' => ['bold' => true, 'size' => 10],
@@ -490,7 +531,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
                             'fillType'   => Fill::FILL_SOLID,
                             'startColor' => ['rgb' => 'F2F2F2'],
                         ],
-                    ] + $border);
+                    ]);
                     $sheet->getStyle("A{$r}:{$lastCol}{$r}")->getAlignment()
                         ->setVertical(Alignment::VERTICAL_CENTER);
                 }
