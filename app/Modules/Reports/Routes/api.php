@@ -97,6 +97,8 @@ Route::prefix('v1/laporan')->name('api.laporan.')->group(function () {
         Route::get('/detail/export', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'exportPayroll'])->name('detail.export');
         Route::get('/resume', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'resume'])->name('resume');
         Route::get('/resume/export', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'exportResume'])->name('resume.export');
+        // Export Lengkap — 5 sheet (Gaji Karyawan, Uang Makan, Kompensasi, Resume, Rekap Gaji)
+        Route::get('/export-lengkap', [\App\Modules\Reports\Controllers\Api\V1\PayrollReportController::class, 'exportLengkap'])->name('export-lengkap');
     });
 
 });

@@ -8,13 +8,14 @@ use Maatwebsite\Excel\Concerns\WithMapping;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class UangMakanRekapExport implements FromArray, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents
+class UangMakanRekapExport implements FromArray, WithHeadings, WithMapping, WithStyles, WithColumnWidths, WithEvents, WithTitle
 {
     protected $data;
     protected $label;
@@ -28,6 +29,11 @@ class UangMakanRekapExport implements FromArray, WithHeadings, WithMapping, With
     {
         $this->data  = array_values($data instanceof \Illuminate\Support\Collection ? $data->toArray() : (array)$data);
         $this->label = $label;
+    }
+
+    public function title(): string
+    {
+        return 'Uang Makan';
     }
 
     public function array(): array

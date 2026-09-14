@@ -111,6 +111,17 @@ class UangMakanReportController extends Controller
 
     public function rekap(Request $request)
     {
+        return response()->json($this->buildRekapPayload($request));
+    }
+
+    /**
+     * Payload rekap uang makan (dipakai bersama oleh endpoint JSON dan export Excel,
+     * termasuk "Export Lengkap" di laporan payroll).
+     *
+     * @return array{data: \Illuminate\Support\Collection, month_label: string, dates: array}
+     */
+    public function buildRekapPayload(Request $request): array
+    {
         $result = $this->buildRekapData($request);
 
         $employees = $result['data']->map(function ($item) {
@@ -216,17 +227,16 @@ class UangMakanReportController extends Controller
             ['name', 'asc'],
         ])->values();
 
-        return response()->json([
+        return [
             'data'         => $employees,
             'month_label'  => $result['month_label'] ?? '',
             'dates'        => $result['dates'] ?? [],
-        ]);
+        ];
     }
 
     public function exportRekap(Request $request)
     {
-        $response = $this->rekap($request);
-        $payload  = json_decode($response->getContent(), true);
+        $payload  = $this->buildRekapPayload($request);
         $label    = $payload['month_label'] ?? 'Rekap';
 
         $filename = 'Rekap_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
@@ -238,8 +248,7 @@ class UangMakanReportController extends Controller
 
     public function printRekap(Request $request)
     {
-        $response = $this->rekap($request);
-        $payload  = json_decode($response->getContent(), true);
+        $payload  = $this->buildRekapPayload($request);
         $label    = $payload['month_label'] ?? 'Rekap Uang Makan';
         $data     = $payload['data'] ?? [];
 
@@ -251,8 +260,18 @@ class UangMakanReportController extends Controller
 
     public function rekapResume(Request $request)
     {
-        $response = $this->rekap($request);
-        $payload  = json_decode($response->getContent(), true);
+        return response()->json($this->buildRekapResumePayload($request));
+    }
+
+    /**
+     * Rekap uang makan dikelompokkan per bagian/jabatan — dipakai endpoint JSON
+     * dan blok "RESUME UANG MAKAN & LEMBUR" pada Export Lengkap.
+     *
+     * @return array{data: array, month_label: string}
+     */
+    public function buildRekapResumePayload(Request $request): array
+    {
+        $payload   = $this->buildRekapPayload($request);
         $employees = $payload['data'] ?? [];
 
         $grouped = [];
@@ -290,16 +309,15 @@ class UangMakanReportController extends Controller
             // total tidak dibulatkan — nilai asli (ditampilkan 2 desimal di frontend)
         }
 
-        return response()->json([
+        return [
             'data'         => $result,
             'month_label'  => $payload['month_label'] ?? '',
-        ]);
+        ];
     }
 
     public function exportRekapResume(Request $request)
     {
-        $response = $this->rekapResume($request);
-        $payload  = json_decode($response->getContent(), true);
+        $payload  = $this->buildRekapResumePayload($request);
         $label    = $payload['month_label'] ?? 'Resume';
 
         $filename = 'Resume_Uang_Makan_' . str_replace(' ', '_', $label) . '.xlsx';
@@ -311,8 +329,7 @@ class UangMakanReportController extends Controller
 
     public function printRekapResume(Request $request)
     {
-        $response = $this->rekapResume($request);
-        $payload  = json_decode($response->getContent(), true);
+        $payload  = $this->buildRekapResumePayload($request);
         $label    = $payload['month_label'] ?? 'Resume Uang Makan';
         $data     = $payload['data'] ?? [];
 

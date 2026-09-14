@@ -40,7 +40,7 @@ class PayrollResumeSheet implements WithTitle, WithEvents
 
                 $firstDataRow = 8;
                 $lastDataRow = $firstDataRow + $rowCount - 1;
-                $lastCol = 'S';
+                $lastCol = 'U';
 
                 // Row 1: Title
                 $sheet->setCellValue('A1', 'PT. KEMILAU UNGARAN SUKSES');
@@ -64,8 +64,8 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                 $sheet->getStyle('A5')->getFont()->setBold(true)->setSize(11);
 
                 // Row 6-7: Headers
-                $headers1 = ['No', 'BAGIAN', 'JML KARYAWAN', '', '', 'GAJI', 'LEMBUR', 'REVISI', 'TJ. MASA KERJA', 'TUNJANGAN', 'PREMI HADIR', 'PBLT', 'TOTAL', 'BPJS TENAGA KERJA', 'BPJS KESEHATAN', 'BPJS PENSIUN', 'CASHBON', 'REVISI PPH', 'TOTAL TERIMA'];
-                $headers2 = ['', '', 'L', 'P', 'Total', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
+                $headers1 = ['No', 'BAGIAN', 'JML KARYAWAN', '', '', 'GAJI', 'LEMBUR', 'REVISI', 'TJ. MASA KERJA', 'TUNJANGAN', 'PREMI HADIR', 'PBLT', 'TOTAL', 'LEMBUR', 'TOTAL + LEMBUR', 'BPJS TENAGA KERJA', 'BPJS KESEHATAN', 'BPJS PENSIUN', 'CASHBON', 'REVISI PPH', 'TOTAL TERIMA'];
+                $headers2 = ['', '', 'L', 'P', 'Total', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''];
 
                 foreach ($headers1 as $i => $h) {
                     $col = chr(65 + $i);
@@ -77,7 +77,7 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                 $sheet->mergeCells('C6:E6');
 
                 // Vertical merges for single-row headers
-                $colsToMerge = ['A', 'B', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S'];
+                $colsToMerge = ['A', 'B', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U'];
                 foreach ($colsToMerge as $col) {
                     $sheet->mergeCells("{$col}6:{$col}7");
                 }
@@ -90,7 +90,11 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                     ->setWrapText(true);
 
                 // Data rows
-                $colKeys = ['bagian', 'jml_karyawan_l', 'jml_karyawan_p', 'jml_karyawan_total', 'gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
+                $colKeys = ['bagian', 'jml_karyawan_l', 'jml_karyawan_p', 'jml_karyawan_total', 'gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'lembur', 'total_plus_lembur', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
+
+                // Kolom finansial mulai kolom F. 'lembur' muncul 2x (sebelum & sesudah TOTAL),
+                // karena itu akumulasi total dihitung dari key yang unik.
+                $financialKeys = ['gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'lembur', 'total_plus_lembur', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
 
                 $totals = [];
                 foreach ($this->data as $idx => $row) {
@@ -104,13 +108,14 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                     $sheet->setCellValue("D{$r}", $row['jml_karyawan_p'] ?? 0);
                     $sheet->setCellValue("E{$r}", $row['jml_karyawan_total'] ?? 0);
 
-                    // Financial columns (F to S)
-                    $financialKeys = ['gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
+                    // Financial columns (F onwards)
                     foreach ($financialKeys as $fi => $key) {
                         $col = chr(70 + $fi); // F=70
-                        $val = (float) ($row[$key] ?? 0);
-                        $sheet->setCellValue("{$col}{$r}", $val);
-                        $totals[$key] = ($totals[$key] ?? 0) + $val;
+                        $sheet->setCellValue("{$col}{$r}", (float) ($row[$key] ?? 0));
+                    }
+
+                    foreach (array_unique($financialKeys) as $key) {
+                        $totals[$key] = ($totals[$key] ?? 0) + (float) ($row[$key] ?? 0);
                     }
 
                     // Collect totals for count columns
@@ -130,7 +135,6 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                     $sheet->setCellValue("D{$totalRow}", $totals['jml_karyawan_p'] ?? 0);
                     $sheet->setCellValue("E{$totalRow}", $totals['jml_karyawan_total'] ?? 0);
 
-                    $financialKeys = ['gaji', 'lembur', 'revisi', 'tj_masa_kerja', 'tunjangan', 'premi_hadir', 'pblt', 'total', 'bpjs_tk', 'bpjs_ks', 'bpjs_pen', 'cashbon', 'revisi_pph', 'total_terima'];
                     foreach ($financialKeys as $fi => $key) {
                         $col = chr(70 + $fi);
                         $sheet->setCellValue("{$col}{$totalRow}", $totals[$key] ?? 0);
@@ -163,8 +167,9 @@ class PayrollResumeSheet implements WithTitle, WithEvents
                 $colWidths = [
                     'A' => 5, 'B' => 22, 'C' => 6, 'D' => 6, 'E' => 7,
                     'F' => 15, 'G' => 12, 'H' => 10, 'I' => 14, 'J' => 12,
-                    'K' => 12, 'L' => 10, 'M' => 15, 'N' => 16, 'O' => 16,
-                    'P' => 14, 'Q' => 12, 'R' => 12, 'S' => 16,
+                    'K' => 12, 'L' => 10, 'M' => 15, 'N' => 12, 'O' => 16,
+                    'P' => 16, 'Q' => 16, 'R' => 14, 'S' => 12, 'T' => 12,
+                    'U' => 16,
                 ];
                 foreach ($colWidths as $col => $width) {
                     $sheet->getColumnDimension($col)->setWidth($width);

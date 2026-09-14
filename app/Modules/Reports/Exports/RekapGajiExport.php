@@ -8,6 +8,7 @@ use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithCustomValueBinder;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
@@ -17,7 +18,7 @@ use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class RekapGajiExport extends DefaultValueBinder implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithEvents, WithCustomValueBinder
+class RekapGajiExport extends DefaultValueBinder implements FromArray, WithHeadings, WithStyles, WithColumnWidths, WithEvents, WithCustomValueBinder, WithTitle
 {
     protected array $rows;
     protected string $periodName;
@@ -57,6 +58,11 @@ class RekapGajiExport extends DefaultValueBinder implements FromArray, WithHeadi
         }
 
         return parent::bindValue($cell, $value);
+    }
+
+    public function title(): string
+    {
+        return 'Rekap Gaji';
     }
 
     public function array(): array

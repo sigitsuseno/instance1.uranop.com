@@ -64,6 +64,8 @@
                 <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Premi Hadir</th>
                 <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">PBLT</th>
                 <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total</th>
+                <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Lembur</th>
+                <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">Total + Lembur</th>
                 <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">BPJS Tenaga Kerja</th>
                 <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">BPJS Kesehatan</th>
                 <th rowspan="2" class="px-4 py-3 text-right font-bold text-(--text-muted) uppercase border-r border-(--border-soft)">BPJS Pensiun</th>
@@ -79,7 +81,7 @@
             </thead>
             <tbody class="divide-y divide-(--border-soft)">
               <tr v-if="section.data.length === 0">
-                <td colspan="19" class="px-4 py-8 text-center text-(--text-muted)">
+                <td colspan="21" class="px-4 py-8 text-center text-(--text-muted)">
                   Tidak ada data untuk bagian ini.
                 </td>
               </tr>
@@ -97,6 +99,8 @@
                 <td class="px-4 py-2 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ formatNumber(item.premi_hadir) }}</td>
                 <td class="px-4 py-2 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ formatNumber(item.pblt) }}</td>
                 <td class="px-4 py-2 text-right font-bold text-blue-600 border-r border-(--border-soft)">{{ formatNumber(item.total) }}</td>
+                <td class="px-4 py-2 text-right font-medium text-(--text-main) border-r border-(--border-soft)">{{ formatNumber(item.lembur) }}</td>
+                <td class="px-4 py-2 text-right font-bold text-blue-600 border-r border-(--border-soft)">{{ formatNumber(item.total_plus_lembur) }}</td>
                 <td class="px-4 py-2 text-right font-medium text-red-600 border-r border-(--border-soft)">{{ formatNumber(item.bpjs_tk) }}</td>
                 <td class="px-4 py-2 text-right font-medium text-red-600 border-r border-(--border-soft)">{{ formatNumber(item.bpjs_ks) }}</td>
                 <td class="px-4 py-2 text-right font-medium text-red-600 border-r border-(--border-soft)">{{ formatNumber(item.bpjs_pen) }}</td>
@@ -120,6 +124,8 @@
                 <td class="px-4 py-3 text-right font-medium">{{ formatNumber(calculateTotal(section.data, 'premi_hadir')) }}</td>
                 <td class="px-4 py-3 text-right font-medium">{{ formatNumber(calculateTotal(section.data, 'pblt')) }}</td>
                 <td class="px-4 py-3 text-right font-bold text-blue-600">{{ formatNumber(calculateTotal(section.data, 'total')) }}</td>
+                <td class="px-4 py-3 text-right font-medium">{{ formatNumber(calculateTotal(section.data, 'lembur')) }}</td>
+                <td class="px-4 py-3 text-right font-bold text-blue-600">{{ formatNumber(calculateTotal(section.data, 'total_plus_lembur')) }}</td>
                 <td class="px-4 py-3 text-right font-medium text-red-600">{{ formatNumber(calculateTotal(section.data, 'bpjs_tk')) }}</td>
                 <td class="px-4 py-3 text-right font-medium text-red-600">{{ formatNumber(calculateTotal(section.data, 'bpjs_ks')) }}</td>
                 <td class="px-4 py-3 text-right font-medium text-red-600">{{ formatNumber(calculateTotal(section.data, 'bpjs_pen')) }}</td>

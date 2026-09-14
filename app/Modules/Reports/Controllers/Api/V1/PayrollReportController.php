@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\ExtraEmployee;
 use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
+use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
 use App\Modules\Payroll\Models\PayrollConfig;
+use App\Modules\Reports\Exports\Sheets\KompensasiLengkapSheet;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -42,15 +44,8 @@ class PayrollReportController extends Controller
 
     public function exportResume(Request $request)
     {
-        // Build data untuk All-In
-        $reqAllIn = clone $request;
-        $reqAllIn->merge(['tab' => 'all-in']);
-        $resultAllIn = $this->buildResumeData($reqAllIn);
-
-        // Build data untuk Print
-        $reqPrint = clone $request;
-        $reqPrint->merge(['tab' => 'print']);
-        $resultPrint = $this->buildResumeData($reqPrint);
+        $resultAllIn = $this->buildResumeData($request, 'all-in');
+        $resultPrint = $this->buildResumeData($request, 'print');
 
         $periodName = $resultAllIn['period_name'] ?: $resultPrint['period_name'];
         $dataAllIn = ($resultAllIn['data'] ?? collect())->toArray();
@@ -62,6 +57,226 @@ class PayrollReportController extends Controller
             new \App\Modules\Reports\Exports\PayrollResumeExport($dataAllIn, $dataPrint, $periodName),
             $filename
         );
+    }
+
+    // =====================================================================
+    // EXPORT LENGKAP — satu file Excel berisi 5 sheet (format GAJI_KUS_*.xlsx)
+    // GET /api/v1/laporan/payroll/export-lengkap
+    // =====================================================================
+
+    /** Group shift yang mendapat uang makan — sama dengan populasi sheet "Uang Makan". */
+    private const UM_GROUPS = ['GRP-ALLIN', 'GRP-SPR', 'GRP-GD'];
+
+    public function exportLengkap(Request $request)
+    {
+        $validated = $request->validate([
+            'period_id' => 'nullable|exists:pay_periods,id',
+            'segment'   => 'nullable|in:A,B',
+        ]);
+
+        $period  = $this->resolvePeriod($validated['period_id'] ?? null);
+        $segment = $validated['segment'] ?? null;
+
+        // Builder di bawah punya validasi sendiri dan butuh period_id eksplisit —
+        // jadi diteruskan lewat request turunan dengan periode hasil resolve.
+        $dataRequest = Request::create($request->url(), 'GET', array_merge($request->query(), [
+            'period_id' => $period->id,
+        ]));
+
+        // ── 1. Gaji Karyawan (Section A + B) ──
+        [$records, , $segment] = $this->buildLaporanPayrollExportData($dataRequest);
+
+        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
+        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+
+        $secAData = [];
+        $secBData = [];
+        foreach ($records as $r) {
+            $groups = $r['groups'] ?? [];
+            // GRP-EXTRA (karyawan titipan) selalu masuk Section A
+            if (array_intersect($groups, $sectionA) || in_array('GRP-EXTRA', $groups)) {
+                $secAData[] = $r;
+            } elseif (array_intersect($groups, $sectionB)) {
+                $secBData[] = $r;
+            }
+        }
+
+        $periodName = $period->name;
+        if ($period->is_split && $segment) {
+            $periodName .= " (Segmen {$segment})";
+        }
+
+        // ── 2. Uang Makan (rekap per karyawan) ──
+        $umRequest = Request::create('/api/v1/reports/uang-makan/rekap', 'GET', [
+            'period_id' => $period->id,
+            'groups'    => self::UM_GROUPS,
+        ]);
+        $umController = app(UangMakanReportController::class);
+        $umPayload    = $umController->buildRekapPayload($umRequest);
+        $umResumeData = $umController->buildRekapResumePayload($umRequest);
+
+        // ── 3. Kompensasi (12 kolom, tanpa POTONGAN) ──
+        [$contracts, $compGroup] = $this->resolveKompensasi($period);
+
+        // ── 4. Blok Resume ──
+        $resumeAllIn = $this->buildResumeData($dataRequest, 'all-in')['data']->toArray();
+        $resumePrint = $this->buildResumeData($dataRequest, 'print')['data']->toArray();
+
+        // ── 5. Rekap Gaji ──
+        // Populasinya = karyawan yang punya pay_record di periode ini (sama dengan
+        // sheet "Gaji Karyawan"), bukan query roster seperti halaman Rekap Gaji.
+        $rekapEmployees = Employee::whereIn('id', function ($q) use ($period) {
+                $q->select('employee_id')->from('pay_records')->where('pay_period_id', $period->id);
+            })
+            ->with(['position', 'groups', 'groups.master'])
+            ->orderBy('name')
+            ->get();
+
+        $rekapResult = app(RekapGajiController::class)->buildRekapGajiRows($rekapEmployees, $period, (int) $period->id);
+        $rekapRows   = $rekapResult['data'] instanceof Collection
+            ? $rekapResult['data']->toArray()
+            : (array) ($rekapResult['data'] ?? []);
+
+        $export = new \App\Modules\Reports\Exports\PayrollFullExport(
+            $secAData,
+            $secBData,
+            $periodName,
+            $umPayload['data']->toArray(),
+            $umPayload['month_label'] ?? $periodName,
+            $contracts,
+            $compGroup,
+            (int) $period->period_year,
+            (int) $period->period_month,
+            $resumeAllIn,
+            $resumePrint,
+            $umResumeData['data'] ?? [],
+            $this->buildKompensasiByPosisi($contracts, (int) $period->period_year, (int) $period->period_month),
+            $rekapRows,
+            $period->start_date?->format('Y-m-d') ?? ''
+        );
+
+        $filename = 'GAJI_KUS_' . strtoupper(str_replace(' ', '_', $periodName)) . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download($export, $filename);
+    }
+
+    /**
+     * Periode yang dipakai Export Lengkap.
+     *
+     * Tanpa period_id ("Periode Terakhir") dipakai periode terbaru yang sudah
+     * punya pay_record — supaya tidak jatuh ke periode masa depan yang masih kosong.
+     */
+    private function resolvePeriod(?string $periodId): PayPeriod
+    {
+        if ($periodId) {
+            return PayPeriod::findOrFail($periodId);
+        }
+
+        $latestPeriodId = PayRecord::orderByDesc('pay_period_id')->value('pay_period_id');
+
+        $period = $latestPeriodId ? PayPeriod::find($latestPeriodId) : null;
+        $period ??= PayPeriod::orderByDesc('start_date')->first();
+
+        abort_if(!$period, 422, 'Belum ada periode payroll yang bisa diexport.');
+
+        return $period;
+    }
+
+    /**
+     * Tentukan group kompensasi yang dipakai sheet "Kompensasi".
+     *
+     * Group kompensasi dibuat manual oleh HR dengan nama bebas, jadi tidak bisa
+     * diturunkan langsung dari periode. Aturan: ambil group yang dibayarkan dalam
+     * rentang periode DAN namanya mengandung nama bulan periode, pilih pembayaran
+     * paling akhir. Bila tidak ada yang cocok, pakai group terakhir yang dibayar
+     * dalam rentang tersebut.
+     *
+     * @return array{0: \Illuminate\Support\Collection, 1: ?string}
+     */
+    private function resolveKompensasi(PayPeriod $period): array
+    {
+        $start  = $period->start_date;
+        $end    = $period->end_date->copy()->addDays(7);
+        $year   = (int) $period->period_year;
+        $month  = (int) $period->period_month;
+
+        // Batas atas pakai akhir hari — pembayaran pada tanggal terakhir rentang
+        // (mis. 31 Agustus 07:00) harus tetap ikut terhitung.
+        $window = EmployeeContract::whereNotNull('comp_group')
+            ->whereNotNull('compensation_paid_at')
+            ->whereBetween('compensation_paid_at', [
+                $start->copy()->startOfDay()->format('Y-m-d H:i:s'),
+                $end->copy()->endOfDay()->format('Y-m-d H:i:s'),
+            ])
+            ->selectRaw('comp_group, MAX(compensation_paid_at) as paid_at')
+            ->groupBy('comp_group')
+            ->orderByDesc('paid_at')
+            ->get();
+
+        $bulan = strtoupper(Carbon::createFromDate($year, $month, 1)->locale('id')->isoFormat('MMMM'));
+
+        $chosen = $window->first(fn ($g) => str_contains(strtoupper($g->comp_group), $bulan))
+            ?? $window->first();
+
+        if (!$chosen) {
+            return [collect(), null];
+        }
+
+        $contracts = EmployeeContract::with('employee')
+            ->where('comp_group', $chosen->comp_group)
+            ->orderBy('end_date')
+            ->orderBy('id')
+            ->get();
+
+        return [$contracts, $chosen->comp_group];
+    }
+
+    /**
+     * Ringkasan kompensasi per posisi untuk blok "RESUME UANG KOMPENSASI" —
+     * urut sesuai master positions.id (sama seperti file sample).
+     *
+     * @return array<int, array{posisi: string, l: int, p: int, total: float}>
+     */
+    private function buildKompensasiByPosisi(\Illuminate\Support\Collection $contracts, int $year, int $month): array
+    {
+        if ($contracts->isEmpty()) {
+            return [];
+        }
+
+        $contractIds = $contracts->pluck('id');
+        $contractMap = $contracts->keyBy('id');
+
+        // Urut sesuai master positions.id — sama seperti file sample.
+        $rows = \Illuminate\Support\Facades\DB::table('employee_contracts as ec')
+            ->join('employees as e', 'e.id', '=', 'ec.employee_id')
+            ->leftJoin('positions as p', 'p.id', '=', 'e.position_id')
+            ->whereIn('ec.id', $contractIds)
+            ->orderByRaw('p.id IS NULL, p.id ASC')
+            ->orderBy('e.name')
+            ->get(['ec.id', 'e.gender', 'p.name as posisi']);
+
+        $grouped = [];
+        foreach ($rows as $row) {
+            $posisi = $row->posisi ?: '-';
+
+            if (!isset($grouped[$posisi])) {
+                $grouped[$posisi] = ['posisi' => $posisi, 'l' => 0, 'p' => 0, 'total' => 0.0];
+            }
+
+            if ($row->gender === 'L') {
+                $grouped[$posisi]['l']++;
+            } elseif ($row->gender === 'P') {
+                $grouped[$posisi]['p']++;
+            }
+
+            $contract = $contractMap->get($row->id);
+            if ($contract) {
+                $grouped[$posisi]['total'] += KompensasiLengkapSheet::computeRow($contract, $year, $month)['total_terima'];
+            }
+        }
+
+        return array_values($grouped);
     }
 
     /**
@@ -501,11 +716,14 @@ class PayrollReportController extends Controller
         ];
     }
 
-    private function buildResumeData(Request $request)
+    /**
+     * @param  string|null  $tab  'all-in' | 'print'. Null = ambil dari request.
+     */
+    private function buildResumeData(Request $request, ?string $tab = null)
     {
         $periodId = $request->input('period_id');
         $period = PayPeriod::find($periodId);
-        $tab = $request->input('tab', 'all-in'); 
+        $tab ??= $request->input('tab', 'all-in');
 
         $groupCodes = $tab === 'all-in'
             ? ['GRP-ALLIN', 'GRP-SPR']
@@ -548,19 +766,25 @@ class PayrollReportController extends Controller
             $maleCount = $groupRecords->filter(fn($r) => $r->employee->gender === 'L')->count();
             $femaleCount = $groupRecords->filter(fn($r) => $r->employee->gender === 'P')->count();
 
+            // gaji_kotor sudah termasuk upah_lembur.
+            // TOTAL = di luar lembur, TOTAL + LEMBUR = gaji_kotor.
+            $totalKotor = (float) $groupRecords->sum('gaji_kotor');
+            $totalLembur = (float) $groupRecords->sum('upah_lembur');
+
             $data[] = [
                 'bagian' => $position,
                 'jml_karyawan_l' => $maleCount,
                 'jml_karyawan_p' => $femaleCount,
                 'jml_karyawan_total' => $maleCount + $femaleCount,
                 'gaji' => $groupRecords->sum('gaji'),
-                'lembur' => $groupRecords->sum('upah_lembur'),
+                'lembur' => $totalLembur,
                 'revisi' => $groupRecords->sum('revisi'),
                 'tj_masa_kerja' => $groupRecords->sum('tj_masa_kerja'),
                 'tunjangan' => $groupRecords->sum('tunjangan'),
                 'premi_hadir' => $groupRecords->sum('premi_hadir'),
                 'pblt' => $groupRecords->sum('pblt'),
-                'total' => $groupRecords->sum('gaji_kotor'),
+                'total' => $totalKotor - $totalLembur,
+                'total_plus_lembur' => $totalKotor,
                 'bpjs_tk' => $groupRecords->sum('bpjs_tk'),
                 'bpjs_ks' => $groupRecords->sum('bpjs_ks'),
                 'bpjs_pen' => $groupRecords->sum('bpjs_pen'),
@@ -611,6 +835,7 @@ class PayrollReportController extends Controller
                     'premi_hadir'        => 0,
                     'pblt'               => 0,
                     'total'              => $sumTotalGaji,
+                    'total_plus_lembur'  => $sumTotalGaji, // lembur = 0
                     'bpjs_tk'            => 0,
                     'bpjs_ks'            => 0,
                     'bpjs_pen'           => 0,

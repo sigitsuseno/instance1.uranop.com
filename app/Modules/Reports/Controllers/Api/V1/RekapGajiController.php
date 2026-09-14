@@ -62,6 +62,28 @@ class RekapGajiController extends Controller
     }
 
     /**
+     * Payload rekap gaji untuk pemakaian internal (Export Lengkap).
+     * Mengembalikan array kosong bila periode tidak punya data roster.
+     *
+     * @return array{data: array, period_name: string, date_start: string}
+     */
+    public function buildRekapGajiPayload(Request $request): array
+    {
+        $result = $this->buildRekapGajiData($request);
+        if ($result instanceof \Illuminate\Http\JsonResponse) {
+            return ['data' => [], 'period_name' => '', 'date_start' => ''];
+        }
+
+        return [
+            'data'        => $result['data'] instanceof \Illuminate\Support\Collection
+                ? $result['data']->toArray()
+                : (array) $result['data'],
+            'period_name' => $result['period_name'] ?? '',
+            'date_start'  => $result['date_start'] ?? '',
+        ];
+    }
+
+    /**
      * GET /api/v1/reports/rekap-gaji/groups
      *
      * Ambil daftar group dengan group_label = 'Imported Shift/Group'
@@ -130,6 +152,29 @@ class RekapGajiController extends Controller
         }
 
         $employees = $query->orderBy('name')->get();
+
+        return $this->buildRekapGajiRows($employees, $period, (int) $periodId);
+    }
+
+    /**
+     * Bangun baris rekap gaji dari daftar karyawan tertentu.
+     *
+     * Dipakai oleh buildRekapGajiData (populasi = karyawan ber-roster) dan oleh
+     * Export Lengkap (populasi = karyawan yang punya pay_record di periode itu,
+     * agar sama persis dengan sheet "Gaji Karyawan").
+     *
+     * @param  \Illuminate\Support\Collection<int, Employee>  $employees
+     * @return array{data: \Illuminate\Support\Collection, period_name: string, date_start: string, date_end: string}
+     */
+    public function buildRekapGajiRows($employees, PayPeriod $period, int $periodId): array
+    {
+        // Normalisasi ke base Collection. Pada Eloquent Collection yang KOSONG,
+        // map() mengembalikan Eloquent Collection (bukan base), dan merge() di
+        // bawah akan gagal dengan "getKey() on array".
+        $employees = collect($employees->all());
+
+        $startDate = $period->start_date->format('Y-m-d');
+        $endDate   = $period->end_date->format('Y-m-d');
 
         // Preload BPJS — cari per period dulu, fallback ke yg terbaru
         $bpjsByPeriod = EmployeeBpjs::whereIn('employee_id', $employees->pluck('id'))
