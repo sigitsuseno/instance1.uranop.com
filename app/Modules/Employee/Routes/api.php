@@ -93,6 +93,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
                 Route::post('/',     [ContractApiController::class, 'store'])->name('employees.contracts.store');
                 Route::get('/{contract}',    [ContractApiController::class, 'show'])->name('employees.contracts.show');
                 Route::put('/{contract}',    [ContractApiController::class, 'update'])->name('employees.contracts.update');
+                Route::get('/{contract}/print', [ContractApiController::class, 'printContract'])->name('employees.contracts.print');
                 Route::delete('/{contract}', [ContractApiController::class, 'destroy'])->name('employees.contracts.destroy');
                 Route::patch('/{contract}/mark-paid',   [ContractApiController::class, 'markPaid'])->name('employees.contracts.mark-paid');
                 Route::patch('/{contract}/mark-unpaid', [ContractApiController::class, 'markUnpaid'])->name('employees.contracts.mark-unpaid');

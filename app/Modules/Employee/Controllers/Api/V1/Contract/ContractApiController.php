@@ -5,6 +5,7 @@ namespace App\Modules\Employee\Controllers\Api\V1\Contract;
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeContract;
+use App\Modules\Organization\Models\Company;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -82,6 +83,27 @@ class ContractApiController extends Controller
             'message' => 'Kontrak berhasil diperbarui.',
             'data'    => $contract->fresh(),
         ]);
+    }
+
+    /**
+     * GET /api/employees/{employee}/contracts/{contract}/print
+     *
+     * Render template Perjanjian Kerja Waktu Tertentu (PKWT) siap cetak
+     * (mengikuti layout docs/kontrak kerja.pdf — Legal 216mm x 356mm).
+     */
+    public function printContract(Employee $employee, EmployeeContract $contract): \Illuminate\Http\Response
+    {
+        abort_if($contract->employee_id !== $employee->id, 404);
+
+        $employee->loadMissing(['department', 'position']);
+
+        $html = view('employee.contract-print', [
+            'employee' => $employee,
+            'contract' => $contract,
+            'company'  => Company::first(),
+        ])->render();
+
+        return response($html);
     }
 
     /**

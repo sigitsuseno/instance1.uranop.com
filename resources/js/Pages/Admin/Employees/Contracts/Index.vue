@@ -125,6 +125,29 @@ async function fetchContractHistory(employee) {
   }
 }
 
+// ========== PRINT ==========
+async function printContract(contract) {
+  if (!selectedEmployee.value) return
+  try {
+    const token = localStorage.getItem('token')
+    const baseUrl = import.meta.env.VITE_API_URL || ''
+    const res = await fetch(`${baseUrl}/api/v1/employees/${selectedEmployee.value.id}/contracts/${contract.id}/print`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    })
+    if (!res.ok) throw new Error('Gagal memuat dokumen kontrak.')
+    const html = await res.text()
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) {
+      notification.addNotification('Popup diblokir browser. Izinkan popup untuk mencetak.', 'error')
+      return
+    }
+    win.document.write(html)
+    win.document.close()
+  } catch (e) {
+    notification.addNotification(e.message || 'Gagal mencetak kontrak.', 'error')
+  }
+}
+
 // ========== ACTIONS ==========
 function handlePageChange(page) {
   currentPage.value = page
@@ -556,6 +579,10 @@ onMounted(() => {
       <div v-else class="space-y-4 max-h-[60vh] overflow-y-auto">
         <div v-for="contract in contractHistory" :key="contract.id" class="p-4 rounded-md border border-(--border-soft) bg-(--bg-elevated) relative group">
           <div class="absolute top-4 right-4 flex gap-2">
+            <!-- Print Button -->
+            <button @click="printContract(contract)" class="text-(--text-soft) hover:text-emerald-600 transition-colors" title="Cetak Kontrak Kerja">
+              <i class="bx bx-printer text-lg"></i>
+            </button>
             <!-- Edit Button -->
             <button v-if="permission.can('edit employees')" @click="openEditModal(contract, selectedEmployee)" class="text-(--text-soft) hover:text-(--primary) transition-colors">
               <i class="bx bx-edit text-lg"></i>
