@@ -22,8 +22,9 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
     protected int $rowCount = 0;
     protected array $totals;
 
-    // A=No, B=NAMA BANK, C=PERHITUNGAN PPH, D=NIK, E=NIK TKU, F=STATUS, G=TANGGAL BAYAR, H=TOTAL KOMPENSASI
-    protected string $lastCol = 'H';
+    // A=No, B=NAMA BANK, C=PERHITUNGAN PPH, D=NIK, E=NIK TKU, F=L/P, G=GAJI POKOK,
+    // H=MK, I=PERIODE, J=STATUS, K=TANGGAL BAYAR, L=TOTAL KOMPENSASI
+    protected string $lastCol = 'L';
 
     public function __construct(array $rows, string $periodName, string $dateStart, string $dateEnd)
     {
@@ -48,6 +49,10 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $row['name']             ?? '-',
                 $row['nik']              ?? '-',
                 $row['nik_tku']          ?? '-',
+                $row['gender']           ?? '-',
+                (float) ($row['gaji_pokok'] ?? 0),
+                (int) ($row['mk'] ?? 0),
+                $row['periode']          ?? '-',
                 $row['status_label']     ?? '-',
                 $row['paid_at']          ?? '-',
                 (float) ($row['total_kompensasi'] ?? 0),
@@ -67,7 +72,8 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
             [''],
             [
                 'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU',
-                'STATUS', 'TANGGAL BAYAR', 'TOTAL KOMPENSASI',
+                'L/P', 'GAJI POKOK', 'MK', 'PERIODE', 'STATUS', 'TANGGAL BAYAR',
+                'TOTAL KOMPENSASI',
             ],
         ];
     }
@@ -80,9 +86,13 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
             'C' => 28,  // PERHITUNGAN PPH
             'D' => 16,  // NIK
             'E' => 18,  // NIK TKU
-            'F' => 10,  // STATUS
-            'G' => 14,  // TANGGAL BAYAR
-            'H' => 18,  // TOTAL KOMPENSASI
+            'F' => 6,   // L/P
+            'G' => 16,  // GAJI POKOK
+            'H' => 8,   // MK
+            'I' => 24,  // PERIODE
+            'J' => 10,  // STATUS
+            'K' => 14,  // TANGGAL BAYAR
+            'L' => 18,  // TOTAL KOMPENSASI
         ];
     }
 
@@ -142,8 +152,14 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $sheet->getStyle("C{$dataStart}:C{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                 $sheet->getStyle("D{$dataStart}:E{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("F{$dataStart}:F{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("H{$dataStart}:H{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("H{$dataStart}:I{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("J{$dataStart}:K{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("L{$dataStart}:L{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+
+                // ─── Number format ───
+                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("L{$dataStart}:L{$dataEnd}")->getNumberFormat()->setFormatCode('#,##0');
 
                 // ─── NIK & NIK TKU sebagai teks (hindari floating-point truncation 16-digit) ───
                 $sheet->getStyle("D{$dataStart}:E{$dataEnd}")->getNumberFormat()->setFormatCode('@');
@@ -165,9 +181,9 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 // ─── TOTAL Row ───
                 $totalRow = $dataEnd + 2;
 
-                $sheet->mergeCells("A{$totalRow}:G{$totalRow}");
+                $sheet->mergeCells("A{$totalRow}:K{$totalRow}");
                 $sheet->setCellValue("A{$totalRow}", 'TOTAL');
-                $sheet->setCellValue("H{$totalRow}", $totals['total_kompensasi']);
+                $sheet->setCellValue("L{$totalRow}", $totals['total_kompensasi']);
 
                 $totalRange = "A{$totalRow}:{$lastCol}{$totalRow}";
                 $sheet->getStyle($totalRange)->getFont()->setBold(true);
@@ -177,8 +193,8 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $sheet->getStyle($totalRange)->getBorders()
                     ->getAllBorders()->setBorderStyle(Border::BORDER_THIN);
                 $sheet->getStyle("A{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("H{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle("H{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
+                $sheet->getStyle("L{$totalRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle("L{$totalRow}")->getNumberFormat()->setFormatCode('#,##0');
 
                 // ─── Freeze ───
                 $sheet->freezePane("B{$dataStart}");

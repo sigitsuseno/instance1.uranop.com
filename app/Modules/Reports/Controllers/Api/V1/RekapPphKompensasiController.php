@@ -124,6 +124,19 @@ class RekapPphKompensasiController extends Controller
 
     // ─── Private helpers ──────────────────────────────────────────
 
+    /**
+     * Rentang periode kontrak untuk kolom PERIODE, memakai format yang sama
+     * dengan judul "PERIODE: ..." di baris 3 sheet (Y-m-d - Y-m-d).
+     */
+    private function formatPeriode(?Carbon $start, ?Carbon $end): string
+    {
+        if (! $start && ! $end) {
+            return '-';
+        }
+
+        return ($start ? $start->format('Y-m-d') : '-') . ' - ' . ($end ? $end->format('Y-m-d') : '-');
+    }
+
     private function buildData(Request $request)
     {
         $periodId = $request->input('period_id');
@@ -190,9 +203,28 @@ class RekapPphKompensasiController extends Controller
             // Per karyawan per tanggal pembayaran
             $key = $emp->id . '|' . $paidDate;
             if (!isset($nominalByGroup[$key])) {
-                $nominalByGroup[$key] = ['employee' => $emp, 'paid_at' => $paidDate, 'total' => 0];
+                $nominalByGroup[$key] = [
+                    'employee'   => $emp,
+                    'paid_at'    => $paidDate,
+                    'total'      => 0,
+                    'gaji_pokok' => $gajiPokok,
+                    'mk'         => 0,
+                    'start_date' => null,
+                    'end_date'   => null,
+                ];
             }
             $nominalByGroup[$key]['total'] += $nominal;
+
+            // Kolom pendukung export: MK = akumulasi masa kerja (bulan) kontrak yang
+            // dibayar di tanggal ini; PERIODE = rentang terlebar dari kontrak tsb.
+            $nominalByGroup[$key]['mk'] += $durationMonths;
+
+            if ($contract->start_date && (! $nominalByGroup[$key]['start_date'] || $contract->start_date->lt($nominalByGroup[$key]['start_date']))) {
+                $nominalByGroup[$key]['start_date'] = $contract->start_date;
+            }
+            if ($contract->end_date && (! $nominalByGroup[$key]['end_date'] || $contract->end_date->gt($nominalByGroup[$key]['end_date']))) {
+                $nominalByGroup[$key]['end_date'] = $contract->end_date;
+            }
         }
 
         $kompensasiData = collect($nominalByGroup)
@@ -206,6 +238,9 @@ class RekapPphKompensasiController extends Controller
                     'nik'              => $nik,
                     'nik_tku'          => $nik !== '-' ? $nik . '000000' : '-',
                     'gender'           => $emp->gender === 'L' ? 'L' : ($emp->gender === 'P' ? 'P' : '-'),
+                    'gaji_pokok'       => (float) $item['gaji_pokok'],
+                    'mk'               => (int) $item['mk'],
+                    'periode'          => $this->formatPeriode($item['start_date'], $item['end_date']),
                     'status_label'     => $emp->ptkp ?? '-',
                     'paid_at'          => $item['paid_at'],
                     'total_kompensasi' => (float) $item['total'],
