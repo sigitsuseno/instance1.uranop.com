@@ -16,7 +16,8 @@ mkdir -p "$TMP"
 
 php artisan tinker --execute="
 \$c = App\Modules\Employee\Models\EmployeeContract::where('is_latest', true)->with('employee.department','employee.position')->first();
-\$html = view('employee.contract-print', ['employee' => \$c->employee, 'contract' => \$c, 'company' => App\Modules\Organization\Models\Company::first()])->render();
+\$co = App\Modules\Organization\Models\Company::with('branches')->first();
+\$html = view('employee.contract-print', ['employee' => \$c->employee, 'contract' => \$c, 'company' => \$co, 'branch' => \$co?->branches->first() ?? App\Modules\Organization\Models\Branch::first()])->render();
 file_put_contents('$TMP/kontrak.html', \$html);
 " > /dev/null
 

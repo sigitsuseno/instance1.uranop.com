@@ -63,8 +63,10 @@ class CompanyProfileApiController extends Controller
             'branch_phone' => 'nullable|string|max:50',
             'branch_email' => 'nullable|email|max:255',
             'branch_pic_name' => 'nullable|string|max:255',
+            'branch_nama_pimpinan' => 'nullable|string|max:255',
 
-            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+            'logo' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'ttd_pimpinan' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048'
         ]);
 
         $company = Company::first();
@@ -102,6 +104,16 @@ class CompanyProfileApiController extends Controller
         $branch->phone = $request->branch_phone;
         $branch->email = $request->branch_email;
         $branch->pic_name = $request->branch_pic_name;
+        $branch->nama_pimpinan = $request->branch_nama_pimpinan;
+
+        if ($request->hasFile('ttd_pimpinan')) {
+            // Delete old signature if exists
+            if ($branch->ttd_pimpinan && Storage::disk('public')->exists($branch->ttd_pimpinan)) {
+                Storage::disk('public')->delete($branch->ttd_pimpinan);
+            }
+            $branch->ttd_pimpinan = $request->file('ttd_pimpinan')->store('signatures', 'public');
+        }
+
         $branch->save();
 
         return response()->json([

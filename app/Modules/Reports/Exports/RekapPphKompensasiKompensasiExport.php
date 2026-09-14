@@ -22,8 +22,9 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
     protected int $rowCount = 0;
     protected array $totals;
 
-    // A=No, B=NAMA BANK, C=PERHITUNGAN PPH, D=NIK, E=NIK TKU, F=L/P, G=GAJI POKOK,
-    // H=MK, I=PERIODE, J=STATUS, K=TANGGAL BAYAR, L=TOTAL KOMPENSASI
+    // A=No, B=NAMA BANK, C=PERHITUNGAN PPH, D=NIK, E=NIK TKU, F=L/P, G=STATUS,
+    // H=KOSONG, I=KOSONG, J=KOSONG, K=TANGGAL BAYAR, L=TOTAL KOMPENSASI
+    // (H..J sengaja dibiarkan kosong — kolom tetap ada, hanya tanpa isi)
     protected string $lastCol = 'L';
 
     public function __construct(array $rows, string $periodName, string $dateStart, string $dateEnd)
@@ -50,10 +51,10 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $row['nik']              ?? '-',
                 $row['nik_tku']          ?? '-',
                 $row['gender']           ?? '-',
-                (float) ($row['gaji_pokok'] ?? 0),
-                (int) ($row['mk'] ?? 0),
-                $row['periode']          ?? '-',
                 $row['status_label']     ?? '-',
+                '',
+                '',
+                '',
                 $row['paid_at']          ?? '-',
                 (float) ($row['total_kompensasi'] ?? 0),
             ];
@@ -72,7 +73,7 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
             [''],
             [
                 'No', 'NAMA BANK', 'PERHITUNGAN PPH (NAMA KTP)', 'NIK', 'NIK TKU',
-                'L/P', 'GAJI POKOK', 'MK', 'PERIODE', 'STATUS', 'TANGGAL BAYAR',
+                'L/P', 'STATUS', '', '', '', 'TANGGAL BAYAR',
                 'TOTAL KOMPENSASI',
             ],
         ];
@@ -87,10 +88,10 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
             'D' => 16,  // NIK
             'E' => 18,  // NIK TKU
             'F' => 6,   // L/P
-            'G' => 16,  // GAJI POKOK
-            'H' => 8,   // MK
-            'I' => 24,  // PERIODE
-            'J' => 10,  // STATUS
+            'G' => 16,  // STATUS
+            'H' => 8,   // kosong
+            'I' => 24,  // kosong
+            'J' => 10,  // kosong
             'K' => 14,  // TANGGAL BAYAR
             'L' => 18,  // TOTAL KOMPENSASI
         ];
@@ -152,13 +153,10 @@ class RekapPphKompensasiKompensasiExport implements FromArray, WithHeadings, Wit
                 $sheet->getStyle("C{$dataStart}:C{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
                 $sheet->getStyle("D{$dataStart}:E{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("F{$dataStart}:F{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-                $sheet->getStyle("H{$dataStart}:I{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-                $sheet->getStyle("J{$dataStart}:K{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle("G{$dataStart}:K{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 $sheet->getStyle("L{$dataStart}:L{$dataEnd}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                 // ─── Number format ───
-                $sheet->getStyle("G{$dataStart}:G{$dataEnd}")->getNumberFormat()->setFormatCode('#,##0');
                 $sheet->getStyle("L{$dataStart}:L{$dataEnd}")->getNumberFormat()->setFormatCode('#,##0');
 
                 // ─── NIK & NIK TKU sebagai teks (hindari floating-point truncation 16-digit) ───

@@ -5,6 +5,7 @@ namespace App\Modules\Employee\Controllers\Api\V1\Contract;
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeContract;
+use App\Modules\Organization\Models\Branch;
 use App\Modules\Organization\Models\Company;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -97,10 +98,14 @@ class ContractApiController extends Controller
 
         $employee->loadMissing(['department', 'position']);
 
+        $company = Company::with('branches')->first();
+
         $html = view('employee.contract-print', [
             'employee' => $employee,
             'contract' => $contract,
-            'company'  => Company::first(),
+            'company'  => $company,
+            // Kop & penandatangan diambil dari cabang (instance tunggal → cabang pertama).
+            'branch'   => $company?->branches->first() ?? Branch::first(),
         ])->render();
 
         return response($html);

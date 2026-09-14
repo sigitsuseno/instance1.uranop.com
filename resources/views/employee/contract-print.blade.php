@@ -5,9 +5,10 @@
      */
 
     $c = $company;
+    $b = $branch ?? null;
 
     // ── Identitas PIHAK PERTAMA (penandatangan a/n perusahaan) ──
-    // Ubah di sini bila pejabat penandatangan berganti.
+    // Dipakai sebagai fallback bila branches.nama_pimpinan belum diisi.
     $pihakPertama = [
         'nama'    => 'SATYAHADI MURDITOMO, ST',
         'jabatan' => 'Factory Manager',
@@ -15,18 +16,24 @@
 
     $companyName    = strtoupper($c->name ?? 'PT KEMILAU UNGARAN SUKSES');
     $companyTagline = 'EMBROIDERY & PRINTING FACTORY';
-    $companyAddress = 'Jl. Ngobo/PTPN IX No 1 Gudang Dolog BGR Karangjati 50552';
-    $companyPhone   = '0298- 525052, 522686';
+    // Kop surat: nama dari perusahaan, alamat & telepon dari cabang (fallback ke perusahaan).
+    $kopAddress     = trim((string) ($b->address ?? '')) ?: trim((string) ($c->address ?? ''));
+    $companyAddress = $kopAddress !== '' ? $kopAddress : 'Jl. Ngobo/PTPN IX No 1 Gudang Dolog BGR Karangjati 50552';
+    $kopPhone       = trim((string) ($b->phone ?? '')) ?: trim((string) ($c->phone ?? ''));
+    $companyPhone   = $kopPhone !== '' ? $kopPhone : '0298- 525052, 522686';
     $companyCity    = 'Ungaran - Semarang';
     $companyDomicile = 'Jl.PTPN IX / Jl.Ngobo No.1 Gudang Dolog BGR Karangjati Ungaran Semarang';
+
+    // ── Logo & tanda tangan pimpinan ──
+    $logoUrl = ($c && $c->logo_path) ? asset('storage/' . $c->logo_path) : null;
+    $ttdUrl  = ($b && $b->ttd_pimpinan) ? asset('storage/' . $b->ttd_pimpinan) : null;
+
+    // Nama di blok tanda tangan PIHAK PERTAMA diambil dari cabang.
+    $pimpinanName = trim((string) ($b->nama_pimpinan ?? '')) ?: $pihakPertama['nama'];
 
     // ── Periode kontrak ──
     $start = $contract->start_date;
     $end   = $contract->end_date;
-
-    $bulanRomawi = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
-    $noKontrak   = trim((string) $contract->contract_number);
-    $nomorDokumen = $noKontrak . '/SMG/KUS/' . ($start ? $bulanRomawi[(int) $start->format('n')] : '') . '/' . ($start ? $start->format('Y') : date('Y'));
 
     $durasiBulan = $contract->duration_months;
     if (! $durasiBulan && $start && $end) {
@@ -42,6 +49,10 @@
     $gajiPokok = (float) ($employee->base_salary ?? 0);
 
     $tanggalSurat = $start ? $start->locale('id')->translatedFormat('d F Y') : '-';
+
+    // ── Bulan Romawi untuk nomor dokumen (bulan saat dokumen dicetak) ──
+    $bulanRomawiList = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
+    $bulanRomawi     = $bulanRomawiList[(int) date('n')];
 
     // ── Bank pembayaran gaji (dinamis dari employees.bank_name) ──
     // "UOB" -> "UOB Bank"; bila nama bank sudah memuat kata "Bank", tidak digandakan.
@@ -90,6 +101,13 @@
         }
 
         /* ═══════ HEADER PERUSAHAAN ═══════ */
+        /* Logo di kiri, teks kop tetap center: kolom kiri & kanan disamakan lebarnya. */
+        table.kop { width: 100%; border-collapse: collapse; }
+        table.kop > tbody > tr > td { vertical-align: middle; padding: 0; }
+        table.kop .kop-side { width: 72px; }
+        .kop-logo { display: block; width: 62px; height: 62px; object-fit: contain; }
+        .kop-divider { border-top: 1.6px solid #000; margin: 4px 0 0; }
+
         .company-header { text-align: center; line-height: 1.2; }
         .company-header .name { font-size: 12pt; font-weight: bold; letter-spacing: .4px; }
         .company-header .tagline { font-size: 9.5pt; font-weight: bold; letter-spacing: 1px; }
@@ -102,6 +120,8 @@
         .doc-title .t1 { font-size: 11.5pt; font-weight: bold; text-decoration: underline; }
         .doc-title .t2 { font-size: 9.5pt; font-weight: bold; }
         .doc-title .t3 { font-size: 9pt; margin-top: 2px; }
+        /* Nomor kontrak dikosongkan (diisi tangan) — sisakan ruang ±40px. */
+        .no-blank { display: inline-block; width: 40px; }
 
         /* ═══════ BLOK IDENTITAS ═══════ */
         .party { width: 100%; border-collapse: collapse; margin-top: 5px; }
@@ -143,6 +163,7 @@
         .sign-table td { width: 50%; text-align: center; vertical-align: top; font-size: 8.8pt; }
         .sign-table .space { height: 58px; }
         .sign-table .name { font-weight: bold; text-decoration: underline; }
+        .sign-table .ttd-img { display: block; height: 50px; max-width: 150px; margin: 4px auto 0; object-fit: contain; }
 
         @media print {
             body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -151,20 +172,34 @@
 </head>
 <body>
 
-<!-- ═══════════════ HEADER ═══════════════ -->
-<div class="company-header">
-    <div class="name">{{ $companyName }}</div>
-    <div class="tagline">{{ $companyTagline }}</div>
-    <div class="address">{{ $companyAddress }}</div>
-    <div class="phone">Telp. : {{ $companyPhone }}</div>
-    <div class="city">{{ $companyCity }}</div>
-</div>
+<!-- ═══════════════ HEADER (logo kiri, kop tengah) ═══════════════ -->
+<table class="kop">
+    <tr>
+        <td class="kop-side">
+            @if ($logoUrl)
+                <img src="{{ $logoUrl }}" class="kop-logo" alt="">
+            @endif
+        </td>
+        <td>
+            <div class="company-header" >
+                <div class="name">{{ $companyName }}</div>
+                <div class="tagline">{{ $companyTagline }}</div>
+                <div class="address" style="padding: 0 60px;">{{ $companyAddress }}</div>
+                <div class="phone">Telp. : {{ $companyPhone }}</div>
+                <div class="city">{{ $companyCity }}</div>
+            </div>
+        </td>
+        
+        <td class="kop-side"></td>
+    </tr>
+</table>
+<div class="kop-divider"></div>
 
 <!-- ═══════════════ JUDUL ═══════════════ -->
 <div class="doc-title">
     <div class="t1">PERJANJIAN KERJA</div>
     <div class="t2">(UNTUK WAKTU TERTENTU)</div>
-    <div class="t3">NO. {{ $nomorDokumen }}</div>
+    <div class="t3">NO.<span class="no-blank"></span> /SMG/KUS/{{ $bulanRomawi }}/{{ date('Y') }}</div>
 </div>
 
 <!-- ═══════════════ PIHAK PERTAMA & KEDUA ═══════════════ -->
@@ -291,9 +326,9 @@
         <td colspan="4"></td>
     </tr>
     <tr>
-        <td colspan="5" style="text-align:center;font-weight:bold;font-size:9pt;">SENIN - JUMAT</td>
+        <td style="border: 1px solid #000;text-align:center;font-weight:bold;font-size:9pt;">SENIN - JUMAT</td>
         <td class="gap"></td>
-        <td colspan="4" style="text-align:center;font-weight:bold;font-size:9pt;">SABTU</td>
+        <td style="border: 1px solid #000;text-align:center;font-weight:bold;font-size:9pt;">SABTU</td>
     </tr>
     <tr>
         <td>
@@ -407,11 +442,15 @@
         <td></td>
     </tr>
     <tr>
-        <td class="space"></td>
+        <td class="space">
+            @if ($ttdUrl)
+                <img src="{{ $ttdUrl }}" class="ttd-img" alt="">
+            @endif
+        </td>
         <td class="space"></td>
     </tr>
     <tr>
-        <td class="name">{{ $pihakPertama['nama'] }}</td>
+        <td class="name">{{ $pimpinanName }}</td>
         <td class="name">{{ strtoupper($employee->name) }}</td>
     </tr>
 </table>

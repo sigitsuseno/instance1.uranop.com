@@ -18,6 +18,8 @@ class Branch extends Model
         'phone',
         'email',
         'pic_name',
+        'nama_pimpinan',
+        'ttd_pimpinan',
     ];
 
     public function company()
