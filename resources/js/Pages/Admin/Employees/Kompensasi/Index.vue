@@ -31,7 +31,6 @@ if (now.getDate() >= 25) {
 
 const selectedMonth = ref(initMonth)
 const selectedYear = ref(initYear)
-const selectedPeriode = ref('auto')
 
 // Hanya tampilkan kontrak terakhir (is_latest = true) secara default
 const onlyLatest = ref(true)
@@ -120,7 +119,6 @@ async function fetchData() {
         const params = new URLSearchParams()
         params.set('month', month)
         params.set('year', year)
-        params.set('periode', selectedPeriode.value)
         if (onlyLatest.value) params.set('is_latest', '1')
 
         const res = await get(`/api/v1/employees/compensation?${params}`)
@@ -276,7 +274,6 @@ async function fetchGroups() {
         const params = new URLSearchParams()
         params.set('month', month)
         params.set('year', year)
-        params.set('periode', selectedPeriode.value)
 
         const res = await get(`/api/v1/employees/compensation/export-groups?${params}`)
         if (res.data) {
@@ -315,7 +312,6 @@ function confirmExport() {
     const params = new URLSearchParams()
     params.set('month', month)
     params.set('year', year)
-    params.set('periode', selectedPeriode.value)
     params.set('is_latest', onlyLatest.value ? 1 : 0)
     Array.from(exportSelectedGroups.value).forEach(g => params.append('groups[]', g))
 
@@ -356,7 +352,6 @@ async function confirmPrint() {
         const params = new URLSearchParams()
         params.set('month', month)
         params.set('year', year)
-        params.set('periode', selectedPeriode.value)
         if (onlyLatest.value) params.set('is_latest', '1')
         Array.from(printSelectedGroups.value).forEach(g => params.append('groups[]', g))
 
@@ -488,8 +483,7 @@ onMounted(() => {
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Periode Badge -->
                 <div class="flex-1">
-                    <Badge v-if="period.label" :variant="period.label.includes('Awal') ? 'primary' : 'warning'"
-                        class="px-3 py-1">
+                    <Badge v-if="period.label" variant="primary" class="px-3 py-1">
                         <i class="bx bx-calendar mr-1"></i>
                         {{ period.label }}
                     </Badge>

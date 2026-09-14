@@ -32,7 +32,6 @@ if (now.getDate() >= 25) {
 
 const selectedMonth = ref(initMonth)
 const selectedYear = ref(initYear)
-const selectedPeriode = ref('auto')
 
 // Generate available months for filter
 const availableMonths = computed(() => {
@@ -82,7 +81,6 @@ async function fetchData() {
         const params = new URLSearchParams()
         params.set('month', month)
         params.set('year', year)
-        params.set('periode', selectedPeriode.value)
 
         const res = await get(`/api/v1/supervisor/employee-data/kompensasi?${params}`)
         if (res.data) {
@@ -182,7 +180,7 @@ async function downloadFile(url, defaultFilename) {
 
 function exportExcel() {
     const [year, month] = selectedMonthYear.value.split('-')
-    const url = `/api/v1/supervisor/employee-data/kompensasi/export?month=${month}&year=${year}&periode=${selectedPeriode.value}`
+    const url = `/api/v1/supervisor/employee-data/kompensasi/export?month=${month}&year=${year}`
     downloadFile(url, `kompensasi-${year}-${month}.xlsx`)
 }
 
@@ -193,7 +191,6 @@ async function bulkPrint() {
         const params = new URLSearchParams()
         params.set('month', month)
         params.set('year', year)
-        params.set('periode', selectedPeriode.value)
 
         const res = await get(`/api/v1/supervisor/employee-data/kompensasi/print?${params}`)
         if (res.data) {
@@ -322,8 +319,7 @@ onMounted(() => {
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Periode Badge -->
                 <div class="flex-1">
-                    <Badge v-if="period.label" :variant="period.label.includes('Awal') ? 'primary' : 'warning'"
-                        class="px-3 py-1">
+                    <Badge v-if="period.label" variant="primary" class="px-3 py-1">
                         <i class="bx bx-calendar mr-1"></i>
                         {{ period.label }}
                     </Badge>
@@ -343,18 +339,6 @@ onMounted(() => {
                     </div>
                 </div>
 
-                <div class="w-48 relative">
-                    <select v-model="selectedPeriode" @change="applyFilter"
-                        class="w-full pl-3 pr-8 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm appearance-none cursor-pointer">
-                        <option value="auto">Otomatis (Hari ini)</option>
-                        <option value="awal">Awal (25-7)</option>
-                        <option value="akhir">Akhir (8-24)</option>
-                    </select>
-                    <div
-                        class="absolute inset-y-0 right-0 pr-2 flex items-center pointer-events-none text-(--text-muted)">
-                        <i class="bx bx-chevron-down text-lg"></i>
-                    </div>
-                </div>
             </div>
         </BaseCard>
 

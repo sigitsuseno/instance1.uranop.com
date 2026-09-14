@@ -20,12 +20,11 @@ class CompensationApiController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
 
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
-            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month);
         } catch (\Exception $e) {
             return response()->json([
                 'data' => [
@@ -165,12 +164,11 @@ class CompensationApiController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
 
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
-            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month);
         } catch (\Exception $e) {
             return response()->json([
                 'data' => ['period' => null, 'groups' => []],
@@ -222,7 +220,6 @@ class CompensationApiController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
         $isLatest = $request->boolean('is_latest');
 
         $groupsRaw = $request->query('groups');
@@ -237,7 +234,7 @@ class CompensationApiController extends Controller
         $fileName = "kompensasi_{$year}_{$month}.xlsx";
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $periode, $isLatest, $groups),
+            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $isLatest, $groups),
             $fileName
         );
     }
@@ -250,7 +247,6 @@ class CompensationApiController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
 
         $groupsRaw = $request->query('groups');
         if (is_array($groupsRaw)) {
@@ -264,7 +260,7 @@ class CompensationApiController extends Controller
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
-            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

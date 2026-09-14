@@ -20,12 +20,11 @@ class SupervisorCompensationController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
 
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
-            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month);
         } catch (\Exception $e) {
             return response()->json([
                 'data' => [
@@ -110,12 +109,11 @@ class SupervisorCompensationController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
         
         $fileName = "kompensasi_{$year}_{$month}.xlsx";
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Modules\Employee\Exports\CompensationExport($month, $year, $periode), 
+            new \App\Modules\Employee\Exports\CompensationExport($month, $year), 
             $fileName
         );
     }
@@ -128,12 +126,11 @@ class SupervisorCompensationController extends Controller
     {
         $month = $request->query('month', date('n'));
         $year = $request->query('year', date('Y'));
-        $periode = $request->query('periode', 'auto');
 
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
-            $dateInfo = $compensationService->calculateCompensationDates($year, $month, $periode);
+            $dateInfo = $compensationService->calculateCompensationDates($year, $month);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 400);
         }

@@ -13,15 +13,13 @@ class CompensationExport implements WithMultipleSheets
 {
     protected $month;
     protected $year;
-    protected $periode;
     protected $isLatest;
     protected $groups;
 
-    public function __construct($month, $year, $periode, $isLatest = false, array $groups = [])
+    public function __construct($month, $year, $isLatest = false, array $groups = [])
     {
         $this->month = $month;
         $this->year = $year;
-        $this->periode = $periode;
         $this->isLatest = $isLatest;
         $this->groups = $groups;
     }
@@ -31,7 +29,7 @@ class CompensationExport implements WithMultipleSheets
         $compensationService = new \App\Modules\Employee\Services\CompensationPeriodService();
 
         try {
-            $dateInfo = $compensationService->calculateCompensationDates($this->year, $this->month, $this->periode);
+            $dateInfo = $compensationService->calculateCompensationDates($this->year, $this->month);
         } catch (\Exception $e) {
             $dateInfo = null;
         }
