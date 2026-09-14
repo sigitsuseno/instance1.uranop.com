@@ -4,7 +4,6 @@ namespace App\Modules\Employee\Controllers\Api\V1\Compensation;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Employee\Models\EmployeeContract;
-use App\Modules\Employee\Models\EmployeeSalaryComponent;
 use App\Modules\Organization\Models\Company;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -319,23 +318,20 @@ class CompensationApiController extends Controller
             $employee = $contract->employee;
             if (!$employee) continue;
 
-            // Get salary component data
-            $salaryData = EmployeeSalaryComponent::where('employee_id', $employee->id)
-                ->where('is_active', true)
-                ->latest('effective_date')
-                ->first();
-
-            $gajiPokok = $salaryData ? (float) $salaryData->gaji_pokok : (float) ($employee->base_salary ?? 0);
             // Tj. masa kerja dihitung dinamis dari join_date per periode (konsisten
-            // dengan tabel daftar & export kompensasi), bukan nilai tersimpan
-            // di employee_salary_components.
+            // dengan tabel daftar & export kompensasi). Gaji pokok juga diambil dari
+            // sumber yang sama dengan daftar/export (employee_salaries), bukan
+            // employee_salary_components, supaya nominal slip tidak pernah beda.
             $period = sprintf('%d-%02d', $year, $month);
+            $gajiPokok = $employee->gaji_pokok($period);
             $tjMasaKerja = $employee->tjMasaKerja($period);
             $durationMonths = (int) ($contract->duration_months ?? 0);
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);
-            $pembulatan = (int) floor($totalRounded - $totalRaw);
+            // Selisih ke total yang dibulatkan; dibulatkan ke rupiah terdekat supaya
+            // baris "Pblt" + nominal yang tampil = TOTAL (bukan dipotong floor()).
+            $pembulatan = (int) round($totalRounded - $totalRaw);
             $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
 
             $slips[] = [

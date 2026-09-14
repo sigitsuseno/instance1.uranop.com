@@ -84,9 +84,11 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                 $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
                 $totalRaw = $durationMonths * $monthlyRate;
                 $totalRounded = (float) (ceil($totalRaw / 100) * 100);
-                $pembulatan = (int) floor($totalRounded - $totalRaw);
+                // Selisih ke total yang dibulatkan; dibulatkan ke rupiah terdekat supaya
+                // kolom PEMBULATAN + nominal (format #,##0) = TOTAL.
+                $pembulatan = (int) round($totalRounded - $totalRaw);
                 $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
-                $totalTerima = $totalRounded - (float) ($potAdmin ?? 0);
+                $totalTerimaRow = $totalRounded - (float) ($potAdmin ?? 0);
 
                 $rows[] = [
                     $no++,
@@ -98,17 +100,21 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                     Carbon::parse($contract->end_date)->format('d-m-Y'),
                     $gajiPokok,
                     $durationMonths,
-                    round($totalRaw, 2),
+                    // Disimpan sebagai rupiah utuh (format kolom #,##0), supaya
+                    // nominal + PEMBULATAN = TOTAL konsisten sampai baris TOTAL.
+                    round($totalRaw),
                     $pembulatan,
                     $potAdmin,
-                    $totalTerima,
+                    $totalTerimaRow,
                 ];
 
                 $totalGajiPokok += $gajiPokok;
-                $totalRawSum += $totalRaw;
+                // Jumlahkan nilai yang tampil di sel (rupiah utuh), bukan raw berdesimal,
+                // supaya baris TOTAL tetap memenuhi nominal + PEMBULATAN - POTONGAN = TOTAL.
+                $totalRawSum += round($totalRaw);
                 $totalPembulatan += $pembulatan;
                 $totalPotAdmin += (float) ($potAdmin ?? 0);
-                $totalTerima += $totalTerima;
+                $totalTerima += $totalTerimaRow;
             }
 
             // ── Blank row pemisah antar section ──
@@ -119,7 +125,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
         $totalRow = array_fill(0, self::COL_COUNT, null);
         $totalRow[0]  = 'TOTAL';
         $totalRow[7]  = $totalGajiPokok;
-        $totalRow[9]  = round($totalRawSum, 2);
+        $totalRow[9]  = (float) $totalRawSum;
         $totalRow[10] = $totalPembulatan;
         $totalRow[11] = (float) $totalPotAdmin;
         $totalRow[12] = (float) $totalTerima;
