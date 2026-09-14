@@ -1,7 +1,7 @@
 @php
     /*
      * Print template: PERJANJIAN KERJA (UNTUK WAKTU TERTENTU)
-     * Mengikuti layout dokumen "docs/kontrak kerja.pdf" (Legal 8.5" x 14", 1 halaman).
+     * Mengikuti layout dokumen "docs/kontrak kerja.pdf" (1 halaman), dicetak di kertas F4 210mm x 330mm.
      */
 
     $c = $company;
@@ -91,13 +91,15 @@
     <meta charset="utf-8">
     <title>Perjanjian Kerja - {{ $employee->name }}</title>
     <style>
-        @page { size: 216mm 356mm; margin: 8mm 10mm; }
+        /* Kertas F4 (210mm x 330mm) — area cetak 190mm x 314mm. */
+        @page { size: 210mm 330mm; margin: 8mm 10mm; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: Arial, Helvetica, sans-serif;
             font-size: 8.8pt;
             line-height: 1.115;
             color: #000;
+            zoom: 0.92;
         }
 
         /* ═══════ HEADER PERUSAHAAN ═══════ */
@@ -177,7 +179,9 @@
     <tr>
         <td class="kop-side">
             @if ($logoUrl)
-                <img src="{{ $logoUrl }}" class="kop-logo" alt="">
+            <div style="position: relative; width: 72px; height: 62px; display: flex; align-items: center; justify-content: center;">
+                <img src="{{ $logoUrl }}" style="position: absolute; top: 0; left: 30px; max-width: 100%; max-height: 100%;" alt="">
+            </div>
             @endif
         </td>
         <td>
@@ -444,7 +448,9 @@
     <tr>
         <td class="space">
             @if ($ttdUrl)
-                <img src="{{ $ttdUrl }}" class="ttd-img" alt="">
+            <div style="position: relative; width: 100%; height: 50px;">
+                <img src="{{ $ttdUrl }}" alt="" style="position: absolute; top: 0; left: 50%; transform: translateX(-50%); max-height: 80px; object-fit: contain;">
+            </div>
             @endif
         </td>
         <td class="space"></td>
