@@ -682,12 +682,18 @@ onMounted(() => {
                                     <span style="font-size:6px">Rp</span>
                                     <span class="total-amount">{{ formatNumber(slip.totalRounded) }}</span>
                                 </div>
+                                <div v-if="Number(slip.potAdmin || 0) > 0" class="pblt-row">
+                                    <span class="pblt-label">Potongan</span>
+                                    <span style="font-size:6px">Rp</span>
+                                    <span class="pblt-amount">{{ formatNumber(slip.potAdmin) }}</span>
+                                    <span class="plus">-</span>
+                                </div>
                             </div>
 
                             <!-- TOTAL TERIMA -->
                             <div class="total-terima">
                                 <span>T O T A L &nbsp; T E R I M A</span>
-                                <span>Rp {{ formatNumber(slip.totalRounded) }}</span>
+                                <span>Rp {{ formatNumber(slip.totalTerima ?? slip.totalRounded) }}</span>
                             </div>
 
                             <!-- SIGNATURE -->

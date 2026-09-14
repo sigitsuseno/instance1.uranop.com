@@ -29,6 +29,7 @@ class CompensationResumeSheet implements WithTitle, WithEvents, WithColumnWidths
     protected string $companyName;
     protected string $monthLabel;
     protected array $resume = [];
+    protected float $totalPotAdmin = 0.0;
 
     public function __construct(Collection $contracts, int $year, int $month)
     {
@@ -82,6 +83,8 @@ class CompensationResumeSheet implements WithTitle, WithEvents, WithColumnWidths
             $durationMonths = (int) ($contract->duration_months ?? 0);
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRounded = (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
+
+            $this->totalPotAdmin += (float) ($contract->pot_admin ?? 0);
 
             $pid = $employee->position_id;
             $agg[$pid]['L'] = ($agg[$pid]['L'] ?? 0) + ($gender === 'L' ? 1 : 0);
@@ -239,7 +242,8 @@ class CompensationResumeSheet implements WithTitle, WithEvents, WithColumnWidths
                 $row++;
 
                 $this->writeSummaryLine($sheet, $row++, 'Total Kompensasi', $totalComp);
-                $this->writeSummaryLine($sheet, $row++, 'Pembayaran / Penyesuaian', $totalComp);
+                $this->writeSummaryLine($sheet, $row++, 'Potongan Admin', $this->totalPotAdmin);
+                $this->writeSummaryLine($sheet, $row++, 'Pembayaran / Penyesuaian', $totalComp - $this->totalPotAdmin);
                 $this->writeSummaryLine($sheet, $row++, 'Sisa', 0.0);
             },
         ];

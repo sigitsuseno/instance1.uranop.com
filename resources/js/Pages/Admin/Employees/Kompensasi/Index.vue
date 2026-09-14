@@ -9,7 +9,7 @@ import Badge from '../../../../Components/Badge.vue'
 
 const router = useRouter()
 const notification = useNotificationStore()
-const { get, post } = useApi()
+const { get, post, patch } = useApi()
 
 // State
 const loading = ref(false)
@@ -64,8 +64,11 @@ const selectedMonthYear = ref(`${selectedYear.value}-${String(selectedMonth.valu
 // Group Modal State
 const showGroupModal = ref(false)
 const groupLoading = ref(false)
-const groupForm = ref({ name: '', payment_date: '' })
+const groupForm = ref({ name: '', payment_date: '', pot_admins: {} })
 const deletingGroup = ref(null)
+
+// Kontrak yang nilainya sedang disimpan (inline edit potongan admin)
+const savingPotAdmin = ref(null)
 
 // Bulk State
 const selectedIds = ref(new Set())
@@ -99,6 +102,8 @@ const someSelected = computed(() => {
 })
 
 const selectedCount = computed(() => selectedIds.value.size)
+
+const selectedContracts = computed(() => contracts.value.filter(c => selectedIds.value.has(c.id)))
 
 // Group kompensasi unik yang ada di kontrak periode terpilih (comp_group + paid_at)
 const compGroups = computed(() => {
@@ -162,16 +167,51 @@ function toggleSelect(id) {
 
 function openGroupModal() {
     const d = new Date()
+    const potAdmins = {}
+    selectedContracts.value.forEach(c => { potAdmins[c.id] = c.pot_admin ?? '' })
+
     groupForm.value = {
         name: '',
         payment_date: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        pot_admins: potAdmins,
     }
     showGroupModal.value = true
 }
 
 async function closeGroupModal() {
     showGroupModal.value = false
-    groupForm.value = { name: '', payment_date: '' }
+    groupForm.value = { name: '', payment_date: '', pot_admins: {} }
+}
+
+/**
+ * Simpan potongan admin satu kontrak (inline). String kosong = tidak ada potongan.
+ */
+async function savePotAdmin(contract, rawValue) {
+    const trimmed = String(rawValue ?? '').trim()
+    let value = null
+
+    if (trimmed !== '') {
+        value = Number(trimmed)
+        if (!Number.isFinite(value) || value < 0) {
+            notification.addNotification('Potongan admin harus angka 0 atau lebih.', 'error')
+            return
+        }
+    }
+
+    if (value === (contract.pot_admin ?? null)) return
+
+    savingPotAdmin.value = contract.id
+    try {
+        const [year, month] = selectedMonthYear.value.split('-')
+        const res = await patch(`/api/v1/employees/compensation/${contract.id}/pot-admin?month=${month}&year=${year}`, { pot_admin: value })
+        contract.pot_admin = res.data?.pot_admin ?? value
+        contract.total_terima = res.data?.total_terima ?? contract.nominal
+        notification.addNotification(res.message || 'Potongan admin disimpan.', 'success')
+    } catch (e) {
+        notification.addNotification(e.message || 'Gagal menyimpan potongan admin.', 'error')
+    } finally {
+        savingPotAdmin.value = null
+    }
 }
 
 async function confirmDeleteGroup(group) {
@@ -201,10 +241,33 @@ async function saveGroup() {
     groupLoading.value = true
     try {
         const ids = Array.from(selectedIds.value)
+
+        const potAdmins = {}
+        let invalid = false
+        Object.entries(groupForm.value.pot_admins || {}).forEach(([id, raw]) => {
+            const trimmed = String(raw ?? '').trim()
+            if (trimmed === '') {
+                potAdmins[id] = null
+                return
+            }
+            const value = Number(trimmed)
+            if (!Number.isFinite(value) || value < 0) {
+                invalid = true
+                return
+            }
+            potAdmins[id] = value
+        })
+
+        if (invalid) {
+            notification.addNotification('Potongan admin harus angka 0 atau lebih.', 'error')
+            return
+        }
+
         const res = await post('/api/v1/employees/compensation/create-group', {
             ids,
             group_name: groupForm.value.name.trim(),
             payment_date: groupForm.value.payment_date,
+            pot_admins: potAdmins,
         })
         notification.addNotification(res.message || 'Group kompensasi berhasil dibuat.', 'success')
         selectedIds.value = new Set()
@@ -645,6 +708,12 @@ onMounted(() => {
                                 class="px-4 py-3 text-right text-xs font-bold text-(--text-muted) uppercase tracking-wider">
                                 Nominal</th>
                             <th
+                                class="px-4 py-3 text-right text-xs font-bold text-(--text-muted) uppercase tracking-wider">
+                                Potongan</th>
+                            <th
+                                class="px-4 py-3 text-right text-xs font-bold text-(--text-muted) uppercase tracking-wider">
+                                Total Terima</th>
+                            <th
                                 class="px-4 py-3 text-left text-xs font-bold text-(--text-muted) uppercase tracking-wider">
                                 Sisa Hari</th>
                             <th
@@ -654,7 +723,7 @@ onMounted(() => {
                     </thead>
                     <tbody class="bg-(--bg-card) divide-y divide-(--border-soft)">
                         <tr v-if="loading">
-                            <td colspan="7" class="px-4 py-12 text-center">
+                            <td colspan="9" class="px-4 py-12 text-center">
                                 <div
                                     class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin mx-auto mb-2">
                                 </div>
@@ -662,7 +731,7 @@ onMounted(() => {
                             </td>
                         </tr>
                         <tr v-else-if="contracts.length === 0">
-                            <td colspan="7" class="px-4 py-12 text-center text-(--text-muted)">
+                            <td colspan="9" class="px-4 py-12 text-center text-(--text-muted)">
                                 <i class="bx bx-check-circle text-4xl mb-2 block"></i>
                                 Tidak ada kontrak yang jatuh tempo di periode ini.
                             </td>
@@ -716,6 +785,28 @@ onMounted(() => {
                             <td class="px-4 py-3 whitespace-nowrap text-right">
                                 <p class="text-sm font-semibold text-(--text-main)">
                                     {{ formatCurrency(contract.nominal) }}
+                                </p>
+                            </td>
+
+                            <!-- Potongan Admin (inline) -->
+                            <td class="px-4 py-3 whitespace-nowrap text-right">
+                                <div class="relative inline-block">
+                                    <input type="number" min="0" step="1" placeholder="-"
+                                        :value="contract.pot_admin ?? ''"
+                                        :disabled="savingPotAdmin === contract.id"
+                                        @keyup.enter="$event.target.blur()"
+                                        @blur="savePotAdmin(contract, $event.target.value)"
+                                        :title="'Potongan admin untuk kontrak ini (kosongkan jika tidak ada)'"
+                                        class="w-28 h-8 pl-2 pr-7 text-right text-sm rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all disabled:opacity-50" />
+                                    <i v-if="savingPotAdmin === contract.id"
+                                        class="bx bx-loader-alt bx-spin absolute right-1.5 top-1/2 -translate-y-1/2 text-(--text-muted)"></i>
+                                </div>
+                            </td>
+
+                            <!-- Total Terima -->
+                            <td class="px-4 py-3 whitespace-nowrap text-right">
+                                <p class="text-sm font-semibold text-emerald-600">
+                                    {{ formatCurrency(contract.total_terima) }}
                                 </p>
                             </td>
 
@@ -782,6 +873,23 @@ onMounted(() => {
                             <label class="block text-sm font-medium text-(--text-main) mb-1.5">Tanggal Pembayaran</label>
                             <input type="date" v-model="groupForm.payment_date"
                                 class="w-full h-10 px-3 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-(--text-main) mb-1.5">
+                                Potongan Admin
+                                <span class="text-(--text-muted) font-normal">(kosongkan jika tidak ada)</span>
+                            </label>
+                            <div class="max-h-44 overflow-y-auto space-y-2 pr-1">
+                                <div v-for="c in selectedContracts" :key="'pot-' + c.id"
+                                    class="flex items-center gap-2">
+                                    <span class="flex-1 min-w-0 truncate text-sm text-(--text-main)">
+                                        {{ c.employee?.name || '-' }}
+                                    </span>
+                                    <input type="number" min="0" step="1" placeholder="-"
+                                        v-model="groupForm.pot_admins[c.id]"
+                                        class="w-32 h-9 px-2 text-right text-sm rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all" />
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -1067,6 +1175,14 @@ onMounted(() => {
                                             <span class="total-amount">{{ formatNumber(slip.totalRounded, 2) }}</span>
                                         </div>
                                     </div>
+                                    <div class="flex items-center justify-start py-1">
+                                        <span class="w-1/3"></span>
+                                        <span class="w-1/3 text-end pr-4">POTONGAN</span>
+                                        <div class="w-1/4 flex justify-between items-center border-b">
+                                            <span class="rp">Rp</span>
+                                            <span class="pblt-amount">{{ formatNumber(slip.potAdmin || 0, 2) }} -</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1075,7 +1191,7 @@ onMounted(() => {
                                 <span class="w-2/3 text-center py-1">TOTAL &nbsp; TERIMA</span>
                                 <div class="w-1/4 flex justify-between items-center">
                                     <span class="rp">Rp</span>
-                                    <span class="">{{ formatNumber(slip.totalRounded, 2) }}</span>
+                                    <span class="">{{ formatNumber(slip.totalTerima ?? slip.totalRounded, 2) }}</span>
                                 </div>
                             </div>
 

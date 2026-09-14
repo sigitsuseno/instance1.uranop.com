@@ -21,11 +21,11 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
     protected int $year;
     protected int $month;
 
-    // 12 kolom: A=NO, B=NAMA, C=REKENING, D=BANK, E=CABANG,
+    // 13 kolom: A=NO, B=NAMA, C=REKENING, D=BANK, E=CABANG,
     // F..J = di bawah header group (start_date, end_date, gaji_pokok, durasi, nominal),
-    // K=PEMBULATAN, L=TOTAL TERIMA
-    private const LAST_COL = 'L';
-    private const COL_COUNT = 12;
+    // K=PEMBULATAN, L=POTONGAN, M=TOTAL TERIMA
+    private const LAST_COL = 'M';
+    private const COL_COUNT = 13;
 
     public function __construct(Collection $contracts, int $year, int $month)
     {
@@ -55,6 +55,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
         $totalGajiPokok = 0;
         $totalRawSum = 0.0;
         $totalPembulatan = 0;
+        $totalPotAdmin = 0.0;
         $totalTerima = 0.0;
 
         foreach ($grouped as $groupName => $groupContracts) {
@@ -67,7 +68,8 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
             $row1[4]  = 'CABANG';
             $row1[5]  = trim($groupName . ' ' . $this->year);
             $row1[10] = 'PEMBULATAN';
-            $row1[11] = 'TOTAL TERIMA';
+            $row1[11] = 'POTONGAN';
+            $row1[12] = 'TOTAL TERIMA';
             $rows[] = $row1;
 
             // ── Data rows ──
@@ -83,6 +85,8 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                 $totalRaw = $durationMonths * $monthlyRate;
                 $totalRounded = (float) (ceil($totalRaw / 100) * 100);
                 $pembulatan = (int) floor($totalRounded - $totalRaw);
+                $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
+                $totalTerima = $totalRounded - (float) ($potAdmin ?? 0);
 
                 $rows[] = [
                     $no++,
@@ -96,13 +100,15 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                     $durationMonths,
                     round($totalRaw, 2),
                     $pembulatan,
-                    $totalRounded,
+                    $potAdmin,
+                    $totalTerima,
                 ];
 
                 $totalGajiPokok += $gajiPokok;
                 $totalRawSum += $totalRaw;
                 $totalPembulatan += $pembulatan;
-                $totalTerima += $totalRounded;
+                $totalPotAdmin += (float) ($potAdmin ?? 0);
+                $totalTerima += $totalTerima;
             }
 
             // ── Blank row pemisah antar section ──
@@ -115,7 +121,8 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
         $totalRow[7]  = $totalGajiPokok;
         $totalRow[9]  = round($totalRawSum, 2);
         $totalRow[10] = $totalPembulatan;
-        $totalRow[11] = (float) $totalTerima;
+        $totalRow[11] = (float) $totalPotAdmin;
+        $totalRow[12] = (float) $totalTerima;
         $rows[] = $totalRow;
 
         return $rows;
@@ -136,6 +143,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
             'J' => 14,
             'K' => 12,
             'L' => 14,
+            'M' => 14,
         ];
     }
 
@@ -249,7 +257,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                     $sheet->getStyle("J{$firstData}:{$lastCol}{$lastData}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                     // Number format untuk kolom numerik
-                    foreach (['H', 'I', 'J', 'K', 'L'] as $col) {
+                    foreach (['H', 'I', 'J', 'K', 'L', 'M'] as $col) {
                         $sheet->getStyle("{$col}{$firstData}:{$col}{$lastData}")
                             ->getNumberFormat()->setFormatCode('#,##0');
                     }
@@ -281,7 +289,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
                     // Number format kolom numerik
-                    foreach (['H', 'I', 'J', 'K', 'L'] as $col) {
+                    foreach (['H', 'I', 'J', 'K', 'L', 'M'] as $col) {
                         $sheet->getStyle("{$col}{$totalRow}")
                             ->getNumberFormat()->setFormatCode('#,##0');
                     }

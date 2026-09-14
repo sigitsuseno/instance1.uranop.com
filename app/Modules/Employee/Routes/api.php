@@ -52,6 +52,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             Route::get('/print', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'print'])->name('employees.compensation.print');
             Route::post('/create-group', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'createGroup'])->name('employees.compensation.create-group');
             Route::post('/delete-group', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'deleteGroup'])->name('employees.compensation.delete-group');
+            Route::patch('/{contract}/pot-admin', [\App\Modules\Employee\Controllers\Api\V1\Compensation\CompensationApiController::class, 'updatePotAdmin'])->name('employees.compensation.pot-admin');
         });
 
         // Grouping & Kanban

@@ -171,6 +171,7 @@ class SupervisorCompensationController extends Controller
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);
             $pembulatan = (int) floor($totalRounded - $totalRaw);
+            $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
 
             $slips[] = [
                 'contract_id' => $contract->id,
@@ -186,6 +187,8 @@ class SupervisorCompensationController extends Controller
                 'totalRaw' => $totalRaw,
                 'totalRounded' => $totalRounded,
                 'pembulatan' => $pembulatan,
+                'potAdmin' => $potAdmin,
+                'totalTerima' => $totalRounded - (float) ($potAdmin ?? 0),
             ];
         }
 

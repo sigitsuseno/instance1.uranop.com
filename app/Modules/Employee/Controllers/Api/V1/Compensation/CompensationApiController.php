@@ -53,16 +53,12 @@ class CompensationApiController extends Controller
             ->get()
             ->map(function ($contract) use ($year, $month) {
                 // Return necessary fields
-                $employee = current($contract->employee()->getModels());
+                $employee = $contract->employee;
                 $period = sprintf('%d-%02d', $year, $month);
 
-                // Nominal kompensasi, konsisten dengan export/slip:
-                // (gaji pokok + tj. masa kerja) / 12 × durasi, dibulatkan ke atas.
-                $gajiPokok = $employee ? $employee->gaji_pokok($period) : 0;
-                $tjMasaKerja = $employee ? $employee->tjMasaKerja($period) : 0;
                 $durationMonths = (int) ($contract->duration_months ?? 0);
-                $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
-                $nominal = (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
+                $nominal = $this->contractNominal($contract, $period);
+                $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
 
                 return [
                     'id' => $contract->id,
@@ -75,6 +71,8 @@ class CompensationApiController extends Controller
                     'compensation_paid_at' => $contract->compensation_paid_at,
                     'comp_group' => $contract->comp_group,
                     'nominal' => $nominal,
+                    'pot_admin' => $potAdmin,
+                    'total_terima' => $nominal - (float) ($potAdmin ?? 0),
                     'employee' => [
                         'name' => $employee?->name,
                         'employee_code' => $employee?->employee_code,
@@ -109,9 +107,24 @@ class CompensationApiController extends Controller
             'ids.*'        => ['integer'],
             'group_name'   => ['required', 'string', 'max:255'],
             'payment_date' => ['required', 'date'],
+            'pot_admins'   => ['sometimes', 'array'],
+            'pot_admins.*' => ['nullable', 'numeric', 'min:0'],
         ]);
 
         $paymentDate = Carbon::parse($validated['payment_date'])->startOfDay();
+
+        // Simpan potongan admin per kontrak (hanya untuk kontrak yang belum dibayar
+        // dan memang termasuk dalam pilihan), sebelum ditandai dibayar.
+        $selectedIds = array_map('intval', $validated['ids']);
+        foreach ($validated['pot_admins'] ?? [] as $contractId => $value) {
+            if (! in_array((int) $contractId, $selectedIds, true)) {
+                continue;
+            }
+
+            EmployeeContract::where('id', $contractId)
+                ->whereNull('compensation_paid_at')
+                ->update(['pot_admin' => $value === null ? null : (float) $value]);
+        }
 
         $updated = EmployeeContract::whereIn('id', $validated['ids'])
             ->whereNull('compensation_paid_at')
@@ -323,6 +336,7 @@ class CompensationApiController extends Controller
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);
             $pembulatan = (int) floor($totalRounded - $totalRaw);
+            $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
 
             $slips[] = [
                 'contract_id' => $contract->id,
@@ -339,6 +353,8 @@ class CompensationApiController extends Controller
                 'totalRaw' => $totalRaw,
                 'totalRounded' => $totalRounded,
                 'pembulatan' => $pembulatan,
+                'potAdmin' => $potAdmin,
+                'totalTerima' => $totalRounded - (float) ($potAdmin ?? 0),
             ];
         }
 
@@ -368,5 +384,56 @@ class CompensationApiController extends Controller
                 'slips' => $slips,
             ]
         ]);
+    }
+
+    /**
+     * PATCH /api/v1/employees/compensation/{contract}/pot-admin
+     *
+     * Isi/ubah potongan admin per kontrak. Kirim pot_admin = null untuk
+     * menghapus potongan (karyawan tersebut tidak punya potongan).
+     */
+    public function updatePotAdmin(Request $request, EmployeeContract $contract): JsonResponse
+    {
+        $validated = $request->validate([
+            'pot_admin' => ['present', 'nullable', 'numeric', 'min:0'],
+        ]);
+
+        $contract->pot_admin = $validated['pot_admin'] === null ? null : (float) $validated['pot_admin'];
+        $contract->save();
+
+        $period = $request->filled(['month', 'year'])
+            ? sprintf('%d-%02d', $request->query('year'), $request->query('month'))
+            : date('Y-m');
+
+        $nominal  = $this->contractNominal($contract, $period);
+        $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
+
+        return response()->json([
+            'message' => $potAdmin === null
+                ? 'Potongan admin dihapus.'
+                : 'Potongan admin berhasil disimpan.',
+            'data' => [
+                'id'           => $contract->id,
+                'pot_admin'    => $potAdmin,
+                'nominal'      => $nominal,
+                'total_terima' => $nominal - (float) ($potAdmin ?? 0),
+            ],
+        ]);
+    }
+
+    /**
+     * Nominal kompensasi per kontrak, konsisten dengan tabel daftar & slip:
+     * (gaji pokok + tj. masa kerja) / 12 × durasi, dibulatkan ke atas ke ratusan.
+     */
+    private function contractNominal(EmployeeContract $contract, string $period): float
+    {
+        $employee = $contract->employee;
+
+        $gajiPokok      = $employee ? $employee->gaji_pokok($period) : 0;
+        $tjMasaKerja    = $employee ? $employee->tjMasaKerja($period) : 0;
+        $durationMonths = (int) ($contract->duration_months ?? 0);
+        $monthlyRate    = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
+
+        return (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
     }
 }

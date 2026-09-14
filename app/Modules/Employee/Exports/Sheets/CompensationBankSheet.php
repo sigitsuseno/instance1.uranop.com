@@ -40,13 +40,15 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);
+            // Nominal transfer bank = kompensasi bersih setelah potongan admin.
+            $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
 
             $this->data[] = [
                 'penerima'  => $employee->bank_account_name ?: $employee->name,
                 'norek'     => (string) ($employee->bank_account_number ?? ''),
                 'bank'      => (string) ($employee->bank_name ?? ''),
                 'cabang'    => (string) ($employee->bank_cabang ?? ''),
-                'nominal'   => $totalRounded,
+                'nominal'   => $totalRounded - (float) ($potAdmin ?? 0),
                 'tanggal'   => $contract->compensation_paid_at?->format('d-m-Y') ?? '',
                 'keterangan'=> 'KOMPENSASI',
             ];

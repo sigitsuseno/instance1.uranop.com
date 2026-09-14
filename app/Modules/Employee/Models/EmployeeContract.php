@@ -32,6 +32,7 @@ class EmployeeContract extends Model
         'expiry_notified_at',
         'compensation_paid_at',
         'comp_group',
+        'pot_admin',
         'created_by',
         'updated_by',
     ];
@@ -44,6 +45,7 @@ class EmployeeContract extends Model
         'version'              => 'integer',
         'expiry_notified_at'   => 'datetime',
         'compensation_paid_at' => 'datetime',
+        'pot_admin'            => 'decimal:2',
     ];
 
     protected $attributes = [
