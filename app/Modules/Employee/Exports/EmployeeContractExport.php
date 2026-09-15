@@ -3,6 +3,7 @@
 namespace App\Modules\Employee\Exports;
 
 use App\Modules\Employee\Models\EmployeeContract;
+use DateTimeInterface;
 use Maatwebsite\Excel\Concerns\FromQuery;
 use Maatwebsite\Excel\Concerns\WithColumnFormatting;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
@@ -15,6 +16,7 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Cell\Cell;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
+use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
@@ -67,11 +69,22 @@ class EmployeeContractExport implements
 
     /**
      * Paksa kolom NIK tetap bertipe string saat ditulis.
+     *
+     * Tanggal (start_date/end_date) ditulis sebagai serial number Excel, bukan
+     * string "Y-m-d H:i:s" seperti perilaku DefaultValueBinder. Dengan begitu
+     * format kolom H/I (DD/MM/YYYY) benar-benar dipakai Excel sehingga tanggal
+     * tampil tanpa jam.
      */
     public function bindValue(Cell $cell, $value)
     {
         if (in_array($cell->getColumn(), self::TEXT_COLUMNS, true)) {
             $cell->setValueExplicit((string) $value, DataType::TYPE_STRING);
+
+            return true;
+        }
+
+        if ($value instanceof DateTimeInterface) {
+            $cell->setValueExplicit(ExcelDate::PHPToExcel($value), DataType::TYPE_NUMERIC);
 
             return true;
         }
