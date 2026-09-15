@@ -225,6 +225,10 @@ class ContractApiController extends Controller
         $request->validate([
             'end_date_start' => 'nullable|date',
             'end_date_end'   => $isLatest ? 'nullable|date' : 'nullable|date|after_or_equal:end_date_start',
+        ], [
+            'end_date_start.date'         => 'Tanggal awal rentang kontrak tidak valid.',
+            'end_date_end.date'           => 'Tanggal akhir rentang kontrak tidak valid.',
+            'end_date_end.after_or_equal' => 'Tanggal "Sampai" tidak boleh lebih awal dari tanggal "Dari".',
         ]);
 
         $filters = [

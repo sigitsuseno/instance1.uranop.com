@@ -233,7 +233,57 @@ function applyIsLatest(value) {
   }
 }
 
+/**
+ * Rapikan rentang tanggal export: bila "Dari" lebih besar dari "Sampai",
+ * posisinya ditukar supaya export tetap bisa dijalankan.
+ * Mengembalikan true bila urutan tanggal diubah.
+ */
+function normalizeExportDateRange() {
+  if (exportIsLatest.value) return false
+  if (!exportDateStart.value || !exportDateEnd.value) return false
+  if (exportDateStart.value <= exportDateEnd.value) return false
+
+  const earlierDate = exportDateEnd.value
+  exportDateEnd.value = exportDateStart.value
+  exportDateStart.value = earlierDate
+
+  return true
+}
+
+/**
+ * Terjemahkan respons gagal dari server menjadi pesan yang bisa dibaca user,
+ * supaya tidak lagi menampilkan "Pastikan anda sudah login" untuk semua error.
+ */
+async function describeExportError(res) {
+  if (res.status === 401 || res.status === 403) {
+    return 'Sesi login berakhir. Silakan login ulang lalu ulangi export.'
+  }
+
+  if (res.status === 419) {
+    return 'Sesi anda kadaluarsa. Muat ulang halaman lalu ulangi export.'
+  }
+
+  try {
+    const data = await res.json()
+
+    if (data?.errors) {
+      const firstError = Object.values(data.errors).flat()[0]
+      if (firstError) return firstError
+    }
+
+    if (data?.message) return data.message
+  } catch (e) {
+    // Respons bukan JSON (mis. halaman error HTML) — pakai pesan default di bawah.
+  }
+
+  return `Gagal export kontrak (HTTP ${res.status}).`
+}
+
 async function exportContracts() {
+  if (normalizeExportDateRange()) {
+    notification.addNotification('Rentang tanggal ditukar otomatis: tanggal "Dari" harus lebih awal dari "Sampai".', 'warning')
+  }
+
   const params = new URLSearchParams()
   if (searchQuery.value) params.set('search', searchQuery.value)
   if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
@@ -255,20 +305,30 @@ async function exportContracts() {
   exporting.value = true
 
   try {
-    const res = await fetch(`/api/v1/employees/contracts/export?${params.toString()}`, { headers })
-    if (!res.ok) throw new Error('Export gagal')
+    const baseUrl = import.meta.env.VITE_API_URL || ''
+    const res = await fetch(`${baseUrl}/api/v1/employees/contracts/export?${params.toString()}`, { headers })
+
+    if (!res.ok) {
+      throw new Error(await describeExportError(res))
+    }
 
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = `kontrak_kerja_${new Date().toISOString().slice(0, 10)}.xlsx`
+    document.body.appendChild(a)
     a.click()
-    URL.revokeObjectURL(url)
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
     showExportModal.value = false
     notification.addNotification('Export kontrak berhasil didownload.', 'success')
   } catch (e) {
-    notification.addNotification('Gagal export kontrak. Pastikan anda sudah login.', 'error')
+    const message = e instanceof TypeError
+      ? 'Gagal menghubungi server. Periksa koneksi anda lalu coba lagi.'
+      : (e?.message || 'Gagal export kontrak.')
+
+    notification.addNotification(message, 'error')
   } finally {
     exporting.value = false
   }
