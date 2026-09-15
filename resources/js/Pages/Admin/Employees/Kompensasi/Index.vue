@@ -1158,7 +1158,7 @@ onMounted(() => {
                                 </div>
 
                                 <!-- TOTAL SECTION -->
-                                <div class="mt-8">
+                                <div class="mt-12">
                                     <div class="flex items-center justify-start">
                                         <span class="w-1/3"></span>
                                         <span class="w-1/3 text-end pr-4">Pblt</span>
@@ -1175,14 +1175,7 @@ onMounted(() => {
                                             <span class="total-amount">{{ formatNumber(slip.totalRounded, 2) }}</span>
                                         </div>
                                     </div>
-                                    <div class="flex items-center justify-start py-1">
-                                        <span class="w-1/3"></span>
-                                        <span class="w-1/3 text-end pr-4">POTONGAN</span>
-                                        <div class="w-1/4 flex justify-between items-center border-b">
-                                            <span class="rp">Rp</span>
-                                            <span class="pblt-amount">{{ formatNumber(slip.potAdmin || 0, 2) }} -</span>
-                                        </div>
-                                    </div>
+
                                 </div>
                             </div>
 
