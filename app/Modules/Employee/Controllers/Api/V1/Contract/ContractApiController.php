@@ -211,15 +211,32 @@ class ContractApiController extends Controller
 
     /**
      * GET /api/contracts/export
+     *
+     * Filter opsional:
+     * - is_latest      : hanya kontrak terbaru tiap karyawan (range tanggal diabaikan)
+     * - end_date_start : batas awal range end_date (dipakai bila is_latest tidak aktif)
+     * - end_date_end   : batas akhir range end_date (dipakai bila is_latest tidak aktif)
+     * - only_active    : hanya kontrak milik karyawan yang aktif
      */
     public function export(Request $request): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        $filters = $request->only([
-            'search',
-            'employee_id',
-            'contract_type',
-            'status',
+        $isLatest = $request->boolean('is_latest');
+
+        $request->validate([
+            'end_date_start' => 'nullable|date',
+            'end_date_end'   => $isLatest ? 'nullable|date' : 'nullable|date|after_or_equal:end_date_start',
         ]);
+
+        $filters = [
+            'search'         => $request->input('search'),
+            'employee_id'    => $request->input('employee_id'),
+            'contract_type'  => $request->input('contract_type'),
+            'status'         => $request->input('status'),
+            'is_latest'      => $isLatest,
+            'end_date_start' => $isLatest ? null : $request->input('end_date_start'),
+            'end_date_end'   => $isLatest ? null : $request->input('end_date_end'),
+            'only_active'    => $request->boolean('only_active'),
+        ];
 
         return \Maatwebsite\Excel\Facades\Excel::download(
             new \App\Modules\Employee\Exports\EmployeeContractExport($filters),

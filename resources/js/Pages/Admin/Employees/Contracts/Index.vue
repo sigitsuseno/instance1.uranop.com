@@ -64,6 +64,14 @@ const showHistoryModal = ref(false)
 const contractHistory = ref([])
 const loadingHistory = ref(false)
 
+// Export Modal
+const showExportModal = ref(false)
+const exporting = ref(false)
+const exportIsLatest = ref(false)
+const exportDateStart = ref('')
+const exportDateEnd = ref('')
+const exportOnlyActive = ref(false)
+
 // ========== API CALLS ==========
 async function fetchEmployees() {
   loading.value = true
@@ -208,33 +216,62 @@ async function markCompensationPaid(contractId, employeeId) {
   }
 }
 
-function exportContracts() {
+function openExportModal() {
+  exportIsLatest.value = false
+  exportDateStart.value = ''
+  exportDateEnd.value = ''
+  exportOnlyActive.value = false
+  showExportModal.value = true
+}
+
+function applyIsLatest(value) {
+  exportIsLatest.value = value
+  if (value) {
+    // Latest di-check → range tanggal tidak dipakai
+    exportDateStart.value = ''
+    exportDateEnd.value = ''
+  }
+}
+
+async function exportContracts() {
   const params = new URLSearchParams()
   if (searchQuery.value) params.set('search', searchQuery.value)
   if (contractTypeFilter.value) params.set('contract_type', contractTypeFilter.value)
   if (contractStatusFilter.value) params.set('status', contractStatusFilter.value)
 
+  if (exportIsLatest.value) {
+    params.set('is_latest', '1')
+  } else {
+    if (exportDateStart.value) params.set('end_date_start', exportDateStart.value)
+    if (exportDateEnd.value) params.set('end_date_end', exportDateEnd.value)
+  }
+
+  if (exportOnlyActive.value) params.set('only_active', '1')
+
   const headers = { 'Accept': 'application/json' }
   const token = localStorage.getItem('token')
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  fetch(`/api/v1/employees/contracts/export?${params.toString()}`, { headers })
-    .then(res => {
-      if (!res.ok) throw new Error('Export gagal')
-      return res.blob()
-    })
-    .then(blob => {
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `kontrak_kerja_${new Date().toISOString().slice(0, 10)}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
-      notification.addNotification('Export kontrak berhasil didownload.', 'success')
-    })
-    .catch(() => {
-      notification.addNotification('Gagal export kontrak. Pastikan anda sudah login.', 'error')
-    })
+  exporting.value = true
+
+  try {
+    const res = await fetch(`/api/v1/employees/contracts/export?${params.toString()}`, { headers })
+    if (!res.ok) throw new Error('Export gagal')
+
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `kontrak_kerja_${new Date().toISOString().slice(0, 10)}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+    showExportModal.value = false
+    notification.addNotification('Export kontrak berhasil didownload.', 'success')
+  } catch (e) {
+    notification.addNotification('Gagal export kontrak. Pastikan anda sudah login.', 'error')
+  } finally {
+    exporting.value = false
+  }
 }
 
 // ========== HELPERS ==========
@@ -324,7 +361,7 @@ onMounted(() => {
           </template>
           Import Kontrak
         </BaseButton>
-        <BaseButton v-if="permission.can('view employees')" variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200" @click="exportContracts">
+        <BaseButton v-if="permission.can('view employees')" variant="secondary" class="bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border-emerald-200" @click="openExportModal">
           <template #icon-left>
             <i class="bx bx-export text-lg"></i>
           </template>
@@ -567,6 +604,77 @@ onMounted(() => {
       <h3 class="text-lg font-semibold text-(--text-main)">Tidak ada data kontrak</h3>
       <p class="text-(--text-muted) mt-2 max-w-sm mx-auto">Tidak dapat menemukan data dengan filter yang Anda berikan. Coba ubah pencarian atau tambahkan kontrak baru.</p>
     </div>
+
+    <!-- Export Modal -->
+    <BaseModal :show="showExportModal" @close="showExportModal = false" title="Export Kontrak Kerja" size="md">
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-muted)">
+          Pilih kriteria kontrak yang akan diexport. Pencarian serta filter tipe & status kontrak yang sedang aktif tetap dipakai.
+        </p>
+
+        <label class="flex items-start gap-3 p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated) cursor-pointer">
+          <input
+            type="checkbox"
+            :checked="exportIsLatest"
+            @change="applyIsLatest($event.target.checked)"
+            class="mt-0.5 w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-2 focus:ring-(--primary-glow) cursor-pointer"
+          >
+          <span>
+            <span class="block text-sm font-semibold text-(--text-main)">Hanya kontrak terakhir (Latest)</span>
+            <span class="block text-xs text-(--text-muted) mt-0.5">Ambil satu kontrak terbaru per karyawan. Range tanggal di bawah diabaikan.</span>
+          </span>
+        </label>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-(--text-muted) uppercase tracking-wide mb-1">Tgl Akhir Kontrak — Dari</label>
+            <input
+              type="date"
+              v-model="exportDateStart"
+              :disabled="exportIsLatest"
+              class="w-full px-3 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-(--text-muted) uppercase tracking-wide mb-1">Tgl Akhir Kontrak — Sampai</label>
+            <input
+              type="date"
+              v-model="exportDateEnd"
+              :disabled="exportIsLatest"
+              class="w-full px-3 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+          </div>
+        </div>
+
+        <p v-if="!exportIsLatest && (exportDateStart || exportDateEnd)" class="text-xs text-(--text-muted)">
+          Hanya kontrak dengan tanggal akhir pada rentang
+          <span class="font-semibold text-(--text-main)">{{ exportDateStart || 'awal' }}</span> s/d
+          <span class="font-semibold text-(--text-main)">{{ exportDateEnd || 'akhir' }}</span> yang akan diexport.
+        </p>
+
+        <label class="flex items-start gap-3 p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated) cursor-pointer">
+          <input
+            type="checkbox"
+            v-model="exportOnlyActive"
+            class="mt-0.5 w-4 h-4 rounded border-(--border-strong) text-(--primary) focus:ring-2 focus:ring-(--primary-glow) cursor-pointer"
+          >
+          <span>
+            <span class="block text-sm font-semibold text-(--text-main)">Hanya karyawan yang aktif</span>
+            <span class="block text-xs text-(--text-muted) mt-0.5">Kontrak milik karyawan non-aktif (resign / PHK) tidak diikutkan.</span>
+          </span>
+        </label>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="secondary" :disabled="exporting" @click="showExportModal = false">Batal</BaseButton>
+        <BaseButton variant="primary" :loading="exporting" @click="exportContracts">
+          <template #icon-left>
+            <i class="bx bx-download text-lg"></i>
+          </template>
+          Export Excel
+        </BaseButton>
+      </template>
+    </BaseModal>
 
     <!-- History Modal -->
     <BaseModal :show="showHistoryModal" @close="showHistoryModal = false" :title="`Riwayat Kontrak - ${selectedEmployee?.name}`" size="lg">

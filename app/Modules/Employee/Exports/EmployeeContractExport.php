@@ -68,6 +68,30 @@ class EmployeeContractExport implements FromQuery, WithHeadings, WithMapping, Sh
             };
         }
 
+        // Filter "Latest": hanya kontrak terbaru tiap karyawan.
+        // Jika aktif, range tanggal end_date diabaikan.
+        $isLatest = filter_var($filters['is_latest'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+        if ($isLatest) {
+            $query->where('is_latest', true);
+        } else {
+            // Range tanggal: seleksi kontrak berdasarkan end_date di rentang tersebut.
+            if (! empty($filters['end_date_start'])) {
+                $query->whereDate('end_date', '>=', $filters['end_date_start']);
+            }
+
+            if (! empty($filters['end_date_end'])) {
+                $query->whereDate('end_date', '<=', $filters['end_date_end']);
+            }
+        }
+
+        // Filter "Hanya karyawan aktif"
+        if (filter_var($filters['only_active'] ?? false, FILTER_VALIDATE_BOOLEAN)) {
+            $query->whereHas('employee', function ($eq) {
+                $eq->where('is_active', true);
+            });
+        }
+
         return $query->orderBy('employee_id')->orderBy('start_date', 'desc');
     }
 
