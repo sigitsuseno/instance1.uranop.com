@@ -21,6 +21,9 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
     protected int $year;
     protected int $month;
 
+    /** Nomor rekening asli per baris (row => norek), dipakai di AfterSheet. */
+    protected array $norekByRow = [];
+
     // 13 kolom: A=NO, B=NAMA, C=REKENING, D=BANK, E=CABANG,
     // F..J = di bawah header group (start_date, end_date, gaji_pokok, durasi, nominal),
     // K=PEMBULATAN, L=POTONGAN, M=TOTAL TERIMA
@@ -41,6 +44,8 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
 
     public function array(): array
     {
+        $this->norekByRow = [];
+
         $grouped = $this->contracts->groupBy(fn ($c) => $c->comp_group ?: '(Tanpa Group)');
 
         // ── Baris 1: judul KOMPENSASI UNGARAN {bulan} {tahun} ──
@@ -89,6 +94,10 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                 $pembulatan = (int) round($totalRounded - $totalRaw);
                 $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
                 $totalTerimaRow = $totalRounded - (float) ($potAdmin ?? 0);
+
+                // Simpan nomor rekening asli + barisnya agar bisa ditulis sebagai
+                // teks di AfterSheet (mencegah Excel mengubahnya jadi 1,23E+11).
+                $this->norekByRow[count($rows) + 1] = (string) ($employee?->bank_account_number ?? '-');
 
                 $rows[] = [
                     $no++,
@@ -139,7 +148,7 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
         return [
             'A' => 5,
             'B' => 28,
-            'C' => 16,
+            'C' => 22,
             'D' => 12,
             'E' => 14,
             'F' => 12,
@@ -266,6 +275,18 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
                     foreach (['H', 'I', 'J', 'K', 'L', 'M'] as $col) {
                         $sheet->getStyle("{$col}{$firstData}:{$col}{$lastData}")
                             ->getNumberFormat()->setFormatCode('#,##0');
+                    }
+
+                    // Kolom REKENING ditulis ulang sebagai teks murni + format '@'
+                    // supaya nomor rekening panjang (12-16 digit) tampil utuh dan
+                    // tidak berubah jadi notasi ilmiah (E+11) di Excel.
+                    foreach ($this->norekByRow as $r => $norek) {
+                        $sheet->setCellValueExplicit(
+                            "C{$r}",
+                            $norek,
+                            \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING
+                        );
+                        $sheet->getStyle("C{$r}")->getNumberFormat()->setFormatCode('@');
                     }
                 }
 
