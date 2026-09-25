@@ -9,6 +9,7 @@ use App\Modules\Employee\Models\EmployeeContract;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Payroll\Models\PayRecord;
+use App\Modules\Payroll\Models\PayWorkingDayOverride;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Schedule\Models\Holiday;
 use App\Modules\Settings\Models\SystemSetting;
@@ -467,6 +468,11 @@ class GajiKaryawanController extends Controller
             ->map(fn ($d) => $d->toDateString())
             ->toArray();
 
+        // Pengaturan khusus: hari_kerja manual per karyawan, menimpa hitungan otomatis.
+        // Dimuat sekali untuk seluruh periode (map employee_id → hari_kerja).
+        $overrides = PayWorkingDayOverride::where('pay_period_id', $period->id)
+            ->pluck('hari_kerja', 'employee_id');
+
         $processed = 0;
 
         foreach ($records as $record) {
@@ -577,9 +583,16 @@ class GajiKaryawanController extends Controller
                 }
             }
 
-            // hari_kerja pakai hitungan LAMA: hk − (izin tak dibayar + absent)
-            $deductDay = $unpaid + $absen;
-            $hariKerja = max(0, $hkSegment - $deductDay);
+            if ($overrides->has($employee->id)) {
+                // Pengaturan khusus: hari_kerja diambil utuh dari pengaturan,
+                // deduct_day ikut menyesuaikan (pot_kehadiran = deduct_day × gaji_pokok/fixed_days)
+                $hariKerja = (int) $overrides->get($employee->id);
+                $deductDay = max(0, $hkSegment - $hariKerja);
+            } else {
+                // hari_kerja pakai hitungan LAMA: hk − (izin tak dibayar + absent)
+                $deductDay = $unpaid + $absen;
+                $hariKerja = max(0, $hkSegment - $deductDay);
+            }
 
             // ── Data masukan ──
             $segmentMonth = $record->segment !== null

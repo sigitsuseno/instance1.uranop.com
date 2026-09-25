@@ -5,6 +5,7 @@ use App\Modules\Payroll\Controllers\Api\V1\PayPeriodApiController;
 use App\Modules\Payroll\Controllers\Api\V1\GajiKaryawanController;
 use App\Modules\Payroll\Controllers\Api\V1\PayrollConfigApiController;
 use App\Modules\Payroll\Controllers\Api\V1\PayslipController;
+use App\Modules\Payroll\Controllers\Api\V1\WorkingDayOverrideController;
 
 Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::apiResource('periods', PayPeriodApiController::class);
@@ -17,6 +18,11 @@ Route::prefix('v1/payroll')->middleware(['api'])->group(function () {
     Route::post('gaji-karyawan/lock', [GajiKaryawanController::class, 'lock']);
     Route::post('gaji-karyawan/unlock', [GajiKaryawanController::class, 'unlock']);
     Route::post('gaji-karyawan/sync-missing', [GajiKaryawanController::class, 'syncMissingRecords']);
+
+    // Pengaturan khusus hari_kerja per karyawan per periode — acuan saat Finalisasi
+    Route::get('working-day-overrides', [WorkingDayOverrideController::class, 'index']);
+    Route::post('working-day-overrides', [WorkingDayOverrideController::class, 'store']);
+    Route::delete('working-day-overrides/{id}', [WorkingDayOverrideController::class, 'destroy']);
 
     Route::put('gaji-karyawan/{id}/upah-lembur', [GajiKaryawanController::class, 'updateUpahLembur']);
     Route::put('gaji-karyawan/{id}/transfer-info', [GajiKaryawanController::class, 'updateTransferInfo']);

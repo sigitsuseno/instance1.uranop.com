@@ -96,6 +96,17 @@
           </svg>
           <span class="hidden sm:inline">Setting</span>
         </button>
+
+        <!-- Pengaturan Khusus: hari_kerja manual per karyawan (acuan saat Finalisasi) -->
+        <button
+          @click="openWorkingDayModal"
+          :disabled="!selectedPeriodId"
+          class="h-10 px-3 text-sm rounded-lg border border-(--border-soft) hover:bg-(--bg-hover) flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          title="Pengaturan Khusus Hari Kerja"
+        >
+          <IconUsers class="w-4 h-4" />
+          <span class="hidden sm:inline">Pengaturan Khusus</span>
+        </button>
       </div>
     </div>
 
@@ -506,6 +517,170 @@
       </div>
     </BaseModal>
 
+    <!-- Modal: Pengaturan Khusus Hari Kerja -->
+    <BaseModal :show="showWorkingDayModal" @close="closeWorkingDayModal" title="Pengaturan Khusus Hari Kerja" size="lg">
+      <div class="space-y-4">
+        <p class="text-xs text-(--text-muted)">
+          Karyawan yang terdaftar di sini memakai <strong class="text-(--text-main)">hari kerja</strong> dari pengaturan ini
+          saat tombol <strong class="text-(--text-main)">Finalisasi</strong> ditekan. Karyawan lain tetap memakai hitungan otomatis.
+        </p>
+
+        <!-- Periode -->
+        <div>
+          <label class="block text-xs font-medium text-(--text-muted) mb-1">Periode</label>
+          <select
+            v-model="selectedPeriodId"
+            @change="onPeriodChange"
+            class="w-full h-10 px-3 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main) text-sm focus:ring-2 focus:ring-(--primary) focus:border-transparent outline-none cursor-pointer"
+          >
+            <option value="">Pilih Periode</option>
+            <option v-for="p in periods" :key="p.id" :value="p.id">{{ p.name }}</option>
+          </select>
+        </div>
+
+        <!-- Form tambah pengaturan -->
+        <div class="p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated)/40 space-y-3">
+          <input
+            v-model="employeeSearch"
+            type="text"
+            placeholder="Cari nama atau NIP..."
+            class="w-full h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-xs text-(--text-main) focus:ring-2 focus:ring-(--primary)"
+          />
+
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="select-all-override"
+              @change="toggleSelectAllOverride"
+              :checked="isAllOverrideSelected"
+              class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+            />
+            <label for="select-all-override" class="text-xs font-bold text-(--text-main) cursor-pointer select-none">
+              Pilih Semua Karyawan ({{ filteredEmployeeOptions.length }} tampil)
+            </label>
+            <span v-if="selectedOverrideEmployeeIds.length" class="text-xs text-(--primary) font-semibold ml-auto">
+              {{ selectedOverrideEmployeeIds.length }} dipilih
+            </span>
+          </div>
+
+          <div class="space-y-1 max-h-[260px] overflow-y-auto pr-1">
+            <label
+              v-for="emp in filteredEmployeeOptions"
+              :key="emp.id"
+              class="flex items-center gap-3 p-2 rounded-md hover:bg-(--bg-elevated)/50 cursor-pointer border border-transparent transition-all"
+              :class="selectedOverrideEmployeeIds.includes(emp.id) ? 'border-(--primary)/20 bg-(--primary)/5' : ''"
+            >
+              <input
+                type="checkbox"
+                :value="emp.id"
+                v-model="selectedOverrideEmployeeIds"
+                class="rounded border-(--border-strong) text-(--primary) focus:ring-(--primary)"
+              />
+              <div class="min-w-0">
+                <div class="text-xs font-bold text-(--text-main) truncate">{{ emp.name }}</div>
+                <div class="text-[10px] text-(--text-muted) truncate">
+                  NIP: {{ emp.nip || '-' }} &middot; {{ emp.code || '-' }}
+                  <span v-if="emp.department_name"> &middot; {{ emp.department_name }}</span>
+                </div>
+              </div>
+            </label>
+
+            <div v-if="filteredEmployeeOptions.length === 0" class="text-center py-6 text-xs text-(--text-muted) italic">
+              Tidak ada karyawan ditemukan.
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row sm:items-end gap-3 pt-1 border-t border-(--border-soft)">
+            <div class="w-full sm:w-40">
+              <label class="block text-xs font-medium text-(--text-muted) mb-1">Hari Kerja</label>
+              <input
+                v-model.number="overrideHariKerja"
+                type="number"
+                min="0"
+                max="31"
+                class="w-full h-10 px-3 rounded-md bg-(--bg-card) border border-(--border-strong) text-sm text-(--text-main) focus:ring-2 focus:ring-(--primary)"
+              />
+            </div>
+            <BaseButton variant="primary" :loading="savingOverride" @click="handleSaveOverride">
+              Simpan Pengaturan
+            </BaseButton>
+          </div>
+        </div>
+
+        <!-- Daftar pengaturan tersimpan -->
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-(--text-main)">
+              Pengaturan Tersimpan ({{ overrides.length }})
+            </span>
+            <span v-if="overridesMeta.is_split" class="text-[10px] text-(--warning)">
+              Periode split — potongan mengikuti segmen karyawan (dari data tersimpan)
+            </span>
+          </div>
+
+          <div v-if="overrides.length === 0" class="text-center py-6 text-xs text-(--text-muted) italic border border-dashed border-(--border-soft) rounded-md">
+            Belum ada pengaturan khusus untuk periode ini.
+          </div>
+
+          <div v-else class="border border-(--border-soft) rounded-md overflow-hidden">
+            <table class="w-full text-xs">
+              <thead class="bg-(--bg-elevated) text-(--text-muted)">
+                <tr>
+                  <th class="text-left px-3 py-2 font-semibold">Karyawan</th>
+                  <th v-if="overridesMeta.is_split" class="text-center px-3 py-2 font-semibold">Seg</th>
+                  <th class="text-center px-3 py-2 font-semibold">Hari Kerja</th>
+                  <th class="text-center px-3 py-2 font-semibold">Pot. Kehadiran</th>
+                  <th class="text-center px-3 py-2 font-semibold w-16">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in overrides" :key="row.id" class="border-t border-(--border-soft)">
+                  <td class="px-3 py-2">
+                    <div class="font-semibold text-(--text-main)">{{ row.name }}</div>
+                    <div class="text-[10px] text-(--text-muted)">{{ row.employee_code }}</div>
+                  </td>
+                  <td v-if="overridesMeta.is_split" class="px-3 py-2 text-center text-(--text-muted)">
+                    {{ row.segment || '-' }}
+                  </td>
+                  <td class="px-3 py-2 text-center font-bold text-(--primary)">{{ row.hari_kerja }}</td>
+                  <td class="px-3 py-2 text-center">
+                    <span :class="row.deduct_day > 0 ? 'text-(--warning) font-semibold' : 'text-(--text-muted)'">
+                      {{ row.deduct_day }} hari
+                    </span>
+                  </td>
+                  <td class="px-3 py-2 text-center">
+                    <button
+                      @click="deleteOverrideTarget = row"
+                      class="w-7 h-7 rounded text-(--text-muted) hover:text-(--danger) hover:bg-(--bg-hover) transition-all"
+                      title="Hapus pengaturan"
+                    >
+                      <IconTrash class="w-4 h-4 mx-auto" />
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 mt-2">
+          <BaseButton variant="ghost" @click="closeWorkingDayModal">Tutup</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
+
+    <!-- Modal: Konfirmasi Hapus Pengaturan Khusus -->
+    <ConfirmDialog
+      :show="!!deleteOverrideTarget"
+      title="Hapus Pengaturan Khusus"
+      :message="deleteOverrideTarget ? `Hapus pengaturan hari kerja untuk ${deleteOverrideTarget.name}? Karyawan ini kembali ke hitungan otomatis pada finalisasi berikutnya.` : ''"
+      confirm-text="Ya, Hapus"
+      variant="danger"
+      :loading="processingDeleteOverride"
+      @confirm="handleDeleteOverride"
+      @cancel="deleteOverrideTarget = null"
+    />
+
     <!-- Modal: Konfirmasi Update Data (sync-missing) -->
     <BaseModal :show="showSyncModal" @close="showSyncModal = false" title="Konfirmasi Update Data">
       <div class="space-y-4">
@@ -621,12 +796,13 @@ import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 import Badge from '@/Components/Badge.vue'
-import { IconDownload, IconFileInvoice, IconSearch } from '@/Components/Icons/index.js'
+import { IconDownload, IconFileInvoice, IconSearch, IconUsers, IconTrash } from '@/Components/Icons/index.js'
+import ConfirmDialog from '@/Components/ConfirmDialog.vue'
 import GajiKaryawanSettings from '@/Components/ReportPage/settings/GajiKaryawanSettings.vue'
 import { useApi } from '@/composables/useApi'
 import { useNotificationStore } from '@/Stores/notification'
 
-const { get, post, put } = useApi()
+const { get, post, put, destroy } = useApi()
 const notification = useNotificationStore()
 
 const periods = ref([])
@@ -665,6 +841,18 @@ const editLmCount = ref(0)
 const editLemburCount = ref(0)
 const editCashbon = ref(0)
 const savingUpahLembur = ref(false)
+
+// Pengaturan Khusus hari_kerja (per karyawan per periode) state
+const showWorkingDayModal = ref(false)
+const employeeOptions = ref([])
+const employeeSearch = ref('')
+const selectedOverrideEmployeeIds = ref([])
+const overrideHariKerja = ref(25)
+const savingOverride = ref(false)
+const overrides = ref([])
+const overridesMeta = ref({ is_split: false, fixed_working_day: 25 })
+const deleteOverrideTarget = ref(null)
+const processingDeleteOverride = ref(false)
 
 const hitungPerkiraanTrima = computed(() => {
   if (!editingRecord.value) return 0
@@ -893,6 +1081,7 @@ async function onPeriodChange() {
   activeSegment.value = period?.is_split ? 'A' : null
   searchQuery.value = ''
   await fetchRecords()
+  if (showWorkingDayModal.value) await fetchOverrides()
 }
 
 function handleExport() {
@@ -1095,6 +1284,124 @@ async function saveUpahLembur() {
     notification.error(error.message || 'Gagal update data lembur.')
   } finally {
     savingUpahLembur.value = false
+  }
+}
+
+// ─── Pengaturan Khusus hari_kerja (acuan saat Finalisasi) ───
+
+const filteredEmployeeOptions = computed(() => {
+  const q = employeeSearch.value.trim().toLowerCase()
+  if (!q) return employeeOptions.value
+  return employeeOptions.value.filter(e =>
+    (e.name || '').toLowerCase().includes(q) ||
+    (e.nip || '').toLowerCase().includes(q) ||
+    (e.code || '').toLowerCase().includes(q)
+  )
+})
+
+const isAllOverrideSelected = computed(() => {
+  const list = filteredEmployeeOptions.value
+  return list.length > 0 && list.every(e => selectedOverrideEmployeeIds.value.includes(e.id))
+})
+
+function toggleSelectAllOverride() {
+  const list = filteredEmployeeOptions.value
+  if (isAllOverrideSelected.value) {
+    const ids = list.map(e => e.id)
+    selectedOverrideEmployeeIds.value = selectedOverrideEmployeeIds.value.filter(id => !ids.includes(id))
+  } else {
+    selectedOverrideEmployeeIds.value = [...new Set([...selectedOverrideEmployeeIds.value, ...list.map(e => e.id)])]
+  }
+}
+
+async function openWorkingDayModal() {
+  if (!selectedPeriodId.value) {
+    notification.warning('Pilih periode dulu.')
+    return
+  }
+  showWorkingDayModal.value = true
+  employeeSearch.value = ''
+  selectedOverrideEmployeeIds.value = []
+  await Promise.all([fetchEmployeeOptions(), fetchOverrides()])
+}
+
+function closeWorkingDayModal() {
+  showWorkingDayModal.value = false
+  employeeSearch.value = ''
+  selectedOverrideEmployeeIds.value = []
+}
+
+async function fetchEmployeeOptions() {
+  if (employeeOptions.value.length > 0) return
+  try {
+    const res = await get('/api/v1/employees/options')
+    employeeOptions.value = res.data || []
+  } catch (error) {
+    console.error('Error fetching employee options', error)
+    notification.error('Gagal memuat daftar karyawan.')
+  }
+}
+
+async function fetchOverrides() {
+  if (!selectedPeriodId.value) {
+    overrides.value = []
+    return
+  }
+  try {
+    const res = await get(`/api/v1/payroll/working-day-overrides?period_id=${selectedPeriodId.value}`)
+    overrides.value = res.data || []
+    overridesMeta.value = {
+      is_split: !!res.is_split,
+      fixed_working_day: res.fixed_working_day ?? 25,
+    }
+  } catch (error) {
+    console.error('Error fetching overrides', error)
+    overrides.value = []
+  }
+}
+
+async function handleSaveOverride() {
+  if (!selectedPeriodId.value) return
+  if (selectedOverrideEmployeeIds.value.length === 0) {
+    notification.warning('Pilih minimal satu karyawan.')
+    return
+  }
+  const hk = parseInt(overrideHariKerja.value)
+  if (isNaN(hk) || hk < 0 || hk > 31) {
+    notification.warning('Hari kerja harus berupa angka 0 sampai 31.')
+    return
+  }
+  savingOverride.value = true
+  try {
+    const res = await post('/api/v1/payroll/working-day-overrides', {
+      period_id: selectedPeriodId.value,
+      employee_ids: selectedOverrideEmployeeIds.value,
+      hari_kerja: hk,
+    })
+    notification.success(res.message || 'Pengaturan khusus disimpan.')
+    selectedOverrideEmployeeIds.value = []
+    await fetchOverrides()
+  } catch (error) {
+    console.error('Error saving override', error)
+    notification.error(error.message || 'Gagal menyimpan pengaturan khusus.')
+  } finally {
+    savingOverride.value = false
+  }
+}
+
+async function handleDeleteOverride() {
+  if (!deleteOverrideTarget.value) return
+  processingDeleteOverride.value = true
+  try {
+    const res = await destroy(`/api/v1/payroll/working-day-overrides/${deleteOverrideTarget.value.id}`)
+    notification.success(res.message || 'Pengaturan khusus dihapus.')
+    deleteOverrideTarget.value = null
+    await fetchOverrides()
+  } catch (error) {
+    console.error('Error deleting override', error)
+    notification.error(error.message || 'Gagal menghapus pengaturan khusus.')
+  } finally {
+    processingDeleteOverride.value = false
   }
 }
 
