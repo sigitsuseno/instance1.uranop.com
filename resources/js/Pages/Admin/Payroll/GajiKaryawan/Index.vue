@@ -538,6 +538,22 @@
           </select>
         </div>
 
+        <!-- Segmen (periode split): daftar karyawan mengikuti segmen terpilih -->
+        <div v-if="selectedPeriod?.is_split" class="flex items-center gap-2">
+          <span class="text-xs font-medium text-(--text-muted)">Segmen:</span>
+          <button
+            v-for="seg in ['A', 'B']"
+            :key="seg"
+            @click="switchSegment(seg)"
+            class="h-8 px-3 rounded-md text-xs font-semibold transition-all cursor-pointer"
+            :class="activeSegment === seg
+              ? 'bg-(--primary) text-white shadow-sm'
+              : 'bg-(--bg-card) text-(--text-muted) hover:text-(--text-main) border border-(--border-soft)'"
+          >
+            Seg-{{ seg === 'A' ? '1' : '2' }}
+          </button>
+        </div>
+
         <!-- Form tambah pengaturan -->
         <div class="p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated)/40 space-y-3">
           <input
@@ -579,14 +595,16 @@
               <div class="min-w-0">
                 <div class="text-xs font-bold text-(--text-main) truncate">{{ emp.name }}</div>
                 <div class="text-[10px] text-(--text-muted) truncate">
-                  NIP: {{ emp.nip || '-' }} &middot; {{ emp.code || '-' }}
+                  {{ emp.employee_code || '-' }}
                   <span v-if="emp.department_name"> &middot; {{ emp.department_name }}</span>
                 </div>
               </div>
             </label>
 
             <div v-if="filteredEmployeeOptions.length === 0" class="text-center py-6 text-xs text-(--text-muted) italic">
-              Tidak ada karyawan ditemukan.
+              {{ records.length === 0
+                ? 'Tabel payroll periode ini masih kosong. Klik Simpan dulu agar daftar karyawan muncul.'
+                : 'Tidak ada karyawan ditemukan.' }}
             </div>
           </div>
 
@@ -844,7 +862,6 @@ const savingUpahLembur = ref(false)
 
 // Pengaturan Khusus hari_kerja (per karyawan per periode) state
 const showWorkingDayModal = ref(false)
-const employeeOptions = ref([])
 const employeeSearch = ref('')
 const selectedOverrideEmployeeIds = ref([])
 const overrideHariKerja = ref(25)
@@ -1289,13 +1306,30 @@ async function saveUpahLembur() {
 
 // ─── Pengaturan Khusus hari_kerja (acuan saat Finalisasi) ───
 
+// Sumber karyawan = baris tabel payroll periode/segmen terpilih (bukan /employees/options).
+// Wajib sama persis dengan yang diproses Finalisasi: ikut menyertakan karyawan yang
+// sudah is_active=false tapi masih tercatat di pay_records periode ini.
+//
+// Baris "karyawan tambahan" (appendExtraEmployees) DIBUANG: id-nya 'ext-{id}' dan
+// employee_id-nya menunjuk ke extra_employees.id (bukan employees.id), serta tidak
+// pernah ikut finalisasi — kalau diteruskan bisa tersimpan ke karyawan yang salah.
+const payrollEmployeeOptions = computed(() =>
+  records.value
+    .filter(r => !String(r.id).startsWith('ext-'))
+    .map(r => ({
+      id: r.employee_id,
+      name: r.name,
+      employee_code: r.employee_code,
+      department_name: r.department,
+    }))
+)
+
 const filteredEmployeeOptions = computed(() => {
   const q = employeeSearch.value.trim().toLowerCase()
-  if (!q) return employeeOptions.value
-  return employeeOptions.value.filter(e =>
+  if (!q) return payrollEmployeeOptions.value
+  return payrollEmployeeOptions.value.filter(e =>
     (e.name || '').toLowerCase().includes(q) ||
-    (e.nip || '').toLowerCase().includes(q) ||
-    (e.code || '').toLowerCase().includes(q)
+    (e.employee_code || '').toLowerCase().includes(q)
   )
 })
 
@@ -1322,24 +1356,14 @@ async function openWorkingDayModal() {
   showWorkingDayModal.value = true
   employeeSearch.value = ''
   selectedOverrideEmployeeIds.value = []
-  await Promise.all([fetchEmployeeOptions(), fetchOverrides()])
+  // Pastikan baris payroll terbaru (sumber daftar karyawan) & pengaturan tersimpan termuat
+  await Promise.all([fetchRecords(), fetchOverrides()])
 }
 
 function closeWorkingDayModal() {
   showWorkingDayModal.value = false
   employeeSearch.value = ''
   selectedOverrideEmployeeIds.value = []
-}
-
-async function fetchEmployeeOptions() {
-  if (employeeOptions.value.length > 0) return
-  try {
-    const res = await get('/api/v1/employees/options')
-    employeeOptions.value = res.data || []
-  } catch (error) {
-    console.error('Error fetching employee options', error)
-    notification.error('Gagal memuat daftar karyawan.')
-  }
 }
 
 async function fetchOverrides() {
