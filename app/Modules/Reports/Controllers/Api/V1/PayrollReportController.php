@@ -281,10 +281,10 @@ class PayrollReportController extends Controller
 
     /**
      * GET /api/v1/laporan/payroll/kirim-audit
-     * Data untuk laporan Kirim Audit.
+     * Data untuk tab Kirim Kemilau (daftar transfer bank).
      *
      * NOMINAL = (pay_records.gaji_bersih - supervisor_breakdowns.gaji_bersih)
-     *         + uangMakan + insentif
+     *         + uangMakan + insentif, dibulatkan ke atas ke kelipatan 100.
      */
     public function kirimAudit(Request $request)
     {
@@ -338,9 +338,16 @@ class PayrollReportController extends Controller
     }
 
     /**
-     * Bangun data untuk laporan Kirim Audit / Kirim Bank.
-     * NOMINAL = (pay_records.gaji_bersih - supervisor_breakdowns.gaji_bersih)
-     *         + uangMakan + insentif
+     * Bangun data untuk laporan Kirim Bank (tab Kirim Kemilau).
+     *
+     * Basis daftar = pay_records, sumber yang sama dengan tab Kirim ALL, supaya
+     * semua karyawan yang dibayar di Kirim ALL ikut muncul di sini.
+     * NOMINAL = (pay_records.gaji_bersih - gaji_bersih audit) + uangMakan + insentif,
+     * dibulatkan ke atas ke kelipatan 100.
+     *
+     * Tidak semua karyawan dihitung di tab Kirim Audit. Karyawan yang tidak punya
+     * baris audit dianggap gaji audit = 0, sehingga nominalnya = gaji bersih penuh
+     * + uangMakan + insentif.
      */
     private function buildKirimAuditData(Request $request): array
     {
@@ -349,37 +356,46 @@ class PayrollReportController extends Controller
             'segment'   => 'nullable|in:A,B',
         ]);
 
-        $period = PayPeriod::findOrFail($validated['period_id']);
+        $period  = PayPeriod::findOrFail($validated['period_id']);
         $segment = $validated['segment'] ?? null;
 
-        $query = SupervisorBreakdown::with(['employee.department', 'employee.position', 'employee.groups'])
+        if ($period->is_split && !$segment) {
+            $segment = 'A';
+        }
+
+        // Section A/B untuk karyawan yang tidak punya baris audit — sama dgn tab Kirim ALL.
+        $payrollConfig = PayrollConfig::getConfig('gaji_karyawan');
+        $sectionA = $payrollConfig['sections']['A'] ?? ['GRP-ALLIN', 'GRP-SPR'];
+        $sectionB = $payrollConfig['sections']['B'] ?? ['GRP-GD', 'GRP-SS', 'GRP-PS1'];
+
+        // ── Basis daftar: pay_records (sama dengan tab Kirim ALL) ──
+        $payRecords = PayRecord::with(['employee.department', 'employee.position', 'employee.groups'])
             ->where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
+            ->join('employees', 'pay_records.employee_id', '=', 'employees.id')
+            ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
+            ->orderBy('employees.nip')
+            ->select('pay_records.*')
+            ->get();
+
+        // ── Baris hasil kalkulasi audit (tab Kirim Audit), dipetakan per karyawan ──
+        $breakdowns = SupervisorBreakdown::with(['employee.department', 'employee.position', 'employee.groups'])
+            ->where('pay_period_id', $period->id)
+            ->when($period->is_split, fn ($q) => $q->where('segment', $segment))
             ->join('employees', 'supervisor_breakdowns.employee_id', '=', 'employees.id')
             ->orderByRaw('employees.no_urut IS NULL, employees.no_urut ASC')
             ->orderBy('employees.nip')
-            ->select('supervisor_breakdowns.*');
+            ->select('supervisor_breakdowns.*')
+            ->get()
+            ->keyBy('employee_id');
 
-        if ($period->is_split) {
-            if (!$segment) {
-                $segment = 'A';
-            }
-            $query->where('segment', $segment);
-        }
+        // ── Batch overtime: uangMakan (nominal) & insentif per karyawan ──
+        $employeeIds = $payRecords->pluck('employee_id')
+            ->merge($breakdowns->keys())
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
 
-        $records = $query->get();
-
-        // Batch query pay records: gaji_bersih & notes per employee
-        $employeeIds = $records->pluck('employee_id')->unique()->values();
-        $payRecordData = collect();
-        if ($employeeIds->isNotEmpty()) {
-            $payRecordData = PayRecord::where('pay_period_id', $period->id)
-                ->whereIn('employee_id', $employeeIds->toArray())
-                ->select('employee_id', 'gaji_bersih', 'notes')
-                ->get()
-                ->keyBy('employee_id');
-        }
-
-        // Batch query overtime: insentif & uangMakan per employee
         $overtimeData = collect();
         if ($employeeIds->isNotEmpty()) {
             $overtimeData = EmployeeOvertime::where('pay_periode_id', $period->id)
@@ -390,67 +406,23 @@ class PayrollReportController extends Controller
                 ->keyBy('employee_id');
         }
 
-        $data = $records->map(function ($record) use ($overtimeData, $payRecordData) {
-            $emp       = $record->employee;
-            $payRecord = $payRecordData->get($record->employee_id);
-            $joinDate  = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+        // ── Baris dari Kirim ALL (gaji audit = 0 kalau tidak ada barisnya) ──
+        $data = $payRecords->map(fn ($payRecord) => $this->buildKemilauRow(
+            $payRecord,
+            $breakdowns->get((int) $payRecord->employee_id),
+            $overtimeData,
+            $sectionA,
+            $sectionB,
+        ));
 
-            // NOMINAL = (gajiKus - gajiAudit) + uangMakan + insentif
-            $gajiKus   = (float) ($payRecord?->gaji_bersih ?? 0);
-            $gajiAudit = (float) $record->gaji_bersih;
-
-            $overtimeRow = $overtimeData->get($record->employee_id);
-            $insentif    = (float) ($overtimeRow->total_insentif ?? 0);
-
-            // uangMakan hanya Section A (ALLIN), kecuali GRP-SPR
-            $uangMakan  = 0;
-            $groupCodes = $record->group_codes
-                ?? $emp?->groups?->pluck('reference_code')->toArray()
-                ?? [];
-            if ($record->section === 'A' && !in_array('GRP-SPR', $groupCodes)) {
-                $uangMakan = (float) ($overtimeRow->total_nominal ?? 0);
+        // ── Karyawan yang HANYA ada di audit (tanpa pay_record) tetap ditampilkan ──
+        $payRecordIds = $payRecords->pluck('employee_id')->map(fn ($id) => (int) $id)->all();
+        foreach ($breakdowns as $breakdown) {
+            if (in_array((int) $breakdown->employee_id, $payRecordIds, true)) {
+                continue;
             }
-
-            $nominal = ($gajiKus - $gajiAudit) + $uangMakan + $insentif;
-
-            return [
-                'id'                  => $record->id,
-                'employee_id'         => $emp?->id,
-                'employee_code'       => $emp?->nip ?? $record->employee_code ?? '-',
-                'name'                => $record->employee_name ?? $emp?->name ?? '-',
-                'department'          => $record->department_name ?? $emp?->department?->name ?? '-',
-                'position'            => $record->position_name ?? $emp?->position?->name ?? '-',
-                'gender'              => $record->gender ?? $emp?->gender ?? '-',
-                'join_year'           => $joinDate ? $joinDate->format('d-M-Y') : '-',
-                'groups'              => $groupCodes,
-                'bank_name'           => $record->bank_name ?? $emp?->bank_name ?? '-',
-                'bank_account_number' => $record->bank_account_number ?? $emp?->bank_account_number ?? '-',
-                'bank_account_name'   => $record->bank_account_name ?? $emp?->bank_account_name ?? '-',
-                'bank_cabang'         => $emp?->bank_cabang ?? '-',
-                'notes'               => $payRecord?->notes ?? $record->notes ?? '',
-                'section'             => $record->section,
-                'gaji_pokok'    => (float) $record->gaji_pokok,
-                'premi'         => (float) $record->premi,
-                'tj_masa_kerja' => (float) $record->tj_masa_kerja,
-                'tunjangan'     => (float) $record->tunjangan,
-                'hari_kerja'    => (int) $record->hari_kerja,
-                'lm'            => round((float) $record->lm / 8, 1),
-                'lm_count'      => (float) $record->lm_count,
-                'lembur_count'  => (float) $record->lembur_count,
-                'gaji'         => (float) $record->gaji,
-                'upah_lembur'  => (float) $record->upah_lembur,
-                'revisi'       => (float) $record->revisi,
-                'premi_hadir'  => (float) $record->premi_hadir,
-                'pblt'         => (float) $record->pblt,
-                'total'        => (float) $record->gaji_kotor,
-                'bpjs_tk'      => (float) $record->bpjs_tk,
-                'bpjs_ks'      => (float) $record->bpjs_ks,
-                'bpjs_pen'     => (float) $record->bpjs_pen,
-                'cashbon'      => (float) $record->cashbon,
-                'pph'          => (float) $record->pph,
-                'gaji_bersih'  => $nominal,
-            ];
-        });
+            $data->push($this->buildKemilauRow(null, $breakdown, $overtimeData, $sectionA, $sectionB));
+        }
 
         // ── Tambahan: Karyawan tambahan (ExtraEmployee) masuk ke Section A ──
         $extraEmployees = ExtraEmployee::all();
@@ -491,11 +463,113 @@ class PayrollReportController extends Controller
                 'bpjs_pen'      => 0,
                 'cashbon'       => (float) ($g['cashbon'] ?? 0),
                 'pph'           => (float) ($g['ttl_pph'] ?? 0),
-                'gaji_bersih'   => (float) ($g['total_terima'] ?? 0),
+                'gaji_bersih'   => $this->roundUpTo100((float) ($g['total_terima'] ?? 0)),
             ]);
         }
 
         return [$data, $period, $segment];
+    }
+
+    /**
+     * Bulatkan ke atas ke kelipatan 100 (KEPUTUSAN #3 — sama dengan gaji_bersih).
+     * Dipakai untuk kolom Nominal di tab Kirim Kemilau agar selalu bulat ratusan.
+     */
+    private function roundUpTo100(float $value): float
+    {
+        $rounded = ceil($value / 100) * 100;
+
+        // ceil() nilai negatif kecil menghasilkan -0; normalisasi agar tampil 0.
+        return $rounded == 0 ? 0.0 : (float) $rounded;
+    }
+
+    /**
+     * Susun satu baris daftar transfer Kirim Kemilau.
+     *
+     * $payRecord = baris Kirim ALL, $breakdown = baris Kirim Audit. Salah satu boleh null:
+     * - $breakdown null → karyawan tidak dihitung di tab Kirim Audit, gaji audit dianggap 0.
+     * - $payRecord null → karyawan hanya ada di audit, gaji KUS dianggap 0 (perilaku lama).
+     */
+    private function buildKemilauRow(
+        ?PayRecord $payRecord,
+        ?SupervisorBreakdown $breakdown,
+        $overtimeData,
+        array $sectionA,
+        array $sectionB,
+    ): array {
+        $emp      = $breakdown?->employee ?? $payRecord?->employee;
+        $joinDate = $emp?->join_date ? Carbon::parse($emp->join_date) : null;
+
+        $groupCodes = $breakdown?->group_codes
+            ?? $emp?->groups?->pluck('reference_code')->toArray()
+            ?? [];
+
+        // Section: pakai hasil kalkulasi audit kalau ada; kalau tidak, turunkan dari group
+        // (sama dengan pengelompokan di tab Kirim ALL).
+        $section = $breakdown?->section;
+        if (!$section) {
+            if (array_intersect($groupCodes, $sectionA) || in_array('GRP-EXTRA', $groupCodes)) {
+                $section = 'A';
+            } elseif (array_intersect($groupCodes, $sectionB)) {
+                $section = 'B';
+            }
+        }
+
+        // NOMINAL = (gaji KUS - gaji audit) + uangMakan + insentif
+        $gajiKus   = (float) ($payRecord?->gaji_bersih ?? 0);
+        $gajiAudit = (float) ($breakdown?->gaji_bersih ?? 0);
+
+        $overtimeRow = $overtimeData->get((int) ($payRecord?->employee_id ?? $breakdown?->employee_id));
+        $insentif    = (float) ($overtimeRow->total_insentif ?? 0);
+
+        // uangMakan hanya Section A (ALLIN), kecuali GRP-SPR
+        $uangMakan = 0;
+        if ($section === 'A' && !in_array('GRP-SPR', $groupCodes)) {
+            $uangMakan = (float) ($overtimeRow->total_nominal ?? 0);
+        }
+
+        // KEPUTUSAN #3: nominal transfer dibulatkan ke atas kelipatan 100
+        $nominal = $this->roundUpTo100(($gajiKus - $gajiAudit) + $uangMakan + $insentif);
+
+        // Komponen gaji: dari baris audit kalau ada, kalau tidak dari pay_records
+        $src = $breakdown ?? $payRecord;
+
+        return [
+            'id'                  => $breakdown?->id ?? 'pr-' . $payRecord?->id,
+            'employee_id'         => $emp?->id,
+            'employee_code'       => $emp?->nip ?? $breakdown?->employee_code ?? '-',
+            'name'                => $breakdown?->employee_name ?? $emp?->name ?? '-',
+            'department'          => $breakdown?->department_name ?? $emp?->department?->name ?? '-',
+            'position'            => $breakdown?->position_name ?? $emp?->position?->name ?? '-',
+            'gender'              => $breakdown?->gender ?? $emp?->gender ?? '-',
+            'join_year'           => $joinDate ? $joinDate->format('d-M-Y') : '-',
+            'groups'              => $groupCodes,
+            'bank_name'           => $breakdown?->bank_name ?? $emp?->bank_name ?? '-',
+            'bank_account_number' => $breakdown?->bank_account_number ?? $emp?->bank_account_number ?? '-',
+            'bank_account_name'   => $breakdown?->bank_account_name ?? $emp?->bank_account_name ?? '-',
+            'bank_cabang'         => $emp?->bank_cabang ?? '-',
+            'notes'               => $payRecord?->notes ?? $breakdown?->notes ?? '',
+            'section'             => $section,
+            'gaji_pokok'    => (float) $src->gaji_pokok,
+            'premi'         => (float) $src->premi,
+            'tj_masa_kerja' => (float) $src->tj_masa_kerja,
+            'tunjangan'     => (float) $src->tunjangan,
+            'hari_kerja'    => (int) $src->hari_kerja,
+            'lm'            => round((float) $src->lm / 8, 1),
+            'lm_count'      => (float) $src->lm_count,
+            'lembur_count'  => (float) $src->lembur_count,
+            'gaji'         => (float) $src->gaji,
+            'upah_lembur'  => (float) $src->upah_lembur,
+            'revisi'       => (float) $src->revisi,
+            'premi_hadir'  => (float) $src->premi_hadir,
+            'pblt'         => (float) $src->pblt,
+            'total'        => (float) $src->gaji_kotor,
+            'bpjs_tk'      => (float) $src->bpjs_tk,
+            'bpjs_ks'      => (float) $src->bpjs_ks,
+            'bpjs_pen'     => (float) $src->bpjs_pen,
+            'cashbon'      => (float) $src->cashbon,
+            'pph'          => (float) $src->pph,
+            'gaji_bersih'  => $nominal,
+        ];
     }
 
     // =====================================================================
