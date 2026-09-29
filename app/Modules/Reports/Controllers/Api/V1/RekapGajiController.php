@@ -106,6 +106,20 @@ class RekapGajiController extends Controller
     // ─── Private helpers ──────────────────────────────────────────
 
     /**
+     * Bulatkan ke atas ke kelipatan 100.
+     *
+     * Dipakai kolom UM: sumbernya (uang makan teknisi = rate / 7) tidak habis
+     * dibagi sehingga menyisakan desimal, mis. 14.285,71 × 3 = 42.857,13.
+     */
+    private function roundUpTo100(float $value): float
+    {
+        $rounded = ceil($value / 100) * 100;
+
+        // ceil() nilai negatif kecil menghasilkan -0; normalisasi agar tampil 0.
+        return $rounded == 0 ? 0.0 : (float) $rounded;
+    }
+
+    /**
      * Build rekap gaji data — shared between index() and export().
      */
     private function buildRekapGajiData(Request $request)
@@ -234,6 +248,8 @@ class RekapGajiController extends Controller
                 $um = (float) ($ot->total_nominal ?? 0);
             }
 
+            // TOTAL GAJI sengaja memakai UM ASLI (belum dibulatkan); hanya kolom UM
+            // yang tampil dibulatkan ke atas kelipatan 100.
             $totalGaji = $gajiKotor + $um;
 
             return [
@@ -246,7 +262,7 @@ class RekapGajiController extends Controller
                 'total_gaji'   => $totalGaji,
                 'bpjs_tk'      => $bpjsTk,
                 'bpjs_ks'      => $bpjsKs,
-                'uang_makan'   => $um,
+                'uang_makan'   => $this->roundUpTo100($um),
                 'groups'       => $groupCodes,
                 'department'   => $emp->department?->name ?? '-',
                 'position'     => $emp->position?->name ?? '-',

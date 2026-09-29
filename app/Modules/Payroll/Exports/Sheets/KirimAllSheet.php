@@ -5,6 +5,7 @@ namespace App\Modules\Payroll\Exports\Sheets;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
@@ -89,8 +90,13 @@ class KirimAllSheet implements WithTitle, WithEvents
                     $sheet->setCellValue("A{$r}", $item['bank_account_name'] && $item['bank_account_name'] !== '-'
                         ? $item['bank_account_name']
                         : ($item['name'] ?? '-'));
-                    // B: Norek
-                    $sheet->setCellValue("B{$r}", $item['bank_account_number'] ?? '');
+                    // B: Norek — paksa TEXT supaya nomor rekening panjang tidak
+                    // berubah jadi angka / tampil sebagai notasi ilmiah (E+15) di Excel.
+                    $sheet->setCellValueExplicit(
+                        "B{$r}",
+                        (string) ($item['bank_account_number'] ?? ''),
+                        DataType::TYPE_STRING
+                    );
                     // C: Singkatan Nama Bank
                     $sheet->setCellValue("C{$r}", $item['bank_name'] ?? '');
                     // D: Cabang
@@ -110,6 +116,7 @@ class KirimAllSheet implements WithTitle, WithEvents
                     ]);
                     $sheet->getStyle("B{$r}")->applyFromArray([
                         'font' => ['name' => 'Consolas', 'size' => 10, 'color' => ['rgb' => '333333']],
+                        'numberFormat' => ['formatCode' => '@'],
                         'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
                         'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'B0B0B0']]],
                     ]);
