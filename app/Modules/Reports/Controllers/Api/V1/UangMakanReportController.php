@@ -202,6 +202,15 @@ class UangMakanReportController extends Controller
                 $nominals['insentif'] = (float)($item['insentif_end'] ?? 0);
             }
 
+            // Insentif dibulatkan ke atas ke kelipatan 100 — per karyawan, sama seperti
+            // upah lembur & gaji bersih di GajiKaryawanController. Karena dibulatkan
+            // sebelum dijumlahkan, total insentif di semua turunan (sheet Uang Makan,
+            // blok "RESUME UANG MAKAN & LEMBUR", print, tab Rekap Uang Makan) tetap
+            // konsisten dengan baris kontrol di sheet Resume.
+            if ($nominals['insentif'] > 0) {
+                $nominals['insentif'] = ceil($nominals['insentif'] / 100) * 100;
+            }
+
             $total = $nominals['uang_makan'] + $nominals['lembur_sabtu']
                    + $nominals['lembur_minggu'] + $nominals['insentif']
                    + $nominals['pblt'] + $nominals['revisi'];
