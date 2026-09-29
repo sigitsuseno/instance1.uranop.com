@@ -375,6 +375,68 @@ class BpjsEmployeeController extends Controller
     }
 
     /**
+     * Update nominal iuran BPJS — 3 porsi karyawan (JHT, KES, JP) dari halaman Iuran BPJS.
+     * Sinkron ke pay_records (bpjs_tk/bpjs_ks/bpjs_pen) supaya potongan slip gaji ikut berubah.
+     */
+    public function updateIuran(Request $request, EmployeeBpjs $bpjs): JsonResponse
+    {
+        $data = $request->validate([
+            'employee_jht'       => 'required|numeric|min:0',
+            'employee_kesehatan' => 'required|numeric|min:0',
+            'employee_jp'        => 'required|numeric|min:0',
+        ]);
+
+        // GUARD LOCK: payroll sudah dikunci → tolak perubahan (logic_payroll_baru.md §5/#11)
+        if ($bpjs->pay_period_id
+            && PayRecord::where('pay_period_id', $bpjs->pay_period_id)
+                ->where('status', 'locked')
+                ->exists()) {
+            return response()->json([
+                'message' => 'Payroll telah dikunci. Anda tidak bisa melakukan perubahan pada periode ini. Unlock payroll terlebih dahulu.',
+            ], 403);
+        }
+
+        DB::beginTransaction();
+        try {
+            $bpjs->update([
+                'employee_jht'       => $data['employee_jht'],
+                'employee_kesehatan' => $data['employee_kesehatan'],
+                'employee_jp'        => $data['employee_jp'],
+                'updated_by'         => auth()->id(),
+            ]);
+
+            // Sinkron ke pay_records — segmen sama seperti generateIuran
+            if ($bpjs->pay_period_id) {
+                $payPeriod = PayPeriod::find($bpjs->pay_period_id);
+                $segment   = $payPeriod?->is_split ? 'B' : null;
+
+                PayRecord::where('employee_id', $bpjs->employee_id)
+                    ->where('pay_period_id', $bpjs->pay_period_id)
+                    ->where('segment', $segment)
+                    ->update([
+                        'bpjs_tk'    => $data['employee_jht'],
+                        'bpjs_ks'    => $data['employee_kesehatan'],
+                        'bpjs_pen'   => $data['employee_jp'],
+                        'updated_by' => auth()->id(),
+                    ]);
+            }
+
+            DB::commit();
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'message' => 'Gagal menyimpan iuran: ' . $e->getMessage(),
+            ], 500);
+        }
+
+        return response()->json([
+            'message' => 'Iuran BPJS karyawan berhasil diperbarui.',
+            'data'    => $bpjs->fresh(),
+        ]);
+    }
+
+    /**
      * Export iuran BPJS ke Excel.
      */
     public function exportIuran(Request $request)

@@ -61,6 +61,7 @@
               <th rowspan="2" class="p-3 font-medium text-right">Dasar BPJS</th>
               <th colspan="5" class="p-2 text-center bg-blue-50/30 text-blue-700 text-[10px]">Porsi Perusahaan</th>
               <th colspan="3" class="p-2 text-center bg-orange-50/30 text-orange-700 text-[10px]">Porsi Karyawan</th>
+              <th rowspan="2" class="p-2 font-medium text-center w-[110px]">Aksi</th>
             </tr>
             <tr class="text-[10px] text-(--text-soft)">
               <th class="px-2 py-1.5 text-right">JHT</th>
@@ -91,10 +92,40 @@
               <td class="p-2 text-right text-blue-600 bg-blue-50/10 text-xs">{{ fmt(r.employer_jkm) }}</td>
               <td class="p-2 text-right text-blue-600 bg-blue-50/10 text-xs">{{ fmt(r.employer_kesehatan) }}</td>
               <td class="p-2 text-right text-blue-600 bg-blue-50/10 text-xs">{{ fmt(r.employer_jp) }}</td>
-              <!-- Employee (3) -->
-              <td class="p-2 text-right text-orange-600 bg-orange-50/10 text-xs">{{ fmt(r.employee_jht) }}</td>
-              <td class="p-2 text-right text-orange-600 bg-orange-50/10 text-xs">{{ fmt(r.employee_kesehatan) }}</td>
-              <td class="p-2 text-right text-orange-600 bg-orange-50/10 text-xs">{{ fmt(r.employee_jp) }}</td>
+              <!-- Employee (3) — inline edit -->
+              <td class="p-2 text-right text-orange-600 bg-orange-50/10 text-xs">
+                <input v-if="isEditing(r)" v-model.number="editForm.employee_jht" type="number" min="0" step="any"
+                  class="w-24 bg-(--bg-input) border border-(--border-soft) rounded px-2 py-1 text-right text-xs" />
+                <template v-else>{{ fmt(r.employee_jht) }}</template>
+              </td>
+              <td class="p-2 text-right text-orange-600 bg-orange-50/10 text-xs">
+                <input v-if="isEditing(r)" v-model.number="editForm.employee_kesehatan" type="number" min="0" step="any"
+                  class="w-24 bg-(--bg-input) border border-(--border-soft) rounded px-2 py-1 text-right text-xs" />
+                <template v-else>{{ fmt(r.employee_kesehatan) }}</template>
+              </td>
+              <td class="p-2 text-right text-orange-600 bg-orange-50/10 text-xs">
+                <input v-if="isEditing(r)" v-model.number="editForm.employee_jp" type="number" min="0" step="any"
+                  class="w-24 bg-(--bg-input) border border-(--border-soft) rounded px-2 py-1 text-right text-xs" />
+                <template v-else>{{ fmt(r.employee_jp) }}</template>
+              </td>
+              <!-- Aksi -->
+              <td class="p-2 text-center">
+                <div v-if="isEditing(r)" class="flex justify-center gap-1">
+                  <button @click="saveEdit(r)" :disabled="savingEdit"
+                    class="px-2 py-1 rounded text-[10px] bg-(--primary) text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {{ savingEdit ? '...' : 'Simpan' }}
+                  </button>
+                  <button @click="cancelEdit" :disabled="savingEdit"
+                    class="px-2 py-1 rounded text-[10px] bg-(--bg-input) border border-(--border-soft) text-(--text-main) hover:bg-(--bg-hover) disabled:opacity-50 disabled:cursor-not-allowed">
+                    Batal
+                  </button>
+                </div>
+                <button v-else @click="startEdit(r)"
+                  class="p-1.5 rounded hover:bg-(--bg-hover) text-(--text-muted) hover:text-(--primary)"
+                  title="Edit iuran karyawan (JHT, KES, JP)">
+                  ✏️
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -108,15 +139,33 @@
         </div>
       </div>
     </BaseCard>
+
+    <!-- Locked Warning Modal (logic_payroll_baru.md §5/#11) -->
+    <BaseModal :show="showLockedModal" @close="showLockedModal = false" title="Payroll Terkunci">
+      <div class="p-4 space-y-4">
+        <p class="text-sm text-(--text-main)">
+          Payroll telah di kunci, anda tidak bisa melakukan perubahan pada periode ini.
+          Untuk melakukan perubahan, unlock payroll di halaman Gaji Karyawan terlebih dahulu.
+        </p>
+        <div class="flex justify-end gap-2">
+          <BaseButton variant="secondary" @click="showLockedModal = false">Tutup</BaseButton>
+          <BaseButton variant="primary" @click="goToGajiKaryawan">Unlock Payroll</BaseButton>
+        </div>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useApi } from '@/composables/useApi'
 import BaseCard from '@/Components/BaseCard.vue'
+import BaseButton from '@/Components/BaseButton.vue'
+import BaseModal from '@/Components/BaseModal.vue'
 
-const { get } = useApi()
+const router = useRouter()
+const { get, put } = useApi()
 
 const records = ref([])
 const loading = ref(false)
@@ -127,6 +176,56 @@ const search = ref('')
 const payPeriodId = ref('')
 const payPeriods = ref([])
 const exporting = ref(false)
+
+// Inline edit — 3 porsi karyawan
+const editingId = ref(null)
+const editForm = ref({ employee_jht: 0, employee_kesehatan: 0, employee_jp: 0 })
+const savingEdit = ref(false)
+const showLockedModal = ref(false)
+
+function isEditing(r) {
+  return editingId.value === r.id
+}
+
+function startEdit(r) {
+  editingId.value = r.id
+  editForm.value = {
+    employee_jht: parseFloat(r.employee_jht) || 0,
+    employee_kesehatan: parseFloat(r.employee_kesehatan) || 0,
+    employee_jp: parseFloat(r.employee_jp) || 0,
+  }
+}
+
+function cancelEdit() {
+  editingId.value = null
+}
+
+async function saveEdit(r) {
+  savingEdit.value = true
+  try {
+    const res = await put(`/api/v1/bpjs/iuran/${r.id}`, editForm.value)
+    const d = res.data?.data || res.data
+    if (d) {
+      r.employee_jht = d.employee_jht
+      r.employee_kesehatan = d.employee_kesehatan
+      r.employee_jp = d.employee_jp
+    }
+    editingId.value = null
+  } catch (e) {
+    if (e.response?.status === 403) {
+      showLockedModal.value = true
+    } else {
+      alert(e.message || 'Gagal menyimpan iuran')
+    }
+  } finally {
+    savingEdit.value = false
+  }
+}
+
+function goToGajiKaryawan() {
+  showLockedModal.value = false
+  router.push('/admin/payroll/gaji-karyawan')
+}
 
 const totalPages = computed(() => Math.ceil(total.value / perPage))
 const visiblePages = computed(() => {

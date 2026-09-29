@@ -160,6 +160,7 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
         Route::delete('/keanggotaan/{employee}', [BpjsEmployeeController::class, 'destroy']);
         Route::post('/generate-iuran', [BpjsEmployeeController::class, 'generateIuran']);
         Route::get('/iuran', [BpjsEmployeeController::class, 'iuranIndex']);
+        Route::put('/iuran/{bpjs}', [BpjsEmployeeController::class, 'updateIuran']);
         Route::get('/iuran/export', [BpjsEmployeeController::class, 'exportIuran']);
         Route::get('/reports', [BpjsEmployeeController::class, 'reports']);
         Route::get('/reports/export', [BpjsEmployeeController::class, 'exportReports']);
