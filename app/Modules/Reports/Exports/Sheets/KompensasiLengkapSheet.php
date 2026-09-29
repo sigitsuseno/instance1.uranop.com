@@ -18,13 +18,18 @@ use PhpOffice\PhpSpreadsheet\Style\Fill;
 /**
  * Sheet "Kompensasi" untuk Export Lengkap.
  *
- * Layout mengikuti file GAJI_KUS_*.xlsx (12 kolom, A–L), TANPA kolom POTONGAN:
+ * 13 kolom (A–M), mengikuti export Kompensasi standalone (CompensationMainSheet)
+ * supaya potongan admin kelihatan:
  *   A=NO, B=NAMA, C=REKENING, D=BANK, E=CABANG,
  *   F..J = di bawah header group (tgl mulai, tgl akhir, gaji pokok, durasi, nominal),
- *   K=PEMBULATAN, L=TOTAL TERIMA.
+ *   K=PEMBULATAN, L=POTONGAN, M=TOTAL TERIMA.
  *
- * TOTAL TERIMA = nominal yang sudah dibulatkan ke atas per Rp100 (potongan admin
- * tidak diperhitungkan di sheet ini).
+ * CATATAN: file sample GAJI_KUS_*.xlsx hanya 12 kolom (tanpa POTONGAN), jadi sheet
+ * ini sengaja lebih lebar satu kolom dari sample. Total di kolom M tetap dipakai
+ * sheet Resume sebagai pembanding baris kontrol.
+ *
+ * nominal + PEMBULATAN − POTONGAN = TOTAL TERIMA, dengan POTONGAN = potongan admin
+ * per kontrak (employee_contracts.pot_admin, kosong bila tidak ada potongan).
  */
 class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithColumnWidths, WithTitle
 {
@@ -34,10 +39,10 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
     protected string $groupLabel;
     protected string $sheetTitle;
 
-    private const LAST_COL = 'L';
-    private const COL_COUNT = 12;
+    private const LAST_COL = 'M';
+    private const COL_COUNT = 13;
 
-    /** Total kolom L — diambil Export Lengkap untuk baris kontrol di sheet Resume. */
+    /** Total kolom M — diambil Export Lengkap untuk baris kontrol di sheet Resume. */
     public float $totalTerima = 0.0;
 
     public function __construct(Collection $contracts, int $year, int $month, string $groupLabel)
@@ -79,7 +84,7 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
      * blok "RESUME UANG KOMPENSASI" supaya totalnya dijamin sama.
      *
      * @return array{gaji_pokok: float, tj_masa_kerja: float, duration_months: int,
-     *               nominal: float, pembulatan: int, total_terima: float}
+     *               nominal: float, pembulatan: int, potongan: float|null, total_terima: float}
      */
     public static function computeRow(?object $contract, int $year, int $month): array
     {
@@ -96,13 +101,17 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
         // Dibulatkan ke rupiah terdekat supaya nominal (format #,##0) + PEMBULATAN = TOTAL TERIMA.
         $pembulatan   = (int) round($totalRounded - $totalRaw);
 
+        // Potongan admin kompensasi per kontrak; null = tidak ada potongan (sel dibiarkan kosong).
+        $potongan     = $contract?->pot_admin === null ? null : (float) $contract->pot_admin;
+
         return [
             'gaji_pokok'      => $gajiPokok,
             'tj_masa_kerja'   => $tjMasaKerja,
             'duration_months' => $durationMonths,
             'nominal'         => round($totalRaw),
             'pembulatan'      => $pembulatan,
-            'total_terima'    => $totalRounded,
+            'potongan'        => $potongan,
+            'total_terima'    => $totalRounded - (float) ($potongan ?? 0),
         ];
     }
 
@@ -126,7 +135,8 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
         $headerRow[4]  = 'CABANG';
         $headerRow[5]  = trim($this->groupLabel . ' ' . $this->year);
         $headerRow[10] = 'PEMBULATAN';
-        $headerRow[11] = 'TOTAL TERIMA';
+        $headerRow[11] = 'POTONGAN';
+        $headerRow[12] = 'TOTAL TERIMA';
         $rows[] = $headerRow;
 
         // ── Baris data ──
@@ -134,6 +144,7 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
         $totalGajiPokok = 0.0;
         $totalNominal   = 0.0;
         $totalPembulatan = 0;
+        $totalPotongan  = 0.0;
         $totalTerima    = 0.0;
 
         foreach ($this->contracts as $contract) {
@@ -152,12 +163,14 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
                 $calc['duration_months'],
                 $calc['nominal'],
                 $calc['pembulatan'],
+                $calc['potongan'],
                 $calc['total_terima'],
             ];
 
             $totalGajiPokok  += $calc['gaji_pokok'];
             $totalNominal    += $calc['nominal'];
             $totalPembulatan += $calc['pembulatan'];
+            $totalPotongan   += (float) ($calc['potongan'] ?? 0);
             $totalTerima     += $calc['total_terima'];
         }
 
@@ -170,7 +183,8 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
         $totalRow[7]  = $totalGajiPokok;
         $totalRow[9]  = $totalNominal;
         $totalRow[10] = $totalPembulatan;
-        $totalRow[11] = $totalTerima;
+        $totalRow[11] = $totalPotongan;
+        $totalRow[12] = $totalTerima;
         $rows[] = $totalRow;
 
         $this->totalTerima = $totalTerima;
@@ -183,7 +197,7 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
         return [
             'A' => 5, 'B' => 28, 'C' => 16, 'D' => 10, 'E' => 14,
             'F' => 12, 'G' => 12, 'H' => 14, 'I' => 8, 'J' => 14,
-            'K' => 12, 'L' => 14,
+            'K' => 12, 'L' => 12, 'M' => 14,
         ];
     }
 
@@ -258,7 +272,7 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
                     // REKENING sebagai teks supaya digit panjang tidak jadi notasi ilmiah
                     $sheet->getStyle("C{$firstData}:C{$lastData}")->getNumberFormat()->setFormatCode('@');
 
-                    foreach (['H', 'I', 'J', 'K', 'L'] as $col) {
+                    foreach (['H', 'I', 'J', 'K', 'L', 'M'] as $col) {
                         $sheet->getStyle("{$col}{$firstData}:{$col}{$lastData}")
                             ->getNumberFormat()->setFormatCode('#,##0');
                     }
@@ -278,7 +292,7 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
                     ],
                 ] + $border);
 
-                foreach (['H', 'I', 'J', 'K', 'L'] as $col) {
+                foreach (['H', 'I', 'J', 'K', 'L', 'M'] as $col) {
                     $sheet->getStyle("{$col}{$totalRow}")
                         ->getNumberFormat()->setFormatCode('#,##0');
                 }

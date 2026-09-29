@@ -281,7 +281,7 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
         $rows[] = self::rowAt(['A' => 'TOTAL', 'U' => "=U{$totalARow}+U{$totalBRow}+U{$umTotalRow}+U{$kTotalRow}"]);
         $rows[] = self::rowAt([
             'U' => "='Gaji Karyawan'!AB{$this->gkLastRow}+'Uang Makan'!P{$this->umLastRow}"
-                 . "+'{$this->kompSheetTitle}'!L{$this->kompLastRow}",
+                 . "+'{$this->kompSheetTitle}'!M{$this->kompLastRow}",
         ]);
 
         return $rows;

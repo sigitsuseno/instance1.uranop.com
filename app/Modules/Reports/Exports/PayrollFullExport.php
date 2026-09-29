@@ -12,7 +12,7 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
  *
  *   1. Gaji Karyawan   — per karyawan (Section A All In + Section B Bulanan Print)
  *   2. Uang Makan      — rekap uang makan / lembur per karyawan
- *   3. Kompensasi ...  — daftar kompensasi kontrak (12 kolom, tanpa POTONGAN)
+ *   3. Kompensasi ...  — daftar kompensasi kontrak (13 kolom, dengan POTONGAN)
  *   4. Resume          — 4 blok ringkasan (gaji A, gaji B, uang makan, kompensasi)
  *   5. Rekap Gaji      — rekap gaji + BPJS + uang makan per karyawan
  */

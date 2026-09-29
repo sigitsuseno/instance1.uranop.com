@@ -116,7 +116,7 @@ class PayrollReportController extends Controller
         $umPayload    = $umController->buildRekapPayload($umRequest);
         $umResumeData = $umController->buildRekapResumePayload($umRequest);
 
-        // ── 3. Kompensasi (12 kolom, tanpa POTONGAN) ──
+        // ── 3. Kompensasi (13 kolom, dengan POTONGAN) ──
         [$contracts, $compGroup] = $this->resolveKompensasi($period);
 
         // ── 4. Blok Resume ──
