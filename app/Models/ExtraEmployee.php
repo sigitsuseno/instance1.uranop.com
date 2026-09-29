@@ -7,6 +7,13 @@ use Illuminate\Support\Str;
 
 class ExtraEmployee extends Model
 {
+    /**
+     * Label baris rekap karyawan titipan di laporan Resume (tab Resume Section A
+     * dan sheet Resume pada Export Lengkap). Dipakai juga sebagai penanda baris
+     * di ResumeLengkapSheet — jangan diubah di satu tempat saja.
+     */
+    public const RESUME_LABEL = 'UMUM 2';
+
     protected $table = 'extra_employees';
 
     protected $fillable = [

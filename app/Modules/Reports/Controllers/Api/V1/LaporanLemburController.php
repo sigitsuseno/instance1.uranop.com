@@ -1167,10 +1167,13 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 $totalUangMakan = 0;
             }
 
+            // Kolom Total U.Mkn+Ins dibulatkan ke atas ke kelipatan 100
+            $totalUangMakanInsentif = $this->roundUpTo100($totalUangMakan + $totalInsentif);
+
             if ($isAfterEndDate || $isRangeMode) {
-                $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakan + $totalInsentif + $premiHadir;
+                $totalTerima = $totalHariKerja + $totalOvertime + $totalUangMakanInsentif + $premiHadir;
             } else {
-                $totalTerima = $totalOvertime + $totalUangMakan + $totalInsentif;
+                $totalTerima = $totalOvertime + $totalUangMakanInsentif;
             }
 
             $item = [
@@ -1189,7 +1192,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 'insentif'          => $endDateInsentif,
                 'total_hari_kerja'  => $totalHariKerja,
                 'total_overtime'    => $totalOvertime,
-                'total_uang_makan'  => $totalUangMakan + $totalInsentif,
+                'total_uang_makan'  => $totalUangMakanInsentif,
                 'total_insentif'    => $totalInsentif,
                 'total_terima'      => $totalTerima,
                 '_is_spr'            => false,
@@ -1221,7 +1224,7 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
                 }
                 unset($day);
                 $item['_is_spr'] = true;
-                $item['total_uang_makan'] = $totalInsentif;
+                $item['total_uang_makan'] = $totalUangMakanInsentif;
                 $allInEmployees->push($item);
             } else {
                 $allInEmployees->push($item);
@@ -1350,6 +1353,18 @@ td{padding:2px 4px;border:1px solid #e5e7eb}tr:nth-child(even){background:#f9faf
             'total_terima'     => $employees->sum('total_terima'),
             'count'            => $employees->count(),
         ];
+    }
+
+    /**
+     * Bulatkan ke atas ke kelipatan 100 (kolom Total U.Mkn+Ins).
+     * Nilai dari rate /7 (KRY-TKN) menghasilkan pecahan, mis. 857.142,87 → 857.200.
+     */
+    private function roundUpTo100(float $value): float
+    {
+        $rounded = ceil($value / 100) * 100;
+
+        // ceil() nilai negatif kecil menghasilkan -0; normalisasi agar tampil 0.
+        return $rounded == 0 ? 0.0 : (float) $rounded;
     }
 
     // ─── Update Data ──────────────────────────────────────────────

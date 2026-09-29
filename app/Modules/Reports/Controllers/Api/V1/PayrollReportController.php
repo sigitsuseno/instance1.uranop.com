@@ -897,7 +897,7 @@ class PayrollReportController extends Controller
                 }
 
                 $data[] = [
-                    'bagian'             => 'Karyawan Tambahan',
+                    'bagian'             => ExtraEmployee::RESUME_LABEL,
                     'jml_karyawan_l'     => $maleCount,
                     'jml_karyawan_p'     => $femaleCount,
                     'jml_karyawan_total' => $maleCount + $femaleCount,

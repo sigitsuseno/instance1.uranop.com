@@ -2,6 +2,7 @@
 
 namespace App\Modules\Reports\Exports\Sheets;
 
+use App\Models\ExtraEmployee;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use Maatwebsite\Excel\Concerns\WithEvents;
@@ -310,13 +311,13 @@ class ResumeLengkapSheet implements FromArray, WithEvents, WithStyles, WithColum
      */
     private function gajiRow(array $r, int $no, int $rowNo, bool $includeLembur): array
     {
-        // Baris "Karyawan Tambahan" (ExtraEmployee) tidak punya posisi dan komponen
+        // Baris "UMUM 2" (ExtraEmployee) tidak punya posisi dan komponen
         // gajinya hanya gaji pokok. Karena sheet ini tidak punya kolom GAJI POKOK,
         // nominalnya ditaruh di kolom GAJI — sama seperti file sample yang
         // menggabungkannya ke baris UMUM. Tanpa ini kolom TOTAL (=SUM(F:K)) akan
         // kehilangan nilainya dan baris kontrol TOTAL A tidak cocok dengan sheet
         // Gaji Karyawan.
-        if (($r['bagian'] ?? null) === 'Karyawan Tambahan') {
+        if (($r['bagian'] ?? null) === ExtraEmployee::RESUME_LABEL) {
             return self::rowAt([
                 'A' => $no,
                 'B' => $r['bagian'],
