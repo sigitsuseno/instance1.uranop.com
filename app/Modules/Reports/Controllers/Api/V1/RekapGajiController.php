@@ -248,9 +248,10 @@ class RekapGajiController extends Controller
                 $um = (float) ($ot->total_nominal ?? 0);
             }
 
-            // TOTAL GAJI sengaja memakai UM ASLI (belum dibulatkan); hanya kolom UM
-            // yang tampil dibulatkan ke atas kelipatan 100.
-            $totalGaji = $gajiKotor + $um;
+            // UM dibulatkan ke atas kelipatan 100, dan TOTAL GAJI memakai nilai
+            // bulat yang sama supaya GAJI + UM = TOTAL GAJI tetap konsisten.
+            $umRounded = $this->roundUpTo100($um);
+            $totalGaji = $gajiKotor + $umRounded;
 
             return [
                 'id'           => $emp->id,
@@ -262,7 +263,7 @@ class RekapGajiController extends Controller
                 'total_gaji'   => $totalGaji,
                 'bpjs_tk'      => $bpjsTk,
                 'bpjs_ks'      => $bpjsKs,
-                'uang_makan'   => $this->roundUpTo100($um),
+                'uang_makan'   => $umRounded,
                 'groups'       => $groupCodes,
                 'department'   => $emp->department?->name ?? '-',
                 'position'     => $emp->position?->name ?? '-',
