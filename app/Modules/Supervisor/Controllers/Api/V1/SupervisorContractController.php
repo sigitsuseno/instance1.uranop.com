@@ -8,6 +8,7 @@ use App\Modules\Employee\Models\EmployeeContract;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SupervisorContractController extends Controller
 {
@@ -118,6 +119,67 @@ class SupervisorContractController extends Controller
         $contract->update(['compensation_paid_at' => null]);
 
         return response()->json(['message' => 'Status kompensasi dikembalikan.']);
+    }
+
+    /**
+     * POST /api/employees/contracts/bulk-type
+     * Bulk update contract_type (latest contract) + employment_status.
+     * Superadmin only (route middleware role:superadmin).
+     * Mapping: pkwt -> employment_status=contract, pkwtt -> employment_status=permanent.
+     */
+    public function bulkUpdateType(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'employee_ids'   => 'required|array|min:1|max:200',
+            'employee_ids.*' => 'integer|distinct|exists:employees,id',
+            'target'         => 'required|in:pkwt,pkwtt',
+        ]);
+
+        $contractType = $data['target'];
+        $employmentStatus = $contractType === 'pkwt' ? 'contract' : 'permanent';
+
+        $updatedEmployees = 0;
+        $updatedContracts = 0;
+        $skippedNoContract = 0;
+
+        DB::transaction(function () use ($data, $contractType, $employmentStatus, &$updatedEmployees, &$updatedContracts, &$skippedNoContract) {
+            $employees = Employee::whereIn('id', $data['employee_ids'])
+                ->where('is_active', true)
+                ->with('latestContract')
+                ->get();
+
+            foreach ($employees as $employee) {
+                // Hanya ubah kolom employment_status di tabel employees
+                if ($employee->employment_status !== $employmentStatus) {
+                    $employee->employment_status = $employmentStatus;
+                    $employee->save();
+                }
+                $updatedEmployees++;
+
+                // Hanya ubah kolom contract_type di kontrak terakhir (jika ada)
+                $latest = $employee->latestContract;
+                if ($latest) {
+                    if ($latest->contract_type !== $contractType) {
+                        $latest->contract_type = $contractType;
+                        $latest->save();
+                    }
+                    $updatedContracts++;
+                } else {
+                    $skippedNoContract++;
+                }
+            }
+        });
+
+        return response()->json([
+            'message' => 'Bulk update tipe kontrak berhasil.',
+            'data'    => [
+                'target'              => $contractType,
+                'employment_status'   => $employmentStatus,
+                'updated_employees'   => $updatedEmployees,
+                'updated_contracts'   => $updatedContracts,
+                'skipped_no_contract' => $skippedNoContract,
+            ],
+        ]);
     }
 
     /**

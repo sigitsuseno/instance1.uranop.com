@@ -141,6 +141,7 @@ Route::prefix('v1/supervisor')
             // Kontrak Kerja
             Route::get('karyawan/contracts/stats', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorContractController::class, 'stats']);
             Route::post('karyawan/contracts/import', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorContractController::class, 'import']);
+            Route::post('karyawan/contracts/bulk-type', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorContractController::class, 'bulkUpdateType'])->middleware('role:superadmin');
             Route::get('karyawan/{employee}/contracts', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorContractController::class, 'index']);
             Route::post('karyawan/{employee}/contracts', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorContractController::class, 'store']);
             Route::get('karyawan/{employee}/contracts/{contract}', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorContractController::class, 'show']);

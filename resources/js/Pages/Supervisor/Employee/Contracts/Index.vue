@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useApi } from '../../../../composables/useApi'
+import { useAuth } from '../../../../composables/useAuth'
 import { useNotificationStore } from '../../../../Stores/notification'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseButton from '../../../../Components/BaseButton.vue'
@@ -14,6 +15,7 @@ import ContractForm from './Form.vue'
 const router = useRouter()
 const notification = useNotificationStore()
 const { get, post, patch, destroy: apiDelete } = useApi()
+const auth = useAuth()
 
 // State
 const loading = ref(false)
@@ -60,6 +62,15 @@ const modalEmployee = ref(null)
 const showHistoryModal = ref(false)
 const contractHistory = ref([])
 const loadingHistory = ref(false)
+
+// Bulk Type Modal (superadmin only)
+const showBulkModal = ref(false)
+const bulkSearch = ref('')
+const bulkEmployees = ref([])
+const bulkLoading = ref(false)
+const bulkSubmitting = ref(false)
+const selectedIds = ref([])
+const isAllSelected = computed(() => bulkEmployees.value.length > 0 && selectedIds.value.length === bulkEmployees.value.length)
 
 // ========== API CALLS ==========
 async function fetchEmployees() {
@@ -169,6 +180,87 @@ function handleFormSuccess() {
   }
 }
 
+// ========== BULK UPDATE TYPE (superadmin) ==========
+const bulkPage = ref(1)
+const bulkTotal = ref(0)
+const bulkPerPage = 100
+const bulkHasMore = computed(() => bulkEmployees.value.length < bulkTotal.value)
+
+function openBulkModal() {
+  showBulkModal.value = true
+  bulkSearch.value = ''
+  selectedIds.value = []
+  fetchBulkEmployees(true)
+}
+
+async function fetchBulkEmployees(reset = true, loadMore = false) {
+  if (reset) {
+    bulkPage.value = 1
+    selectedIds.value = []
+  }
+  if (loadMore) bulkPage.value += 1
+  bulkLoading.value = true
+  try {
+    const params = new URLSearchParams()
+    params.set('is_active', '1')
+    params.set('per_page', String(bulkPerPage))
+    params.set('page', String(bulkPage.value))
+    if (bulkSearch.value) params.set('search', bulkSearch.value)
+    const res = await get(`/api/v1/supervisor/employee-data/karyawan?${params}`)
+    const rows = res.data || []
+    bulkTotal.value = res.meta?.total ?? rows.length
+    bulkEmployees.value = loadMore ? [...bulkEmployees.value, ...rows] : rows
+  } catch (e) {
+    notification.addNotification('Gagal memuat daftar karyawan.', 'error')
+  } finally {
+    bulkLoading.value = false
+  }
+}
+
+function toggleSelect(id) {
+  const idx = selectedIds.value.indexOf(id)
+  if (idx >= 0) selectedIds.value.splice(idx, 1)
+  else selectedIds.value.push(id)
+}
+
+function toggleSelectAll() {
+  if (isAllSelected.value) selectedIds.value = []
+  else selectedIds.value = bulkEmployees.value.map(e => e.id)
+}
+
+async function bulkUpdate(target) {
+  if (selectedIds.value.length === 0) {
+    notification.addNotification('Pilih minimal 1 karyawan.', 'error')
+    return
+  }
+  bulkSubmitting.value = true
+  try {
+    const res = await post('/api/v1/supervisor/employee-data/karyawan/contracts/bulk-type', {
+      employee_ids: selectedIds.value,
+      target,
+    })
+    const d = res.data || {}
+    notification.addNotification(
+      `Berhasil update ${d.updated_employees ?? 0} karyawan (${d.updated_contracts ?? 0} kontrak).` +
+      (d.skipped_no_contract ? ` ${d.skipped_no_contract} tanpa kontrak.` : ''),
+      'success'
+    )
+    showBulkModal.value = false
+    selectedIds.value = []
+    fetchEmployees()
+  } catch (e) {
+    notification.addNotification(e.message || 'Gagal bulk update tipe kontrak.', 'error')
+  } finally {
+    bulkSubmitting.value = false
+  }
+}
+
+let bulkSearchTimeout = null
+watch(bulkSearch, () => {
+  clearTimeout(bulkSearchTimeout)
+  bulkSearchTimeout = setTimeout(() => fetchBulkEmployees(true), 400)
+})
+
 async function markCompensationPaid(contractId, employeeId) {
   try {
     await patch(`/api/v1/supervisor/employee-data/karyawan/${employeeId}/contracts/${contractId}/mark-paid`)
@@ -263,6 +355,9 @@ onMounted(() => {
         </div>
       </div>
       <div class="flex items-center gap-3">
+        <BaseButton v-if="auth.isSuperadmin" variant="secondary" @click="openBulkModal" title="Bulk Ubah Tipe Kontrak" class="px-3">
+          <i class="bx bx-cog text-lg"></i>
+        </BaseButton>
         <BaseButton variant="secondary" @click="$router.push('/supervisor/employee-data/kontrak-kerja/import')">
           <template #icon-left>
             <i class="bx bx-upload text-lg"></i>
@@ -572,6 +667,77 @@ onMounted(() => {
         @success="handleFormSuccess"
         @cancel="showContractModal = false"
       />
+    </BaseModal>
+
+    <!-- Bulk Update Type Modal (superadmin only) -->
+    <BaseModal :show="showBulkModal" @close="showBulkModal = false" title="Bulk Ubah Tipe Kontrak" size="lg">
+      <div class="relative mb-4">
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-(--text-muted)">
+          <i class="bx bx-search text-lg"></i>
+        </div>
+        <input
+          type="text"
+          v-model="bulkSearch"
+          placeholder="Cari nama, NIK, atau kode karyawan..."
+          class="w-full pl-10 pr-4 h-10 rounded-md bg-(--bg-elevated) border border-(--border-soft) text-(--text-main) placeholder:text-(--text-soft) focus:ring-2 focus:ring-(--primary-glow) focus:border-(--primary) outline-none transition-all text-sm"
+        >
+      </div>
+
+      <div class="flex items-center justify-between mb-2">
+        <label class="flex items-center gap-2 text-sm text-(--text-main) cursor-pointer select-none">
+          <input type="checkbox" :checked="isAllSelected" @change="toggleSelectAll" class="w-4 h-4 accent-(--primary)">
+          <span class="font-medium">Pilih semua (yang tampil)</span>
+        </label>
+        <span class="text-xs text-(--text-muted)">{{ selectedIds.length }} dipilih • tampil {{ bulkEmployees.length }} dari {{ bulkTotal }}</span>
+      </div>
+
+      <div v-if="bulkLoading" class="p-8 flex justify-center">
+        <div class="w-8 h-8 border-4 border-(--primary)/30 border-t-(--primary) rounded-full animate-spin"></div>
+      </div>
+      <div v-else-if="bulkEmployees.length === 0" class="p-8 text-center text-(--text-muted)">
+        Tidak ada karyawan ditemukan.
+      </div>
+      <div v-else class="space-y-2 max-h-[40vh] overflow-y-auto pr-1">
+        <label
+          v-for="emp in bulkEmployees"
+          :key="emp.id"
+          class="flex items-center gap-3 p-3 rounded-md border border-(--border-soft) bg-(--bg-elevated) cursor-pointer hover:border-(--primary)/40 transition-colors"
+        >
+          <input
+            type="checkbox"
+            :checked="selectedIds.includes(emp.id)"
+            @change="toggleSelect(emp.id)"
+            class="w-4 h-4 accent-(--primary) shrink-0"
+          >
+          <div class="w-9 h-9 rounded-md bg-(--primary)/10 flex items-center justify-center border border-(--primary)/20 shrink-0 overflow-hidden">
+            <img v-if="emp.photo_url" :src="emp.photo_url" class="w-full h-full object-cover" >
+            <span v-else class="text-(--primary) font-bold text-xs">{{ getInitials(emp.name) }}</span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-bold text-(--text-main) truncate">{{ emp.name }}</p>
+            <p class="text-xs text-(--text-muted) truncate">{{ emp.employee_code }} • {{ emp.department?.name || '-' }} • {{ emp.employment_status_label || emp.employment_status }}</p>
+          </div>
+          <span v-if="emp.latest_contract" class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-(--bg-card) border border-(--border-soft) text-(--text-soft) shrink-0">
+            {{ getTypeLabel(emp.latest_contract.contract_type) }}
+          </span>
+          <span v-else class="text-[10px] italic text-(--text-muted) shrink-0">Tanpa kontrak</span>
+        </label>
+        <div v-if="bulkHasMore" class="pt-2 text-center">
+          <BaseButton variant="secondary" :disabled="bulkLoading" @click="fetchBulkEmployees(false, true)">
+            {{ bulkLoading ? 'Memuat...' : `Muat lebih banyak (sisa ${bulkTotal - bulkEmployees.length})` }}
+          </BaseButton>
+        </div>
+      </div>
+
+      <template #footer>
+        <BaseButton variant="secondary" @click="showBulkModal = false">Batal</BaseButton>
+        <BaseButton variant="primary" :disabled="bulkSubmitting || selectedIds.length === 0" @click="bulkUpdate('pkwt')">
+          {{ bulkSubmitting ? 'Memproses...' : `Ubah menjadi PKWT (${selectedIds.length})` }}
+        </BaseButton>
+        <BaseButton variant="primary" :disabled="bulkSubmitting || selectedIds.length === 0" @click="bulkUpdate('pkwtt')">
+          {{ bulkSubmitting ? 'Memproses...' : `Ubah menjadi PKWTT (${selectedIds.length})` }}
+        </BaseButton>
+      </template>
     </BaseModal>
   </div>
 </template>
