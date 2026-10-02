@@ -3,7 +3,7 @@
 namespace App\Modules\Payroll\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Attendance\Models\AttendancePrepare;
+use App\Modules\Attendance\Models\EmployeeOvertime;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeBpjs;
 use App\Modules\Payroll\Models\EmployeePph;
@@ -21,14 +21,11 @@ use Illuminate\Support\Str;
  *
  * Alur:
  *   1. GET  /api/v1/payroll/pph/data      → list data PPh untuk suatu periode
- *   2. POST /api/v1/payroll/pph/generate   → generate PPh dari sumber data (salary, bpjs, attendance)
+ *   2. POST /api/v1/payroll/pph/generate   → generate PPh dari sumber data (salary, bpjs, employee_overtime)
  *   3. PUT  /api/v1/payroll/pph/data/{id}  → edit manual satu record
  */
 class EmployeePphController extends Controller
 {
-    // Group yang mendapat upah lembur 0 (sama dengan payroll)
-    private const ZERO_OVERTIME_GROUPS = ['GRP-ALLIN', 'GRP-GD'];
-
     /** Group payroll yang eligible */
     private const GAJI_GROUPS = ['GRP-ALLIN', 'GRP-PS1', 'GRP-GD', 'GRP-SS', 'GRP-SPR'];
 
@@ -121,10 +118,6 @@ class EmployeePphController extends Controller
             ], 422);
         }
 
-        // Attendance aggregates
-        $startDate = $period->start_date->toDateString();
-        $endDate   = $period->end_date->toDateString();
-
         $force     = (bool) ($validated['force'] ?? false);
         $generated = 0;
         $skipped   = 0;
@@ -164,38 +157,16 @@ class EmployeePphController extends Controller
                 $jpKaryawan    = (float) ($bpjs?->employee_jp ?? 0);
                 $bpjsKesKary   = (float) ($bpjs?->employee_kesehatan ?? 0);
 
-                // ── Sumber data: attendance (untuk lembur) ──
-                $prepares = AttendancePrepare::where('employee_id', $employee->id)
-                    ->whereBetween('date', [$startDate, $endDate])
-                    ->get();
+                // ── Sumber data: insentif + uang makan/lembur ──
+                // Diambil dari employee_overtime (hasil update lembur & uang makan
+                // periode ini), bukan dihitung ulang dari att_prepares.
+                $overtime = EmployeeOvertime::where('employee_id', $employee->id)
+                    ->where('pay_periode_id', $period->id)
+                    ->selectRaw('COALESCE(SUM(nominal), 0) as total_nominal, COALESCE(SUM(insentif), 0) as total_insentif')
+                    ->first();
 
-                $lm          = $prepares->sum('lm');
-                $lmCount     = $prepares->sum('lm_count');
-                $lemburCount = $prepares->sum('overtime_count');
-
-                $isZeroOvertime = $employee->groups()
-                    ->whereIn('reference_code', self::ZERO_OVERTIME_GROUPS)
-                    ->exists();
-
-                if ($isZeroOvertime) {
-                    $upahLembur = 0;
-                } else {
-                    $isSpr = $employee->hasGroup('GRP-SPR');
-                    if ($isSpr) {
-                        $lemburCount = 0;
-                        $totalLemburJam = $lmCount / 60;
-                    } else {
-                        $totalLemburJam = ($lmCount + $lemburCount) / 60;
-                    }
-
-                    $tjMasaKerja = $employee->tunjangan_masa_kerja($segmentMonth);
-                    $hourlyBase  = $gajiPokok + $tjMasaKerja + $tunjangan;
-                    $upahLembur  = $totalLemburJam > 0 && $hourlyBase > 0
-                        ? ceil(($hourlyBase / 173) * $totalLemburJam / 100) * 100
-                        : 0;
-                }
-
-                $lemburBonusThr = $upahLembur;
+                $lemburBonusThr = (float) ($overtime->total_nominal ?? 0)
+                    + (float) ($overtime->total_insentif ?? 0);
 
                 // ── Hitung PPh ──
                 // Penghasilan bruto = gaji pokok + premi + tunjangan + lembur/bonus/THR + BPJS perusahaan

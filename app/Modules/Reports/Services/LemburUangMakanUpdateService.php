@@ -79,10 +79,24 @@ class LemburUangMakanUpdateService
         $payRecords = PayRecord::where('pay_period_id', $period->id)
             ->get()->groupBy('employee_id');
 
+        // Insentif manual (disimpan lewat modal Edit Insentif → kolom insentif pada
+        // record tanggal end_date periode) harus dipertahankan: proses di bawah
+        // menghapus & menulis ulang seluruh baris periode ini.
+        $insentifLama = EmployeeOvertime::where('pay_periode_id', $period->id)
+            ->where('insentif', '!=', 0)
+            ->get()
+            ->groupBy('employee_id')
+            ->map(fn($rows) => (float) $rows->sortByDesc('date')->first()->insentif);
+
         // ── Process ─────────────────────────────────────────────────
         $inserts = [];
         $now     = now();
         $userId  = auth()->id();
+
+        // Posisi baris hasil insert per karyawan, untuk menempelkan kembali insentif.
+        $endDateStr         = $period->end_date->format('Y-m-d');
+        $lastInsertIndex    = [];
+        $endDateInsertIndex = [];
 
         foreach ($employees as $employee) {
             $empPrepares = $prepares->get($employee->id, collect())->keyBy(fn($p) => $p->date->format('Y-m-d'));
@@ -203,6 +217,20 @@ class LemburUangMakanUpdateService
                     'created_at'     => $now,
                     'updated_at'     => $now,
                 ];
+
+                $lastInsertIndex[$employee->id] = count($inserts) - 1;
+                if ($dateStr === $endDateStr) {
+                    $endDateInsertIndex[$employee->id] = count($inserts) - 1;
+                }
+            }
+        }
+
+        // Tempelkan kembali insentif ke baris tanggal end_date periode
+        // (fallback: baris terakhir karyawan tsb).
+        foreach ($insentifLama as $employeeId => $nilai) {
+            $index = $endDateInsertIndex[$employeeId] ?? $lastInsertIndex[$employeeId] ?? null;
+            if ($index !== null) {
+                $inserts[$index]['insentif'] = $nilai;
             }
         }
 
