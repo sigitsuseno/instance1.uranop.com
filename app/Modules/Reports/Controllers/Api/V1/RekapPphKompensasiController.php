@@ -269,8 +269,19 @@ class RekapPphKompensasiController extends Controller
             ]);
         }
 
+        // Keikutsertaan ditentukan dari kontrak, bukan flag is_active: rekap ini
+        // untuk periode lampau, sedangkan is_active mencerminkan status hari ini —
+        // karyawan yang resign di akhir periode jadi ikut terbuang.
         $query = Employee::whereIn('id', $rosteredEmployeeIds)
-            ->where('is_active', true)
+            ->where(function ($q) use ($startDate, $endDate) {
+                // Karyawan permanent tidak punya baris kontrak → selalu ikut.
+                $q->whereDoesntHave('contracts')
+                  // PKWT: ikut selama kontraknya belum berakhir saat periode mulai.
+                  ->orWhereHas('contracts', function ($c) use ($startDate, $endDate) {
+                      $c->where('end_date', '>=', $startDate)
+                        ->where('start_date', '<=', $endDate);
+                  });
+            })
             ->with(['position', 'groups', 'families']);
 
         if (!empty($selectedGroups)) {
