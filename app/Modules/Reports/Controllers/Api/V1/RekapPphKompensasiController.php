@@ -125,6 +125,19 @@ class RekapPphKompensasiController extends Controller
     // ─── Private helpers ──────────────────────────────────────────
 
     /**
+     * Bulatkan ke atas ke kelipatan 100 (kolom UM).
+     * Sumbernya (rate / 7, gaji / 173) menghasilkan pecahan, sama seperti
+     * RekapGajiController / LaporanLemburController.
+     */
+    private function roundUpTo100(float $value): float
+    {
+        $rounded = ceil($value / 100) * 100;
+
+        // ceil() nilai negatif kecil menghasilkan -0; normalisasi agar tampil 0.
+        return $rounded == 0 ? 0.0 : (float) $rounded;
+    }
+
+    /**
      * Rentang periode kontrak untuk kolom PERIODE, memakai format yang sama
      * dengan judul "PERIODE: ..." di baris 3 sheet (Y-m-d - Y-m-d).
      */
@@ -354,9 +367,9 @@ class RekapPphKompensasiController extends Controller
             if (in_array('GRP-PS1', $groupCodes) || in_array('GRP-SS', $groupCodes) || in_array('GRP-JKT', $groupCodes)) {
                 $um = 0;
             } elseif (in_array('GRP-SPR', $groupCodes)) {
-                $um = (float) ($ot->total_insentif ?? 0);
+                $um = $this->roundUpTo100((float) ($ot->total_insentif ?? 0));
             } else {
-                $um = (float) ($ot->total_nominal ?? 0);
+                $um = $this->roundUpTo100((float) ($ot->total_nominal ?? 0));
             }
 
             $pph = $sc ? (float)($sc->pph ?? 0) : 0;
