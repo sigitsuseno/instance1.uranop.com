@@ -319,20 +319,7 @@ onMounted(() => {
     </div>
 
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <BaseCard class="border-(--border-soft) shadow-sm relative overflow-hidden group">
-        <div class="absolute right-0 top-0 w-24 h-24 bg-(--primary)/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-        <div class="flex items-center justify-between relative z-10">
-          <div>
-            <p class="text-sm font-medium text-(--text-muted)">Total Karyawan</p>
-            <p class="text-3xl font-bold text-(--text-main) mt-1">{{ stats.total }}</p>
-          </div>
-          <div class="w-12 h-12 bg-(--primary)/10 text-(--primary) rounded-md flex items-center justify-center">
-            <i class="bx bx-group text-2xl"></i>
-          </div>
-        </div>
-      </BaseCard>
-
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <BaseCard class="border-(--border-soft) shadow-sm relative overflow-hidden group">
         <div class="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
         <div class="flex items-center justify-between relative z-10">
