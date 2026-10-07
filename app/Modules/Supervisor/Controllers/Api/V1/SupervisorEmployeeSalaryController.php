@@ -64,16 +64,23 @@ class SupervisorEmployeeSalaryController extends Controller
 
     public function globalIndex(Request $request): JsonResponse
     {
-        $query = EmployeeSalary::with('employee.department', 'employee.position', 'createdBy');
+        // Halaman supervisor hanya menampilkan data karyawan audit. Filter ini
+        // digabung ke dalam whereHas yang sama dengan pencarian, supaya kondisi
+        // orWhere milik search tidak keluar dari grupnya (kalau dipisah, SQL-nya
+        // jadi "is_audit = 1 AND name LIKE ? OR employee_code LIKE ?" — bocor).
+        $query = EmployeeSalary::with('employee.department', 'employee.position', 'createdBy')
+            ->whereHas('employee', function ($q) use ($request) {
+                $q->where('is_audit', true);
 
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->whereHas('employee', function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('employee_code', 'like', "%{$search}%")
-                  ->orWhere('nik', 'like', "%{$search}%");
+                if ($request->filled('search')) {
+                    $search = $request->search;
+                    $q->where(function ($sub) use ($search) {
+                        $sub->where('name', 'like', "%{$search}%")
+                            ->orWhere('employee_code', 'like', "%{$search}%")
+                            ->orWhere('nik', 'like', "%{$search}%");
+                    });
+                }
             });
-        }
 
         if ($request->filled('employee_id')) {
             $query->where('employee_id', $request->employee_id);
