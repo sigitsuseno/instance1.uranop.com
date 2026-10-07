@@ -11,6 +11,7 @@ use App\Modules\Supervisor\Controllers\Api\V1\SupervisorDepartmentController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorPositionController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorLeaveSettingController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeController;
+use App\Modules\Supervisor\Controllers\Api\V1\SupervisorAuditEmployeeController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1/supervisor')
@@ -131,6 +132,10 @@ Route::prefix('v1/supervisor')
 
         // Employee Data
         Route::prefix('employee-data')->group(function () {
+            // Karyawan Audit — kanban pemilahan karyawan supervisor
+            Route::get('karyawan-audit', [SupervisorAuditEmployeeController::class, 'index']);
+            Route::post('karyawan-audit/bulk-update', [SupervisorAuditEmployeeController::class, 'bulkUpdate']);
+
             // Karyawan
             Route::get('karyawan/stats', [SupervisorEmployeeController::class, 'stats']);
             Route::patch('karyawan/{id}/deactivate', [SupervisorEmployeeController::class, 'deactivate']);

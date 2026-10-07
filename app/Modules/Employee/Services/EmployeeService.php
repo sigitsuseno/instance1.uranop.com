@@ -67,6 +67,12 @@ class EmployeeService
             $query->where('employment_status', $filters['employment_status']);
         }
 
+        // Opt-in: hanya dipakai halaman supervisor (karyawan audit).
+        // Tidak di-set berarti tidak memfilter apa pun, supaya daftar /admin tetap utuh.
+        if (isset($filters['is_audit']) && $filters['is_audit'] !== '') {
+            $query->where('is_audit', (bool) $filters['is_audit']);
+        }
+
         if (! empty($filters['period_start']) && ! empty($filters['period_end'])) {
             // Filter: hanya karyawan yang punya roster/shift di periode tersebut
             $query->whereHas('shiftRosters', function ($q) use ($filters) {
@@ -309,19 +315,21 @@ class EmployeeService
 
     /**
      * Get statistics.
+     *
+     * @param  bool  $auditOnly  Batasi ke karyawan audit (dipakai halaman supervisor).
      */
-    public function getStats(): array
+    public function getStats(bool $auditOnly = false): array
     {
-        $total = Employee::count();
+        $scope = fn () => Employee::query()->when($auditOnly, fn ($q) => $q->where('is_audit', true));
 
         return [
-            'total'     => $total,
-            'active'    => Employee::active()->count(),
-            'permanent' => Employee::where('employment_status', 'permanent')->count(),
-            'contract'  => Employee::where('employment_status', 'contract')->count(),
-            'probation' => Employee::where('employment_status', 'probation')->count(),
-            'male'      => Employee::where('gender', 'L')->count(),
-            'female'    => Employee::where('gender', 'P')->count(),
+            'total'     => $scope()->count(),
+            'active'    => $scope()->active()->count(),
+            'permanent' => $scope()->where('employment_status', 'permanent')->count(),
+            'contract'  => $scope()->where('employment_status', 'contract')->count(),
+            'probation' => $scope()->where('employment_status', 'probation')->count(),
+            'male'      => $scope()->where('gender', 'L')->count(),
+            'female'    => $scope()->where('gender', 'P')->count(),
         ];
     }
 

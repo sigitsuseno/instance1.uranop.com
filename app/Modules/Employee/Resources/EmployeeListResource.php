@@ -22,6 +22,7 @@ class EmployeeListResource extends JsonResource
             'join_date'              => $this->join_date?->format('Y-m-d'),
             'origin_join_date'       => $this->origin_join_date?->format('Y-m-d'),
             'is_active'              => $this->is_active,
+            'is_audit'               => (bool) $this->is_audit,
             'years_of_service'       => $this->years_of_service,
             'department'             => $this->whenLoaded('department', fn () => [
                 'id'   => $this->department->id,

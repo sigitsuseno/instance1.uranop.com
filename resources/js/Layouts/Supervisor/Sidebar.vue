@@ -39,6 +39,7 @@ const supervisorMenus = computed(() => [
       { title: 'BPJS Karyawan', icon: 'bx bx-shield-plus', route: '/supervisor/employee-data/bpjs-karyawan' },
       { title: 'PPh Karyawan', icon: 'bx bx-receipt', route: '/supervisor/employee-data/pph-karyawan' },
       { title: 'Karyawan Group', icon: 'bx bx-layer', route: '/supervisor/employee-data/karyawan-group', visible: auth.isSuperadmin },
+      { title: 'Karyawan Audit', icon: 'bx bx-user-check', route: '/supervisor/employee-data/karyawan-audit', visible: auth.isSuperadmin },
     ],
   },
   {

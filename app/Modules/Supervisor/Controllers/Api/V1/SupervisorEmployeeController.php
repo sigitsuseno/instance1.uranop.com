@@ -39,6 +39,10 @@ class SupervisorEmployeeController extends Controller
             'exclude_expired_contracts' => 'nullable|boolean',
         ]);
 
+        // Halaman supervisor hanya menampilkan karyawan audit. Nilai ini di-set
+        // setelah validasi (bukan dari request) supaya tidak bisa ditimpa klien.
+        $filters['is_audit'] = true;
+
         $employees = $this->employeeService->getPaginated($filters);
 
         return EmployeeListResource::collection($employees);
@@ -212,7 +216,7 @@ class SupervisorEmployeeController extends Controller
     public function stats(): JsonResponse
     {
         return response()->json([
-            'data' => $this->employeeService->getStats(),
+            'data' => $this->employeeService->getStats(auditOnly: true),
         ]);
     }
 

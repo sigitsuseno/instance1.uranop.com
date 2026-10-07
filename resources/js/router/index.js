@@ -282,6 +282,8 @@ const routes = [
 
       { path: 'employee-data/karyawan-group', name: 'supervisor.employee.karyawan-group', component: () => import('../Pages/Supervisor/Employee/KaryawanGroup/Index.vue'), meta: { title: 'Karyawan Group' } },
 
+      { path: 'employee-data/karyawan-audit', name: 'supervisor.employee.karyawan-audit', component: () => import('../Pages/Supervisor/Employee/KaryawanAudit/Index.vue'), meta: { title: 'Karyawan Audit', requiresSuperadmin: true } },
+
       { path: 'reports', name: 'supervisor.reports', component: SupervisorReports, meta: { title: 'Laporan' } },
 
       { path: 'schedule/work-patterns', name: 'supervisor.schedule.work-patterns', component: SupervisorScheduleWorkPatterns, meta: { title: 'Pola Kerja' } },
