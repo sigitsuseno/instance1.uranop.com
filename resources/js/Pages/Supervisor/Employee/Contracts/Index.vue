@@ -20,7 +20,6 @@ const auth = useAuth()
 // State
 const loading = ref(false)
 const employees = ref([])
-const stats = ref({ active: 0, expiring_soon: 0, expired: 0 })
 const pagination = ref({ current_page: 1, last_page: 1, per_page: 15, total: 0 })
 const selectedEmployee = ref(null)
 
@@ -110,15 +109,6 @@ async function fetchEmployees() {
   }
 }
 
-async function fetchStats() {
-  try {
-    const res = await get('/api/v1/supervisor/employee-data/karyawan/contracts/stats')
-    stats.value = res.data || { active: 0, expiring_soon: 0, expired: 0 }
-  } catch (e) {
-    console.error(e)
-  }
-}
-
 async function fetchContractHistory(employee) {
   selectedEmployee.value = employee
   showHistoryModal.value = true
@@ -174,7 +164,6 @@ function openEditModal(contract, employee = null) {
 function handleFormSuccess() {
   showContractModal.value = false
   fetchEmployees()
-  fetchStats()
   if (showHistoryModal.value && selectedEmployee.value) {
     fetchContractHistory(selectedEmployee.value)
   }
@@ -337,7 +326,6 @@ watch([contractTypeFilter, contractStatusFilter, periodStartFilter, periodEndFil
 // ========== INIT ==========
 onMounted(() => {
   fetchEmployees()
-  fetchStats()
 })
 </script>
 
@@ -365,49 +353,6 @@ onMounted(() => {
           Import Kontrak
         </BaseButton>
       </div>
-    </div>
-
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <BaseCard class="border-(--border-soft) shadow-sm relative overflow-hidden group">
-        <div class="absolute right-0 top-0 w-24 h-24 bg-emerald-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-        <div class="flex items-center justify-between relative z-10">
-          <div>
-            <p class="text-xs font-bold text-(--text-muted) uppercase tracking-wide">Kontrak Aktif</p>
-            <p class="text-3xl font-black text-emerald-600 mt-1">{{ stats.active }}</p>
-          </div>
-          <div class="w-10 h-10 bg-emerald-500/10 text-emerald-600 rounded-md flex items-center justify-center">
-            <i class="bx bx-check-shield text-2xl"></i>
-          </div>
-        </div>
-      </BaseCard>
-
-      <BaseCard class="border-(--border-soft) shadow-sm relative overflow-hidden group">
-        <div class="absolute right-0 top-0 w-24 h-24 bg-amber-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-        <div class="flex items-center justify-between relative z-10">
-          <div>
-            <p class="text-xs font-bold text-amber-600 uppercase tracking-wide">Segera Berakhir</p>
-            <p class="text-3xl font-black text-amber-600 mt-1">{{ stats.expiring_soon }}</p>
-          </div>
-          <div class="w-10 h-10 bg-amber-500/10 text-amber-600 rounded-md flex items-center justify-center">
-            <i class="bx bx-time-five text-2xl"></i>
-          </div>
-        </div>
-        <p class="text-[10px] text-amber-600/70 mt-2 italic font-medium relative z-10">Habis dalam 14 hari kedepan</p>
-      </BaseCard>
-
-      <BaseCard class="border-(--border-soft) shadow-sm relative overflow-hidden group">
-        <div class="absolute right-0 top-0 w-24 h-24 bg-red-500/5 rounded-bl-full -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
-        <div class="flex items-center justify-between relative z-10">
-          <div>
-            <p class="text-xs font-bold text-red-600 uppercase tracking-wide">Sudah Berakhir</p>
-            <p class="text-3xl font-black text-red-600 mt-1">{{ stats.expired }}</p>
-          </div>
-          <div class="w-10 h-10 bg-red-500/10 text-red-600 rounded-md flex items-center justify-center">
-            <i class="bx bx-error-circle text-2xl"></i>
-          </div>
-        </div>
-      </BaseCard>
     </div>
 
     <!-- Search & Filters -->
