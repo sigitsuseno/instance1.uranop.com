@@ -164,6 +164,12 @@ const allMenus = [
     route: '/admin/settings',
     visible: isSuperadmin.value || isHrmanager.value,
   },
+  {
+    title: 'File Manager',
+    icon: 'bx bx-folder',
+    route: '/admin/file-manager',
+    visible: isSuperadmin.value,
+  },
 ]
 
 // Submenu yang di-hide dari manajemen

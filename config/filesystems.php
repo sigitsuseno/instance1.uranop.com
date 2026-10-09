@@ -47,6 +47,24 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Penyimpanan privat untuk modul File Manager.
+         *
+         * Sengaja TIDAK memakai 'serve' dan 'url': disk yang di-serve akan
+         * mendaftarkan route /storage, dan URI itu sudah dipakai disk 'local'.
+         * Dua disk ber-'serve' tanpa 'url' akan melempar InvalidArgumentException
+         * saat boot (lihat FilesystemServiceProvider::serveFiles()).
+         *
+         * Root-nya dipisah agar modul yang punya wewenang hapus/pindah ini
+         * tidak mungkin menyentuh berkas aplikasi lain (foto karyawan, logo).
+         */
+        'file_manager' => [
+            'driver' => 'local',
+            'root' => storage_path('app/file-manager'),
+            'throw' => true,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

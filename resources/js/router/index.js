@@ -82,6 +82,7 @@ const RekapGajiIndex = () => import('../Pages/Admin/Reports/RekapGaji/Index.vue'
 const RekapKerjaIndex = () => import('../Pages/Admin/Reports/RekapKerja/Index.vue')
 const RekapPphKompensasiIndex = () => import('../Pages/Admin/Reports/RekapPphKompensasi/Index.vue')
 const SettingsIndex = () => import('../Pages/Admin/Settings/Index.vue')
+const FileManagerIndex = () => import('../Pages/Admin/FileManager/Index.vue')
 const NotificationsIndex = () => import('../Pages/Admin/Notifications/Index.vue')
 const PphConfigIndex = () => import('../Pages/Admin/Payroll/Pph/Index.vue')
 const PphEmployeesIndex = () => import('../Pages/Admin/Payroll/Pph/Employees.vue')
@@ -219,6 +220,7 @@ const routes = [
       { path: 'reports/rekap-pph-kompensasi', name: 'reports.rekap-pph-kompensasi', component: RekapPphKompensasiIndex, meta: { title: 'Rekap PPH & Kompensasi' } },
       { path: 'reports/karyawan-titipan', name: 'reports.karyawan-titipan', component: KaryawanTitipanIndex, meta: { title: 'Karyawan Titipan' } },
       { path: 'settings', name: 'settings', component: SettingsIndex, meta: { title: 'Pengaturan' } },
+      { path: 'file-manager', name: 'file-manager', component: FileManagerIndex, meta: { title: 'File Manager', requiresSuperadmin: true } },
       { path: 'notifications', name: 'notifications', component: NotificationsIndex, meta: { title: 'Notifikasi' } },
     ],
   },
