@@ -1866,4 +1866,67 @@ class AttendanceAutologController extends Controller
             $filename
         );
     }
+
+    /**
+     * Export scan khusus per employee ke Excel.
+     * Struktur tabel SAMA dengan export semua (AttendanceSingleSheetExport),
+     * hanya isinya beda: NIP = employee->nip, Tanggal = DD-MM-YYYY,
+     * Scan 1/Scan 2 = check_in/check_out + detik (H:i:s), OT = '-'.
+     * GET /api/v1/supervisor/attendance/absensi/{id}/export-scan?start_date=...&end_date=...
+     */
+    public function exportScan($employeeId, Request $request)
+    {
+        $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
+        $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
+
+        $employee = Employee::with(['department', 'position'])
+            ->where('id', $employeeId)
+            ->firstOrFail();
+
+        $logs = AttendanceAutolog::where('employee_id', $employeeId)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->get();
+
+        $rows = [];
+        $currentDate = Carbon::parse($startDate);
+        $lastDate = Carbon::parse($endDate);
+        while ($currentDate <= $lastDate) {
+            $dateStr = $currentDate->toDateString();
+            $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
+
+            $rows[] = [
+                $employee->nip ?? '-',
+                $employee->name,
+                $currentDate->format('d-m-Y'),
+                $log?->check_in ? $log->check_in->format('H:i:s') : '--:--:--',
+                $log?->check_out ? $log->check_out->format('H:i:s') : '--:--:--',
+                '-',
+                '-',
+            ];
+
+            $currentDate->addDay();
+        }
+
+        $safeName = preg_replace('/[^a-zA-Z0-9]/', '_', $employee->name);
+        $safeName = preg_replace('/_+/', '_', $safeName);
+        $safeName = trim($safeName, '_');
+        $periodLabel = \Carbon\Carbon::parse($endDate)->translatedFormat('F_Y');
+        $filename = $safeName . '_Scan_' . $periodLabel . '.xlsx';
+
+        return Excel::download(
+            new \App\Modules\Supervisor\Attendance\Exports\AttendanceScanExport([
+                [
+                    'employee' => [
+                        'name' => $employee->name,
+                        'code' => $employee->employee_code,
+                        'department' => $employee->department?->name ?? '-',
+                        'position' => $employee->position?->name ?? '-',
+                    ],
+                    'rows' => $rows,
+                ],
+            ]),
+            $filename
+        );
+    }
 }

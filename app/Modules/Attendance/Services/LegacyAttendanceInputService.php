@@ -196,7 +196,14 @@ class LegacyAttendanceInputService
             $byStatus[$row['status']] = ($byStatus[$row['status']] ?? 0) + 1;
         }
 
-        $leaveRanges = $this->buildLeaveRanges($leaveDatesByEmployee, $leaveTypes, $employees->pluck('name', 'id'));
+        $occupied = $this->loadOccupiedLeaveDates(array_keys($matchedEmployeeIds), $periodStart, $periodEnd);
+
+        [$leaveRanges, $skippedLeaveDates] = $this->buildLeaveRanges(
+            $leaveDatesByEmployee,
+            $leaveTypes,
+            $employees->pluck('name', 'id'),
+            $occupied,
+        );
 
         [$rosterRowsMissing, $employeesWithoutRoster] = $this->inspectRosterGaps($dates, $roster, array_keys($matchedEmployeeIds));
 
@@ -231,8 +238,9 @@ class LegacyAttendanceInputService
                 'employees_without_roster' => $employeesWithoutRoster,
             ],
             'leave_requests' => [
-                'total'  => count($leaveRanges),
-                'ranges' => $leaveRanges,
+                'total'   => count($leaveRanges),
+                'ranges'  => $leaveRanges,
+                'skipped' => $skippedLeaveDates,
             ],
             'consecutive' => [
                 'total' => count($consecutive),
@@ -252,6 +260,10 @@ class LegacyAttendanceInputService
         }
         if ($unknownCodes !== []) {
             $issues[] = 'Kode tidak dikenal (diisi absent): '.implode(', ', array_keys($unknownCodes));
+        }
+        if ($skippedLeaveDates !== []) {
+            $issues[] = count($skippedLeaveDates).' hari cuti/izin/sakit dilewati karena tanggalnya sudah punya '
+                .'leave_request berstatus approved.';
         }
         if ($rosterRowsMissing > 0) {
             $issues[] = $rosterRowsMissing.' hari tidak punya baris roster; kolom jadwal/jam dibiarkan kosong.';
@@ -630,16 +642,58 @@ class LegacyAttendanceInputService
     }
 
     /**
+     * Tanggal yang sudah ditempati leave_request berstatus approved.
+     *
+     * Dipakai agar pengisian data lama tidak membuat cuti dobel — kalau tanggalnya
+     * sudah punya record approved, hari itu dilewati (bukan dibuatkan record baru),
+     * supaya saldo cuti tidak terpotong dua kali.
+     *
+     * @param  list<int>  $employeeIds
+     * @return array<int,array<string,bool>> employee_id => [Y-m-d => true]
+     */
+    protected function loadOccupiedLeaveDates(array $employeeIds, string $periodStart, string $periodEnd): array
+    {
+        if ($employeeIds === []) {
+            return [];
+        }
+
+        $occupied = [];
+
+        LeaveRequest::query()
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $periodEnd)
+            ->where('end_date', '>=', $periodStart)
+            ->get(['employee_id', 'start_date', 'end_date'])
+            ->each(function ($request) use (&$occupied) {
+                $date = Carbon::parse($request->start_date);
+                $end = Carbon::parse($request->end_date);
+
+                while ($date->lte($end)) {
+                    $occupied[$request->employee_id][$date->toDateString()] = true;
+                    $date->addDay();
+                }
+            });
+
+        return $occupied;
+    }
+
+    /**
      * Gabungkan hari cuti/izin/sakit yang bertanggal berurutan menjadi satu rentang.
+     *
+     * Tanggal yang sudah ditempati leave_request approved dibuang lebih dulu,
+     * sehingga satu rentang bisa terpecah bila ada hari yang sudah terisi.
      *
      * @param  array<int,array<string,list<string>>>  $leaveDatesByEmployee
      * @param  \Illuminate\Support\Collection<string,\App\Modules\Leave\Models\LeaveType>  $leaveTypes
      * @param  \Illuminate\Support\Collection<int,string>  $employeeNames
-     * @return list<array<string,mixed>>
+     * @param  array<int,array<string,bool>>  $occupied
+     * @return array{0: list<array<string,mixed>>, 1: list<array<string,mixed>>} [rentang, tanggal yang dilewati]
      */
-    protected function buildLeaveRanges(array $leaveDatesByEmployee, $leaveTypes, $employeeNames): array
+    protected function buildLeaveRanges(array $leaveDatesByEmployee, $leaveTypes, $employeeNames, array $occupied = []): array
     {
         $ranges = [];
+        $skipped = [];
 
         foreach ($leaveDatesByEmployee as $employeeId => $byCode) {
             foreach ($byCode as $code => $dates) {
@@ -648,7 +702,28 @@ class LegacyAttendanceInputService
                     continue;
                 }
 
-                sort($dates);
+                // Buang tanggal yang sudah punya leave_request approved.
+                $free = [];
+                foreach ($dates as $date) {
+                    if (isset($occupied[$employeeId][$date])) {
+                        $skipped[] = [
+                            'employee_id'   => $employeeId,
+                            'employee_nama' => $employeeNames[$employeeId] ?? null,
+                            'date'          => $date,
+                            'leave_code'    => $code,
+                        ];
+
+                        continue;
+                    }
+
+                    $free[] = $date;
+                }
+
+                if ($free === []) {
+                    continue;
+                }
+
+                sort($free);
                 $start = null;
                 $previous = null;
 
@@ -672,7 +747,7 @@ class LegacyAttendanceInputService
                     ];
                 };
 
-                foreach ($dates as $date) {
+                foreach ($free as $date) {
                     if ($previous !== null && Carbon::parse($previous)->addDay()->toDateString() !== $date) {
                         $flush();
                         $start = null;
@@ -686,7 +761,7 @@ class LegacyAttendanceInputService
             }
         }
 
-        return $ranges;
+        return [$ranges, $skipped];
     }
 
     // ════════════════════════════════════════════════════════════════

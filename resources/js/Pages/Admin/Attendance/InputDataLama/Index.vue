@@ -189,9 +189,19 @@
         </BaseCard>
 
         <!-- leave request -->
-        <BaseCard v-if="summary.leave_requests.total">
-          <template #title>Leave Request yang akan dibuat ({{ summary.leave_requests.total }})</template>
-          <div class="max-h-80 overflow-auto rounded-md border border-(--border-soft)">
+        <BaseCard v-if="summary.leave_requests.total || summary.leave_requests.skipped.length">
+          <template #title>Leave Request ({{ summary.leave_requests.total }} dibuat)</template>
+
+          <div v-if="summary.leave_requests.skipped.length" class="mb-3 p-3 rounded-md bg-amber-50 border border-amber-200">
+            <p class="text-xs font-medium text-amber-800 mb-1">
+              {{ summary.leave_requests.skipped.length }} hari dilewati karena tanggalnya sudah punya leave_request approved:
+            </p>
+            <p class="text-xs text-amber-800">
+              {{ summary.leave_requests.skipped.map(s => `${s.employee_nama || ('#' + s.employee_id)} ${s.date} (${s.leave_code})`).join(' · ') }}
+            </p>
+          </div>
+
+          <div v-if="summary.leave_requests.total" class="max-h-80 overflow-auto rounded-md border border-(--border-soft)">
             <table class="w-full text-xs">
               <thead class="bg-(--bg-elevated) text-(--text-muted) sticky top-0">
                 <tr>

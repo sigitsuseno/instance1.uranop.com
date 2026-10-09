@@ -8,6 +8,7 @@ use App\Modules\Employee\Models\Employee;
 use App\Modules\FileManager\Support\FileManagerPathGuard;
 use App\Modules\Leave\Models\EmployeeLeave;
 use App\Modules\Leave\Models\LeavePeriod;
+use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
@@ -463,6 +464,71 @@ class LegacyAttendanceInputTest extends TestCase
         // Saldo CT terpotong total 3 hari (2 + 1)
         $balance = DB::table('employee_leaves')->where('employee_id', $employee->id)->value('amount');
         $this->assertSame('9.00', number_format((float) $balance, 2, '.', ''));
+    }
+
+    public function test_tanggal_cuti_yang_sudah_punya_leave_request_approved_dilewati(): void
+    {
+        $employee = $this->makeEmployee('1001', 'BUDI');
+        $this->seedRoster();
+
+        $ct = LeaveType::where('code', 'CT')->first();
+        LeaveRequest::create([
+            'employee_id'     => $employee->id,
+            'leave_type_id'   => $ct->id,
+            'leave_period_id' => LeavePeriod::first()->id,
+            'start_date'      => '2026-04-28',
+            'end_date'        => '2026-04-28',
+            'days_requested'  => 1,
+            'status'          => 'approved',
+        ]);
+
+        // CUTI 27, 28, 29 — 28 sudah terisi, jadi rentangnya terpecah jadi 27 dan 29.
+        $path = $this->sourceFile([
+            '1001' => [2 => ['CUTI', null], 3 => ['CUTI', null], 4 => ['CUTI', null]],
+        ]);
+
+        $data = $this->store($path);
+
+        $this->assertCount(1, $data['summary']['leave_requests']['skipped']);
+        $this->assertSame('2026-04-28', $data['summary']['leave_requests']['skipped'][0]['date']);
+        $this->assertSame(2, $data['summary']['leave_requests']['total']);
+
+        // 1 record lama + 2 rentang baru
+        $this->assertSame(3, DB::table('leave_requests')->count());
+        $this->assertSame(1, DB::table('leave_requests')->where('start_date', '2026-04-27')->where('end_date', '2026-04-27')->count());
+        $this->assertSame(1, DB::table('leave_requests')->where('start_date', '2026-04-29')->where('end_date', '2026-04-29')->count());
+    }
+
+    public function test_leave_request_pending_tidak_menghalangi_pengisian(): void
+    {
+        $employee = $this->makeEmployee('1001', 'BUDI');
+        $this->seedRoster();
+
+        $ct = LeaveType::where('code', 'CT')->first();
+        LeaveRequest::create([
+            'employee_id'     => $employee->id,
+            'leave_type_id'   => $ct->id,
+            'leave_period_id' => LeavePeriod::first()->id,
+            'start_date'      => '2026-04-28',
+            'end_date'        => '2026-04-28',
+            'days_requested'  => 1,
+            'status'          => 'pending',
+        ]);
+
+        // CUTI 27, 28 — yang pending tidak menempati tanggal, jadi tetap satu rentang penuh.
+        $path = $this->sourceFile([
+            '1001' => [2 => ['CUTI', null], 3 => ['CUTI', null]],
+        ]);
+
+        $data = $this->store($path);
+
+        $this->assertCount(0, $data['summary']['leave_requests']['skipped']);
+        $this->assertSame(1, $data['summary']['leave_requests']['total']);
+
+        $created = DB::table('leave_requests')->where('status', 'approved')->first();
+        $this->assertSame('2026-04-27', $created->start_date);
+        $this->assertSame('2026-04-28', $created->end_date);
+        $this->assertSame(2, $created->days_requested);
     }
 
     // ════════════════════════════════════════════════════════════════

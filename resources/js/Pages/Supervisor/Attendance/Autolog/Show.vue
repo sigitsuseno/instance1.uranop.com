@@ -191,6 +191,41 @@ async function handleExport() {
     }
 }
 
+async function handleExportScan() {
+    const url = `/api/v1/supervisor/attendance/absensi/${employee.value.id}/export-scan?start_date=${period.value.start}&end_date=${period.value.end}`;
+    try {
+        const token = localStorage.getItem('token');
+        const headers = { 'Accept': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const response = await fetch(url, { headers });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.message || 'Download gagal');
+        }
+        const blob = await response.blob();
+
+        // Ambil filename dari Content-Disposition header
+        let filename = 'export-scan.xlsx';
+        const disposition = response.headers.get('Content-Disposition');
+        if (disposition) {
+            const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/);
+            if (match) filename = decodeURIComponent(match[1]);
+        }
+
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
 async function handleExportByDate() {
     const url = `/api/v1/supervisor/attendance/absensi/export-by-date?date=${exportDate.value}`;
     try {
@@ -575,6 +610,12 @@ function isLmDayForRow(day) {
                         <span>Export</span>
                     </button>
                 </div>
+
+                <!-- Export scan khusus (struktur = export semua, isi: NIP, Tanggal DD-MM-YYYY, Scan 1/2 + detik, OT '-') -->
+                <button @click="handleExportScan" class="h-10 px-4 bg-(--primary) hover:bg-(--primary-hover) text-white rounded-md transition flex items-center gap-2" title="Export scan karyawan ini (NIP, Tanggal, Scan 1, Scan 2, OT)">
+                    <i class="bx bx-scan text-lg"></i>
+                    <span class="text-xs font-medium">Export Scan</span>
+                </button>
 
                 <!-- Export dengan pilihan scope -->
                 <div class="relative flex rounded-xl overflow-hidden">
