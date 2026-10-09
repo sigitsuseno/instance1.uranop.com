@@ -26,7 +26,8 @@ class AttendanceScanExport implements FromArray, ShouldAutoSize, WithStyles, Wit
      *      [
      *          [
      *              'employee' => ['name','code','department','position'],
-     *              'rows'     => [ [NIP(nip), Nama, Tanggal(DD-MM-YYYY), Scan 1(H:i:s), Scan 2(H:i:s), OT('-'), '-'], ... ],
+     *              'rows'     => [ [NIP(nip), Nama, Tanggal(DD-MM-YYYY), Scan 1(H:i:s), Scan 2(H:i:s), OT(lembur_calc+lm_calc jam), '-'], ... ],
+     *              'totalOt'  => float, // sum kolom OT (jam)
      *          ], ...
      *      ]
      */
@@ -61,7 +62,8 @@ class AttendanceScanExport implements FromArray, ShouldAutoSize, WithStyles, Wit
             $lastDataRow = $row - 1;
 
             $totalRow = $row;
-            $out[] = ['TOTAL', '', '', '', '', '-', '-'];
+            $totalOt = (float) ($data['totalOt'] ?? 0);
+            $out[] = ['TOTAL', '', '', '', '', $totalOt > 0 ? round($totalOt, 1) . ' jam' : '-', '-'];
             $row++;
 
             // Jarak 2 baris kosong sebelum blok karyawan berikutnya

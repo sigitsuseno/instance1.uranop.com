@@ -1963,7 +1963,8 @@ class AttendanceAutologController extends Controller
      * Export scan khusus per employee ke Excel.
      * Struktur tabel SAMA dengan export semua (AttendanceSingleSheetExport),
      * hanya isinya beda: NIP = employee->nip, Tanggal = DD-MM-YYYY,
-     * Scan 1/Scan 2 = check_in/check_out + detik (H:i:s), OT = '-'.
+     * Scan 1/Scan 2 = check_in/check_out + detik (H:i:s),
+     * OT = lembur_calc+lm_calc (jam, hasil konversi multiplier).
      * GET /api/v1/supervisor/attendance/absensi/{id}/export-scan?start_date=...&end_date=...
      */
     public function exportScan($employeeId, Request $request)
@@ -1981,11 +1982,17 @@ class AttendanceAutologController extends Controller
             ->get();
 
         $rows = [];
+        $totalOtHours = 0;
         $currentDate = Carbon::parse($startDate);
         $lastDate = Carbon::parse($endDate);
         while ($currentDate <= $lastDate) {
             $dateStr = $currentDate->toDateString();
             $log = $logs->first(fn ($l) => $l->date->toDateString() === $dateStr);
+
+            // OT dari attendance_autologs.lembur_calc+lm_calc (sudah dalam satuan jam).
+            $countHours = (float) ($log?->lembur_calc ?? 0) + (float) ($log?->lm_calc ?? 0);
+            $otDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
+            $totalOtHours += $countHours;
 
             $rows[] = [
                 $employee->nip ?? '-',
@@ -1993,7 +2000,7 @@ class AttendanceAutologController extends Controller
                 $currentDate->format('d-m-Y'),
                 $log?->check_in ? $log->check_in->format('H:i:s') : '--:--:--',
                 $log?->check_out ? $log->check_out->format('H:i:s') : '--:--:--',
-                '-',
+                $otDisplay,
                 '-',
             ];
 
@@ -2016,6 +2023,7 @@ class AttendanceAutologController extends Controller
                         'position' => $employee->position?->name ?? '-',
                     ],
                     'rows' => $rows,
+                    'totalOt' => round($totalOtHours, 1),
                 ],
             ]),
             $filename
