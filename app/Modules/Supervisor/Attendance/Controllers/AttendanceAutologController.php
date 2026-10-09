@@ -1191,6 +1191,98 @@ class AttendanceAutologController extends Controller
     }
 
     /**
+     * Random Second: isi detik acak (01-29) pada check_in & check_out.
+     * Jam:menit dipertahankan, hanya komponen detik yang diacak per record.
+     * Skip record terkunci (is_locked) dan yang check_in/check_out-nya kosong.
+     *
+     * POST /api/v1/supervisor/attendance/roster/random-second
+     */
+    public function randomSecond(Request $request)
+    {
+        set_time_limit(300);
+        ini_set('memory_limit', '512M');
+
+        $request->validate([
+            'start_date'     => ['required', 'date'],
+            'end_date'       => ['required', 'date'],
+            'group_codes'    => ['nullable', 'array'],
+            'group_codes.*'  => ['string'],
+            'employee_ids'   => ['nullable', 'array'],
+            'employee_ids.*' => ['integer'],
+        ]);
+
+        $startDate   = Carbon::parse($request->input('start_date'))->toDateString();
+        $endDate     = Carbon::parse($request->input('end_date'))->toDateString();
+        $groupCodes  = $request->input('group_codes', []);
+        $employeeIds = $request->input('employee_ids', []);
+
+        $query = AttendanceAutolog::whereBetween('date', [$startDate, $endDate])
+            ->where(function ($q) {
+                $q->whereNotNull('check_in')->orWhereNotNull('check_out');
+            });
+
+        if (! empty($employeeIds)) {
+            $query->whereIn('employee_id', array_values(array_unique(array_map('intval', $employeeIds))));
+        } elseif (! empty($groupCodes)) {
+            $query->whereHas('employee.groups', function ($q) use ($groupCodes) {
+                $q->whereIn('reference_code', $groupCodes);
+            });
+        }
+
+        $autologs = $query->get();
+
+        $updated = 0;
+        $skippedLocked = 0;
+
+        try {
+            DB::beginTransaction();
+
+            foreach ($autologs as $autolog) {
+                if ($autolog->is_locked) {
+                    $skippedLocked++;
+                    continue;
+                }
+
+                $updates = [];
+                if ($autolog->check_in) {
+                    $updates['check_in'] = Carbon::parse($autolog->check_in)->second(random_int(1, 29));
+                }
+                if ($autolog->check_out) {
+                    $updates['check_out'] = Carbon::parse($autolog->check_out)->second(random_int(1, 29));
+                }
+
+                if (empty($updates)) {
+                    continue;
+                }
+
+                $updates['is_manual_edit'] = true;
+                $updates['last_edited_at'] = now();
+                $updates['last_edited_by'] = Auth::id();
+
+                $autolog->update($updates);
+                $updated++;
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Random second berhasil! {$updated} record diperbarui, {$skippedLocked} terkunci dilewati.",
+                'updated' => $updated,
+                'skipped_locked' => $skippedLocked,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Random Second Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Sync data dari att_prepares ke attendance_autologs.
      * Tombol Sync di halaman Data Absensi.
      */

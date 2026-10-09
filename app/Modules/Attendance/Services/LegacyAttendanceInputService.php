@@ -39,6 +39,11 @@ class LegacyAttendanceInputService
     /** Lembur hari kerja di atas ini ditandai "perhatian" (tidak dipotong). */
     public const WEEKDAY_OVERTIME_REVIEW_HOURS = 3.0;
 
+    /** Rentang detik acak untuk check_in/check_out. */
+    public const SECONDS_MIN = 1;
+
+    public const SECONDS_MAX = 29;
+
     /**
      * Pemetaan kode Excel => status att_prepares + opsi tambahan.
      * 'leave' = kode LeaveType yang dipakai untuk leave_requests.
@@ -544,8 +549,8 @@ class LegacyAttendanceInputService
             'row' => [
                 'employee_id'     => $employeeId,
                 'date'            => $date,
-                'check_in'        => $checkIn,
-                'check_out'       => $checkOut,
+                'check_in'        => $this->withRandomSeconds($checkIn),
+                'check_out'       => $this->withRandomSeconds($checkOut),
                 'schedule_in'     => $scheduleIn,
                 'schedule_out'    => $scheduleOut,
                 'lm'              => $lm,
@@ -562,6 +567,26 @@ class LegacyAttendanceInputService
             'consecutive'       => $consecutive,
             'over_weekday_limit' => $overWeekdayLimit,
         ];
+    }
+
+    /**
+     * Ganti komponen detik dengan nilai acak 01-29.
+     *
+     * Jam dan menit tetap sesuai jadwal + lembur; hanya detiknya yang diacak
+     * supaya tidak selalu bulat :00 seperti jam jadwal, melainkan seperti hasil
+     * scan mesin absen.
+     */
+    protected function withRandomSeconds(?string $dateTime): ?string
+    {
+        if ($dateTime === null) {
+            return null;
+        }
+
+        $parsed = Carbon::parse($dateTime);
+
+        return $parsed
+            ->setTime($parsed->hour, $parsed->minute, random_int(self::SECONDS_MIN, self::SECONDS_MAX))
+            ->format('Y-m-d H:i:s');
     }
 
     /**

@@ -24,6 +24,11 @@
           :class="updateSuccess ? 'text-green-600' : 'text-red-600'">
           {{ updateMessage }}
         </span>
+        <!-- Random Second Feedback -->
+        <span v-if="randomMessage" class="text-sm font-medium"
+          :class="randomSuccess ? 'text-green-600' : 'text-red-600'">
+          {{ randomMessage }}
+        </span>
         <!-- Update Cuti Button -->
         <button @click="handleAdjustment"
           :disabled="isAdjusting"
@@ -63,6 +68,20 @@
             <polyline points="12 6 12 12 16 14" />
           </svg>
           {{ isUpdating ? 'Update Jadwal...' : 'Update Jadwal' }}
+        </button>
+        <!-- Random Second Button -->
+        <button @click="handleRandomSecond"
+          :disabled="isRandoming"
+          class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2 text-sm font-medium"
+          title="Isi detik acak (01-29) pada check_in & check_out periode ini">
+          <svg v-if="isRandoming" class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" stroke-dasharray="31.4 31.4" />
+          </svg>
+          <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          {{ isRandoming ? 'Rand Secon...' : 'Rand Secon' }}
         </button>
         <!-- Refresh Button -->
         <button @click="fetchData"
@@ -474,6 +493,9 @@ const holidaySuccess = ref(false)
 const isUpdating = ref(false)
 const updateMessage = ref('')
 const updateSuccess = ref(false)
+const isRandoming = ref(false)
+const randomMessage = ref('')
+const randomSuccess = ref(false)
 const showScheduleModal = ref(false)
 const scheduleSelectedIds = ref([])
 const scheduleSearchQuery = ref('')
@@ -735,6 +757,40 @@ async function submitScheduleUpdate() {
   } finally {
     isSubmittingSchedule.value = false
     setTimeout(() => { updateMessage.value = '' }, 8000)
+  }
+}
+
+// ── Random Second (isi detik acak 01-29 pada check_in & check_out) ──
+async function handleRandomSecond() {
+  if (!startDate.value || !endDate.value) {
+    randomMessage.value = 'Periode belum dipilih.'
+    randomSuccess.value = false
+    setTimeout(() => { randomMessage.value = '' }, 5000)
+    return
+  }
+  if (!confirm('Isi detik acak (01-29) pada check_in & check_out untuk periode ini?')) return
+  isRandoming.value = true
+  randomMessage.value = ''
+  try {
+    const res = await post('/api/v1/supervisor/attendance/roster/random-second', {
+      start_date: startDate.value,
+      end_date: endDate.value,
+      group_codes: selectedGroups.value,
+    })
+    if (res.success) {
+      randomSuccess.value = true
+      randomMessage.value = res.message || 'Random second berhasil!'
+      await fetchData()
+    } else {
+      randomSuccess.value = false
+      randomMessage.value = res.message || 'Gagal random second.'
+    }
+  } catch (e) {
+    randomSuccess.value = false
+    randomMessage.value = e.message || 'Gagal random second.'
+  } finally {
+    isRandoming.value = false
+    setTimeout(() => { randomMessage.value = '' }, 8000)
   }
 }
 

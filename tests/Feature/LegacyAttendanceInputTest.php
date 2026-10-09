@@ -129,16 +129,43 @@ class LegacyAttendanceInputTest extends TestCase
             ],
         );
 
-        foreach (Employee::all() as $employee) {
-            for ($date = self::START; $date <= self::END; $date = date('Y-m-d', strtotime("$date +1 day"))) {
-                EmployeeShiftRoster::firstOrCreate(
-                    ['employee_id' => $employee->id, 'date' => $date],
-                    [
-                        'uuid' => (string) Str::uuid(),
-                        'shift_id' => $shift->id,
-                        'is_sun' => date('N', strtotime($date)) == 7,
-                    ],
-                );
+        // Sengaja lewat query builder, bukan model: cast 'date' pada model menulis
+        // "2026-04-30 00:00:00", sedangkan MySQL menyimpan kolom DATE sebagai
+        // "2026-04-30". Fixture harus menyerupai MySQL, kalau tidak perbandingan
+        // rentang tanggal di SQLite ikut membuang hari terakhir.
+        $employeeIds = Employee::pluck('id')->all();
+
+        if ($employeeIds === []) {
+            return;
+        }
+
+        $existing = DB::table('sch_employee_shift_rosters')
+            ->whereIn('employee_id', $employeeIds)
+            ->get(['employee_id', 'date'])
+            ->map(fn ($row) => $row->employee_id.'|'.substr((string) $row->date, 0, 10))
+            ->all();
+
+        $dates = [];
+        for ($date = self::START; $date <= self::END; $date = date('Y-m-d', strtotime("$date +1 day"))) {
+            $dates[] = $date;
+        }
+
+        foreach ($employeeIds as $employeeId) {
+            foreach ($dates as $date) {
+                if (in_array($employeeId.'|'.$date, $existing, true)) {
+                    continue;
+                }
+
+                DB::table('sch_employee_shift_rosters')->insert([
+                    'uuid' => (string) Str::uuid(),
+                    'employee_id' => $employeeId,
+                    'shift_id' => $shift->id,
+                    'date' => $date,
+                    'is_sun' => date('N', strtotime($date)) == 7,
+                    'status' => 'scheduled',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
             }
         }
     }
@@ -213,6 +240,19 @@ class LegacyAttendanceInputTest extends TestCase
     private function rawRow(string $date): ?object
     {
         return DB::table('att_prepares')->where('date', $date)->first();
+    }
+
+    /**
+     * Jam & menit harus persis; detiknya sengaja acak 01-29.
+     */
+    private function assertClockIs(string $expectedPrefix, ?string $actual): void
+    {
+        $this->assertNotNull($actual, 'Waktu tidak boleh kosong.');
+        $this->assertStringStartsWith($expectedPrefix, $actual);
+
+        $seconds = (int) substr($actual, -2);
+        $this->assertGreaterThanOrEqual(1, $seconds, "Detik {$seconds} di luar rentang 01-29.");
+        $this->assertLessThanOrEqual(29, $seconds, "Detik {$seconds} di luar rentang 01-29.");
     }
 
     private function preview(string $path): array
@@ -348,9 +388,9 @@ class LegacyAttendanceInputTest extends TestCase
         $this->assertSame(0, (int) $row->lm);
         $this->assertSame('08:00:00', $row->schedule_in);
         $this->assertSame('17:00:00', $row->schedule_out);
-        $this->assertSame('2026-04-27 08:00:00', $row->check_in);
+        $this->assertClockIs('2026-04-27 08:00:', $row->check_in);
         // check_out = jam pulang jadwal (17:00) + 2 jam lembur
-        $this->assertSame('2026-04-27 19:00:00', $row->check_out);
+        $this->assertClockIs('2026-04-27 19:00:', $row->check_out);
     }
 
     public function test_kode_l_menjadi_lm_480_dan_jam_tetap(): void
@@ -369,8 +409,8 @@ class LegacyAttendanceInputTest extends TestCase
         $this->assertSame(0, (int) $row->overtime);
         $this->assertSame('08:00:00', $row->schedule_in);
         $this->assertSame('16:00:00', $row->schedule_out);
-        $this->assertSame('2026-04-26 08:00:00', $row->check_in);
-        $this->assertSame('2026-04-26 16:00:00', $row->check_out);
+        $this->assertClockIs('2026-04-26 08:00:', $row->check_in);
+        $this->assertClockIs('2026-04-26 16:00:', $row->check_out);
     }
 
     public function test_minggu_tanpa_kode_dengan_jam_lembur_jadi_lm(): void
@@ -389,9 +429,47 @@ class LegacyAttendanceInputTest extends TestCase
         $this->assertSame(0, (int) $row->overtime);
         $this->assertSame('08:00:00', $row->schedule_in);
         $this->assertSame('16:00:00', $row->schedule_out);
-        $this->assertSame('2026-04-26 08:00:00', $row->check_in);
+        $this->assertClockIs('2026-04-26 08:00:', $row->check_in);
         // check_out = 08:00 + 3,5 jam
-        $this->assertSame('2026-04-26 11:30:00', $row->check_out);
+        $this->assertClockIs('2026-04-26 11:30:', $row->check_out);
+    }
+
+    public function test_detik_check_in_dan_check_out_selalu_antara_01_dan_29(): void
+    {
+        $this->makeEmployee('1001', 'BUDI');
+        $this->seedRoster();
+
+        // Campur semua bentuk hari yang punya jam: H (dengan & tanpa lembur),
+        // Minggu berlembur, dan kode L.
+        $path = $this->sourceFile([
+            '1001' => [
+                0 => ['H', 1],
+                1 => [null, 3.5],
+                2 => ['H', 2],
+                3 => ['L', null],
+                4 => ['H', null],
+                5 => ['H', 4],
+            ],
+        ]);
+
+        $this->store($path);
+
+        $checked = 0;
+
+        foreach (DB::table('att_prepares')->get(['check_in', 'check_out']) as $row) {
+            foreach ([$row->check_in, $row->check_out] as $value) {
+                if ($value === null) {
+                    continue;
+                }
+
+                $seconds = (int) substr($value, -2);
+                $this->assertGreaterThanOrEqual(1, $seconds, "Detik {$seconds} pada {$value} di bawah 01.");
+                $this->assertLessThanOrEqual(29, $seconds, "Detik {$seconds} pada {$value} di atas 29.");
+                $checked++;
+            }
+        }
+
+        $this->assertSame(12, $checked, 'Enam hari berlalu: tiap hari harus punya check_in dan check_out.');
     }
 
     // ════════════════════════════════════════════════════════════════
