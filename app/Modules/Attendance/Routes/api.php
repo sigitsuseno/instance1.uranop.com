@@ -2,6 +2,7 @@
 
 use App\Modules\Attendance\Controllers\Api\V1\AttendanceApiController;
 use App\Modules\Attendance\Controllers\Api\V1\AttendanceConfigController;
+use App\Modules\Attendance\Controllers\Api\V1\LegacyInputApiController;
 use App\Modules\Attendance\Controllers\Api\V1\ManualSyncController;
 use Illuminate\Support\Facades\Route;
 
@@ -115,5 +116,15 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.manual-sync.push-prepare');
     });
 
+    // ========== INPUT DATA LAMA (absen_core Excel dari File Manager) ==========
+    // Sumber berkasnya disk privat File Manager, jadi aksesnya dibatasi
+    // superadmin — sama seperti modul File Manager itu sendiri.
+
+    Route::prefix('attendance/legacy-input')->middleware(['role:superadmin'])->group(function () {
+        Route::post('/preview', [LegacyInputApiController::class, 'preview'])
+            ->name('attendance.legacy-input.preview');
+        Route::post('/store', [LegacyInputApiController::class, 'store'])
+            ->name('attendance.legacy-input.store');
+    });
 
 });

@@ -1,11 +1,11 @@
 <template>
-  <div class="space-y-6">
+  <div class="space-y-4">
     <!-- Page Header -->
-    <div class="sm:flex sm:justify-between sm:items-end border-b border-(--border-soft) pb-6">
+    <div class="sm:flex sm:justify-between sm:items-end border-b border-(--border-soft) pb-4">
       <div>
         <h1 class="text-xl font-semibold text-(--text-main)">Roster Shift Kerja</h1>
         <p class="text-xs text-(--text-muted) mt-1 flex items-center gap-2">
-          <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span class="inline-block w-2 h-2 rounded-full bg-(--success) animate-pulse"></span>
           Periode Roster: <span class="font-bold text-(--text-main)">25 {{ monthLabels[prevMonthIndex] }} {{ prevMonthYear }}</span> s/d <span class="font-bold text-(--text-main)">24 {{ monthLabels[selectedMonth - 1] }} {{ selectedYear }}</span>
         </p>
       </div>
@@ -64,21 +64,21 @@
       </div>
 
       <!-- Color Legend Reference -->
-      <div class="flex items-center gap-3 overflow-x-auto py-1 no-scrollbar text-xs">
+      <div class="flex items-center gap-2 overflow-x-auto py-1 text-xs">
         <div class="flex items-center gap-1 bg-(--bg-elevated) px-2 py-1 rounded">
-          <span class="w-4 h-4 rounded bg-blue-500 text-white flex items-center justify-center font-bold text-[8px]">PG</span>
+          <span class="w-4 h-4 rounded bg-(--primary) text-white flex items-center justify-center font-bold text-[8px]">PG</span>
           <span class="text-(--text-muted)">Pagi</span>
         </div>
         <div class="flex items-center gap-1 bg-(--bg-elevated) px-2 py-1 rounded">
-          <span class="w-4 h-4 rounded bg-yellow-500 text-white flex items-center justify-center font-bold text-[8px]">SG</span>
+          <span class="w-4 h-4 rounded bg-(--warning) text-white flex items-center justify-center font-bold text-[8px]">SG</span>
           <span class="text-(--text-muted)">Siang</span>
         </div>
         <div class="flex items-center gap-1 bg-(--bg-elevated) px-2 py-1 rounded">
-          <span class="w-4 h-4 rounded bg-purple-500 text-white flex items-center justify-center font-bold text-[8px]">ML</span>
+          <span class="w-4 h-4 rounded text-white flex items-center justify-center font-bold text-[8px]" style="background-color: #8b5cf6">ML</span>
           <span class="text-(--text-muted)">Malam</span>
         </div>
         <div class="flex items-center gap-1 bg-(--bg-elevated) px-2 py-1 rounded">
-          <span class="w-4 h-4 rounded bg-rose-500 text-white flex items-center justify-center font-bold text-[8px]">L</span>
+          <span class="w-4 h-4 rounded bg-(--danger) text-white flex items-center justify-center font-bold text-[8px]">L</span>
           <span class="text-(--text-muted)">Libur</span>
         </div>
       </div>
@@ -101,10 +101,10 @@
                 class="w-[40px] px-0 py-2 text-center border-r border-(--border-soft)/50"
               >
                 <div class="flex flex-col items-center">
-                  <span class="text-[9px] text-(--text-muted)" :class="{ 'text-red-500': day.dow === 0 }">
+                  <span class="text-[9px] text-(--text-muted)" :class="{ 'text-(--danger)': day.dow === 0 }">
                     {{ dayNameAbbr[day.dow] }}
                   </span>
-                  <span class="font-bold text-xs" :class="{ 'text-red-500': day.dow === 0 }">
+                  <span class="font-bold text-xs" :class="{ 'text-(--danger)': day.dow === 0 }">
                     {{ day.day }}
                   </span>
                 </div>
@@ -125,6 +125,7 @@
                 <div class="font-bold text-(--text-main)">{{ emp.name }}</div>
                 <div class="text-[10px] text-(--text-muted) flex items-center gap-1 mt-0.5">
                   <span class="font-mono bg-(--bg-elevated) px-1 rounded">{{ emp.nik }}</span>
+                  <span v-if="emp.work_pattern_code" class="px-1 rounded font-bold bg-(--primary)/10 text-(--primary)">{{ emp.work_pattern_code }}</span>
                   <span class="truncate">{{ emp.department }}</span>
                 </div>
               </td>
@@ -144,7 +145,7 @@
                   >
                     {{ emp.schedule[idx].external_code }}
                   </span>
-                  <span v-else class="text-gray-300">-</span>
+                  <span v-else class="text-(--text-soft)">-</span>
                 </div>
               </td>
             </tr>
@@ -174,9 +175,9 @@
         class="fixed inset-0 z-40 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center pointer-events-none p-4"
         @click.self="closeImportModal"
       >
-        <div class="bg-(--bg-card) rounded-xl shadow-2xl w-full max-w-lg pointer-events-auto max-h-[90vh] overflow-y-auto">
+        <div class="bg-(--bg-card) rounded-md shadow-2xl w-full max-w-lg pointer-events-auto max-h-[90vh] overflow-y-auto">
           <!-- Header -->
-          <div class="flex justify-between items-center px-6 py-4 border-b border-(--border-soft)">
+          <div class="flex justify-between items-center p-4 border-b border-(--border-soft)">
             <h3 class="text-lg font-semibold text-(--text-main)">Import Roster Excel</h3>
             <button
               class="text-(--text-muted) hover:text-(--text-main) transition-colors"
@@ -191,7 +192,7 @@
           </div>
 
           <!-- Body -->
-          <div class="p-6 space-y-4">
+          <div class="p-4 space-y-4">
             <div>
               <h4 class="text-sm font-semibold text-(--text-main) mb-1">Format File</h4>
               <p class="text-xs text-(--text-muted)">
@@ -200,22 +201,22 @@
             </div>
 
             <!-- Periode -->
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-sm font-medium text-(--text-main) mb-1">Bulan</label>
+                <label class="block text-xs font-medium text-(--text-main) mb-1">Bulan</label>
                 <select
                   v-model.number="importMonth"
-                  class="w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main)"
+                  class="w-full h-10 px-3 rounded-md border border-(--border-soft) bg-(--bg-card) text-xs text-(--text-main)"
                 >
                   <option v-for="(m, i) in monthLabels" :key="i" :value="i + 1">{{ m }}</option>
                 </select>
               </div>
               <div>
-                <label class="block text-sm font-medium text-(--text-main) mb-1">Tahun</label>
+                <label class="block text-xs font-medium text-(--text-main) mb-1">Tahun</label>
                 <input
                   v-model.number="importYear"
                   type="number"
-                  class="w-full px-3 py-2 rounded-md border border-(--border-soft) bg-(--bg-card) text-(--text-main)"
+                  class="w-full h-10 px-3 rounded-md border border-(--border-soft) bg-(--bg-card) text-xs text-(--text-main)"
                   min="2020" max="2050"
                 />
               </div>
@@ -223,7 +224,7 @@
 
             <!-- Drop Zone -->
             <div
-              class="border-2 border-dashed border-(--border-soft) rounded-md p-6 text-center cursor-pointer hover:border-(--primary)/50 hover:bg-(--primary)/5 transition-colors"
+              class="border-2 border-dashed border-(--border-soft) rounded-md p-4 text-center cursor-pointer hover:border-(--primary)/50 hover:bg-(--primary)/5 transition-colors"
               :class="{ 'border-(--primary) bg-(--primary)/5': importDragOver }"
               @click="triggerImportInput"
               @dragover.prevent="importDragOver = true"
@@ -263,10 +264,10 @@
             <!-- Import Result -->
             <div
               v-if="importResult"
-              class="p-3 rounded-md text-sm"
-              :class="importResult.success ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700'"
+              class="p-3 rounded-md text-sm border border-(--border-soft)"
+              :style="{ borderLeftWidth: '4px', borderLeftColor: importResult.success ? 'var(--success)' : 'var(--danger)' }"
             >
-              <p class="font-medium">{{ importResult.message }}</p>
+              <p class="font-medium text-(--text-main)">{{ importResult.message }}</p>
               <p v-if="importResult.inserted !== undefined" class="mt-1 text-xs opacity-80">
                 {{ importResult.inserted }} baru, {{ importResult.updated }} diperbarui
               </p>
@@ -279,14 +280,14 @@
           </div>
 
           <!-- Footer -->
-          <div class="px-6 py-4 border-t border-(--border-soft) flex justify-end gap-3">
+          <div class="p-4 border-t border-(--border-soft) flex justify-end gap-2">
             <button
-              class="px-4 py-2 text-sm font-medium rounded-md border border-(--border-soft) text-(--text-main) hover:bg-(--bg-elevated) transition-colors"
+              class="h-10 px-4 text-xs font-medium rounded-md border border-(--border-soft) text-(--text-main) hover:bg-(--bg-elevated) transition-colors"
               @click="closeImportModal"
               :disabled="importing"
             >Batal</button>
             <button
-              class="px-4 py-2 text-sm font-medium rounded-md bg-(--primary) text-white hover:bg-(--primary-hover) transition-colors flex items-center gap-2"
+              class="h-10 px-4 text-xs font-medium rounded-md bg-(--primary) text-white hover:bg-(--primary-hover) transition-colors flex items-center gap-2"
               :disabled="!importFile || !importMonth || !importYear || importing"
               @click="handleImport"
             >
@@ -311,8 +312,8 @@
         v-if="importing"
         class="fixed inset-0 z-50 bg-gray-900/70 backdrop-blur-sm flex items-center justify-center"
       >
-        <div class="bg-(--bg-card) rounded-xl p-8 shadow-2xl flex flex-col items-center gap-4">
-          <span class="inline-block w-12 h-12 border-4 border-(--primary) border-t-transparent rounded-full animate-spin"></span>
+        <div class="bg-(--bg-card) rounded-md p-4 shadow-2xl flex flex-col items-center gap-3">
+          <span class="inline-block w-8 h-8 border-2 border-(--primary) border-t-transparent rounded-full animate-spin"></span>
           <p class="text-sm font-semibold text-(--text-main)">Sedang mengimport data...</p>
           <p class="text-xs text-(--text-muted)">Memproses file roster, mohon tunggu sebentar</p>
         </div>
@@ -328,33 +329,43 @@
           <div class="text-xs font-semibold text-(--primary) mt-1">
             {{ formatDateLabel(editingCell.date) }}
           </div>
+          <div class="mt-2 inline-flex items-center gap-1 rounded bg-(--bg-card) border border-(--border-soft) px-2 py-1 text-[10px] font-bold text-(--text-muted)">
+            Pola: {{ editingCell.workPatternCode || '-' }}<span v-if="editingCell.workPatternName"> - {{ editingCell.workPatternName }}</span>
+          </div>
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-(--text-main) mb-2">Pilih Shift Pengganti</label>
-          <div class="grid grid-cols-2 gap-2">
+          <label class="block text-xs font-semibold text-(--text-main) mb-2">
+            Pilih Shift Pengganti
+            <span class="font-normal text-(--text-muted)">— pola {{ editingCell.workPatternCode || 'umum' }} ({{ availableShifts.length }} shift)</span>
+          </label>
+          <div v-if="availableShifts.length" class="grid grid-cols-2 gap-2">
             <button
-              v-for="s in store.shifts"
+              v-for="s in availableShifts"
               :key="s.id"
               @click="applyOverride(s)"
-              class="flex flex-col items-center justify-center p-3 rounded-md border border-(--border-soft) hover:border-(--primary) hover:bg-(--primary-glow)/5 transition-all text-center"
+              class="flex flex-col items-center justify-center p-3 rounded-md border border-(--border-soft) hover:border-(--primary) hover:bg-(--primary)/5 transition-all text-center"
             >
               <span class="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold text-white shadow-sm" :style="{ backgroundColor: s.color }">
                 {{ s.code }}
               </span>
               <span class="text-[10px] font-bold text-(--text-main) mt-1.5">{{ s.name }}</span>
-            </button>
-            
-            <button
-              @click="applyOverride({ code: 'L', name: 'Libur', is_off: true })"
-              class="flex flex-col items-center justify-center p-3 rounded-md border-2 border-rose-100 bg-rose-50/40 hover:bg-rose-50 hover:border-rose-300 transition-all col-span-2 text-center"
-            >
-              <span class="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold text-white bg-rose-500 shadow-sm">
-                L
-              </span>
-              <span class="text-[10px] font-bold text-rose-700 mt-1.5">LIBUR (OFF DAY)</span>
+              <span v-if="s.work_hour_start" class="text-[10px] text-(--text-muted)">{{ formatHours(s.work_hour_start) }} - {{ formatHours(s.work_hour_end) }}</span>
             </button>
           </div>
+          <div v-else class="rounded-md border border-(--border-soft) bg-(--bg-elevated)/50 p-4 text-center text-xs text-(--text-muted)">
+            Tidak ada shift terdaftar pada pola kerja ini. Hanya Libur yang bisa dipilih.
+          </div>
+
+          <button
+            @click="applyOverride({ code: 'L', name: 'Libur', is_off: true })"
+            class="mt-2 flex w-full flex-col items-center justify-center p-3 rounded-md border border-(--danger)/40 hover:border-(--danger) hover:bg-(--danger)/10 transition-all text-center"
+          >
+            <span class="w-6 h-6 rounded flex items-center justify-center text-[10px] font-bold text-white bg-(--danger) shadow-sm">
+              L
+            </span>
+            <span class="text-[10px] font-bold text-(--danger) mt-1.5">LIBUR (OFF DAY)</span>
+          </button>
         </div>
       </div>
       <template #footer>
@@ -464,13 +475,17 @@ function getShiftStyle(scheduleDay) {
 }
 
 function openOverrideModal(employee, dayInfo, dayIndex) {
+  const current = employee.schedule[dayIndex]
   editingCell.value = {
     employeeId: employee.id,
     employeeName: employee.name,
     employeeNik: employee.nik,
     date: dayInfo.date,
     dayIndex,
-    currentShift: employee.schedule[dayIndex]
+    currentShift: current,
+    workPatternId: current?.work_pattern_id ?? employee.work_pattern_id ?? null,
+    workPatternCode: employee.work_pattern_code ?? null,
+    workPatternName: employee.work_pattern_name ?? null,
   }
   showModal.value = true
 }
@@ -502,6 +517,20 @@ async function applyOverride(newShift) {
 
 function formatDateLabel(date) {
   return date.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+// Hanya shift dari pola kerja milik karyawan + shift global (tanpa pola) yang boleh dipilih manual
+const availableShifts = computed(() => {
+  if (!editingCell.value) return []
+  const patternId = editingCell.value.workPatternId
+  return store.shifts.filter(s =>
+    s.work_pattern_id == null ||
+    (patternId != null && Number(s.work_pattern_id) === Number(patternId))
+  )
+})
+
+function formatHours(time) {
+  return String(time || '').slice(0, 5)
 }
 
 // ─── Import Functions ────────────────────────

@@ -38,6 +38,7 @@ const OvertimeIndex = () => import('../Pages/Admin/Attendance/Overtime/Index.vue
 const OvertimeCalculationIndex = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Index.vue')
 const OvertimeCalculationDetail = () => import('../Pages/Admin/Attendance/OvertimeCalculation/Detail.vue')
 const ConsecutiveIndex = () => import('../Pages/Admin/Attendance/Consecutive/Index.vue')
+const InputDataLama = () => import('../Pages/Admin/Attendance/InputDataLama/Index.vue')
 const LeaveSettings = () => import('../Pages/Admin/Leave/Settings.vue')
 // New separate leave pages
 const LeaveGenerate = () => import('../Pages/Admin/Leave/Generate.vue')
@@ -172,6 +173,7 @@ const routes = [
       { path: 'attendance/overtime-calculation', name: 'attendance.overtime-calculation', component: OvertimeCalculationIndex, meta: { title: 'Perhitungan Lembur' } },
       { path: 'attendance/overtime-calculation/:id', name: 'attendance.overtime-calculation.detail', component: OvertimeCalculationDetail, meta: { title: 'Detail Perhitungan Lembur' } },
       { path: 'attendance/consecutive', name: 'attendance.consecutive', component: ConsecutiveIndex, meta: { title: 'Consecutive Day' } },
+      { path: 'attendance/input-data-lama', name: 'attendance.input-data-lama', component: InputDataLama, meta: { title: 'Input Data Lama', requiresSuperadmin: true } },
       { path: 'leave/settings', name: 'leave.settings', component: LeaveSettings, meta: { title: 'Pengaturan Cuti' } },
       // New separate leave pages
       { path: 'leave/generate', name: 'leave.generate', component: LeaveGenerate, meta: { title: 'Generate Cuti Tahunan' } },

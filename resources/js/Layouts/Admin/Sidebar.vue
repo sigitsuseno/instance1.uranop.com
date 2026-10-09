@@ -107,6 +107,7 @@ const allMenus = [
       { title: 'Hitung Lembur', icon: 'bx bx-calculator', route: '/admin/attendance/overtime-calculation', visible: isSuperadmin.value || isHrmanager.value },
       { title: 'Resume Kehadiran', icon: 'bx bx-file', route: '/admin/attendance/recap', visible: true },
       { title: 'Consecutive Day', icon: 'bx bx-calendar-star', route: '/admin/attendance/consecutive', visible: true },
+      { title: 'Input Data Lama', icon: 'bx bx-history', route: '/admin/attendance/input-data-lama', visible: isSuperadmin.value },
     ],
   },
   {

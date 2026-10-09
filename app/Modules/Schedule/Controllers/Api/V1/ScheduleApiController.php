@@ -302,10 +302,16 @@ class ScheduleApiController extends Controller
             ->get()
             ->groupBy('employee_id');
 
-        $result = $employees->map(function ($emp) use ($rosters, $start, $end) {
+        $patterns = \App\Modules\Schedule\Models\WorkPattern::select('id', 'code', 'name')->get()->keyBy('id');
+
+        $result = $employees->map(function ($emp) use ($rosters, $patterns, $start, $end) {
             $empRosters = $rosters->get($emp->id, collect())->keyBy(function($r) {
                 return $r->date->format('Y-m-d');
             });
+
+            // Pola kerja milik karyawan = pola yang paling sering muncul di periode ini
+            $patternId = $empRosters->pluck('work_pattern_id')->filter()->countBy()->sortDesc()->keys()->first();
+            $pattern = $patternId ? $patterns->get($patternId) : null;
             
             $schedule = [];
             $current = $start->copy();
@@ -322,7 +328,8 @@ class ScheduleApiController extends Controller
                         'name' => $r->shift ? $r->shift->name : ($r->is_holiday ? 'Libur' : 'Non Shift'),
                         'external_code' => $r->external_code ?? ($r->is_holiday ? 'L' : '-'),
                         'is_off' => $r->is_holiday || $r->shift?->is_dayoff,
-                        'shift_id' => $r->shift_id
+                        'shift_id' => $r->shift_id,
+                        'work_pattern_id' => $r->work_pattern_id,
                     ];
                 } else {
                     $schedule[] = null;
@@ -336,6 +343,9 @@ class ScheduleApiController extends Controller
                 'nik' => $emp->employee_code,
                 'department' => $emp->department ? $emp->department->name : '-',
                 'department_id' => $emp->department_id,
+                'work_pattern_id' => $patternId,
+                'work_pattern_code' => $pattern?->code,
+                'work_pattern_name' => $pattern?->name,
                 'schedule' => $schedule
             ];
         });
@@ -463,6 +473,30 @@ class ScheduleApiController extends Controller
             $shift = \App\Modules\Schedule\Models\Shift::find($request->shift_id);
         }
 
+        // Pola kerja milik karyawan: dari roster tanggal tsb, fallback ke pola dominan di bulan berjalan
+        $existing = \App\Modules\Schedule\Models\EmployeeShiftRoster::where('employee_id', $request->employee_id)
+            ->where('date', $carbonDate->format('Y-m-d'))
+            ->first();
+
+        $employeePatternId = $existing?->work_pattern_id;
+        if (! $employeePatternId) {
+            $employeePatternId = \App\Modules\Schedule\Models\EmployeeShiftRoster::where('employee_id', $request->employee_id)
+                ->whereNotNull('work_pattern_id')
+                ->select('work_pattern_id')
+                ->get()
+                ->countBy('work_pattern_id')->sortDesc()->keys()->first();
+        }
+
+        // Tolak shift dari pola kerja lain (shift global tanpa pola tetap diizinkan)
+        if ($shift && $shift->work_pattern_id && $employeePatternId && (int) $shift->work_pattern_id !== (int) $employeePatternId) {
+            $expected = \App\Modules\Schedule\Models\WorkPattern::select('code', 'name')->find($employeePatternId);
+            return response()->json([
+                'success' => false,
+                'message' => 'Shift "' . $shift->code . '" bukan bagian dari pola kerja karyawan'
+                    . ($expected ? " ({$expected->code} - {$expected->name})" : '') . '.',
+            ], 422);
+        }
+
         \App\Modules\Schedule\Models\EmployeeShiftRoster::updateOrCreate(
             [
                 'employee_id' => $request->employee_id,
@@ -470,6 +504,7 @@ class ScheduleApiController extends Controller
             ],
             [
                 'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                'work_pattern_id' => $employeePatternId,
                 'shift_id' => $shift ? $shift->id : null,
                 'shift_code' => $shift ? $shift->code : ($request->is_off ? 'L' : null),
                 'external_code' => $shift ? $shift->external_code : ($request->is_off ? 'L' : null),

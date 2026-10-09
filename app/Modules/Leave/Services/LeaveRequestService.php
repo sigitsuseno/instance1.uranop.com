@@ -45,7 +45,9 @@ class LeaveRequestService
                 'employee_id'      => $employeeId,
                 'leave_type_id'    => $leaveTypeId,
                 'leave_period_id'  => $periodId,
-                'transaction_type' => 'initial',
+                // Kolomnya enum('increment','decrement') — nilai 'initial' akan
+                // ditolak MySQL strict mode dan menggagalkan approve cuti.
+                'transaction_type' => 'increment',
                 'amount'           => 12,
                 'description'      => 'Saldo awal Cuti Tahunan (auto)',
                 'created_by'       => 1,
@@ -302,6 +304,59 @@ class LeaveRequestService
                 ]);
 
             // Sync sisa_cuti
+            $this->syncSisaCuti($leaveRequest);
+
+            return $leaveRequest;
+        });
+    }
+
+    /**
+     * Buat leave_request langsung approved untuk pengisian data lama,
+     * dengan periode cuti diresolusi DARI TANGGAL — bukan dari periode aktif.
+     *
+     * approveAndPrintRequest() memilih LeavePeriod::where('status','active')
+     * terbaru, sehingga cuti Desember 2025 akan salah masuk ke periode
+     * 2026-03-20..2027-03-08. Karena itu resolusi periode dilakukan di sini.
+     */
+    public function createApprovedForDate(array $data, string $date, ?int $userId = null): LeaveRequest
+    {
+        $leaveType = LeaveType::findOrFail($data['leave_type_id']);
+
+        $period = LeavePeriod::where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
+            ->orderBy('start_date', 'desc')
+            ->first();
+
+        if (! $period) {
+            throw new Exception("Tidak ada periode cuti yang mencakup tanggal {$date}.");
+        }
+
+        return DB::transaction(function () use ($data, $period, $leaveType, $userId) {
+            $leaveRequest = LeaveRequest::create([
+                'employee_id'     => $data['employee_id'],
+                'leave_type_id'   => $leaveType->id,
+                'leave_period_id' => $period->id,
+                'start_date'      => $data['start_date'],
+                'end_date'        => $data['end_date'],
+                'days_requested'  => $data['days_requested'],
+                'reason'          => $data['reason'] ?? null,
+                'note'            => $data['note'] ?? null,
+                'status'          => 'approved',
+                'approved_by'     => $userId,
+                'approved_at'     => now(),
+                'created_by'      => $userId,
+                'updated_by'      => $userId,
+            ]);
+
+            if ($leaveType->balance_type === 'decrement') {
+                $this->decrementBalance(
+                    $data['employee_id'],
+                    $leaveType->id,
+                    $period->id,
+                    $data['days_requested']
+                );
+            }
+
             $this->syncSisaCuti($leaveRequest);
 
             return $leaveRequest;
