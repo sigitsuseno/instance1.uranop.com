@@ -162,9 +162,10 @@ class AttendanceReportController extends Controller
                 $isHoliday = $isWeekend || $holiday !== null;
 
                 if ($prep) {
-                    $status = $this->mapStatus($prep->status, $isHoliday);
+                    $status = $this->mapStatus($prep->status, $isWeekend, $holiday !== null);
                 } else {
-                    $status = ($isWeekend || $holiday) ? 'Off' : '-';
+                    // Libur hanya untuk hari di luar Minggu; hari Minggu tetap Off
+                    $status = $isWeekend ? 'Off' : ($holiday ? 'Libur' : '-');
                 }
 
                 // Uang Makan & Insentif dari tabel employee_overtime
@@ -214,7 +215,7 @@ class AttendanceReportController extends Controller
 
                 foreach ($dateStrings as $dateStr) {
                     $roster = $rosterRecords->get($dateStr);
-                    $status = $roster?->status ?? '-';
+                    $status = $this->mapTitipanStatus($roster?->status ?? '-');
 
                     $uangMakanDaily = ($status === 'H') ? $uangMakanRate : 0;
                     $totalUangMakan += $uangMakanDaily;
@@ -254,20 +255,35 @@ class AttendanceReportController extends Controller
 
     // ─── Status Mapping ──────────────────────────────────────────
 
-    private function mapStatus(string $statusRaw, bool $isHoliday): string
+    private function mapStatus(string $statusRaw, bool $isWeekend, bool $isHolidayDate): string
     {
+        // Libur hanya untuk hari di luar Minggu; hari Minggu tetap Off.
+        $liburAtauOff = $isWeekend ? 'Off' : 'Libur';
+        $isLiburDay = $isWeekend || $isHolidayDate;
+
         return match (true) {
-            $statusRaw === 'hadir' && $isHoliday => 'L',
+            $statusRaw === 'hadir' && $isLiburDay => $liburAtauOff,
             $statusRaw === 'hadir'                => 'H',
-            $statusRaw === 'absent'               => 'A',
+            $statusRaw === 'absent'               => 'Alfa',
             $statusRaw === 'libur',
-            $statusRaw === 'off'                  => 'Off',
-            $statusRaw === 'skt'                  => 'S',
-            str_starts_with($statusRaw, 'c')      => 'C',
+            $statusRaw === 'off'                  => $liburAtauOff,
+            $statusRaw === 'skt'                  => 'Sakit',
+            str_starts_with($statusRaw, 'c')      => 'Cuti',
             $statusRaw === 'imt',
-            $statusRaw === 'ipa'                  => $isHoliday ? 'L' : 'H',
-            str_starts_with($statusRaw, 'i')      => 'I',
+            $statusRaw === 'ipa'                  => $isLiburDay ? $liburAtauOff : 'H',
+            str_starts_with($statusRaw, 'i')      => 'Izin',
             default                               => '-',
+        };
+    }
+
+    private function mapTitipanStatus(string $statusRaw): string
+    {
+        return match ($statusRaw) {
+            'A' => 'Alfa',
+            'C' => 'Cuti',
+            'S' => 'Sakit',
+            'I' => 'Izin',
+            default => $statusRaw,
         };
     }
 }

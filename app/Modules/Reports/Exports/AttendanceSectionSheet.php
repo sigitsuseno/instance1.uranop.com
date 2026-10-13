@@ -28,15 +28,20 @@ class AttendanceSectionSheet implements FromArray, WithStyles, WithColumnWidths,
         'C.' => '9A3412',
     ];
 
-    // Status → color mapping
+    // Status → color mapping (kata penuh + kompatibel kode lama)
     protected const STATUS_COLORS = [
-        'H'   => '16A34A',
-        'L'   => '2563EB',
-        'A'   => 'DC2626',
-        'C'   => 'D97706',
-        'I'   => '7C3AED',
-        'S'   => 'EA580C',
-        'Off' => '9CA3AF',
+        'H'     => '16A34A',
+        'Libur' => '2563EB',
+        'L'     => '2563EB',
+        'Alfa'  => 'DC2626',
+        'A'     => 'DC2626',
+        'Cuti'  => 'D97706',
+        'C'     => 'D97706',
+        'Izin'  => '7C3AED',
+        'I'     => '7C3AED',
+        'Sakit' => 'EA580C',
+        'S'     => 'EA580C',
+        'Off'   => '9CA3AF',
     ];
 
     public function __construct($section, $dates, $label, $companyName)
@@ -388,7 +393,18 @@ class AttendanceSectionSheet implements FromArray, WithStyles, WithColumnWidths,
                 // ═══════════════════════════════════════════
                 $sheet->getColumnDimension('A')->setWidth(11);
                 $sheet->getColumnDimension('B')->setWidth(30);
-                for ($i = 3; $i <= $totalCols; $i++) {
+                // Kolom status (St) lebih lebar agar muat kata penuh
+                // (Cuti/Sakit/Alfa/Izin/Libur); kolom OT/LM tetap sempit.
+                $wc = 3;
+                foreach ($this->dates as $wd) {
+                    $sheet->getColumnDimension(self::colLetter($wc))->setWidth(10);
+                    $wc++;
+                    if ($colsPerDate === 2) {
+                        $sheet->getColumnDimension(self::colLetter($wc))->setWidth(6);
+                        $wc++;
+                    }
+                }
+                for ($i = $wc; $i <= $totalCols; $i++) {
                     $sheet->getColumnDimension(self::colLetter($i))->setWidth(6);
                 }
                 if ($showUangMakan) {

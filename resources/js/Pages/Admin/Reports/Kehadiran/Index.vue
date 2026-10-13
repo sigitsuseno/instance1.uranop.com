@@ -101,14 +101,19 @@ function getCount(att, sectionLabel = '') {
 // ── Status Color ─────────────────────────────
 function getStatusClass(status) {
     switch (status) {
-        case 'H':   return 'text-green-600 dark:text-green-400 font-bold'
-        case 'L':   return 'text-blue-600 dark:text-blue-400 font-bold'
-        case 'A':   return 'text-red-600 dark:text-red-400 font-bold'
-        case 'C':   return 'text-amber-600 dark:text-amber-400 font-bold'
-        case 'I':   return 'text-purple-600 dark:text-purple-400 font-bold'
-        case 'S':   return 'text-orange-600 dark:text-orange-400 font-bold'
-        case 'Off': return 'text-(--text-soft)'
-        default:    return 'text-(--text-main)'
+        case 'H':     return 'text-green-600 dark:text-green-400 font-bold'
+        case 'Libur':
+        case 'L':     return 'text-blue-600 dark:text-blue-400 font-bold'
+        case 'Alfa':
+        case 'A':     return 'text-red-600 dark:text-red-400 font-bold'
+        case 'Cuti':
+        case 'C':     return 'text-amber-600 dark:text-amber-400 font-bold'
+        case 'Izin':
+        case 'I':     return 'text-purple-600 dark:text-purple-400 font-bold'
+        case 'Sakit':
+        case 'S':     return 'text-orange-600 dark:text-orange-400 font-bold'
+        case 'Off':   return 'text-(--text-soft)'
+        default:      return 'text-(--text-main)'
     }
 }
 
@@ -291,12 +296,12 @@ watch(selectedGroups, () => {
         <!-- Legend -->
         <div class="print-hide flex flex-wrap gap-4 text-xs text-(--text-muted) mb-4">
             <span><b class="text-green-600">H</b> Hadir</span>
-            <span><b class="text-red-600">A</b> Absen</span>
-            <span><b class="text-blue-600">L</b> Libur Masuk</span>
-            <span><b class="text-(--text-soft)">Off</b> Libur</span>
-            <span><b class="text-amber-600">C</b> Cuti</span>
-            <span><b class="text-purple-600">I</b> Izin</span>
-            <span><b class="text-orange-600">S</b> Sakit</span>
+            <span><b class="text-red-600">Alfa</b></span>
+            <span><b class="text-blue-600">Libur</b> (non-Minggu)</span>
+            <span><b class="text-(--text-soft)">Off</b> (Minggu)</span>
+            <span><b class="text-amber-600">Cuti</b></span>
+            <span><b class="text-purple-600">Izin</b></span>
+            <span><b class="text-orange-600">Sakit</b></span>
             <span class="text-(--text-soft)">|</span>
             <span class="text-(--text-soft)">Jam: Overtime (hari kerja) / LM (minggu/holiday)</span>
         </div>
@@ -375,7 +380,7 @@ watch(selectedGroups, () => {
                                         {{ row.name }}
                                     </td>
                                     <template v-for="d in dates" :key="d.date">
-                                        <td class="px-1 py-2 text-center text-xs border-b border-l border-(--border-soft)"
+                                        <td class="px-2 py-2 text-center text-[11px] font-semibold whitespace-nowrap border-b border-l border-(--border-soft) min-w-[64px]"
                                             :class="row.attendance[d.date]?.is_holiday ? 'bg-red-50/30 dark:bg-red-950/15' : ''"
                                             :title="d.day_name + ', ' + d.date + (row.attendance[d.date]?.holiday_name ? ' — ' + row.attendance[d.date].holiday_name : '')">
                                             <span :class="getStatusClass(row.attendance[d.date]?.status)">{{ row.attendance[d.date]?.status || '-' }}</span>
