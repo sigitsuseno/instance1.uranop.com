@@ -487,6 +487,65 @@ class AttendanceAutologController extends Controller
         return round($minutes / 60, 1).' jam';
     }
 
+    /**
+     * Teks untuk kolom "Actual In" / "Actual Out" pada export detail karyawan.
+     *
+     * - cuti / izin / sakit / alfa → label status (bukan jam)
+     * - hari Minggu                → 'Off' (kecuali satpam GRP-SS)
+     * - selain itu                 → jam check_in / check_out ('--:--' bila kosong)
+     *
+     * @return array{0: string, 1: string} [actualIn, actualOut]
+     */
+    protected function actualInOutDisplay($log, Carbon $date, bool $isSatpam): array
+    {
+        $label = $this->getActualColumnLabel($log, $date, $isSatpam);
+
+        if ($label !== null) {
+            return [$label, $label];
+        }
+
+        return [
+            $log?->check_in ? $log->check_in->format('H:i') : '--:--',
+            $log?->check_out ? $log->check_out->format('H:i') : '--:--',
+        ];
+    }
+
+    /**
+     * Label status untuk kolom Actual In/Out, atau null jika harus menampilkan jam.
+     */
+    protected function getActualColumnLabel($log, Carbon $date, bool $isSatpam): ?string
+    {
+        if ($log) {
+            // Durasi izin/sakit diutamakan karena status bisa tetap 'leave'
+            if ((int) ($log->sakit_duration ?? 0) === 1) {
+                return 'Sakit';
+            }
+            if ((int) ($log->izin_duration ?? 0) === 1) {
+                return 'Izin';
+            }
+
+            $label = match ($log->status) {
+                'leave', 'cuti'  => 'Cuti',
+                'sakit'          => 'Sakit',
+                'izin', 'permit' => 'Izin',
+                'absent'         => 'Alfa',
+                'off'            => 'Off',
+                default          => null,
+            };
+
+            if ($label !== null) {
+                return $label;
+            }
+        }
+
+        // Libur hanya untuk hari Minggu; satpam (GRP-SS) tetap masuk
+        if (! $isSatpam && $date->isSunday()) {
+            return 'Off';
+        }
+
+        return null;
+    }
+
     protected function getStatusLabel($status)
     {
         $labels = ['present' => 'Hadir', 'absent' => 'Absen', 'leave' => 'Cuti', 'permit' => 'Izin', 'holiday' => 'Libur', 'off' => 'Off', 'pending' => 'Menunggu'];
@@ -1808,7 +1867,7 @@ class AttendanceAutologController extends Controller
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
 
-        $employees = Employee::with(['department', 'position'])
+        $employees = Employee::with(['department', 'position', 'groups'])
             ->whereIn('id', $request->input('employee_ids'))
             ->get()
             ->keyBy('id');
@@ -1820,6 +1879,9 @@ class AttendanceAutologController extends Controller
             if (! $employee) {
                 continue;
             }
+
+            // Satpam (GRP-SS) tetap masuk pada hari Minggu
+            $isSatpam = $employee->groups->contains('reference_code', 'GRP-SS');
 
             $logs = AttendanceAutolog::with('employeeShiftRoster.workPattern')
                 ->where('employee_id', $employeeId)
@@ -1846,12 +1908,14 @@ class AttendanceAutologController extends Controller
                 $countDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
                 $totalCountHours += $countHours;
 
+                [$actualIn, $actualOut] = $this->actualInOutDisplay($log, $currentDate, $isSatpam);
+
                 $rows[] = [
                     $employee->employee_code,
                     $employee->name,
                     $currentDate->translatedFormat('D, d M Y'),
-                    $log?->check_in ? $log->check_in->format('H:i') : '--:--',
-                    $log?->check_out ? $log->check_out->format('H:i') : '--:--',
+                    $actualIn,
+                    $actualOut,
                     $lemburDisplay,
                     $countDisplay,
                 ];
@@ -1891,9 +1955,12 @@ class AttendanceAutologController extends Controller
         $startDate = Carbon::parse($request->input('start_date', now()->startOfMonth()))->toDateString();
         $endDate = Carbon::parse($request->input('end_date', now()->endOfMonth()))->toDateString();
 
-        $employee = Employee::with(['department', 'position'])
+        $employee = Employee::with(['department', 'position', 'groups'])
             ->where('id', $employeeId)
             ->firstOrFail();
+
+        // Satpam (GRP-SS) tetap masuk pada hari Minggu
+        $isSatpam = $employee->groups->contains('reference_code', 'GRP-SS');
 
         $logs = AttendanceAutolog::with('employeeShiftRoster.workPattern')
             ->where('employee_id', $employeeId)
@@ -1920,12 +1987,14 @@ class AttendanceAutologController extends Controller
             $countDisplay = $countHours > 0 ? round($countHours, 1) . ' jam' : '-';
             $totalCountHours += $countHours;
 
+            [$actualIn, $actualOut] = $this->actualInOutDisplay($log, $currentDate, $isSatpam);
+
             $rows[] = [
                 $employee->employee_code,
                 $employee->name,
                 $currentDate->translatedFormat('D, d M Y'),
-                $log?->check_in ? $log->check_in->format('H:i') : '--:--',
-                $log?->check_out ? $log->check_out->format('H:i') : '--:--',
+                $actualIn,
+                $actualOut,
                 $lemburDisplay,
                 $countDisplay,
             ];
