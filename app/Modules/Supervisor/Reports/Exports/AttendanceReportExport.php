@@ -248,12 +248,17 @@ class AttendanceReportSheet implements FromArray, ShouldAutoSize, WithEvents
 
                         $colorMap = [
                             'H'   => ['bg' => 'D4EDDA', 'text' => '155724'],
-                            'S'   => ['bg' => 'FFF3CD', 'text' => '856404'],
-                            'I'   => ['bg' => 'E8DAEF', 'text' => '6C3483'],
-                            'C'   => ['bg' => 'D6EAF8', 'text' => '1A5276'],
-                            'L'   => ['bg' => 'FDEBD0', 'text' => '935116'],
+                            'Sakit' => ['bg' => 'FFF3CD', 'text' => '856404'],
+                            'S'     => ['bg' => 'FFF3CD', 'text' => '856404'],
+                            'Izin' => ['bg' => 'E8DAEF', 'text' => '6C3483'],
+                            'I'    => ['bg' => 'E8DAEF', 'text' => '6C3483'],
+                            'Cuti' => ['bg' => 'D6EAF8', 'text' => '1A5276'],
+                            'C'    => ['bg' => 'D6EAF8', 'text' => '1A5276'],
+                            'Libur' => ['bg' => 'FDEBD0', 'text' => '935116'],
+                            'L'     => ['bg' => 'FDEBD0', 'text' => '935116'],
                             'Off' => ['bg' => 'EAEDED', 'text' => '7F8C8D'],
-                            'A'   => ['bg' => 'F8D7DA', 'text' => '721C24'],
+                            'Alfa' => ['bg' => 'F8D7DA', 'text' => '721C24'],
+                            'A'    => ['bg' => 'F8D7DA', 'text' => '721C24'],
                         ];
 
                         if (isset($colorMap[$status])) {

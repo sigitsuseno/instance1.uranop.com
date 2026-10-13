@@ -205,7 +205,7 @@ class AttendanceReportController extends Controller
         $isHoliday = $log->is_holiday || $d['is_weekend'];
 
         return [
-            'status'       => $this->getStatusText($log),
+            'status'       => $this->getStatusText($log, $d),
             'check_in'     => $log->check_in?->format('H:i'),
             'check_out'    => $log->check_out?->format('H:i'),
             'lembur'       => (int) ($log->lembur ?? 0),
@@ -216,18 +216,19 @@ class AttendanceReportController extends Controller
         ];
     }
 
-    protected function getStatusText($log): string
+    protected function getStatusText($log, ?array $d = null): string
     {
         if (! $log) return '-';
 
-        if ((int) $log->sakit_duration > 0) return 'S';
-        if ((int) $log->izin_duration > 0) return 'I';
+        if ((int) $log->sakit_duration > 0) return 'Sakit';
+        if ((int) $log->izin_duration > 0) return 'Izin';
 
         return match ($log->status) {
             'present' => 'H',
-            'leave'   => 'C',
-            'absent'  => 'A',
-            'holiday' => 'L',
+            'leave'   => 'Cuti',
+            'absent'  => 'Alfa',
+            // Libur hanya untuk hari di luar Minggu; hari Minggu tetap Off
+            'holiday' => ($d !== null && ($d['is_weekend'] ?? false)) ? 'Off' : 'Libur',
             'off'     => 'Off',
             default   => '-',
         };
