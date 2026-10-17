@@ -812,7 +812,7 @@ onMounted(() => {
 
                             <!-- Sisa Hari -->
                             <td class="px-4 py-3 whitespace-nowrap">
-                                <span v-if="getDaysRemaining(contract.end_date) !== null"
+                                <span v-if="!contract.is_compensation_paid && getDaysRemaining(contract.end_date) !== null"
                                     class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold" :class="getDaysRemaining(contract.end_date) < 0
                                         ? 'bg-red-500/10 text-red-600'
                                         : getDaysRemaining(contract.end_date) <= 7
