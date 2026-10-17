@@ -85,7 +85,8 @@ class CompensationMainSheet implements FromArray, WithEvents, WithStyles, WithCo
 
                 $gajiPokok = $employee ? $employee->gaji_pokok($period) : 0;
                 $tjMasaKerja = $employee ? $employee->tjMasaKerja($period) : 0;
-                $durationMonths = (int) ($contract->duration_months ?? 0);
+                // Masa kerja efektif (bulan penuh) — mengikuti resign bila berhenti lebih awal.
+                $durationMonths = $contract->compensationMonths();
                 $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
                 $totalRaw = $durationMonths * $monthlyRate;
                 $totalRounded = (float) (ceil($totalRaw / 100) * 100);

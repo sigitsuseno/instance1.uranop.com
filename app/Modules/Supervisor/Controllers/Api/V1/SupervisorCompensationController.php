@@ -38,9 +38,10 @@ class SupervisorCompensationController extends Controller
         $endDate = $dateInfo['end'];
         $label = $dateInfo['label'];
 
-        // Get contracts that fall into this period (e.g. expiring in this period)
+        // Kompensasi jatuh pada periode ini berdasarkan tanggal berhenti efektif
+        // (end_date kontrak, atau lebih awal bila karyawan resign).
         $contracts = EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->dueInCompensationPeriod($startDate->format('Y-m-d'), $endDate->format('Y-m-d'))
             ->orderBy('end_date', 'asc')
             ->get()
             ->map(function ($contract) {
@@ -144,7 +145,7 @@ class SupervisorCompensationController extends Controller
         $company = Company::first();
 
         $contracts = EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->dueInCompensationPeriod($startDate->format('Y-m-d'), $endDate->format('Y-m-d'))
             ->orderBy('end_date', 'asc')
             ->get();
 
@@ -160,7 +161,8 @@ class SupervisorCompensationController extends Controller
             $period = sprintf('%d-%02d', $year, $month);
             $gajiPokok = $employee->gaji_pokok($period);
             $tjMasaKerja = $employee->tjMasaKerja($period);
-            $durationMonths = (int) ($contract->duration_months ?? 0);
+            // Masa kerja efektif (bulan penuh) — mengikuti resign bila berhenti lebih awal.
+            $durationMonths = $contract->compensationMonths();
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);

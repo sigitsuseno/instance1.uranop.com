@@ -140,6 +140,57 @@ class EmployeeContract extends Model
         return $this->compensation_paid_at !== null;
     }
 
+    /**
+     * Masa kerja efektif (bulan penuh, dibulatkan ke bawah) yang dipakai
+     * untuk menghitung uang kompensasi PKWT.
+     *
+     * Dihitung dari start_date kontrak sampai tanggal berhenti efektif:
+     * end_date kontrak, atau lebih awal bila karyawan resign/berhenti
+     * (employees.resign_date / employees.end_date) sebelum kontrak selesai.
+     * Nilai terkecil 1 bulan, mengikuti konvensi duration_months.
+     */
+    public function compensationMonths(): int
+    {
+        if (! $this->start_date || ! $this->end_date) {
+            return max(1, (int) ($this->duration_months ?? 0));
+        }
+
+        $effectiveEnd = $this->end_date;
+
+        $exitDate = $this->employee?->resign_date ?? $this->employee?->end_date;
+        if ($exitDate && $exitDate->lt($effectiveEnd)) {
+            $effectiveEnd = $exitDate;
+        }
+
+        if ($effectiveEnd->lt($this->start_date)) {
+            return 0;
+        }
+
+        return max(1, (int) $this->start_date->diffInMonths($effectiveEnd));
+    }
+
+    /**
+     * Filter kontrak yang uang kompensasinya jatuh pada periode tertentu.
+     *
+     * Memakai tanggal berhenti efektif: end_date kontrak, atau lebih awal bila
+     * karyawan resign/berhenti (employees.resign_date / employees.end_date)
+     * sebelum kontrak selesai. Contoh: kontrak berakhir 1 Nov tetapi resign
+     * 31 Okt → masuk periode yang memuat 31 Okt (mis. 25 Okt s/d 24 Nov).
+     */
+    public function scopeDueInCompensationPeriod($query, $start, $end)
+    {
+        return $query->whereRaw(
+            'LEAST(
+                employee_contracts.end_date,
+                COALESCE(
+                    (SELECT COALESCE(e.resign_date, e.end_date) FROM employees e WHERE e.id = employee_contracts.employee_id),
+                    employee_contracts.end_date
+                )
+            ) BETWEEN ? AND ?',
+            [$start, $end]
+        );
+    }
+
     // ========== BOOT ==========
 
     protected static function booted(): void

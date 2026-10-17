@@ -93,7 +93,10 @@ class KompensasiLengkapSheet implements FromArray, WithEvents, WithStyles, WithC
 
         $gajiPokok      = $employee ? (float) $employee->gaji_pokok($period) : 0.0;
         $tjMasaKerja    = $employee ? (float) $employee->tjMasaKerja($period) : 0.0;
-        $durationMonths = (int) ($contract->duration_months ?? 0);
+        // Masa kerja efektif (bulan penuh) — mengikuti resign bila berhenti lebih awal.
+        $durationMonths = $contract && method_exists($contract, 'compensationMonths')
+            ? $contract->compensationMonths()
+            : (int) ($contract->duration_months ?? 0);
 
         $monthlyRate  = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0.0;
         $totalRaw     = $durationMonths * $monthlyRate;

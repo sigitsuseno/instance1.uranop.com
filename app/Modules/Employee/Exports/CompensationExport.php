@@ -50,12 +50,12 @@ class CompensationExport implements WithMultipleSheets
                         $dateInfo['end']->copy()->addDays(7)->format('Y-m-d'),
                     ]);
             } else {
-                // Fallback tanpa group (mis. supervisor): kontrak yang end_date-nya
-                // jatuh dalam rentang periode.
-                $query->whereBetween('end_date', [
+                // Fallback tanpa group (mis. supervisor): kontrak yang tanggal berhenti
+                // efektifnya (end_date kontrak atau tanggal resign) jatuh dalam periode.
+                $query->dueInCompensationPeriod(
                     $dateInfo['start']->format('Y-m-d'),
-                    $dateInfo['end']->format('Y-m-d'),
-                ]);
+                    $dateInfo['end']->format('Y-m-d')
+                );
 
                 // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
                 if ($this->isLatest) {

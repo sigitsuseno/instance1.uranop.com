@@ -36,7 +36,8 @@ class CompensationBankSheet implements WithTitle, WithEvents, WithColumnWidths
 
             $gajiPokok = $employee->gaji_pokok($period);
             $tjMasaKerja = $employee->tjMasaKerja($period);
-            $durationMonths = (int) ($contract->duration_months ?? 0);
+            // Masa kerja efektif (bulan penuh) — mengikuti resign bila berhenti lebih awal.
+            $durationMonths = $contract->compensationMonths();
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);

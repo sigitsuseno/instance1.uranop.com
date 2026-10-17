@@ -206,10 +206,10 @@ class RekapPphKompensasiController extends Controller
             }
 
             // Nominal per kontrak, sama seperti halaman /admin/employees/kompensasi:
-            // (gaji pokok + tj. masa kerja) / 12 × durasi, dibulatkan ke atas.
+            // (gaji pokok + tj. masa kerja) / 12 × masa kerja efektif, dibulatkan ke atas.
             $gajiPokok      = $emp->gaji_pokok($periodStr);
             $tjMasaKerja    = $emp->tjMasaKerja($periodStr);
-            $durationMonths = (int) ($contract->duration_months ?? 0);
+            $durationMonths = $contract->compensationMonths();
             $monthlyRate    = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $nominal        = (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
 

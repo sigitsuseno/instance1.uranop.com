@@ -38,9 +38,10 @@ class CompensationApiController extends Controller
         $endDate = $dateInfo['end'];
         $label = $dateInfo['label'];
 
-        // Get contracts that fall into this period (e.g. expiring in this period)
+        // Kompensasi jatuh pada periode ini berdasarkan tanggal berhenti efektif
+        // (end_date kontrak, atau lebih awal bila karyawan resign).
         $query = EmployeeContract::with(['employee'])
-            ->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+            ->dueInCompensationPeriod($startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
 
         // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
         if ($request->boolean('is_latest')) {
@@ -56,6 +57,7 @@ class CompensationApiController extends Controller
                 $period = sprintf('%d-%02d', $year, $month);
 
                 $durationMonths = (int) ($contract->duration_months ?? 0);
+                $compensationMonths = $contract->compensationMonths();
                 $nominal = $this->contractNominal($contract, $period);
                 $potAdmin = $contract->pot_admin === null ? null : (float) $contract->pot_admin;
 
@@ -66,6 +68,7 @@ class CompensationApiController extends Controller
                     'start_date' => $contract->start_date,
                     'end_date' => $contract->end_date,
                     'duration_months' => $durationMonths,
+                    'compensation_months' => $compensationMonths,
                     'is_compensation_paid' => $contract->is_compensation_paid,
                     'compensation_paid_at' => $contract->compensation_paid_at,
                     'comp_group' => $contract->comp_group,
@@ -301,7 +304,7 @@ class CompensationApiController extends Controller
                     $endDate->copy()->addDays(7)->format('Y-m-d'),
                 ]);
         } else {
-            $query->whereBetween('end_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+            $query->dueInCompensationPeriod($startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
 
             // Filter opsional: hanya tampilkan kontrak terakhir (is_latest = true)
             if ($request->boolean('is_latest')) {
@@ -325,7 +328,9 @@ class CompensationApiController extends Controller
             $period = sprintf('%d-%02d', $year, $month);
             $gajiPokok = $employee->gaji_pokok($period);
             $tjMasaKerja = $employee->tjMasaKerja($period);
-            $durationMonths = (int) ($contract->duration_months ?? 0);
+            // Masa kerja efektif (bulan penuh): bila resign sebelum kontrak selesai,
+            // kompensasi mengikuti masa kerja aktual, bukan durasi kontrak.
+            $durationMonths = $contract->compensationMonths();
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;
             $totalRounded = (float) (ceil($totalRaw / 100) * 100);
@@ -419,7 +424,7 @@ class CompensationApiController extends Controller
 
     /**
      * Nominal kompensasi per kontrak, konsisten dengan tabel daftar & slip:
-     * (gaji pokok + tj. masa kerja) / 12 × durasi, dibulatkan ke atas ke ratusan.
+     * (gaji pokok + tj. masa kerja) / 12 × masa kerja efektif, dibulatkan ke atas ke ratusan.
      */
     private function contractNominal(EmployeeContract $contract, string $period): float
     {
@@ -427,7 +432,7 @@ class CompensationApiController extends Controller
 
         $gajiPokok      = $employee ? $employee->gaji_pokok($period) : 0;
         $tjMasaKerja    = $employee ? $employee->tjMasaKerja($period) : 0;
-        $durationMonths = (int) ($contract->duration_months ?? 0);
+        $durationMonths = $contract->compensationMonths();
         $monthlyRate    = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
 
         return (float) (ceil($durationMonths * $monthlyRate / 100) * 100);
