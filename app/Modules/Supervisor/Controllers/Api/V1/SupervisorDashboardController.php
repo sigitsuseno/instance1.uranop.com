@@ -7,6 +7,7 @@ use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\AuditLog\Models\AuditLog;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Employee\Models\EmployeeContract;
+use App\Modules\Employee\Services\EmployeeService;
 use App\Modules\Supervisor\Attendance\Models\SupervisorAttendance;
 use App\Modules\Supervisor\Payroll\Models\SupervisorBreakdown;
 use App\Modules\Leave\Models\LeaveRequest;
@@ -18,6 +19,10 @@ use Illuminate\Http\Request;
 
 class SupervisorDashboardController extends Controller
 {
+    public function __construct(
+        protected EmployeeService $employeeService
+    ) {}
+
     /**
      * Get supervisor dashboard data with audit logs filtered to hrbranch.
      */
@@ -26,7 +31,9 @@ class SupervisorDashboardController extends Controller
         $today = now()->toDateString();
 
         // ── Stats ─────────────────────────────────────────────────────
-        $totalKaryawan = Employee::where('is_active', 1)->count();
+        // Samakan dengan card "Karyawan Aktif" di /supervisor/employee-data/karyawan:
+        // scope supervisor = karyawan audit (is_audit = true).
+        $totalKaryawan = $this->employeeService->getStats(auditOnly: true)['active'];
 
         $hadirHariIni = AttendancePrepare::where('date', $today)
             ->whereNotNull('check_in')
