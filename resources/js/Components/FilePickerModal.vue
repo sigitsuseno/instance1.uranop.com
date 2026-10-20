@@ -1,5 +1,5 @@
 <template>
-  <BaseModal :show="show" title="Pilih Berkas Absen" size="lg" @close="$emit('close')">
+  <BaseModal :show="show" :title="title" size="lg" @close="$emit('close')">
     <div class="space-y-4">
       <!-- Pencarian -->
       <div class="flex items-center gap-2">
@@ -81,6 +81,7 @@ import { useApi } from '@/composables/useApi'
 
 const props = defineProps({
   show: { type: Boolean, default: false },
+  title: { type: String, default: 'Pilih Berkas' },
 })
 
 const emit = defineEmits(['close', 'select'])

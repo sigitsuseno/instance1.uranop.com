@@ -121,6 +121,17 @@ Route::prefix('v1/supervisor')
             Route::get('breakdown', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'index']);
             Route::post('breakdown/calculate', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'calculate']);
             Route::post('breakdown/import', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'import']);
+
+            // Update Data — import Excel dari File Manager. Sumber berkasnya disk
+            // privat File Manager, jadi aksesnya dibatasi superadmin — sama seperti
+            // modul File Manager itu sendiri.
+            Route::middleware('role:superadmin')->group(function () {
+                Route::post('breakdown/import/preview', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownImportController::class, 'preview'])
+                    ->name('supervisor.payroll.breakdown.import.preview');
+                Route::post('breakdown/import/store', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownImportController::class, 'store'])
+                    ->name('supervisor.payroll.breakdown.import.store');
+            });
+
             Route::get('breakdown/export', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'export']);
             Route::get('breakdown/export-kirim-audit', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'exportKirimAudit']);
             Route::get('breakdown/print', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'printPdf']);

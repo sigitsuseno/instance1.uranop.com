@@ -273,7 +273,7 @@
 import { ref, computed, onMounted } from 'vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseButton from '@/Components/BaseButton.vue'
-import FilePickerModal from './Components/FilePickerModal.vue'
+import FilePickerModal from '@/Components/FilePickerModal.vue'
 import {
   IconAlertTriangle,
   IconCheck,

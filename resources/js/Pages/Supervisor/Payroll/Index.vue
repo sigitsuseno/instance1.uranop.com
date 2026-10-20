@@ -35,12 +35,12 @@
           Kalkulasi Gaji
         </BaseButton>
 
-        <!-- Import Excel / Update Data -->
+        <!-- Import Excel / Update Data — hanya superadmin (sumber berkasnya File Manager) -->
         <BaseButton
+          v-if="isSuperadmin"
           variant="secondary"
-          :disabled="!selectedPeriodId || importing"
-          :loading="importing"
-          @click="handleUpdateData"
+          :disabled="!selectedPeriodId"
+          @click="showUpdateModal = true"
         >
           <template #icon-left>
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -364,6 +364,26 @@
       </div>
     </BaseCard>
 
+    <!-- Modal: Update Data dari Excel -->
+    <UpdateDataModal
+      :show="showUpdateModal"
+      :periods="periods"
+      :default-period-id="selectedPeriodId"
+      :default-segment="activeSegment || ''"
+      :file="updateFile"
+      @close="showUpdateModal = false"
+      @pick-file="showUpdatePicker = true"
+      @clear-file="updateFile = null"
+      @imported="fetchRecords"
+    />
+
+    <FilePickerModal
+      :show="showUpdatePicker"
+      title="Pilih Berkas Payroll"
+      @close="showUpdatePicker = false"
+      @select="onUpdateFileSelected"
+    />
+
     <!-- Modal: Setting -->
     <BaseModal :show="showSettings" @close="showSettings = false" title="Pengaturan Gaji Karyawan">
       <div class="space-y-4">
@@ -389,19 +409,25 @@ import BaseCard from '@/Components/BaseCard.vue'
 import BaseModal from '@/Components/BaseModal.vue'
 import Badge from '@/Components/Badge.vue'
 import { IconDownload, IconFileInvoice, IconRefresh, IconSearch } from '@/Components/Icons/index.js'
+import FilePickerModal from '@/Components/FilePickerModal.vue'
+import UpdateDataModal from './Components/UpdateDataModal.vue'
 import GajiKaryawanSettings from '@/Components/ReportPage/settings/GajiKaryawanSettings.vue'
 import { useApi } from '@/composables/useApi'
+import { useAuth } from '@/composables/useAuth'
 import { useNotificationStore } from '@/Stores/notification'
 
 const { get, post, put } = useApi()
 const notification = useNotificationStore()
+const { isSuperadmin } = useAuth()
 
 const periods = ref([])
 const selectedPeriodId = ref('')
 const records = ref([])
 const generating = ref(false)
-const importing = ref(false)
 const printing = ref(false)
+const showUpdateModal = ref(false)
+const showUpdatePicker = ref(false)
+const updateFile = ref(null)
 const activeSegment = ref(null)
 const searchQuery = ref('')
 const recapRecords = ref([])
@@ -560,18 +586,8 @@ async function handleGenerate() {
   finally { generating.value = false }
 }
 
-async function handleUpdateData() {
-  if (!selectedPeriodId.value) return
-  importing.value = true
-  try {
-    const body = { period_id: selectedPeriodId.value }
-    if (activeSegment.value) body.segment = activeSegment.value
-
-    const res = await post('/api/v1/supervisor/payroll/breakdown/import', body)
-    notification.success(res.message || 'Data berhasil diupdate dari file.')
-    await fetchRecords()
-  } catch (error) { notification.error(error.message || 'Gagal update data.') }
-  finally { importing.value = false }
+function onUpdateFileSelected(file) {
+  updateFile.value = file
 }
 
 function handleExport() {
