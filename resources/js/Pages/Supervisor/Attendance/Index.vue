@@ -399,7 +399,7 @@ const hasNextPage = () => !!pagination.value.links?.next
                             <tr v-if="employees?.length === 0">
                                 <td colspan="8" class="px-4 py-12 text-center text-(--text-muted)">
                                     <i class="bx bx-data text-4xl mb-3 block text-gray-300"></i>
-                                    Tidak ada data auditor log untuk periode ini
+                                    Tidak ada data log untuk periode ini
                                 </td>
                             </tr>
                         </tbody>
