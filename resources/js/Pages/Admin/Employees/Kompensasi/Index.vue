@@ -823,7 +823,7 @@ onMounted(() => {
                                         ">
                                     {{ formatDaysRemaining(getDaysRemaining(contract.end_date)) }}
                                 </span>
-                                <span v-else class="text-xs text-(--text-muted)">-</span>
+                                <span v-else-if="!contract.is_compensation_paid" class="text-xs text-(--text-muted)">-</span>
                             </td>
 
                             <!-- Status -->

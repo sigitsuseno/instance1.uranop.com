@@ -9,6 +9,7 @@ const { get, post } = useApi();
 const periods = ref([]);
 const fileInput = ref(null);
 const isLoading = ref(true);
+const dragOver = ref(false);
 
 const form = ref({
     attendance_file: null,
@@ -16,6 +17,10 @@ const form = ref({
     processing: false,
     error: null,
 });
+
+const result = ref(null);
+
+const ALLOWED_EXTENSIONS = ['bin', 'dat', 'xls', 'xlsx'];
 
 async function fetchPeriods() {
     try {
@@ -32,28 +37,56 @@ onMounted(() => {
     fetchPeriods();
 });
 
-const handleFileChange = (e) => {
+const acceptFile = (file) => {
     form.value.error = null;
-    form.value.attendance_file = e.target.files[0];
+    result.value = null;
+
+    if (!file) return;
+
+    const extension = file.name.split('.').pop()?.toLowerCase();
+    if (!ALLOWED_EXTENSIONS.includes(extension)) {
+        form.value.attendance_file = null;
+        if (fileInput.value) fileInput.value.value = '';
+        form.value.error = 'Format file tidak didukung. Gunakan .xls/.xlsx (scanlog) atau .bin/.dat.';
+        return;
+    }
+
+    form.value.attendance_file = file;
+};
+
+const handleFileChange = (e) => {
+    acceptFile(e.target.files[0]);
+};
+
+const handleDrop = (e) => {
+    dragOver.value = false;
+    acceptFile(e.dataTransfer?.files?.[0]);
 };
 
 const removeFile = () => {
     form.value.attendance_file = null;
+    result.value = null;
     if (fileInput.value) fileInput.value.value = '';
 };
 
 const submit = async () => {
-    if (!form.value.payroll_period_id) return;
+    if (!form.value.payroll_period_id || !form.value.attendance_file) return;
 
     form.value.processing = true;
     form.value.error = null;
+    result.value = null;
 
     try {
-        const res = await post('/api/v1/supervisor/attendance/import', {
-            payroll_period_id: form.value.payroll_period_id,
-        });
-        alert(res.message || 'Import selesai!');
-        router.push('/supervisor/attendance');
+        const formData = new FormData();
+        formData.append('payroll_period_id', form.value.payroll_period_id);
+        formData.append('file', form.value.attendance_file);
+
+        const res = await post('/api/v1/supervisor/attendance/import', formData);
+
+        result.value = {
+            message: res.message,
+            data: res.data || null,
+        };
     } catch (error) {
         form.value.error = error.response?.data?.message || error.message || 'Terjadi kesalahan saat import';
     } finally {
@@ -96,6 +129,51 @@ const submit = async () => {
                         </div>
                     </div>
 
+                    <!-- Hasil import -->
+                    <div
+                        v-if="result"
+                        class="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg"
+                    >
+                        <div class="flex items-start space-x-3">
+                            <i class="bx bx-check-circle text-xl text-emerald-600 mt-0.5"></i>
+                            <div class="flex-1">
+                                <p class="font-medium text-emerald-800">Import Selesai</p>
+                                <p class="text-sm text-emerald-700 mt-1">{{ result.message }}</p>
+
+                                <dl
+                                    v-if="result.data"
+                                    class="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"
+                                >
+                                    <div class="rounded-md bg-white/70 border border-emerald-200 px-3 py-2">
+                                        <dt class="text-xs text-emerald-700">Baru</dt>
+                                        <dd class="font-semibold text-emerald-900">{{ result.data.inserted ?? 0 }}</dd>
+                                    </div>
+                                    <div class="rounded-md bg-white/70 border border-emerald-200 px-3 py-2">
+                                        <dt class="text-xs text-emerald-700">Ditimpa</dt>
+                                        <dd class="font-semibold text-emerald-900">{{ result.data.updated ?? 0 }}</dd>
+                                    </div>
+                                    <div class="rounded-md bg-white/70 border border-emerald-200 px-3 py-2">
+                                        <dt class="text-xs text-emerald-700">Diabaikan</dt>
+                                        <dd class="font-semibold text-emerald-900">{{ result.data.skipped ?? 0 }}</dd>
+                                    </div>
+                                    <div class="rounded-md bg-white/70 border border-emerald-200 px-3 py-2">
+                                        <dt class="text-xs text-emerald-700">Format</dt>
+                                        <dd class="font-semibold text-emerald-900">{{ result.data.format ?? '-' }}</dd>
+                                    </div>
+                                </dl>
+
+                                <ul
+                                    v-if="result.data?.warnings?.length"
+                                    class="mt-3 space-y-1 text-xs text-amber-700"
+                                >
+                                    <li v-for="(warning, index) in result.data.warnings" :key="index">
+                                        <i class="bx bx-info-circle mr-1"></i>{{ warning }}
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
                     <form @submit.prevent="submit" class="space-y-6">
                         <div>
                             <label class="block text-sm font-medium text-(--text-main)">Periode Payroll</label>
@@ -111,9 +189,15 @@ const submit = async () => {
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-(--text-main)">File Absensi (.bin / .dat)</label>
+                            <label class="block text-sm font-medium text-(--text-main)">File Absensi</label>
                             <div
-                                class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-(--border-soft) border-dashed rounded-lg relative group cursor-pointer hover:border-(--primary) focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-(--primary)"
+                                class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg relative group cursor-pointer transition-colors"
+                                :class="dragOver
+                                    ? 'border-(--primary) bg-(--primary)/5'
+                                    : 'border-(--border-soft) hover:border-(--primary)'"
+                                @dragover.prevent="dragOver = true"
+                                @dragleave.prevent="dragOver = false"
+                                @drop.prevent="handleDrop"
                             >
                                 <div class="space-y-1 text-center">
                                     <i
@@ -130,7 +214,7 @@ const submit = async () => {
                                                 ref="fileInput"
                                                 name="file-upload"
                                                 type="file"
-                                                accept=".bin,.dat"
+                                                accept=".bin,.dat,.xls,.xlsx"
                                                 class="sr-only"
                                                 @change="handleFileChange"
                                             />
@@ -138,7 +222,7 @@ const submit = async () => {
                                         <p class="pl-1">atau tarik dan letakkan disini</p>
                                     </div>
                                     <p class="text-xs text-(--text-muted)">
-                                        Format .bin atau .dat (Maksimal 20MB)
+                                        Maksimal 20MB
                                     </p>
                                 </div>
 
@@ -169,11 +253,11 @@ const submit = async () => {
                                 to="/supervisor/attendance"
                                 class="px-4 py-2 border border-(--border-soft) text-(--text-main) rounded-md text-sm font-medium hover:bg-(--bg-elevated) transition-colors"
                             >
-                                Batal
+                                {{ result ? 'Selesai' : 'Batal' }}
                             </router-link>
                             <button
                                 type="submit"
-                                :disabled="form.processing || !form.payroll_period_id"
+                                :disabled="form.processing || !form.payroll_period_id || !form.attendance_file"
                                 class="inline-flex justify-center py-2 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-[none] focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-all cursor-pointer"
                             >
                                 <i v-if="form.processing" class="bx bx-loader-alt animate-spin mr-2"></i>
