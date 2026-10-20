@@ -27,11 +27,21 @@ use Throwable;
  *   - check_out = scan paling akhir (null kalau cuma ada 1 scan)
  *   - status    = 'present'
  *   - actual_in/actual_out = jam shift roster hari itu (work_hour_start/end)
- *   - lembur    = max(0, check_out - actual_out) menit, lalu dibulatkan ke
- *                 kelipatan 30 menit (minimal 30; di bawah 30 jadi 0);
+ *   - lembur    = max(0, check_out - actual_out) menit, dibulatkan ke kelipatan
+ *                 30 menit (minimal 30; di bawah 30 jadi 0), maksimal 3 jam;
  *                 hari Minggu / libur masuk ke lm apa adanya, bukan lembur
+ *   - check_out = actual_out + (lembur + lm) — jam pulang mengikuti jumlah
+ *                 lemburnya, seperti AttendanceImportService
  *   - hanya karyawan yang terdaftar di supervisor_employee_groups untuk
  *     periode terpilih yang diimport
+ *
+ * Aturan hari (mengikuti AttendanceImportService::processFixedFlex) — hanya
+ * untuk karyawan NON-SHIFT; satpam (pola SHIFT) memang kerja Minggu & libur
+ * sehingga lm-nya nyata dan tidak disentuh:
+ *   - Minggu atau libur nasional (tabel sch_holidays) → status 'off',
+ *     semua jam dikosongkan, lembur & lm 0
+ *   - Sabtu → status 'present' dengan jam scan apa adanya, tapi lembur 0
+ *   - lm hanya diisi untuk pola SHIFT
  *   - baris yang sudah ada ditimpa per (employee_id, date); baris di luar file
  *     dibiarkan apa adanya
  *
@@ -52,6 +62,9 @@ class AttendanceScanImportService
     /** Toleransi pembulatan di batas kelipatan (55 menit → 60) */
     protected const OVERTIME_ROUNDING_TOLERANCE = 5;
 
+    /** Lembur hari kerja maksimal 3 jam */
+    protected const MAX_OVERTIME_MINUTES = 180;
+
     protected string $importBatch;
 
     protected string $fileName;
@@ -67,6 +80,9 @@ class AttendanceScanImportService
 
     /** @var array<string, EmployeeShiftRoster> "employee_id|date" => roster */
     protected array $rostersByKey = [];
+
+    /** @var array<int, string> employee_id => work_pattern_type (fallback hari tanpa roster) */
+    protected array $patternByEmployee = [];
 
     /** @var array<string, int> nip => employee_id */
     protected array $employeeByNip = [];
@@ -170,6 +186,7 @@ class AttendanceScanImportService
     {
         $this->scopeEmployeeIds = [];
         $this->rostersByKey = [];
+        $this->patternByEmployee = [];
         $this->employeeByNip = [];
         $this->holidaySet = [];
         $this->existingKeys = [];
@@ -259,6 +276,10 @@ class AttendanceScanImportService
         foreach ($rosters as $roster) {
             $date = Carbon::parse($roster->date)->toDateString();
             $this->rostersByKey[$roster->employee_id.'|'.$date] = $roster;
+
+            if ($roster->work_pattern_type) {
+                $this->patternByEmployee[$roster->employee_id] = $roster->work_pattern_type;
+            }
         }
 
         // Employee soft-deleted otomatis tersaring oleh global scope.
@@ -465,25 +486,62 @@ class AttendanceScanImportService
             $roster = $this->rostersByKey[$key] ?? null;
             $shift = $roster?->shift;
 
-            $actualIn = ($shift && $shift->work_hour_start)
-                ? Carbon::parse($dateStr.' '.$shift->work_hour_start)
-                : null;
-            $actualOut = ($shift && $shift->work_hour_end)
-                ? Carbon::parse($dateStr.' '.$shift->work_hour_end)
-                : null;
-
             $isSun = $roster !== null ? (bool) $roster->is_sun : $date->dayOfWeek === 0;
             $isSat = $roster !== null ? (bool) $roster->is_sat : $date->dayOfWeek === 6;
-            $isHoliday = ($roster !== null && (bool) $roster->is_holiday)
-                || isset($this->holidaySet[$dateStr]);
+            $isNationalHoliday = isset($this->holidaySet[$dateStr]);
+            $isHoliday = ($roster !== null && (bool) $roster->is_holiday) || $isNationalHoliday;
 
-            $overtimeMinutes = $this->calculateOvertimeMinutes($checkIn, $checkOut, $actualOut);
+            // Satpam (pola SHIFT) memang kerja Minggu & hari libur — lm-nya nyata.
+            // Aturan di bawah ini hanya untuk pola lain, sama seperti
+            // AttendanceImportService::processFixedFlex().
+            $pattern = $roster?->work_pattern_type
+                ?? $this->patternByEmployee[$employeeId]
+                ?? 'FIXED';
+            $isShift = $pattern === 'SHIFT';
 
-            // Hari Minggu / libur → lembur minggu (lm), bukan lembur biasa.
-            // Pembulatan hanya berlaku untuk lembur hari kerja, tidak untuk lm.
-            $isLmDay = $isSun || $isHoliday;
-            $lembur = $isLmDay ? 0 : $this->roundOvertimeMinutes($overtimeMinutes);
-            $lm = $isLmDay ? $overtimeMinutes : 0;
+            // Non-SHIFT: Minggu / libur nasional → off, semua jam dikosongkan
+            $isOffDay = ! $isShift && ($isSun || $isNationalHoliday);
+
+            if ($isOffDay) {
+                $checkIn = null;
+                $checkOut = null;
+                $actualIn = null;
+                $actualOut = null;
+                $lembur = 0;
+                $lm = 0;
+            } else {
+                $actualIn = ($shift && $shift->work_hour_start)
+                    ? Carbon::parse($dateStr.' '.$shift->work_hour_start)
+                    : null;
+                $actualOut = ($shift && $shift->work_hour_end)
+                    ? Carbon::parse($dateStr.' '.$shift->work_hour_end)
+                    : null;
+
+                $overtimeMinutes = $this->calculateOvertimeMinutes($checkIn, $checkOut, $actualOut);
+
+                // Klasifikasi lm memakai libur NASIONAL, bukan flag is_holiday di
+                // roster: roster menandai hari libur mingguan per karyawan
+                // (shift_code 'L'), dan kerja di hari itu tetap lembur biasa.
+                $isLmDay = $isSun || $isNationalHoliday;
+
+                // Non-SHIFT: Sabtu → lembur selalu 0 (jam Sabtu pendek, jadi
+                // selisih check_out vs jadwal bukan lembur), dan lm memang selalu 0.
+                // Maksimal 3 jam, sama seperti AttendanceImportService.
+                $lembur = ($isLmDay || (! $isShift && $isSat))
+                    ? 0
+                    : min($this->roundOvertimeMinutes($overtimeMinutes), self::MAX_OVERTIME_MINUTES);
+
+                $lm = ($isShift && $isLmDay) ? $overtimeMinutes : 0;
+
+                // Jam pulang mengikuti jumlah lembur: check_out = jadwal + lembur.
+                // Dihitung dari lembur + lm supaya hari Minggu/libur satpam
+                // (lembur 0, lm = selisih) tetap menghasilkan jam scan aslinya.
+                // Kalau tidak ada scan pulang atau jadwalnya tidak diketahui,
+                // jam scan dibiarkan apa adanya.
+                if ($checkOut !== null && $actualOut !== null) {
+                    $checkOut = $actualOut->copy()->addMinutes($lembur + $lm);
+                }
+            }
 
             $records[] = [
                 'company_id' => 1,
@@ -491,14 +549,14 @@ class AttendanceScanImportService
                 'employee_id' => $employeeId,
                 'employee_shift_roster_id' => $roster?->id,
                 'date' => $dateStr,
-                'check_in' => $checkIn->format('Y-m-d H:i:s'),
+                'check_in' => $checkIn?->format('Y-m-d H:i:s'),
                 'check_out' => $checkOut?->format('Y-m-d H:i:s'),
                 'actual_in' => $actualIn?->format('Y-m-d H:i:s'),
                 'actual_out' => $actualOut?->format('Y-m-d H:i:s'),
                 'check_in_log_id' => null,
                 'check_out_log_id' => null,
                 'import_batch' => $this->importBatch,
-                'status' => 'present',
+                'status' => $isOffDay ? 'off' : 'present',
                 'late_duration' => 0,
                 'early_leave_duration' => 0,
                 'lembur' => $lembur,

@@ -98,7 +98,7 @@ class AttendanceScanImportTest extends TestCase
      *
      * @param  array<int, string>  $dates
      */
-    private function seedRoster(Employee $employee, array $dates, ?Shift $shift = null): void
+    private function seedRoster(Employee $employee, array $dates, ?Shift $shift = null, string $pattern = 'FIXED', int $isHoliday = 0): void
     {
         foreach ($dates as $date) {
             DB::table('sch_employee_shift_rosters')->insert([
@@ -108,6 +108,8 @@ class AttendanceScanImportTest extends TestCase
                 'date' => $date,
                 'is_sun' => date('N', strtotime($date)) == 7,
                 'is_sat' => date('N', strtotime($date)) == 6,
+                'is_holiday' => $isHoliday,
+                'work_pattern_type' => $pattern,
                 'status' => 'scheduled',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -139,10 +141,10 @@ class AttendanceScanImportTest extends TestCase
      *
      * @param  array<int, string>  $dates
      */
-    private function enroll(Employee $employee, array $dates): void
+    private function enroll(Employee $employee, array $dates, string $pattern = 'FIXED', int $isHoliday = 0): void
     {
         $this->enrollInGroup($employee);
-        $this->seedRoster($employee, $dates);
+        $this->seedRoster($employee, $dates, null, $pattern, $isHoliday);
     }
 
     /**
@@ -276,7 +278,8 @@ class AttendanceScanImportTest extends TestCase
 
         $this->assertNotNull($row);
         $this->assertSame('2026-10-12 08:24:23', $row->check_in);
-        $this->assertSame('2026-10-12 18:14:16', $row->check_out);
+        // Jam pulang mengikuti lembur: 17:00 + 60 menit, bukan jam scan 18:14:16
+        $this->assertSame('2026-10-12 18:00:00', $row->check_out);
         $this->assertSame('2026-10-12 08:00:00', $row->actual_in);
         $this->assertSame('2026-10-12 17:00:00', $row->actual_out);
         $this->assertSame('present', $row->status);
@@ -342,7 +345,7 @@ class AttendanceScanImportTest extends TestCase
     public function test_lm_tidak_dibulatkan(): void
     {
         $employee = $this->makeEmployee('1');
-        $this->enroll($employee, ['2026-10-18']); // Minggu, is_sun = 1
+        $this->enroll($employee, ['2026-10-18'], 'SHIFT'); // Minggu, satpam
 
         // 17:00 + 74 menit = 18:14 → lm mentah 74, bukan 60
         $path = $this->rawWorkbook([
@@ -436,10 +439,10 @@ class AttendanceScanImportTest extends TestCase
         $this->assertSame(0, (int) $this->autolog($employee->id, self::START)->lembur);
     }
 
-    public function test_hari_minggu_masuk_lm_bukan_lembur(): void
+    public function test_non_shift_hari_minggu_jadi_off(): void
     {
         $employee = $this->makeEmployee('1');
-        $this->enroll($employee, ['2026-10-18']); // Minggu, is_sun = 1
+        $this->enroll($employee, ['2026-10-18'], 'FLEX-SHIFT'); // Minggu, is_sun = 1
 
         $path = $this->rawWorkbook([
             ['pin' => '1', 'date' => '18-10-2026', 'time' => '08:00:00'],
@@ -449,15 +452,22 @@ class AttendanceScanImportTest extends TestCase
         $this->import($path);
 
         $row = $this->autolog($employee->id, '2026-10-18');
+        $this->assertSame('off', $row->status);
         $this->assertSame(1, (int) $row->is_sun);
+        // Jam scan dikosongkan, persis seperti jalur .bin
+        $this->assertNull($row->check_in);
+        $this->assertNull($row->check_out);
+        $this->assertNull($row->actual_in);
+        $this->assertNull($row->actual_out);
+        $this->assertSame(0, (int) $row->scan_count);
         $this->assertSame(0, (int) $row->lembur);
-        $this->assertSame(120, (int) $row->lm);
+        $this->assertSame(0, (int) $row->lm);
     }
 
-    public function test_hari_libur_tabel_holiday_masuk_lm(): void
+    public function test_non_shift_libur_nasional_jadi_off(): void
     {
         $employee = $this->makeEmployee('1');
-        $this->enroll($employee, [self::START]);
+        $this->enroll($employee, [self::START], 'FIXED');
 
         Holiday::create([
             'uuid' => (string) Str::uuid(),
@@ -474,9 +484,153 @@ class AttendanceScanImportTest extends TestCase
         $this->import($path);
 
         $row = $this->autolog($employee->id, self::START);
+        $this->assertSame('off', $row->status);
         $this->assertSame(1, (int) $row->is_holiday);
+        $this->assertNull($row->check_in);
         $this->assertSame(0, (int) $row->lembur);
-        $this->assertSame(60, (int) $row->lm);
+        $this->assertSame(0, (int) $row->lm);
+    }
+
+    /**
+     * Roster menandai hari libur mingguan per karyawan (shift_code 'L') lewat
+     * is_holiday — itu bukan libur nasional, jadi barisnya tetap 'present' dan
+     * lemburnya tetap dihitung.
+     */
+    public function test_hari_libur_mingguan_roster_bukan_off(): void
+    {
+        $employee = $this->makeEmployee('1');
+        // Roster is_holiday=1, tapi tanggalnya tidak ada di tabel sch_holidays
+        $this->enroll($employee, [self::START], 'FLEX-SHIFT', 1);
+
+        $path = $this->rawWorkbook([
+            ['pin' => '1', 'date' => '12-10-2026', 'time' => '08:00:00'],
+            ['pin' => '1', 'date' => '12-10-2026', 'time' => '18:14:00'],
+        ]);
+
+        $this->import($path);
+
+        $row = $this->autolog($employee->id, self::START);
+        $this->assertSame('present', $row->status);
+        $this->assertSame('2026-10-12 18:00:00', $row->check_out);
+        $this->assertSame(60, (int) $row->lembur);
+        $this->assertSame(0, (int) $row->lm);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  Lembur maksimal 3 jam & jam pulang mengikuti lembur
+    // ════════════════════════════════════════════════════════════════
+
+    /**
+     * @return array<string, array{0: string, 1: int, 2: string}>
+     *                                                            [jam scan pulang, lembur diharapkan, check_out diharapkan]
+     */
+    public static function capDanJamPulangProvider(): array
+    {
+        return [
+            // 17:00 + 240 menit = 21:00, di-cap jadi 180 → check_out 20:00
+            'lewat 4 jam di-cap 3 jam' => ['21:00:00', 180, '2026-10-12 20:00:00'],
+            // 17:00 + 130 menit = 19:10 → dibulatkan ke 120, check_out 19:00
+            '2 jam 10 menit' => ['19:10:00', 120, '2026-10-12 19:00:00'],
+            // tepat 3 jam, tidak kena cap
+            'tepat 3 jam' => ['20:00:00', 180, '2026-10-12 20:00:00'],
+            // pulang lebih awal dari jadwal → lembur 0, check_out = jadwal
+            'pulang lebih awal' => ['15:50:00', 0, '2026-10-12 17:00:00'],
+        ];
+    }
+
+    #[DataProvider('capDanJamPulangProvider')]
+    public function test_cap_lembur_dan_jam_pulang(string $scanOut, int $expectedLembur, string $expectedCheckOut): void
+    {
+        $employee = $this->makeEmployee('1');
+        $this->enroll($employee, [self::START], 'FLEX-SHIFT');
+
+        $path = $this->rawWorkbook([
+            ['pin' => '1', 'date' => '12-10-2026', 'time' => '08:00:00'],
+            ['pin' => '1', 'date' => '12-10-2026', 'time' => $scanOut],
+        ]);
+
+        $this->import($path);
+
+        $row = $this->autolog($employee->id, self::START);
+        $this->assertSame($expectedLembur, (int) $row->lembur);
+        $this->assertSame($expectedCheckOut, $row->check_out);
+    }
+
+    public function test_satu_scan_tidak_dikarang_jam_pulang(): void
+    {
+        $employee = $this->makeEmployee('1');
+        $this->enroll($employee, [self::START], 'FLEX-SHIFT');
+
+        // Cuma scan masuk — tidak ada scan pulang yang bisa disesuaikan
+        $path = $this->rawWorkbook([
+            ['pin' => '1', 'date' => '12-10-2026', 'time' => '08:00:00'],
+        ]);
+
+        $this->import($path);
+
+        $row = $this->autolog($employee->id, self::START);
+        $this->assertNull($row->check_out);
+        $this->assertSame(1, (int) $row->scan_count);
+        $this->assertSame(0, (int) $row->lembur);
+    }
+
+    public function test_non_shift_hari_sabtu_lembur_nol(): void
+    {
+        $employee = $this->makeEmployee('1');
+        $this->enroll($employee, ['2026-10-17'], 'FLEX-SHIFT'); // Sabtu
+
+        $path = $this->rawWorkbook([
+            ['pin' => '1', 'date' => '17-10-2026', 'time' => '06:50:00'],
+            ['pin' => '1', 'date' => '17-10-2026', 'time' => '17:00:00'],
+        ]);
+
+        $this->import($path);
+
+        $row = $this->autolog($employee->id, '2026-10-17');
+        $this->assertSame('present', $row->status);
+        $this->assertSame(1, (int) $row->is_sat);
+        // Jam scan tetap, tapi lemburnya nol
+        $this->assertSame('2026-10-17 17:00:00', $row->check_out);
+        $this->assertSame(0, (int) $row->lembur);
+        $this->assertSame(0, (int) $row->lm);
+    }
+
+    public function test_satpam_hari_minggu_tetap_diimport_dengan_lm(): void
+    {
+        $employee = $this->makeEmployee('1');
+        $this->enroll($employee, ['2026-10-18'], 'SHIFT'); // Minggu
+
+        $path = $this->rawWorkbook([
+            ['pin' => '1', 'date' => '18-10-2026', 'time' => '08:00:00'],
+            ['pin' => '1', 'date' => '18-10-2026', 'time' => '19:00:00'],
+        ]);
+
+        $this->import($path);
+
+        $row = $this->autolog($employee->id, '2026-10-18');
+        $this->assertSame('present', $row->status);
+        $this->assertSame('2026-10-18 08:00:00', $row->check_in);
+        $this->assertSame('2026-10-18 19:00:00', $row->check_out);
+        $this->assertSame(0, (int) $row->lembur);
+        $this->assertSame(120, (int) $row->lm);
+    }
+
+    public function test_satpam_hari_sabtu_lembur_tetap_dihitung(): void
+    {
+        $employee = $this->makeEmployee('1');
+        $this->enroll($employee, ['2026-10-17'], 'SHIFT'); // Sabtu
+
+        $path = $this->rawWorkbook([
+            ['pin' => '1', 'date' => '17-10-2026', 'time' => '06:00:00'],
+            ['pin' => '1', 'date' => '17-10-2026', 'time' => '18:14:00'],
+        ]);
+
+        $this->import($path);
+
+        $row = $this->autolog($employee->id, '2026-10-17');
+        $this->assertSame('present', $row->status);
+        // 18:14 − 17:00 = 74 menit → 60
+        $this->assertSame(60, (int) $row->lembur);
     }
 
     public function test_tanpa_shift_jadwal_actual_kosong_dan_lembur_nol(): void
