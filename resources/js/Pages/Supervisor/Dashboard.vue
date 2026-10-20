@@ -101,7 +101,7 @@
           <span class="w-8 h-8 rounded-lg bg-(--primary)/10 border border-(--primary)/15 flex items-center justify-center text-(--primary)"><IconChartBar class="w-4 h-4" /></span>
           <div>
             <div class="text-[13px] font-bold tracking-tight text-(--text-main)">Statistik Tim</div>
-            <div class="text-[11px] text-(--text-muted) font-medium">Sumber: attendance_autologs & supervisor_breakdowns</div>
+            <div class="text-[11px] text-(--text-muted) font-medium">Sumber: tabel kehadiran</div>
           </div>
         </div>
       </template>

@@ -103,8 +103,8 @@ class SupervisorDashboardController extends Controller
                 'id'         => $log->id,
                 'user_name'  => $log->user?->name ?? 'System',
                 'action'     => $log->action,
-                'module'     => $log->module,
-                'model_type' => $log->model_type ? class_basename($log->model_type) : null,
+                'module'     => $this->entitasLabel($log->module),
+                'model_type' => $log->model_type ? $this->entitasLabel(class_basename($log->model_type)) : null,
                 'created_at' => $log->created_at?->format('d M Y H:i'),
             ]);
 
@@ -258,6 +258,16 @@ class SupervisorDashboardController extends Controller
                 'data'        => $payData,
             ],
         ]);
+    }
+
+    /**
+     * Label entitas untuk kolom "Detail Aktivitas" di Aktivitas Terbaru.
+     * Modul supervisor ditampilkan dengan nama HRBranch:
+     * Supervisor → HRBranch, SupervisorBreakdown → HRBranchBreakdown.
+     */
+    private function entitasLabel(?string $nama): ?string
+    {
+        return $nama === null ? null : str_replace('Supervisor', 'HRBranch', $nama);
     }
 
     private function monthOption(string $ym, int $count): array
