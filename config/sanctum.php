@@ -20,7 +20,7 @@ return [
 
     'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
         '%s%s%s',
-        'localhost,localhost:3000,localhost:5173,localhost:1420,localhost:8080,127.0.0.1,127.0.0.1:8000,::1,10.0.2.2,10.0.2.2:5173,10.0.2.2:1420,',
+        'localhost,localhost:3000,localhost:5173,localhost:1420,localhost:8080,127.0.0.1,127.0.0.1:8000,::1,10.0.2.2,10.0.2.2:5173,10.0.2.2:1420,edithris.tein.my.id,edithris.tein.my.id:8321,',
         Sanctum::currentApplicationUrlWithPort(),
         ',tauri://localhost,https://tauri.localhost,capacitor://localhost'
     ))),

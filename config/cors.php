@@ -23,6 +23,9 @@ return [
         'http://10.0.2.2:5173',
         'http://10.0.2.2:1420',
         'http://10.0.2.2:8080',
+        // Production domain
+        'http://edithris.tein.my.id:8321',
+        'https://edithris.tein.my.id',
     ],
 
     'allowed_origins_patterns' => [
