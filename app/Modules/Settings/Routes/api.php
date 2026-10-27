@@ -8,6 +8,7 @@ use App\Modules\Settings\Controllers\Api\V1\PayrollConfigApiController;
 use App\Modules\Settings\Controllers\Api\V1\BpjsConfigController;
 use App\Modules\Settings\Controllers\Api\V1\ReportConfigApiController;
 use App\Modules\Settings\Controllers\Api\V1\CekJadwalController;
+use App\Modules\Settings\Controllers\Api\V1\DetectionSimulationController;
 use App\Modules\Settings\Controllers\Api\V1\ExtraEmployeeController;
 use App\Modules\Settings\Controllers\Api\V1\EmployeeReserveController;
 
@@ -112,6 +113,13 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
         Route::get('/',              [ReportConfigApiController::class, 'index']);
         Route::get('/{reportType}',  [ReportConfigApiController::class, 'show']);
         Route::put('/{reportType}',  [ReportConfigApiController::class, 'update']);
+    });
+
+    // Simulasi Deteksi
+    Route::prefix('detection-simulation')->group(function () {
+        Route::get('/', [DetectionSimulationController::class, 'fetch']);
+        Route::get('/settings', [DetectionSimulationController::class, 'getSettings']);
+        Route::put('/settings', [DetectionSimulationController::class, 'updateSettings']);
     });
 
     // Cek Jadwal

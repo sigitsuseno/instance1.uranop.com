@@ -69,6 +69,9 @@ class SupervisorBreakdownImportService
     private const LM_TO_HOURS = 8;
     private const LM_TO_COUNT = 14;
 
+    /** Cache config gaji karyawan — dipakai sekali per import, bukan per baris. */
+    private ?array $gajiConfig = null;
+
     /**
      * Susun rencana import tanpa menulis apa pun.
      *
@@ -92,8 +95,11 @@ class SupervisorBreakdownImportService
 
             $nip = $this->cellString($row[self::COL_ID_NO] ?? null);
 
-            // Baris "GRAND TOTAL", baris kosong, dan baris keterangan tidak punya ID No.
-            if ($nip === '' || ! preg_match('/^\d+$/', $nip)) {
+            // Baris "GRAND TOTAL" dan baris kosong tidak punya ID No. Baris
+            // berisi ID No yang tidak dikenal sengaja TIDAK dilewati di sini —
+            // dibiarkan jatuh ke pencarian karyawan supaya terlaporkan sebagai
+            // unmatched, bukan hilang diam-diam.
+            if ($nip === '') {
                 $skippedNonData++;
                 continue;
             }
@@ -314,10 +320,16 @@ class SupervisorBreakdownImportService
 
     private function findEmployee(string $nip): ?Employee
     {
-        return Employee::with(['groups', 'department', 'position'])
-            ->where('nip', $nip)
-            ->orWhere('employee_code', $nip)
-            ->first();
+        // Dua kolom pencocokan dikelompokkan eksplisit supaya tidak bergantung
+        // pada cara Laravel menyisipkan klausa global scope SoftDeletes —
+        // tanpa grup, klausa `deleted_at is null` bisa ter-AND hanya ke suku
+        // terakhir dan karyawan terhapus tetap cocok lewat NIP.
+        //
+        // Relasi (groups/department/position) sengaja tidak di-eager load: hanya
+        // dipakai saat membuat record baru, sedangkan jalur update tidak butuh.
+        return Employee::where(function ($query) use ($nip) {
+            $query->where('nip', $nip)->orWhere('employee_code', $nip);
+        })->first();
     }
 
     /**
@@ -346,7 +358,8 @@ class SupervisorBreakdownImportService
     /** Pemetaan group karyawan → section A/B, sama seperti calculate(). */
     private function resolveSection(array $groupCodes): ?string
     {
-        $config = PayrollConfig::getConfig('gaji_karyawan');
+        $this->gajiConfig ??= PayrollConfig::getConfig('gaji_karyawan');
+        $config = $this->gajiConfig;
 
         if (array_intersect($groupCodes, $config['sections']['A'] ?? [])) {
             return 'A';

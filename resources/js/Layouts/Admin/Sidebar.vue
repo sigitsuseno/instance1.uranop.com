@@ -162,8 +162,11 @@ const allMenus = [
   {
     title: 'Settings',
     icon: 'bx bx-cog',
-    route: '/admin/settings',
     visible: isSuperadmin.value || isHrmanager.value,
+    children: [
+      { title: 'Pengaturan Sistem', icon: 'bx bx-cog', route: '/admin/settings' },
+      { title: 'Simulasi Deteksi', icon: 'bx bx-scan', route: '/admin/settings/detection-simulation' },
+    ],
   },
   {
     title: 'File Manager',
@@ -215,7 +218,7 @@ function isActive(url) {
   if (!url || url === '#') return false
   const currentPath = route.path
   if (currentPath === url) return true
-  if (url === '/admin') return currentPath === url
+  if (url === '/admin' || url === '/admin/settings') return currentPath === url
   if (currentPath.startsWith(url + '/')) return true
   return false
 }

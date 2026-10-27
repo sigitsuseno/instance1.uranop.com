@@ -7,6 +7,7 @@ use App\Modules\Attendance\Models\ConsecutiveDay;
 use App\Modules\Attendance\Models\ManualDetect;
 use App\Modules\Attendance\Models\RawLog;
 use App\Modules\Attendance\Services\AttendanceSyncService;
+use App\Modules\Attendance\Services\DetectionWindowService;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
@@ -22,10 +23,14 @@ use Illuminate\Support\Str;
 class ManualSyncController extends Controller
 {
     protected AttendanceSyncService $syncService;
+    protected DetectionWindowService $detectionWindows;
 
-    public function __construct(AttendanceSyncService $syncService)
-    {
+    public function __construct(
+        AttendanceSyncService $syncService,
+        DetectionWindowService $detectionWindows
+    ) {
         $this->syncService = $syncService;
+        $this->detectionWindows = $detectionWindows;
     }
 
     /**
@@ -96,37 +101,20 @@ class ManualSyncController extends Controller
             ->get()
             ->keyBy(fn ($item) => $item->employee_id . '|' . $item->date->toDateString());
 
-        // 3. Single RawLog query untuk SELURUH rentang (hindari N query)
-        $windowStart = Carbon::parse($startDate)->toDateString() . ' 05:50:00';
-        $windowEnd   = Carbon::parse($endDate)->addDay()->toDateString() . ' 08:00:00';
+        // 3. Single RawLog query untuk SELURUH rentang (hindari N query).
+        // Rentang mengikuti aturan Simulasi Deteksi: scan pagi di tanggal roster,
+        // scan siang/malam mulai 12 jam setelah tanggal roster (D+1 12:00).
+        $settings    = $this->detectionWindows->settings();
+        $windowStart = Carbon::parse($startDate)->startOfDay();
+        $windowEnd   = Carbon::parse($endDate)->addDay()->setTime(12, 0);
 
         $allRawLogs = RawLog::whereBetween('scan_datetime', [$windowStart, $windowEnd])
             ->orderBy('scan_datetime')
             ->get();
 
-        // Index logs by (date, employee_code) untuk O(1) lookup
-        // Logs < 08:00 juga di-assign ke hari sebelumnya (overnight window)
-        $logsIndex = [];
-        foreach ($allRawLogs as $log) {
-            $scanDate = $log->scan_datetime->toDateString();
-            $scanTime = $log->scan_datetime->format('H:i:s');
-            $empCode  = $log->employee_code;
-
-            // Primary assignment
-            if (!isset($logsIndex[$scanDate])) {
-                $logsIndex[$scanDate] = [];
-            }
-            $logsIndex[$scanDate][$empCode][] = $log;
-
-            // Overnight: logs before 08:00 also belong to previous day
-            if ($scanTime < '08:00:00') {
-                $prevDate = $log->scan_datetime->copy()->subDay()->toDateString();
-                if (!isset($logsIndex[$prevDate])) {
-                    $logsIndex[$prevDate] = [];
-                }
-                $logsIndex[$prevDate][$empCode][] = $log;
-            }
-        }
+        // Index log per employee_code. Pemetaan ke tanggal roster dilakukan
+        // per roster lewat DetectionWindowService (tanpa duplikasi overnight).
+        $logsByEmployee = $allRawLogs->groupBy('employee_code');
 
         // 4. Preload holidays
         $holidayDates = Holiday::whereBetween('date', [$startDate, $endDate])
@@ -138,16 +126,12 @@ class ManualSyncController extends Controller
         $userId     = Auth::id();
         $inserts    = [];
         $updateCount = 0;
-        $skipCount  = 0;
 
         $dateGroups = $rosters->groupBy(fn ($r) => $r->date->toDateString());
 
         foreach ($dateGroups as $dateStr => $dayRosters) {
             $isSunday  = Carbon::parse($dateStr)->isSunday();
             $isHoliday = isset($holidaySet[$dateStr]);
-
-            // Ambil logs untuk tanggal ini dari index (O(1))
-            $dayLogsIndex = $logsIndex[$dateStr] ?? [];
 
             foreach ($dayRosters as $roster) {
                 $employee = $roster->employee;
@@ -156,17 +140,21 @@ class ManualSyncController extends Controller
                 $key = $employee->id . '|' . $dateStr;
                 $existing = $existingMap->get($key);
 
-                // SKIP: sudah lengkap → gak perlu diproses ulang
-                if ($existing && $existing->status === ManualDetect::STATUS_LENGKAP) {
-                    $skipCount++;
-                    continue;
-                }
-
                 $shift           = $roster->shift;
                 $workPattern     = $roster->workPattern;
                 $workPatternType = $roster->work_pattern_type ?? 'FIXED';
                 $empCode         = $employee->nip ?? $employee->employee_code;
-                $empLogs         = collect($dayLogsIndex[$empCode] ?? []);
+                $rule            = $this->detectionWindows->resolveRule(
+                    $roster,
+                    $settings,
+                    $isHoliday,
+                    $isSunday
+                );
+                $empLogs         = $this->detectionWindows->matchedLogs(
+                    $logsByEmployee->get($empCode, collect()),
+                    $dateStr,
+                    $rule
+                );
 
                 // Format logs untuk time_scan_result
                 $allLogsFormatted = $empLogs->map(fn (RawLog $log) => [
@@ -279,14 +267,12 @@ class ManualSyncController extends Controller
         Log::info('ManualSync: fetch done', [
             'inserted' => $insertedCount,
             'updated'  => $updateCount,
-            'skipped'  => $skipCount,
         ]);
 
         // Return paginated data
         return $this->returnRecords($startDate, $endDate, $page, $perPage, $validated, [
             'inserted' => $insertedCount,
             'updated'  => $updateCount,
-            'skipped'  => $skipCount,
         ]);
     }
 
@@ -652,10 +638,9 @@ class ManualSyncController extends Controller
         if (!empty($fetchStats)) {
             $response['fetch_stats'] = $fetchStats;
             $response['message'] = sprintf(
-                '%d record baru, %d diperbarui, %d dilewati (sudah lengkap).',
+                '%d record baru, %d diperbarui.',
                 $fetchStats['inserted'] ?? 0,
-                $fetchStats['updated'] ?? 0,
-                $fetchStats['skipped'] ?? 0
+                $fetchStats['updated'] ?? 0
             );
         }
 
