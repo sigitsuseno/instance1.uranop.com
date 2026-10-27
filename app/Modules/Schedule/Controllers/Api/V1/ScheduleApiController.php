@@ -3,13 +3,18 @@
 namespace App\Modules\Schedule\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Employee\Models\Employee;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
 use App\Modules\Schedule\Exports\RosterMatrixExport;
 use App\Modules\Schedule\Models\Shift;
 use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Schedule\Resources\ScheduleResource;
+use App\Modules\Settings\Models\EmployeeGroup;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Maatwebsite\Excel\Facades\Excel;
 
 class ScheduleApiController extends Controller
@@ -457,9 +462,21 @@ class ScheduleApiController extends Controller
             $import = new \App\Modules\Schedule\Imports\ShiftRosterMatrixImport($request->month, $request->year);
             \Maatwebsite\Excel\Facades\Excel::import($import, $request->file('file'));
 
+            $enrolled = $this->syncPayrollEnrollment(
+                $import->getEmployeeIds(),
+                (int) $request->year,
+                (int) $request->month
+            );
+
+            $message = "Berhasil mengimpor {$import->getInserted()} data baru, {$import->getUpdated()} diupdate.";
+
+            if ($enrolled !== null) {
+                $message .= " {$enrolled} karyawan di-enroll ke siklus payroll.";
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => "Berhasil mengimpor {$import->getInserted()} data baru, {$import->getUpdated()} diupdate.",
+                'message' => $message,
                 'errors' => $import->getErrors()
             ]);
         } catch (\Exception $e) {
@@ -468,6 +485,51 @@ class ScheduleApiController extends Controller
                 'message' => 'Gagal import: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Samakan enrollment Siklus Payroll (PAY-{tahun}-{bulan}) dengan isi file import.
+     *
+     * Semua karyawan yang NIP-nya ada di file di-enroll, kecuali yang tergabung
+     * di group GRP-JKT. Enrollment periode tersebut dihapus dulu, lalu diisi ulang
+     * sesuai file.
+     *
+     * @param  int[]  $employeeIds
+     * @return int|null  Jumlah yang di-enroll, atau null bila file tidak punya NIP valid.
+     */
+    protected function syncPayrollEnrollment(array $employeeIds, int $year, int $month)
+    {
+        // File tanpa NIP valid jangan sampai mengosongkan enrollment periode.
+        if (empty($employeeIds)) {
+            return null;
+        }
+
+        $periodCode = 'PAY-' . $year . '-' . str_pad((string) $month, 2, '0', STR_PAD_LEFT);
+
+        $eligibleIds = Employee::query()
+            ->whereIn('id', $employeeIds)
+            ->whereDoesntHave('groups', fn ($q) => $q->where('reference_code', 'GRP-JKT'))
+            ->pluck('id');
+
+        DB::transaction(function () use ($periodCode, $eligibleIds) {
+            EmployeeGroup::where('reference_code', $periodCode)->delete();
+
+            $timestamp = now();
+            $userId = Auth::id();
+
+            foreach ($eligibleIds->chunk(500) as $chunk) {
+                EmployeeGroup::insert($chunk->map(fn ($employeeId) => [
+                    'uuid' => (string) Str::uuid(),
+                    'employee_id' => $employeeId,
+                    'reference_code' => $periodCode,
+                    'created_by' => $userId,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
+                ])->all());
+            }
+        });
+
+        return $eligibleIds->count();
     }
 
     /**

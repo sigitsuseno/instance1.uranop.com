@@ -21,13 +21,22 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
 {
     use Importable;
 
-    protected $datesByColumn = []; 
+    protected $datesByColumn = [];
     protected $holidays = [];
     protected $errors = [];
     protected $inserted = 0;
     protected $updated = 0;
     protected $month;
     protected $year;
+    protected $periodStart;
+    protected $periodEnd;
+
+    // NIP yang berhasil dikenali dari file (untuk enrollment siklus payroll).
+    protected $employeeIds = [];
+
+    // Cache per karyawan agar import sel kosong tidak query berulang per tanggal.
+    protected $existingDates = [];
+    protected $fallbackPatterns = [];
 
     public function __construct($month, $year)
     {
@@ -51,7 +60,10 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
         $start = Carbon::create($this->year, $this->month, 25)->subMonth();
         $end = Carbon::create($this->year, $this->month, 24);
 
-        $this->holidays = Holiday::whereBetween('date', [$start->format('Y-m-d'), $end->format('Y-m-d')])
+        $this->periodStart = $start->format('Y-m-d');
+        $this->periodEnd = $end->format('Y-m-d');
+
+        $this->holidays = Holiday::whereBetween('date', [$this->periodStart, $this->periodEnd])
             ->pluck('date')
             ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
             ->toArray();
@@ -96,6 +108,8 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
                 continue;
             }
 
+            $this->employeeIds[$employee->id] = true;
+
             $workPattern = null;
             if (! empty($wpCode)) {
                 $workPattern = WorkPattern::where('code', $wpCode)->first();
@@ -109,7 +123,11 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
             foreach ($this->datesByColumn as $dayNum => $dateInfo) {
                 $externalCode = trim($rowArray[$dayNum] ?? '');
 
+                // Sel tanggal kosong tetap dibuatkan roster (tanpa shift).
+                // Termasuk tanggal yang kolomnya tidak ada di file.
                 if ($externalCode === '') {
+                    $this->saveBlankRoster($employee, $workPattern, $dateInfo);
+
                     continue;
                 }
 
@@ -293,9 +311,94 @@ class ShiftRosterMatrixImport implements ToCollection, WithHeadingRow, WithStart
         }
     }
 
+    /**
+     * Roster untuk sel tanggal kosong: tanpa shift, status 'scheduled'
+     * (atau 'holiday' bila tanggalnya libur nasional).
+     *
+     * Record yang sudah ada tidak ditimpa — sel kosong bukan perintah
+     * menghapus jadwal yang sudah diimpor/di-generate.
+     */
+    protected function saveBlankRoster($employee, $workPattern, array $dateInfo)
+    {
+        $date = $dateInfo['date'];
+        $carbonDate = Carbon::parse($date);
+
+        if ($this->hasExistingRoster($employee, $date)) {
+            return;
+        }
+
+        // Fallback: kalo WP dari Excel kosong, cari dari roster existing
+        if (! $workPattern) {
+            $workPattern = $this->fallbackWorkPattern($employee);
+        }
+
+        $isHoliday = in_array($date, $this->holidays);
+
+        EmployeeShiftRoster::create([
+            'uuid' => Str::uuid()->toString(),
+            'employee_id' => $employee->id,
+            'shift_id' => null,
+            'work_pattern_id' => $workPattern?->id,
+            'date' => $date,
+            'shift_code' => null,
+            'work_pattern_type' => $workPattern?->employee_type,
+            'external_code' => $isHoliday ? 'L' : '-',
+            'is_holiday' => $isHoliday,
+            'is_sat' => $carbonDate->dayOfWeek == 6,
+            'is_sun' => $carbonDate->dayOfWeek == 0,
+            'is_half_day' => false,
+            'status' => $isHoliday ? 'holiday' : 'scheduled',
+            'source' => 'import',
+            'created_by' => Auth::id(),
+            'synced_at' => now(),
+        ]);
+
+        $this->existingDates[$employee->id][$date] = true;
+        $this->inserted++;
+    }
+
+    protected function hasExistingRoster($employee, string $date): bool
+    {
+        if (! isset($this->existingDates[$employee->id])) {
+            $this->existingDates[$employee->id] = EmployeeShiftRoster::where('employee_id', $employee->id)
+                ->whereDate('date', '>=', $this->periodStart)
+                ->whereDate('date', '<=', $this->periodEnd)
+                ->pluck('date')
+                ->mapWithKeys(fn ($d) => [Carbon::parse($d)->format('Y-m-d') => true])
+                ->all();
+        }
+
+        return isset($this->existingDates[$employee->id][$date]);
+    }
+
+    protected function fallbackWorkPattern($employee)
+    {
+        if (! array_key_exists($employee->id, $this->fallbackPatterns)) {
+            $existingRoster = EmployeeShiftRoster::where('employee_id', $employee->id)
+                ->whereNotNull('work_pattern_id')
+                ->with('workPattern')
+                ->orderBy('date', 'desc')
+                ->first();
+
+            $this->fallbackPatterns[$employee->id] = $existingRoster?->workPattern;
+        }
+
+        return $this->fallbackPatterns[$employee->id];
+    }
+
     public function getErrors()
     {
         return $this->errors;
+    }
+
+    /**
+     * ID karyawan yang NIP-nya dikenali dari file import.
+     *
+     * @return int[]
+     */
+    public function getEmployeeIds()
+    {
+        return array_keys($this->employeeIds);
     }
 
     public function getInserted()
