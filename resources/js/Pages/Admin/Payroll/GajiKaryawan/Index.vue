@@ -758,30 +758,61 @@
 
         <hr class="border-(--border-soft)" />
 
-        <!-- Cash Bon Field -->
-        <div>
-          <label class="block text-xs font-medium text-(--text-muted) mb-1">
-            Cash Bon <span class="text-(--danger)">(potongan)</span>
-          </label>
-          <div class="relative">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm text-(--text-muted) pointer-events-none">Rp</span>
-            <input
-              v-model.number="editCashbon"
-              type="number"
-              min="0"
-              step="1"
-              class="w-full pl-10 pr-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
-              placeholder="0"
-            />
+        <!-- Revisi & Cash Bon -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-(--text-muted) mb-1">
+              Revisi <span class="text-(--danger)">(pengurangan gaji kotor)</span>
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm text-(--text-muted) pointer-events-none">Rp</span>
+              <input
+                v-model.number="editRevisi"
+                type="number"
+                min="0"
+                step="1"
+                class="w-full pl-10 pr-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+                placeholder="0"
+              />
+            </div>
+            <p class="text-xs text-(--text-soft) mt-1">
+              Isi nilai positif; disimpan minus dan mengurangi TOTAL. Nilai ini <strong>menggantikan</strong>
+              revisi otomatis (segmen A: −TJ Masa Kerja), jadi jangan dikosongkan.
+            </p>
           </div>
-          <p class="text-xs text-(--text-soft) mt-1">Nilai ini akan mengurangi gaji bersih (TRIMA).</p>
+
+          <div>
+            <label class="block text-xs font-medium text-(--text-muted) mb-1">
+              Cash Bon <span class="text-(--danger)">(potongan)</span>
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm text-(--text-muted) pointer-events-none">Rp</span>
+              <input
+                v-model.number="editCashbon"
+                type="number"
+                min="0"
+                step="1"
+                class="w-full pl-10 pr-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
+                placeholder="0"
+              />
+            </div>
+            <p class="text-xs text-(--text-soft) mt-1">Nilai ini akan mengurangi gaji bersih (TRIMA).</p>
+          </div>
         </div>
 
         <!-- Preview perhitungan -->
         <div v-if="editingRecord" class="bg-(--bg-soft) rounded-lg p-3 text-xs space-y-1 text-(--text-muted)">
           <div class="flex justify-between">
+            <span>Gaji Kotor (sebelum revisi)</span>
+            <span class="font-mono">Rp {{ formatCurrency(editGajiKotorDasar, true) }}</span>
+          </div>
+          <div class="flex justify-between">
+            <span>Revisi</span>
+            <span class="font-mono text-(--danger)">- Rp {{ formatCurrency(editRevisiPotongan, true) }}</span>
+          </div>
+          <div class="flex justify-between">
             <span>Gaji Kotor</span>
-            <span class="font-mono">Rp {{ formatCurrency(editingRecord.total, true) }}</span>
+            <span class="font-mono">Rp {{ formatCurrency(editGajiKotor, true) }}</span>
           </div>
           <div class="flex justify-between">
             <span>Cash Bon</span>
@@ -858,6 +889,7 @@ const editLm = ref(0)
 const editLmCount = ref(0)
 const editLemburCount = ref(0)
 const editCashbon = ref(0)
+const editRevisi = ref(0)
 const savingUpahLembur = ref(false)
 
 // Pengaturan Khusus hari_kerja (per karyawan per periode) state
@@ -871,9 +903,21 @@ const overridesMeta = ref({ is_split: false, fixed_working_day: 25 })
 const deleteOverrideTarget = ref(null)
 const processingDeleteOverride = ref(false)
 
+// Revisi = pengurangan gaji kotor. Disimpan di pay_records.revisi sebagai nilai negatif,
+// jadi yang diisi di modal adalah nilai positif.
+const editRevisiPotongan = computed(() => Math.abs(parseFloat(editRevisi.value) || 0))
+
+// gaji_kotor di record sudah termasuk revisi lama → kembalikan dulu ke nilai dasarnya
+const editGajiKotorDasar = computed(() => {
+  if (!editingRecord.value) return 0
+  return (parseFloat(editingRecord.value.total) || 0) - (parseFloat(editingRecord.value.revisi) || 0)
+})
+
+const editGajiKotor = computed(() => editGajiKotorDasar.value - editRevisiPotongan.value)
+
 const hitungPerkiraanTrima = computed(() => {
   if (!editingRecord.value) return 0
-  const total = parseFloat(editingRecord.value.total) || 0
+  const total = editGajiKotor.value
   const bpjsTk = parseFloat(editingRecord.value.bpjs_tk) || 0
   const bpjsKs = parseFloat(editingRecord.value.bpjs_ks) || 0
   const bpjsPen = parseFloat(editingRecord.value.bpjs_pen) || 0
@@ -1257,6 +1301,7 @@ function openEditModal(record) {
   editLm.value = record.lm || 0
   editLmCount.value = (record.lm_count ?? record.lm) || 0
   editLemburCount.value = record.lembur_count || 0
+  editRevisi.value = Math.abs(record.revisi || 0)
   editCashbon.value = record.cashbon || 0
   isEditModalOpen.value = true
 }
@@ -1267,6 +1312,7 @@ function closeEditModal() {
   editLm.value = 0
   editLmCount.value = 0
   editLemburCount.value = 0
+  editRevisi.value = 0
   editCashbon.value = 0
 }
 
@@ -1278,15 +1324,17 @@ async function saveUpahLembur() {
       lm: editLm.value || 0,
       lm_count: editLmCount.value || 0,
       lembur_count: editLemburCount.value || 0,
+      revisi: editRevisiPotongan.value,
       cashbon: editCashbon.value || 0,
     })
-    
+
     // Update local record
     const idx = records.value.findIndex(r => r.id === editingRecord.value.id)
     if (idx !== -1) {
       records.value[idx].lm = res.data.lm
       records.value[idx].lm_count = res.data.lm_count
       records.value[idx].lembur_count = res.data.lembur_count
+      records.value[idx].revisi = res.data.revisi
       records.value[idx].cashbon = res.data.cashbon
       records.value[idx].upah_lembur = res.data.upah_lembur
       records.value[idx].pblt = res.data.pblt
