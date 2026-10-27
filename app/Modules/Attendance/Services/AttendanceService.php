@@ -172,9 +172,11 @@ class AttendanceService
      * Auto-lengkapi attendance untuk karyawan dalam grup tertentu.
      *
      * Rules:
-     * - Holiday (dari sch_holidays): lengkapi dari roster work_hour_start/end → status='libur'
-     * - Minggu: lengkapi dari roster → status='libur' (ada scan) / 'off' (tidak ada)
+     * - Minggu / Holiday tanpa scan (check_in & check_out null) → status='off'
+     * - Holiday (ada scan): lengkapi dari roster work_hour_start/end → status='libur'
+     * - Minggu (ada scan): lengkapi dari roster → status='hadir'
      * - Hari kerja: cek cuti → 'cuti', else lengkapi dari roster → 'hadir', else 'absent'
+     * - Cuti/izin approved selalu dipertahankan, termasuk di Minggu/holiday.
      *
      * @param  string[]  $groupCodes  e.g. ['GRP-JKT'] atau ['GRP-ALLIN', 'GRP-GD', 'GRP-SS']
      * @param  string    $startDate   Y-m-d
@@ -280,6 +282,7 @@ class AttendanceService
             'off'     => 0,
             'absent'  => 0,
             'cuti'    => 0,
+            'leave'   => 0,
             'hadir'   => 0,
         ];
 
@@ -303,6 +306,23 @@ class AttendanceService
                 $workStart = $shift?->work_hour_start;
                 $workEnd   = $shift?->work_hour_end;
 
+                // Cek cuti — dipakai semua cabang supaya status cuti tidak tertimpa
+                $hasLeave  = false;
+                $leaveCode = null;
+                $empLeaves = $leaves->get($p->employee_id);
+
+                if ($empLeaves) {
+                    foreach ($empLeaves as $leave) {
+                        $leaveStart = Carbon::parse($leave->start_date);
+                        $leaveEnd   = Carbon::parse($leave->end_date);
+                        if ($dateCarbon->between($leaveStart, $leaveEnd)) {
+                            $hasLeave  = true;
+                            $leaveCode = strtolower($leave->leaveType->code ?? 'ct');
+                            break;
+                        }
+                    }
+                }
+
                 $update = [];
 
                 // Cek consecutive day
@@ -319,26 +339,37 @@ class AttendanceService
                     }
                 }
 
-                // ── HOLIDAY ──────────────────────────────────
-                if ($isHoliday) {
-                    if ($hasAny) {
-                        if (! $hasCheckIn && $workStart) {
-                            $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
-                        }
-                        if (! $hasCheckOut && $workEnd) {
-                            $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
-                        }
-                        $update['status'] = AttendancePrepare::STATUS_LIBUR;
+                // ── MINGGU / HOLIDAY TANPA SCAN → OFF ────────
+                // check_in & check_out kosong di Minggu/holiday = off (bukan alfa).
+                // Cuti/izin approved tetap dipertahankan statusnya.
+                if (($isSunday || $isHoliday) && ! $hasCheckIn && ! $hasCheckOut) {
+                    if ($hasLeave) {
+                        $update['status'] = $leaveCode;
+                        $stats['leave']++;
                     } else {
-                        // No scan on holiday → off (bukan absent/libur)
                         $update['status'] = AttendancePrepare::STATUS_OFF;
+                        $stats['off']++;
                     }
+                    $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
+                }
+                // ── HOLIDAY (ada scan) ───────────────────────
+                elseif ($isHoliday) {
+                    if (! $hasCheckIn && $workStart) {
+                        $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
+                    }
+                    if (! $hasCheckOut && $workEnd) {
+                        $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
+                    }
+                    $update['status']        = AttendancePrepare::STATUS_LIBUR;
                     $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
                     $stats['holiday']++;
                 }
-                // ── SUNDAY (tanpa roster) ───────────────────
-                elseif ($isSunday && !$roster) {
-                    if ($hasAny) {
+                // ── MINGGU (ada scan) ────────────────────────
+                elseif ($isSunday) {
+                    if ($hasLeave) {
+                        $update['status'] = $leaveCode;
+                        $stats['leave']++;
+                    } else {
                         if (! $hasCheckIn && $workStart) {
                             $update['check_in'] = Carbon::parse($dateStr . ' ' . $workStart);
                         }
@@ -346,35 +377,16 @@ class AttendanceService
                             $update['check_out'] = Carbon::parse($dateStr . ' ' . $workEnd);
                         }
                         $update['status'] = AttendancePrepare::STATUS_HADIR;
-                    } else {
-                        $update['status'] = AttendancePrepare::STATUS_OFF;
+                        $stats['hadir']++;
                     }
                     $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
-                    $stats['off']++;
                 }
                 // ── WEEKDAY (Mon-Sat) ────────────────────────
                 else {
-                    // Cek cuti
-                    $hasLeave  = false;
-                    $leaveCode = null;
-                    $empLeaves = $leaves->get($p->employee_id);
-
-                    if ($empLeaves) {
-                        foreach ($empLeaves as $leave) {
-                            $leaveStart = Carbon::parse($leave->start_date);
-                            $leaveEnd   = Carbon::parse($leave->end_date);
-                            if ($dateCarbon->between($leaveStart, $leaveEnd)) {
-                                $hasLeave  = true;
-                                $leaveCode = strtolower($leave->leaveType->code ?? 'ct');
-                                break;
-                            }
-                        }
-                    }
-
                     if ($hasLeave) {
                         $update['status']        = $leaveCode ?? 'ct';
                         $update['review_status'] = AttendancePrepare::REVIEW_LENGKAP;
-                        $stats['leave'] = ($stats['leave'] ?? 0) + 1;
+                        $stats['leave']++;
                     } elseif ($roster && !$workStart && !$workEnd && !$hasAny) {
                         // Roster Libur (no working hours) + no scan → off
                         $update['status']        = AttendancePrepare::STATUS_OFF;
