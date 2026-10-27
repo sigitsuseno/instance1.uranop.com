@@ -48,6 +48,16 @@
         </button>
 
         <button
+          @click="exportRosterExcel"
+          :disabled="isExporting"
+          class="h-10 px-4 font-semibold rounded-md flex items-center text-xs transition-colors"
+          :class="isExporting ? 'bg-sky-50/50 text-sky-600/50 cursor-not-allowed dark:bg-sky-500/5 dark:text-sky-400/50' : 'bg-sky-50 text-sky-600 hover:bg-sky-100 dark:bg-sky-500/10 dark:text-sky-400'"
+        >
+          <span v-if="isExporting" class="inline-block w-4 h-4 border-2 border-sky-600 border-t-transparent rounded-full animate-spin mr-2"></span>
+          {{ isExporting ? 'Mengexport...' : 'Export Excel' }}
+        </button>
+
+        <button
           @click="updateRosterCuti"
           :disabled="auth.isManajemen || updatingCuti"
           class="h-10 px-4 font-semibold rounded-md flex items-center text-xs transition-colors"
@@ -387,6 +397,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useScheduleStore } from '../../../../Stores/schedule'
 import { useApi } from '../../../../composables/useApi'
 import { useAuth } from '../../../../composables/useAuth'
+import { fetchFileBlob, saveBlob } from '../../../../composables/useFileBlob'
 import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import BaseModal from '../../../../Components/BaseModal.vue'
@@ -433,6 +444,9 @@ const importResult = ref(null)
 
 // ─── Update Cuti State ───────────────────────
 const updatingCuti = ref(false)
+
+// ─── Export State ────────────────────────────
+const isExporting = ref(false)
 
 const monthLabels = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -615,6 +629,29 @@ function formatBytes(bytes) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
   return (bytes / 1048576).toFixed(1) + ' MB'
+}
+
+// ─── Export Excel ────────────────────────────
+async function exportRosterExcel() {
+  if (isExporting.value) return
+
+  isExporting.value = true
+
+  try {
+    const params = new URLSearchParams({
+      year: selectedYear.value,
+      month: selectedMonth.value,
+    })
+    if (departmentFilter.value) params.set('department_id', departmentFilter.value)
+    if (searchQuery.value) params.set('search', searchQuery.value)
+
+    const blob = await fetchFileBlob(`/api/schedule/roster/export?${params.toString()}`)
+    saveBlob(blob, `Jadwal ${monthLabels[selectedMonth.value - 1]} ${selectedYear.value}.xlsx`)
+  } catch (error) {
+    alert('Gagal export jadwal: ' + (error.message || 'Unknown error'))
+  } finally {
+    isExporting.value = false
+  }
 }
 
 // ─── Update Cuti ─────────────────────────────

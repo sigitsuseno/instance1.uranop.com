@@ -18,6 +18,7 @@ Route::middleware('auth:sanctum')->prefix('schedule')->group(function () {
     
     Route::get('/calendars', [ScheduleApiController::class, 'getCalendars']);
     Route::get('/roster', [ScheduleApiController::class, 'getRoster']);
+    Route::get('/roster/export', [ScheduleApiController::class, 'exportRoster']);
     Route::post('/roster/generate', [ScheduleApiController::class, 'generateRoster']);
     Route::post('/roster/import', [ScheduleApiController::class, 'importRoster']);
     Route::post('/roster/override', [ScheduleApiController::class, 'overrideRoster']);

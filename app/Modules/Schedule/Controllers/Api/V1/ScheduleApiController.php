@@ -5,10 +5,12 @@ namespace App\Modules\Schedule\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Leave\Models\LeaveRequest;
 use App\Modules\Leave\Models\LeaveType;
+use App\Modules\Schedule\Exports\RosterMatrixExport;
 use App\Modules\Schedule\Models\Shift;
 use App\Modules\Schedule\Models\WorkPattern;
 use App\Modules\Schedule\Resources\ScheduleResource;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ScheduleApiController extends Controller
 {
@@ -351,6 +353,96 @@ class ScheduleApiController extends Controller
         });
 
         return response()->json(['data' => $result]);
+    }
+
+    /**
+     * Export roster for a period as an Excel matrix (NIP, NAMA LENGKAP, WP, dates).
+     */
+    public function exportRoster(Request $request)
+    {
+        $validated = $request->validate([
+            'year' => 'required|integer',
+            'month' => 'required|integer|min:1|max:12',
+            'department_id' => 'nullable|integer',
+            'search' => 'nullable|string',
+        ]);
+
+        $year = (int) $validated['year'];
+        $month = (int) $validated['month'];
+
+        $start = \Carbon\Carbon::create($year, $month, 25)->subMonth();
+        $end = \Carbon\Carbon::create($year, $month, 24);
+        $periodStart = $start->format('Y-m-d');
+        $periodEnd = $end->format('Y-m-d');
+
+        $employees = \App\Modules\Employee\Models\Employee::query()
+            ->whereHas('shiftRosters', function ($q) use ($periodStart, $periodEnd) {
+                $q->whereBetween('date', [$periodStart, $periodEnd]);
+            })
+            ->when(! empty($validated['department_id']), function ($q) use ($validated) {
+                $q->where('department_id', $validated['department_id']);
+            })
+            ->when(! empty($validated['search']), function ($q) use ($validated) {
+                $search = $validated['search'];
+                $q->where(function ($q2) use ($search) {
+                    $q2->where('name', 'like', "%{$search}%")
+                        ->orWhere('employee_code', 'like', "%{$search}%");
+                });
+            })
+            ->get();
+
+        $rosters = \App\Modules\Schedule\Models\EmployeeShiftRoster::with(['shift', 'workPattern'])
+            ->whereBetween('date', [$periodStart, $periodEnd])
+            ->whereIn('employee_id', $employees->pluck('id'))
+            ->get()
+            ->groupBy('employee_id');
+
+        $dates = [];
+        $current = $start->copy();
+        while ($current <= $end) {
+            $dates[] = $current->format('Y-m-d');
+            $current->addDay();
+        }
+
+        $rows = $employees->map(function ($employee) use ($rosters, $dates) {
+            $employeeRosters = $rosters->get($employee->id, collect())
+                ->keyBy(fn ($roster) => $roster->date->format('Y-m-d'));
+
+            // WP diambil dari relasi roster -> work_pattern -> code.
+            $workPatternCode = $employeeRosters
+                ->filter(fn ($roster) => $roster->workPattern !== null)
+                ->countBy(fn ($roster) => $roster->workPattern->code)
+                ->sortDesc()
+                ->keys()
+                ->first();
+
+            $row = [
+                (string) ($employee->nip ?: $employee->employee_code),
+                $employee->name,
+                $workPatternCode ?? '',
+            ];
+
+            foreach ($dates as $date) {
+                $roster = $employeeRosters->get($date);
+
+                $row[] = $roster
+                    ? ($roster->shift?->external_code ?? ($roster->is_holiday ? 'L' : '-'))
+                    : '';
+            }
+
+            return $row;
+        })->values()->all();
+
+        $monthNames = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember',
+        ];
+
+        $title = $monthNames[$month].' '.$year;
+        $export = new RosterMatrixExport($rows, $start, $end, $title);
+
+        return Excel::download($export, "Jadwal {$title}.xlsx");
     }
 
     public function importRoster(Request $request)
