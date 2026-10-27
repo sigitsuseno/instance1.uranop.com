@@ -5,6 +5,7 @@ namespace App\Modules\Settings\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Modules\Attendance\Models\RawLog;
 use App\Modules\Attendance\Services\DetectionWindowService;
+use App\Modules\Employee\Models\Employee;
 use App\Modules\Payroll\Models\PayPeriod;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
 use App\Modules\Settings\Models\SystemSetting;
@@ -67,15 +68,64 @@ class DetectionSimulationController extends Controller
     }
 
     /**
-     * GET /api/v1/settings/detection-simulation?period_id=X&page=1&per_page=50&search=
+     * GET /api/v1/settings/detection-simulation/employees?period_id=X&search=
+     *
+     * Daftar karyawan yang punya roster pada periode terpilih, dipakai untuk
+     * combobox pemilihan karyawan di halaman simulasi deteksi.
+     */
+    public function employees(Request $request)
+    {
+        $request->validate([
+            'period_id' => 'required|exists:pay_periods,id',
+            'search'    => 'nullable|string',
+        ]);
+
+        $period = PayPeriod::findOrFail($request->period_id);
+        $search = trim((string) $request->input('search', ''));
+
+        $employeeIds = EmployeeShiftRoster::query()
+            ->whereBetween('date', [
+                $period->start_date->toDateString(),
+                $period->end_date->toDateString(),
+            ])
+            ->select('employee_id')
+            ->distinct()
+            ->pluck('employee_id');
+
+        $query = Employee::query()
+            ->select('id', 'nip', 'employee_code', 'name')
+            ->whereIn('id', $employeeIds)
+            ->orderBy('name');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('nip', 'like', "%{$search}%")
+                    ->orWhere('employee_code', 'like', "%{$search}%");
+            });
+        }
+
+        return response()->json([
+            'data' => $query->get()->map(fn (Employee $employee) => [
+                'id'   => $employee->id,
+                'nip'  => $employee->nip,
+                'name' => $employee->name,
+            ]),
+        ]);
+    }
+
+    /**
+     * GET /api/v1/settings/detection-simulation?period_id=X&page=1&per_page=50&search=&employee_ids[]=1
      */
     public function fetch(Request $request)
     {
         $request->validate([
-            'period_id' => 'required|exists:pay_periods,id',
-            'page'      => 'nullable|integer|min:1',
-            'per_page'  => 'nullable|integer|min:10|max:200',
-            'search'    => 'nullable|string',
+            'period_id'      => 'required|exists:pay_periods,id',
+            'page'           => 'nullable|integer|min:1',
+            'per_page'       => 'nullable|integer|min:10|max:200',
+            'search'         => 'nullable|string',
+            'employee_ids'   => 'nullable|array',
+            'employee_ids.*' => 'integer|min:1',
         ]);
 
         $period   = PayPeriod::findOrFail($request->period_id);
@@ -86,12 +136,23 @@ class DetectionSimulationController extends Controller
         $startDate = $period->start_date->toDateString();
         $endDate   = $period->end_date->toDateString();
 
+        // Kosong = semua karyawan; terisi = hanya karyawan yang dicentang.
+        $employeeIds = collect($request->input('employee_ids', []))
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
         $query = EmployeeShiftRoster::with([
                 'employee:id,employee_code,nip,name',
                 'shift:id,code,name,external_code',
                 'workPattern:id,code,name,employee_type',
             ])
             ->whereBetween('date', [$startDate, $endDate]);
+
+        if ($employeeIds->isNotEmpty()) {
+            $query->whereIn('employee_id', $employeeIds);
+        }
 
         if ($search !== '') {
             $query->whereHas('employee', function ($q) use ($search) {

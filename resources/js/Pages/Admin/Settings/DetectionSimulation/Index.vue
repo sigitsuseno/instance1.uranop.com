@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useApi } from '../../../../composables/useApi'
 import { useNotificationStore } from '../../../../Stores/notification'
 import BaseButton from '../../../../Components/BaseButton.vue'
+import MultiSearchableSelect from '../../../../Components/MultiSearchableSelect.vue'
 
 const { get, put } = useApi()
 const notification = useNotificationStore()
@@ -19,6 +20,12 @@ const currentPage = ref(1)
 const lastPage = ref(1)
 const perPage = ref(50)
 const meta = ref({ total: 0, detected: 0, not_detected: 0, no_rule: 0 })
+
+// ==== Employee filter ====
+const employeeOptions = ref([])
+const selectedEmployeeIds = ref([])
+const loadingEmployees = ref(false)
+const hasEmployeeFilter = computed(() => selectedEmployeeIds.value.length > 0)
 
 // ==== Settings (offcanvas) ====
 const showSettings = ref(false)
@@ -94,6 +101,29 @@ const fetchPeriods = async () => {
   }
 }
 
+const fetchEmployees = async () => {
+  if (!selectedPeriodId.value) {
+    employeeOptions.value = []
+    return
+  }
+
+  loadingEmployees.value = true
+  try {
+    const params = new URLSearchParams({ period_id: selectedPeriodId.value })
+    const res = await get(`/api/v1/settings/detection-simulation/employees?${params}`)
+    employeeOptions.value = (res.data || []).map((e) => ({
+      value: e.id,
+      label: e.name,
+      sublabel: e.nip || null,
+    }))
+  } catch (e) {
+    employeeOptions.value = []
+    notification.error('Gagal memuat daftar karyawan.')
+  } finally {
+    loadingEmployees.value = false
+  }
+}
+
 const fetchSettings = async () => {
   loadingSettings.value = true
   try {
@@ -148,6 +178,9 @@ const fetchData = async (page = 1) => {
       per_page: perPage.value,
     })
 
+    // Hanya tampilkan baris milik karyawan yang dicentang di combobox.
+    selectedEmployeeIds.value.forEach((id) => params.append('employee_ids[]', id))
+
     const res = await get(`/api/v1/settings/detection-simulation?${params}`)
     rows.value = res.data?.rows || []
     windows.value = res.data?.windows || null
@@ -172,14 +205,29 @@ const fetchData = async (page = 1) => {
   }
 }
 
+// Timer untuk auto-refresh saat centang karyawan (debounce agar mencentang
+// beberapa nama sekaligus tidak memicu banyak request).
+let refetchTimer = null
+
 watch(selectedPeriodId, () => {
+  clearTimeout(refetchTimer)
   hasFetched.value = false
   rows.value = []
   windows.value = null
   currentPage.value = 1
   lastPage.value = 1
   meta.value = { total: 0, detected: 0, not_detected: 0, no_rule: 0 }
+  selectedEmployeeIds.value = []
+  fetchEmployees()
 })
+
+watch(selectedEmployeeIds, () => {
+  if (!hasFetched.value) return
+  clearTimeout(refetchTimer)
+  refetchTimer = setTimeout(() => fetchData(1), 350)
+})
+
+onBeforeUnmount(() => clearTimeout(refetchTimer))
 
 // ==== Helpers ====
 const formatDate = (dateStr) => {
@@ -292,6 +340,18 @@ onMounted(() => {
         </select>
       </div>
 
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-medium text-(--text-muted)">Karyawan</label>
+        <MultiSearchableSelect
+          v-model="selectedEmployeeIds"
+          :options="employeeOptions"
+          :loading="loadingEmployees"
+          :disabled="!selectedPeriodId || loadingEmployees"
+          placeholder="Semua karyawan"
+          class="w-[240px]"
+        />
+      </div>
+
       <BaseButton :loading="loading" :disabled="!selectedPeriodId" @click="fetchData(1)">
         <template #icon-left>
           <i class="bx bx-refresh text-lg"></i>
@@ -332,9 +392,19 @@ onMounted(() => {
       </div>
 
       <div v-else-if="rows.length === 0" class="flex-1 p-12 flex flex-col items-center justify-center text-center">
-        <i class="bx bx-calendar-x text-4xl text-(--text-soft) mb-3"></i>
-        <p class="text-sm font-medium text-(--text-main)">Tidak ada roster</p>
-        <p class="text-sm text-(--text-muted) mt-1">Periode ini belum punya data jadwal karyawan.</p>
+        <i class="bx text-4xl text-(--text-soft) mb-3" :class="hasEmployeeFilter ? 'bx-user-x' : 'bx-calendar-x'"></i>
+        <p class="text-sm font-medium text-(--text-main)">
+          {{ hasEmployeeFilter ? 'Tidak ada baris untuk karyawan terpilih' : 'Tidak ada roster' }}
+        </p>
+        <p class="text-sm text-(--text-muted) mt-1">
+          <template v-if="hasEmployeeFilter">
+            Karyawan yang dipilih tidak punya roster pada periode ini. Bersihkan pilihan karyawan
+            untuk melihat semua.
+          </template>
+          <template v-else>
+            Periode ini belum punya data jadwal karyawan.
+          </template>
+        </p>
       </div>
 
       <div v-else class="flex-1 min-h-0 overflow-auto">

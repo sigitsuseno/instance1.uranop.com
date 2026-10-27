@@ -118,6 +118,7 @@ Route::prefix('v1/settings')->middleware('auth:sanctum')->group(function () {
     // Simulasi Deteksi
     Route::prefix('detection-simulation')->group(function () {
         Route::get('/', [DetectionSimulationController::class, 'fetch']);
+        Route::get('/employees', [DetectionSimulationController::class, 'employees']);
         Route::get('/settings', [DetectionSimulationController::class, 'getSettings']);
         Route::put('/settings', [DetectionSimulationController::class, 'updateSettings']);
     });
