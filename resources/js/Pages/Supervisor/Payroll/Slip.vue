@@ -389,7 +389,9 @@ function buildNormalSlipData(r) {
   const hk = fixedWorkDay.value
   const ratePerHari = hk > 0 ? r.gaji_pokok / hk : 0
   const hkAmount = hk * ratePerHari
-  const deductDays = r.deduct_day || 0
+  // Potongan kehadiran = (hari kerja pengaturan − hari kerja aktual) × upah/hari.
+  // Backend sudah mengirim deduct_day hasil hitungan ini; fallback disamakan.
+  const deductDays = r.deduct_day ?? Math.max(0, hk - (parseInt(r.hari_kerja) || 0))
   const potKehadiran = r.pot_kehadiran || Math.round(deductDays * ratePerHari)
   const subTotalEarnings = hkAmount + r.tj_masa_kerja + r.tunjangan + r.premi_hadir + r.upah_lembur + (r.revisi || 0)
   const subTotalDeduction = r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + potKehadiran
@@ -400,7 +402,9 @@ function buildSplitPartData(r, part) {
   const hk = r.hk || fixedWorkDay.value
   const ratePerHari = fixedWorkDay.value > 0 ? r.gaji_pokok / fixedWorkDay.value : 0
   const hkAmount = hk * ratePerHari
-  const deductDays = r.deduct_day || 0
+  // Potongan kehadiran = (hari kerja pengaturan − hari kerja aktual) × upah/hari.
+  // Backend sudah mengirim deduct_day hasil hitungan ini; fallback disamakan.
+  const deductDays = r.deduct_day ?? Math.max(0, hk - (parseInt(r.hari_kerja) || 0))
   const potKehadiran = r.pot_kehadiran || Math.round(deductDays * ratePerHari)
   const subTotalEarnings = hkAmount + r.tj_masa_kerja + r.tunjangan + r.premi_hadir + r.upah_lembur + (r.revisi || 0)
   const subTotalDeduction = r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + potKehadiran

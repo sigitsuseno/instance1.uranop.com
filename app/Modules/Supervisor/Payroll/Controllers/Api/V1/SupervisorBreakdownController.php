@@ -519,7 +519,10 @@ class SupervisorBreakdownController extends Controller
                     $gajiKotor = $gaji + $tunjangan + $upahLembur + $premiHadir + $revisi + $tjMasaKerja;
 
                     // ── Potongan ──
-                    $potKehadiran = round($deductDay * ($gajiPokok / $fixedDays), 2);
+                    // Potongan kehadiran = (hari kerja pengaturan − hari_kerja) × upah/hari,
+                    // sama dengan yang dipakai slip (SupervisorPayslipController::potonganKehadiran()).
+                    // deduct_day tetap disimpan sebagai info absensi, bukan dasar potongan.
+                    $potKehadiran = round(max(0, $hkSegment - $hariKerja) * ($gajiPokok / $fixedDays), 2);
                     $totalPotongan = $bpjsTk + $bpjsKs + $bpjsPen + $pph + $cashbon;
 
                     // ── Pembulatan 100 ──

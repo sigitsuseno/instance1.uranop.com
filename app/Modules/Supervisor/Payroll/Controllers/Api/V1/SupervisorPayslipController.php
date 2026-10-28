@@ -35,8 +35,11 @@ class SupervisorPayslipController extends Controller
         $segment = $validated['segment'] ?? null;
         $perPage = (int) ($validated['per_page'] ?? 50);
 
-        $setting = SystemSetting::first();
+        // Konfigurasi dasar penggajian (/admin/setting → Penggajian & Pajak):
+        // "Jumlah Hari Kerja Tetap" + hari kerja per segmen untuk periode split.
+        $setting = SystemSetting::where('key', 'payroll_config')->first() ?? SystemSetting::first();
         $fixedWorkDay = (int) ($setting?->fixed_working_day ?? 25);
+        $splitDays = json_decode((string) ($setting?->value ?? '{}'), true) ?: [];
 
         // Query dari supervisor_breakdowns (tempat data sebenarnya)
         $query = SupervisorBreakdown::with(['employee', 'employee.groups'])
@@ -129,8 +132,8 @@ class SupervisorPayslipController extends Controller
                 ->keyBy('employee_id');
         }
 
-        $data = $records->map(function ($record) use ($period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances) {
-            return $this->formatRow($record, $period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances);
+        $data = $records->map(function ($record) use ($period, $fixedWorkDay, $splitDays, $otherSegmentRecords, $leaveBalances) {
+            return $this->formatRow($record, $period, $fixedWorkDay, $otherSegmentRecords, $leaveBalances, $splitDays);
         });
 
         // Pastikan urutan final berdasarkan Nama (alfabet, case-insensitive) — fallback aman bila employee_name kosong
@@ -143,13 +146,14 @@ class SupervisorPayslipController extends Controller
         }
         $allRecords = $allRecordsQuery->get();
 
-        $buildStats = function ($records) {
+        $buildStats = function ($records) use ($period, $fixedWorkDay, $splitDays) {
             return [
                 'total_karyawan'   => $records->count(),
                 'total_gaji_kotor' => $records->sum(fn($r) => (float) $r->gaji_kotor),
                 'total_potongan'   => $records->sum(fn($r) =>
                     (float) $r->bpjs_tk + (float) $r->bpjs_ks + (float) $r->bpjs_pen
-                    + (float) $r->pph + (float) $r->cashbon + (float) $r->pot_kehadiran
+                    + (float) $r->pph + (float) $r->cashbon
+                    + $this->potonganKehadiran($r, $period, $fixedWorkDay, $splitDays)[1]
                 ),
                 'total_bersih'     => $records->sum(fn($r) => (float) $r->gaji_bersih),
             ];
@@ -208,13 +212,21 @@ class SupervisorPayslipController extends Controller
 
         $cashbon = $request->has('cashbon') ? (float) $request->cashbon : (float) $record->cashbon;
 
-        // Recalculate total potongan
+        $setting = SystemSetting::where('key', 'payroll_config')->first() ?? SystemSetting::first();
+        $fixedWorkDay = (int) ($setting?->fixed_working_day ?? 25);
+        $splitDays = json_decode((string) ($setting?->value ?? '{}'), true) ?: [];
+
+        // Potongan kehadiran: (hari kerja pengaturan − hari_kerja) × upah/hari.
+        // Tidak ikut mengurangi gaji_bersih — gaji sudah diprorata lewat hari_kerja,
+        // sama seperti calculate(); kalau ikut dipotong di sini hasilnya dobel.
+        [, $potKehadiran] = $this->potonganKehadiran($record, $record->payPeriod, $fixedWorkDay, $splitDays);
+
+        // Recalculate total potongan (BPJS + PPh + cashbon)
         $totalPot = (float) $record->bpjs_tk
                   + (float) $record->bpjs_ks
                   + (float) $record->bpjs_pen
                   + (float) $record->pph
-                  + $cashbon
-                  + (float) $record->pot_kehadiran;
+                  + $cashbon;
 
         // Gaji bersih setelah pembulatan
         $grossRaw = (float) $record->gaji_kotor - $totalPot;
@@ -222,17 +234,18 @@ class SupervisorPayslipController extends Controller
         $pblt = $totalRounded - $grossRaw;
 
         $record->update([
-            'cashbon'     => $cashbon,
-            'pblt'        => round($pblt, 2),
-            'gaji_bersih' => round($totalRounded, 2),
-            'notes'       => $request->input('notes', $record->notes),
-            'updated_by'  => Auth::id(),
+            'cashbon'       => $cashbon,
+            'pot_kehadiran' => $potKehadiran,
+            'pblt'          => round($pblt, 2),
+            'gaji_bersih'   => round($totalRounded, 2),
+            'notes'         => $request->input('notes', $record->notes),
+            'updated_by'    => Auth::id(),
         ]);
 
         return response()->json([
             'success' => true,
             'message' => 'Data slip gaji diperbarui.',
-            'data'    => $this->formatRow($record->fresh()),
+            'data'    => $this->formatRow($record->fresh(), $record->payPeriod, $fixedWorkDay, null, [], $splitDays),
         ]);
     }
 
@@ -289,7 +302,8 @@ class SupervisorPayslipController extends Controller
         ?PayPeriod $period = null,
         int $fixedWorkDay = 25,
         $otherSegmentRecords = null,
-        array $leaveBalances = []
+        array $leaveBalances = [],
+        array $splitDays = []
     ): array {
         $emp = $record->employee;
         $period = $period ?? $record->payPeriod;
@@ -298,15 +312,11 @@ class SupervisorPayslipController extends Controller
         $joinDateRaw = $record->join_date ?? $emp?->join_date;
         $joinDate = $joinDateRaw ? Carbon::parse($joinDateRaw) : null;
 
-        // HK untuk segment ini
-        $hk = $fixedWorkDay;
-        if ($period && $period->is_split && $record->segment) {
-            $hk = (int) $record->hari_kerja + (int) round((float) $record->deduct_day);
-        }
+        // HK patokan periode/segmen dari pengaturan (bukan turunan deduct_day lagi)
+        $hk = $this->segmentWorkDays($period, $record->segment, $fixedWorkDay, $splitDays);
 
-        $ratePerHari = $hk > 0 ? (float) $record->gaji_pokok / $fixedWorkDay : 0;
-        $deductDays = (float) $record->deduct_day;
-        $potKehadiran = round($deductDays * $ratePerHari);
+        $ratePerHari = $fixedWorkDay > 0 ? (float) $record->gaji_pokok / $fixedWorkDay : 0;
+        [$deductDays, $potKehadiran] = $this->potonganKehadiran($record, $period, $fixedWorkDay, $splitDays);
 
         // Employee info: denormalized first, fallback ke relasi
         $employeeCode = $record->employee_code ?: ($emp?->nip ?? $emp?->employee_code ?? '-');
@@ -367,10 +377,9 @@ class SupervisorPayslipController extends Controller
         // Other segment data (untuk split period cross-reference)
         if ($period && $period->is_split && $otherSegmentRecords && $otherSegmentRecords->has($record->employee_id)) {
             $other = $otherSegmentRecords->get($record->employee_id);
-            $otherHk = (int) $other->hari_kerja + (int) round((float) $other->deduct_day);
+            $otherHk = $this->segmentWorkDays($period, $other->segment, $fixedWorkDay, $splitDays);
             $otherRate = $fixedWorkDay > 0 ? (float) $other->gaji_pokok / $fixedWorkDay : 0;
-            $otherDeductDays = (float) $other->deduct_day;
-            $otherPotKehadiran = round($otherDeductDays * $otherRate);
+            [$otherDeductDays, $otherPotKehadiran] = $this->potonganKehadiran($other, $period, $fixedWorkDay, $splitDays);
 
             $otherEmpCode = $other->employee_code ?: ($other->employee?->nip ?? $other->employee?->employee_code ?? '-');
             $otherEmpName = $other->employee_name ?: ($other->employee?->name ?? '-');
@@ -414,5 +423,48 @@ class SupervisorPayslipController extends Controller
         }
 
         return $item;
+    }
+
+    /**
+     * Hari kerja patokan periode/segmen.
+     *
+     * Non-split  → "Jumlah Hari Kerja Tetap" dari pengaturan (mis. 25).
+     * Split A/B  → "Hari Kerja Segmen 1/2" dari pengaturan (mis. 5 / 20).
+     *
+     * Angka ini yang dikurangi hari_kerja aktual untuk mendapat hari potongan.
+     */
+    private function segmentWorkDays(?PayPeriod $period, ?string $segment, int $fixedWorkDay, array $splitDays): int
+    {
+        if (! $period || ! $period->is_split) {
+            return $fixedWorkDay;
+        }
+
+        $segA = (int) ($splitDays['A'] ?? 5);
+        $segB = (int) ($splitDays['B'] ?? max(0, $fixedWorkDay - $segA));
+
+        return $segment === 'B' ? $segB : $segA;
+    }
+
+    /**
+     * Potongan kehadiran = (hari kerja pengaturan − hari_kerja aktual) × upah/hari.
+     *
+     * Sengaja TIDAK memakai kolom deduct_day: kolom itu hanya diisi saat
+     * "Kalkulasi" dan tidak ikut diperbarui oleh jalur impor (CSV / Salary
+     * Breakdown), sehingga bisa basi dan menghasilkan potongan melebihi
+     * jumlah hari dalam periode.
+     *
+     * @return array{0: int, 1: float} [hari potongan, rupiah potongan]
+     */
+    private function potonganKehadiran(
+        SupervisorBreakdown $record,
+        ?PayPeriod $period,
+        int $fixedWorkDay,
+        array $splitDays = []
+    ): array {
+        $baseDays = $this->segmentWorkDays($period, $record->segment, $fixedWorkDay, $splitDays);
+        $days = max(0, $baseDays - (int) $record->hari_kerja);
+        $rate = $fixedWorkDay > 0 ? (float) $record->gaji_pokok / $fixedWorkDay : 0;
+
+        return [$days, round($days * $rate)];
     }
 }
