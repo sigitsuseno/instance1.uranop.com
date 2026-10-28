@@ -283,7 +283,29 @@
                   <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-muted)">{{ record.lembur_count > 0 ? record.lembur_count.toFixed(1).replace('.', ',') : '-' }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.gaji) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.upah_lembur) }}</td>
-                  <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.revisi) }}</td>
+                  <td class="border border-(--border-soft) p-0 text-right font-mono text-(--text-main)">
+                    <input
+                      v-if="editingRevisiId === record.id"
+                      :ref="setRevisiInput"
+                      v-model.number="editingRevisiValue"
+                      type="number"
+                      step="1"
+                      class="w-full h-full min-h-[30px] px-2 py-1 text-right font-mono text-xs bg-(--bg-card) text-(--text-main) border-2 border-(--primary) rounded-none focus:outline-none"
+                      @keydown.enter.prevent="saveRevisi(record)"
+                      @keydown.esc.prevent="cancelRevisi"
+                      @blur="saveRevisi(record)"
+                    />
+                    <button
+                      v-else-if="isSuperadmin"
+                      type="button"
+                      class="w-full min-h-[30px] px-2 py-1 text-right font-mono cursor-pointer hover:bg-(--primary)/10 transition-colors"
+                      title="Klik untuk edit revisi"
+                      @click="startEditRevisi(record)"
+                    >
+                      {{ formatCurrency(record.revisi) }}
+                    </button>
+                    <span v-else class="block px-2 py-1">{{ formatCurrency(record.revisi) }}</span>
+                  </td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.tunjangan) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.premi_hadir) }}</td>
                   <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.pblt) }}</td>
@@ -403,7 +425,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseCard from '@/Components/BaseCard.vue'
 import BaseModal from '@/Components/BaseModal.vue'
@@ -507,6 +529,63 @@ function formatCurrency(value, showZero = false) {
   if (!value && value !== 0) return '-'
   if (parseFloat(value) === 0 && !showZero) return '-'
   return new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value)
+}
+
+// ─── Inline edit REVISI (khusus superadmin) ───
+const editingRevisiId = ref(null)
+const editingRevisiValue = ref(0)
+const savingRevisi = ref(false)
+let revisiInputEl = null
+
+// Dipakai sebagai :ref di dalam v-for — Vue memanggilnya sekali per baris,
+// jadi hanya input yang sedang aktif yang disimpan.
+function setRevisiInput(el) {
+  if (el) revisiInputEl = el
+}
+
+function startEditRevisi(record) {
+  if (savingRevisi.value) return
+  editingRevisiId.value = record.id
+  editingRevisiValue.value = parseFloat(record.revisi) || 0
+  nextTick(() => {
+    revisiInputEl?.focus()
+    revisiInputEl?.select()
+  })
+}
+
+function cancelRevisi() {
+  editingRevisiId.value = null
+  editingRevisiValue.value = 0
+}
+
+async function saveRevisi(record) {
+  // Baris yang sudah tidak diedit → abaikan (mis. blur kedua setelah Enter).
+  if (editingRevisiId.value !== record.id || savingRevisi.value) return
+
+  const nilaiBaru = parseFloat(editingRevisiValue.value) || 0
+  const nilaiLama = parseFloat(record.revisi) || 0
+
+  if (nilaiBaru === nilaiLama) { cancelRevisi(); return }
+
+  savingRevisi.value = true
+  try {
+    const res = await put(`/api/v1/supervisor/payroll/breakdown/${record.id}/revisi`, { revisi: nilaiBaru })
+    const idx = records.value.findIndex(r => r.id === record.id)
+    if (idx !== -1) {
+      records.value[idx].revisi = res.data.revisi
+      records.value[idx].pblt = res.data.pblt
+      records.value[idx].total = res.data.total
+      records.value[idx].gaji_bersih = res.data.gaji_bersih
+    }
+    notification.success(res.message || 'Revisi diperbarui.')
+    cancelRevisi()
+  } catch (error) {
+    console.error('Error updating revisi', error)
+    notification.error(error.message || 'Gagal update revisi.')
+    cancelRevisi()
+  } finally {
+    savingRevisi.value = false
+  }
 }
 
 async function fetchPeriods() {

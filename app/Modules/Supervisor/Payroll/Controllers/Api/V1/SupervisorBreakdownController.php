@@ -113,6 +113,66 @@ class SupervisorBreakdownController extends Controller
     }
 
     /**
+     * PUT /api/v1/supervisor/payroll/breakdown/{id}/revisi
+     *
+     * Edit revisi langsung dari tabel Gaji Karyawan (inline, khusus superadmin).
+     * `revisi` diterima apa adanya (bertanda): negatif mengurangi, positif menambah.
+     *
+     * gaji_kotor & gaji_bersih dihitung ulang dengan rumus yang sama seperti
+     * calculate() — pot_kehadiran tidak ikut dipotong di sini, konsisten dengan
+     * kolom TOTAL/TRIMA pada tabel.
+     */
+    public function updateRevisi(Request $request, int $id)
+    {
+        $validated = $request->validate([
+            'revisi' => 'required|numeric',
+        ]);
+
+        $record = SupervisorBreakdown::findOrFail($id);
+
+        $revisi = round((float) $validated['revisi'], 2);
+
+        $gajiKotor = round(
+            (float) $record->gaji
+            + (float) $record->tunjangan
+            + (float) $record->upah_lembur
+            + (float) $record->premi_hadir
+            + $revisi
+            + (float) $record->tj_masa_kerja,
+            2
+        );
+
+        $totalPotongan = (float) $record->bpjs_tk
+            + (float) $record->bpjs_ks
+            + (float) $record->bpjs_pen
+            + (float) $record->pph
+            + (float) $record->cashbon;
+
+        $beforeRounding = $gajiKotor - $totalPotongan;
+        $rounded = ceil($beforeRounding / 100) * 100;
+
+        $record->update([
+            'revisi'      => $revisi,
+            'gaji_kotor'  => $gajiKotor,
+            'pblt'        => round($rounded - $beforeRounding, 2),
+            'gaji_bersih' => $rounded,
+            'updated_by'  => Auth::id(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Revisi berhasil diperbarui.',
+            'data'    => [
+                'id'          => $record->id,
+                'revisi'      => (float) $record->revisi,
+                'pblt'        => (float) $record->pblt,
+                'total'       => (float) $record->gaji_kotor,
+                'gaji_bersih' => (float) $record->gaji_bersih,
+            ],
+        ]);
+    }
+
+    /**
      * GET /api/v1/supervisor/payroll/breakdown/export-kirim-audit
      * Export daftar transfer (Kirim Audit) — format persis seperti export Kirim ALL.
      */

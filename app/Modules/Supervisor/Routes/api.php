@@ -122,6 +122,12 @@ Route::prefix('v1/supervisor')
             Route::post('breakdown/calculate', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'calculate']);
             Route::post('breakdown/import', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'import']);
 
+            // Edit revisi inline di tabel Gaji Karyawan — hanya superadmin.
+            Route::middleware('role:superadmin')->group(function () {
+                Route::put('breakdown/{id}/revisi', [\App\Modules\Supervisor\Payroll\Controllers\Api\V1\SupervisorBreakdownController::class, 'updateRevisi'])
+                    ->name('supervisor.payroll.breakdown.revisi');
+            });
+
             // Update Data — import Excel dari File Manager. Sumber berkasnya disk
             // privat File Manager, jadi aksesnya dibatasi superadmin — sama seperti
             // modul File Manager itu sendiri.
