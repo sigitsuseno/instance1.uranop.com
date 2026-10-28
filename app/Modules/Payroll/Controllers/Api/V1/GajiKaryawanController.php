@@ -918,8 +918,8 @@ class GajiKaryawanController extends Controller
      * Update lembur fields + revisi + cashbon + recalculate upah_lembur, gaji_kotor & gaji_bersih.
      * PUT /api/v1/payroll/gaji-karyawan/{id}/upah-lembur
      *
-     * `revisi` diterima sebagai nilai POSITIF (besar pengurangan) lalu disimpan
-     * negatif, karena gaji_kotor = ... + revisi.
+     * `revisi` disimpan apa adanya (bertanda), karena gaji_kotor = ... + revisi.
+     * Kirim nilai negatif untuk mengurangi, nilai positif untuk menambah.
      */
     public function updateUpahLembur(Request $request, $id)
     {
@@ -927,7 +927,7 @@ class GajiKaryawanController extends Controller
             'lm'           => 'nullable|integer|min:0',
             'lm_count'     => 'nullable|integer|min:0',
             'lembur_count' => 'nullable|integer|min:0',
-            'revisi'       => 'nullable|numeric|min:0',
+            'revisi'       => 'nullable|numeric',
             'cashbon'      => 'nullable|numeric|min:0',
         ]);
 
@@ -945,7 +945,7 @@ class GajiKaryawanController extends Controller
             $record->lembur_count = $validated['lembur_count'];
         }
         if (array_key_exists('revisi', $validated)) {
-            $record->revisi = -1 * abs((float) $validated['revisi']);
+            $record->revisi = round((float) $validated['revisi'], 2);
         }
         if (array_key_exists('cashbon', $validated)) {
             $record->cashbon = $validated['cashbon'];

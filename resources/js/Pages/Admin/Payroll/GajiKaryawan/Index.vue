@@ -762,22 +762,21 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label class="block text-xs font-medium text-(--text-muted) mb-1">
-              Revisi <span class="text-(--danger)">(pengurangan gaji kotor)</span>
+              Revisi <span class="text-(--text-soft)">(negatif = potong, positif = tambah)</span>
             </label>
             <div class="relative">
               <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-sm text-(--text-muted) pointer-events-none">Rp</span>
               <input
                 v-model.number="editRevisi"
                 type="number"
-                min="0"
                 step="1"
                 class="w-full pl-10 pr-3 py-2 rounded-lg border border-(--border-soft) bg-(--bg-elevated) text-(--text-main) text-sm focus:outline-none focus:ring-1 focus:ring-(--primary) focus:border-(--primary)"
                 placeholder="0"
               />
             </div>
             <p class="text-xs text-(--text-soft) mt-1">
-              Isi nilai positif; disimpan minus dan mengurangi TOTAL. Nilai ini <strong>menggantikan</strong>
-              revisi otomatis (segmen A: −TJ Masa Kerja), jadi jangan dikosongkan.
+              Isi <strong>−</strong> untuk mengurangi, <strong>+</strong> untuk menambah TOTAL. Nilai ini
+              <strong>menggantikan</strong> revisi otomatis (segmen A: −TJ Masa Kerja), jadi jangan dikosongkan.
             </p>
           </div>
 
@@ -808,7 +807,9 @@
           </div>
           <div class="flex justify-between">
             <span>Revisi</span>
-            <span class="font-mono text-(--danger)">- Rp {{ formatCurrency(editRevisiPotongan, true) }}</span>
+            <span class="font-mono" :class="editRevisiNilai < 0 ? 'text-(--danger)' : 'text-(--success)'">
+              {{ editRevisiNilai < 0 ? '- ' : '+ ' }}Rp {{ formatCurrency(Math.abs(editRevisiNilai), true) }}
+            </span>
           </div>
           <div class="flex justify-between">
             <span>Gaji Kotor</span>
@@ -903,9 +904,9 @@ const overridesMeta = ref({ is_split: false, fixed_working_day: 25 })
 const deleteOverrideTarget = ref(null)
 const processingDeleteOverride = ref(false)
 
-// Revisi = pengurangan gaji kotor. Disimpan di pay_records.revisi sebagai nilai negatif,
-// jadi yang diisi di modal adalah nilai positif.
-const editRevisiPotongan = computed(() => Math.abs(parseFloat(editRevisi.value) || 0))
+// Revisi = penyesuaian gaji kotor, disimpan apa adanya (bertanda) di pay_records.revisi:
+// negatif mengurangi, positif menambah. gaji_kotor = ... + revisi.
+const editRevisiNilai = computed(() => parseFloat(editRevisi.value) || 0)
 
 // gaji_kotor di record sudah termasuk revisi lama → kembalikan dulu ke nilai dasarnya
 const editGajiKotorDasar = computed(() => {
@@ -913,7 +914,7 @@ const editGajiKotorDasar = computed(() => {
   return (parseFloat(editingRecord.value.total) || 0) - (parseFloat(editingRecord.value.revisi) || 0)
 })
 
-const editGajiKotor = computed(() => editGajiKotorDasar.value - editRevisiPotongan.value)
+const editGajiKotor = computed(() => editGajiKotorDasar.value + editRevisiNilai.value)
 
 const hitungPerkiraanTrima = computed(() => {
   if (!editingRecord.value) return 0
@@ -1301,7 +1302,7 @@ function openEditModal(record) {
   editLm.value = record.lm || 0
   editLmCount.value = (record.lm_count ?? record.lm) || 0
   editLemburCount.value = record.lembur_count || 0
-  editRevisi.value = Math.abs(record.revisi || 0)
+  editRevisi.value = record.revisi || 0
   editCashbon.value = record.cashbon || 0
   isEditModalOpen.value = true
 }
@@ -1324,7 +1325,7 @@ async function saveUpahLembur() {
       lm: editLm.value || 0,
       lm_count: editLmCount.value || 0,
       lembur_count: editLemburCount.value || 0,
-      revisi: editRevisiPotongan.value,
+      revisi: editRevisiNilai.value,
       cashbon: editCashbon.value || 0,
     })
 
