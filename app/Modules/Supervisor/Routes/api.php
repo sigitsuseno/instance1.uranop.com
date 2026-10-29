@@ -10,6 +10,7 @@ use App\Modules\Supervisor\Controllers\Api\V1\SupervisorScanDetectionConfigContr
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorDepartmentController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorPositionController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorLeaveSettingController;
+use App\Modules\Supervisor\Controllers\Api\V1\SupervisorSpvCutiController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeController;
 use App\Modules\Supervisor\Controllers\Api\V1\SupervisorAuditEmployeeController;
 use Illuminate\Support\Facades\Route;
@@ -217,6 +218,13 @@ Route::prefix('v1/supervisor')
                 Route::get('/template', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'downloadTemplate']);
                 Route::delete('/{id}', [\App\Modules\Supervisor\Controllers\Api\V1\SupervisorEmployeeGroupController::class, 'destroy']);
             });
+        });
+
+        // Cuti — salin ledger ke tabel khusus supervisor (khusus superadmin)
+        Route::prefix('leave')->group(function () {
+            Route::post('spv-ledger-cuti/import', [SupervisorSpvCutiController::class, 'importLedger'])
+                ->middleware('role:superadmin')
+                ->name('supervisor.leave.spv-ledger-cuti.import');
         });
 
         // Reports
