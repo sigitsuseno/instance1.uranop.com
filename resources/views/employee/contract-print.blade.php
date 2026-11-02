@@ -224,7 +224,7 @@
 </table>
 
 <div class="closing" style="margin-top:3px;">
-    Dalam hal ini bertindak untuk dan atas nama {{ $companyName }}
+    Dalam hal ini bertindak untuk dan atas nama {{ $companyName }} yang merupakan Perusahaan bergerak dalam bidang Jasa Printing atau Sablon atau percetakan Kain.
 </div>
 <div class="closing">
     Berkedudukan di {{ $companyDomicile }}, untuk selanjutnya disebut <strong>PIHAK PERTAMA</strong>
@@ -412,7 +412,6 @@
             Ikatan berdasarkan persetujuan kerja ini dapat diputuskan oleh karyawan atau Perusahaan dengan tenggang waktu pemberitahuan satu bulan
             sebelumnya dan keinginan untuk itu harus diberitahukan secara tertulis oleh pihak yang berkepentingan kepada pihak lainnya.
         </li>
-        <li>Jika masa berlaku persetujuan kerja ini berakhir, karyawan tidak akan menuntut apapun dari Perusahaan.</li>
         <li>
             Persetujuan kerja ini dapat dihentikan tanpa tenggang waktu jika terdapat alasan sah yang berikut :
             <div class="nested">a. Kelakuan atau tindakan karyawan yang bertentangan dengan kewajiban yang berdasarkan persetujuan kerja.</div>
