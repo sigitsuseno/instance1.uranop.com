@@ -15,7 +15,7 @@
     ];
 
     $companyName    = strtoupper($c->name ?? 'PT KEMILAU UNGARAN SUKSES');
-    $companyTagline = 'EMBROIDERY & PRINTING FACTORY';
+    $companyTagline = 'PRINTING FACTORY';
     // Kop surat: nama dari perusahaan, alamat & telepon dari cabang (fallback ke perusahaan).
     $kopAddress     = trim((string) ($b->address ?? '')) ?: trim((string) ($c->address ?? ''));
     $companyAddress = $kopAddress !== '' ? $kopAddress : 'Jl. Ngobo/PTPN IX No 1 Gudang Dolog BGR Karangjati 50552';
