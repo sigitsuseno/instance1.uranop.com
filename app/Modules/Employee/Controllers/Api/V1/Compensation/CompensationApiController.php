@@ -38,8 +38,8 @@ class CompensationApiController extends Controller
         $endDate = $dateInfo['end'];
         $label = $dateInfo['label'];
 
-        // Kompensasi jatuh pada periode ini berdasarkan tanggal berhenti efektif
-        // (end_date kontrak, atau lebih awal bila karyawan resign).
+        // Kompensasi murni mengikuti kontrak: kontrak masuk periode bila
+        // end_date kontrak berada di dalam rentang periode terpilih.
         $query = EmployeeContract::with(['employee'])
             ->dueInCompensationPeriod($startDate->format('Y-m-d'), $endDate->format('Y-m-d'));
 
@@ -328,8 +328,7 @@ class CompensationApiController extends Controller
             $period = sprintf('%d-%02d', $year, $month);
             $gajiPokok = $employee->gaji_pokok($period);
             $tjMasaKerja = $employee->tjMasaKerja($period);
-            // Masa kerja efektif (bulan penuh): bila resign sebelum kontrak selesai,
-            // kompensasi mengikuti masa kerja aktual, bukan durasi kontrak.
+            // Masa kerja efektif (bulan penuh) — murni dari tanggal kontrak.
             $durationMonths = $contract->compensationMonths();
             $monthlyRate = $gajiPokok > 0 ? ($gajiPokok + $tjMasaKerja) / 12 : 0;
             $totalRaw = $durationMonths * $monthlyRate;
