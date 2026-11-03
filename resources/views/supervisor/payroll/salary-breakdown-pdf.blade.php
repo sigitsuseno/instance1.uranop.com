@@ -88,6 +88,7 @@
             <th style="width:30px;">Lbr Hitung</th>
             <th style="width:45px;">P. Lembur</th>
             <th style="width:48px;">GAJI</th>
+            <th style="width:40px;">Revisi</th>
             <th style="width:48px;">Tunjangan</th>
             <th style="width:42px;">Premi Hadir</th>
             <th style="width:40px;">BPJS TK</th>
@@ -118,6 +119,7 @@
                 <td class="text-center">{{ $row['lembur_count'] > 0 ? number_format($row['lembur_count'], 1, ',', '.') : '-' }}</td>
                 <td class="text-right">{{ $row['upah_lembur'] > 0 ? number_format($row['upah_lembur'], 0, ',', '.') : '-' }}</td>
                 <td class="text-right">{{ number_format($row['gaji'], 0, ',', '.') }}</td>
+                <td class="text-right">{{ $row['revisi'] != 0 ? number_format($row['revisi'], 0, ',', '.') : '-' }}</td>
                 <td class="text-right">{{ $row['tunjangan'] > 0 ? number_format($row['tunjangan'], 0, ',', '.') : '-' }}</td>
                 <td class="text-right">{{ $row['premi_hadir'] > 0 ? number_format($row['premi_hadir'], 0, ',', '.') : '-' }}</td>
                 <td class="text-right">{{ $row['bpjs_tk'] > 0 ? number_format($row['bpjs_tk'], 0, ',', '.') : '-' }}</td>
@@ -142,6 +144,7 @@
             <td></td>
             <td class="text-right">{{ number_format($totals['upah_lembur'], 0, ',', '.') }}</td>
             <td class="text-right">{{ number_format($totals['gaji'], 0, ',', '.') }}</td>
+            <td class="text-right">{{ $totals['revisi'] != 0 ? number_format($totals['revisi'], 0, ',', '.') : '-' }}</td>
             <td class="text-right">{{ number_format($totals['tunjangan'], 0, ',', '.') }}</td>
             <td class="text-right">{{ number_format($totals['premi_hadir'], 0, ',', '.') }}</td>
             <td class="text-right">{{ number_format($totals['bpjs_tk'], 0, ',', '.') }}</td>

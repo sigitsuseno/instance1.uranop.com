@@ -916,6 +916,7 @@ class SupervisorBreakdownController extends Controller
                 'lembur_count'  => (float) $r->lembur_count,
                 'upah_lembur'   => (float) $r->upah_lembur,
                 'gaji'          => (float) $r->gaji,
+                'revisi'        => (float) $r->revisi,
                 'tunjangan'     => (float) $r->tunjangan,
                 'premi_hadir'   => (float) $r->premi_hadir,
                 'bpjs_tk'       => (float) $r->bpjs_tk,
@@ -941,6 +942,7 @@ class SupervisorBreakdownController extends Controller
             'tj_masa_kerja' => 0,
             'upah_lembur'   => 0,
             'gaji'          => 0,
+            'revisi'        => 0,
             'tunjangan'     => 0,
             'premi_hadir'   => 0,
             'bpjs_tk'       => 0,
@@ -1060,6 +1062,7 @@ class SupervisorBreakdownController extends Controller
                 'lembur_count'    => $lemburCount,
                 'upah_lembur'     => (float) $r->upah_lembur,
                 'gaji'            => (float) $r->gaji,
+                'revisi'          => (float) $r->revisi,
                 'tunjangan'       => (float) $r->tunjangan,
                 'premi_hadir'     => (float) $r->premi_hadir,
                 'bpjs_tk'         => (float) $r->bpjs_tk,
@@ -1084,6 +1087,7 @@ class SupervisorBreakdownController extends Controller
             'tj_masa_kerja' => 0,
             'upah_lembur'   => 0,
             'gaji'          => 0,
+            'revisi'        => 0,
             'tunjangan'     => 0,
             'premi_hadir'   => 0,
             'bpjs_tk'       => 0,
@@ -1112,7 +1116,10 @@ class SupervisorBreakdownController extends Controller
             'companyName' => 'PT. KEMILAU UNGARAN SUKSES',
         ]);
 
-        $pdf->setPaper('A4', 'landscape');
+        // F4 / Folio (215 × 330 mm) landscape — A4 landscape memotong kolom kanan
+        // setelah kolom Revisi ditambahkan. DomPDF tidak punya preset F4, jadi
+        // ukurannya diberikan dalam satuan point (mm × 72 / 25,4).
+        $pdf->setPaper([0, 0, 215 * 72 / 25.4, 330 * 72 / 25.4], 'landscape');
 
         $filename = 'Laporan_Gaji_Karyawan_' . str_replace(' ', '_', $periodLabel) . '.pdf';
         return $pdf->download($filename);

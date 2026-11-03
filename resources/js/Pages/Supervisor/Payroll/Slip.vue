@@ -56,6 +56,7 @@
             <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[100px]">Gaji Pokok</th>
             <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-12">HK</th>
             <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[90px]">Upah Lembur</th>
+            <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[90px]">Revisi</th>
             <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[90px]">Premi Hadir</th>
             <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[100px]">Gaji Kotor</th>
             <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold text-red-600 min-w-[90px]">Potongan</th>
@@ -63,7 +64,7 @@
             <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-16">Cetak</th>
           </tr></thead>
           <tbody>
-            <tr v-if="records.length === 0"><td colspan="12" class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
+            <tr v-if="records.length === 0"><td colspan="13" class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
               <div v-if="loading" class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-(--primary)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" /><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Memproses data...</div>
               <div v-else>Belum ada data slip gaji untuk periode ini. Pastikan data gaji sudah di-generate dan dikunci pada menu <strong>Gaji Karyawan</strong>.</div>
             </td></tr>
@@ -75,6 +76,7 @@
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.gaji_pokok) }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-main) font-medium">{{ record.hari_kerja }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.upah_lembur) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.revisi) }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.premi_hadir) }}</td>
               <td class="border border-(--border-soft) px-2.5 py-2 text-right font-mono font-bold text-(--primary)">{{ formatCurrency(record.gaji_kotor) }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-red-600">{{ formatCurrency(record.bpjs_tk + record.bpjs_ks + record.bpjs_pen + record.pph + record.cashbon + record.pot_kehadiran) }}</td>
@@ -87,6 +89,7 @@
             <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.gaji_pokok, true) }}</td>
             <td class="border border-(--border-soft) px-2 py-3.5 text-center">{{ totals.hari_kerja }}</td>
             <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.upah_lembur, true) }}</td>
+            <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.revisi, true) }}</td>
             <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.premi_hadir, true) }}</td>
             <td class="border border-(--border-soft) px-2.5 py-3.5 text-right font-mono font-bold">{{ formatCurrency(totals.gaji_kotor, true) }}</td>
             <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono text-red-600">{{ formatCurrency(totals.potongan, true) }}</td>
@@ -273,7 +276,7 @@ const totals = computed(() => {
   const fSum = (key) => records.value.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0)
   return {
     gaji_pokok: fSum('gaji_pokok'), hari_kerja: records.value.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
-    upah_lembur: fSum('upah_lembur'), premi_hadir: fSum('premi_hadir'), gaji_kotor: fSum('gaji_kotor'),
+    upah_lembur: fSum('upah_lembur'), revisi: fSum('revisi'), premi_hadir: fSum('premi_hadir'), gaji_kotor: fSum('gaji_kotor'),
     potongan: records.value.reduce((acc, r) => acc + (r.bpjs_tk + r.bpjs_ks + r.bpjs_pen + r.pph + r.cashbon + r.pot_kehadiran), 0),
     gaji_bersih: fSum('gaji_bersih'),
   }

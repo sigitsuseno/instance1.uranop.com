@@ -14,10 +14,10 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 /**
  * Export gaji karyawan supervisor — format persis sample Excel.
  *
- * 25 kolom (A-Y):
+ * 26 kolom (A-Z):
  *   No | ID No | Nama | Bagian / Jabatan | L/P | MASA KERJA | Join Date | Status
  *   | Gaji Pokok | Premi | Tj. MK | HK | L/M | Lbr Hitung | P. Lembur
- *   | GAJI | Tunjangan | Premi Hadir | BPJS TK | BPJS KS | BPJS Pens.
+ *   | GAJI | Revisi | Tunjangan | Premi Hadir | BPJS TK | BPJS KS | BPJS Pens.
  *   | PPh | Kasbon | PBLT | THP
  *
  * Layout:
@@ -33,8 +33,8 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
     protected string $companyName;
     protected array $totals;
 
-    private const LAST_COL = 'Y';
-    private const COL_COUNT = 25;
+    private const LAST_COL = 'Z';
+    private const COL_COUNT = 26;
 
     public function __construct(array $data, string $periodLabel, array $totals = [], string $companyName = 'PT. KEMILAU UNGARAN SUKSES')
     {
@@ -85,15 +85,16 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
             '',             // N — Lbr Hitung
             $t['upah_lembur'] ?? 0,     // O
             $t['gaji'] ?? 0,            // P
-            $t['tunjangan'] ?? 0,       // Q
-            $t['premi_hadir'] ?? 0,     // R
-            $t['bpjs_tk'] ?? 0,         // S
-            $t['bpjs_ks'] ?? 0,         // T
-            $t['bpjs_pen'] ?? 0,        // U
-            $t['pph'] ?? 0,             // V
-            $t['cashbon'] ?? 0,         // W
-            $t['pblt'] ?? 0,            // X
-            $t['gaji_bersih'] ?? 0,     // Y
+            $t['revisi'] ?? 0,          // Q
+            $t['tunjangan'] ?? 0,       // R
+            $t['premi_hadir'] ?? 0,     // S
+            $t['bpjs_tk'] ?? 0,         // T
+            $t['bpjs_ks'] ?? 0,         // U
+            $t['bpjs_pen'] ?? 0,        // V
+            $t['pph'] ?? 0,             // W
+            $t['cashbon'] ?? 0,         // X
+            $t['pblt'] ?? 0,            // Y
+            $t['gaji_bersih'] ?? 0,     // Z
         ];
     }
 
@@ -133,15 +134,16 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
             $lemburCount,                               // N — Lbr Hitung (jam)
             $r['upah_lembur'] ?? 0,                     // O — P. Lembur
             $r['gaji'] ?? 0,                            // P — GAJI
-            $r['tunjangan'] ?? 0,                       // Q — Tunjangan
-            $r['premi_hadir'] ?? 0,                     // R — Premi Hadir
-            $r['bpjs_tk'] ?? 0,                         // S — BPJS TK
-            $r['bpjs_ks'] ?? 0,                         // T — BPJS KS
-            $r['bpjs_pen'] ?? 0,                        // U — BPJS Pens.
-            $r['pph'] ?? 0,                             // V — PPh
-            $r['cashbon'] ?? 0,                         // W — Kasbon
-            $r['pblt'] ?? 0,                            // X — PBLT
-            $r['gaji_bersih'] ?? 0,                     // Y — THP
+            $r['revisi'] ?? 0,                          // Q — Revisi
+            $r['tunjangan'] ?? 0,                       // R — Tunjangan
+            $r['premi_hadir'] ?? 0,                     // S — Premi Hadir
+            $r['bpjs_tk'] ?? 0,                         // T — BPJS TK
+            $r['bpjs_ks'] ?? 0,                         // U — BPJS KS
+            $r['bpjs_pen'] ?? 0,                        // V — BPJS Pens.
+            $r['pph'] ?? 0,                             // W — PPh
+            $r['cashbon'] ?? 0,                         // X — Kasbon
+            $r['pblt'] ?? 0,                            // Y — PBLT
+            $r['gaji_bersih'] ?? 0,                     // Z — THP
         ];
     }
 
@@ -193,7 +195,7 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
                     'No', 'ID No', 'Nama', 'Bagian / Jabatan', 'L/P',
                     'MASA KERJA', 'Join Date', 'Status',
                     'Gaji Pokok', 'Premi', 'Tj. MK', 'HK', 'L/M',
-                    'Lbr Hitung', 'P. Lembur', 'GAJI', 'Tunjangan',
+                    'Lbr Hitung', 'P. Lembur', 'GAJI', 'Revisi', 'Tunjangan',
                     'Premi Hadir', 'BPJS TK', 'BPJS KS', 'BPJS Pens.',
                     'PPh', 'Kasbon', 'PBLT', 'THP',
                 ];
@@ -256,33 +258,34 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
                     'N' => 9,   // Lbr Hitung
                     'O' => 12,  // P. Lembur
                     'P' => 14,  // GAJI
-                    'Q' => 14,  // Tunjangan
-                    'R' => 12,  // Premi Hadir
-                    'S' => 12,  // BPJS TK
-                    'T' => 12,  // BPJS KS
-                    'U' => 12,  // BPJS Pens.
-                    'V' => 10,  // PPh
-                    'W' => 10,  // Kasbon
-                    'X' => 8,   // PBLT
-                    'Y' => 14,  // THP
+                    'Q' => 12,  // Revisi
+                    'R' => 14,  // Tunjangan
+                    'S' => 12,  // Premi Hadir
+                    'T' => 12,  // BPJS TK
+                    'U' => 12,  // BPJS KS
+                    'V' => 12,  // BPJS Pens.
+                    'W' => 10,  // PPh
+                    'X' => 10,  // Kasbon
+                    'Y' => 8,   // PBLT
+                    'Z' => 14,  // THP
                 ];
                 foreach ($colWidths as $col => $width) {
                     $sheet->getColumnDimension($col)->setWidth($width);
                 }
 
                 // ── Alignment per column ──
-                // Center: A(No), B(ID No), E(L/P), F(MASA KERJA), G(Join Date), H(Status), L(HK), M(L/M), N(Lbr Hitung), X(PBLT)
-                $centerCols = ['A', 'B', 'E', 'F', 'G', 'H', 'L', 'M', 'N', 'X'];
+                // Center: A(No), B(ID No), E(L/P), F(MASA KERJA), G(Join Date), H(Status), L(HK), M(L/M), N(Lbr Hitung), Y(PBLT)
+                $centerCols = ['A', 'B', 'E', 'F', 'G', 'H', 'L', 'M', 'N', 'Y'];
                 foreach ($centerCols as $col) {
                     $sheet->getStyle("{$col}4:{$col}{$lastDataRow}")
                         ->getAlignment()
                         ->setHorizontal(Alignment::HORIZONTAL_CENTER);
                 }
 
-                // Right: I(Gaji Pokok), J(Premi), K(Tj. MK), O(P. Lembur), P(GAJI), Q(Tunjangan),
-                //        R(Premi Hadir), S(BPJS TK), T(BPJS KS), U(BPJS Pens.),
-                //        V(PPh), W(Kasbon), Y(THP)
-                $rightCols  = ['I', 'J', 'K', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'Y'];
+                // Right: I(Gaji Pokok), J(Premi), K(Tj. MK), O(P. Lembur), P(GAJI), Q(Revisi),
+                //        R(Tunjangan), S(Premi Hadir), T(BPJS TK), U(BPJS KS), V(BPJS Pens.),
+                //        W(PPh), X(Kasbon), Z(THP)
+                $rightCols  = ['I', 'J', 'K', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'Z'];
                 foreach ($rightCols as $col) {
                     $sheet->getStyle("{$col}4:{$col}{$lastDataRow}")
                         ->getAlignment()
@@ -295,7 +298,7 @@ class SupervisorPayrollExport implements FromArray, WithTitle, WithEvents
                     ->setVertical(Alignment::VERTICAL_CENTER);
 
                 // ── Number formats ──
-                // Numeric: I-Y (col 9-25) with #,##0
+                // Numeric: I-Z (col 9-26) with #,##0
                 $sheet->getStyle("I4:{$lastCol}{$lastDataRow}")
                     ->getNumberFormat()
                     ->setFormatCode('#,##0');
