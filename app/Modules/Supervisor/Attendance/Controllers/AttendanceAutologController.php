@@ -1488,6 +1488,8 @@ class AttendanceAutologController extends Controller
                     'check_out'   => $log->check_out ? $log->check_out->format('H:i') : null,
                     'lembur'      => (int) $log->lembur,
                     'lm'          => (int) $log->lm,
+                    'lembur_count' => (float) ($log->lembur_calc ?? 0),
+                    'lm_count'    => (float) ($log->lm_calc ?? 0),
                     'status'      => $log->status,
                     'shift_start' => $shiftTime['start'],
                     'shift_end'   => $shiftTime['end'],
@@ -1523,6 +1525,8 @@ class AttendanceAutologController extends Controller
             'check_out' => ['nullable', 'date_format:H:i'],
             'lembur'    => ['nullable', 'integer', 'min:0'],
             'lm'        => ['nullable', 'integer', 'min:0'],
+            'lembur_count' => ['nullable', 'numeric', 'min:0'],
+            'lm_count'  => ['nullable', 'numeric', 'min:0'],
             'status'    => ['nullable', 'string', 'in:present,absent,leave,permit,holiday,off,pending'],
         ]);
 
@@ -1541,6 +1545,13 @@ class AttendanceAutologController extends Controller
                 $updates[$field] = $validated[$field];
             }
         }
+        // lembur_count/lm_count disimpan di kolom lembur_calc/lm_calc (jam).
+        if (array_key_exists('lembur_count', $validated)) {
+            $updates['lembur_calc'] = $validated['lembur_count'];
+        }
+        if (array_key_exists('lm_count', $validated)) {
+            $updates['lm_calc'] = $validated['lm_count'];
+        }
         $updates['is_manual_edit'] = true;
         $updates['last_edited_at'] = now();
         $updates['last_edited_by'] = Auth::id();
@@ -1558,6 +1569,8 @@ class AttendanceAutologController extends Controller
                 'check_out' => $autolog->check_out ? $autolog->check_out->format('H:i') : null,
                 'lembur'    => (int) $autolog->lembur,
                 'lm'        => (int) $autolog->lm,
+                'lembur_count' => (float) ($autolog->lembur_calc ?? 0),
+                'lm_count'  => (float) ($autolog->lm_calc ?? 0),
                 'status'    => $autolog->status,
             ],
         ]);

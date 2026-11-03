@@ -359,6 +359,21 @@
           </div>
         </div>
 
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">Lembur Count (jam)</label>
+            <input v-model.number="editForm.lembur_count" type="number" min="0" step="0.01"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              :disabled="editForm.is_locked || !editForm.id" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-(--text-main) mb-1">LM Count (jam)</label>
+            <input v-model.number="editForm.lm_count" type="number" min="0" step="0.01"
+              class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              :disabled="editForm.is_locked || !editForm.id" />
+          </div>
+        </div>
+
         <!-- Status -->
         <div>
           <label class="block text-sm font-medium text-(--text-main) mb-1">Status</label>
@@ -864,6 +879,8 @@ function openEdit(emp, dateObj) {
     check_out: cell.check_out || '',
     lembur: cell.lembur || 0,
     lm: cell.lm || 0,
+    lembur_count: cell.lembur_count ?? 0,
+    lm_count: cell.lm_count ?? 0,
     status: cell.status || 'present',
     shift_start: cell.shift_start || null,
     shift_end: cell.shift_end || null,
@@ -886,6 +903,8 @@ async function handleSaveEdit() {
       check_out: editForm.value.check_out || null,
       lembur: editForm.value.lembur,
       lm: editForm.value.lm,
+      lembur_count: editForm.value.lembur_count,
+      lm_count: editForm.value.lm_count,
       status: editForm.value.status,
     })
 
@@ -898,6 +917,8 @@ async function handleSaveEdit() {
         autologData.value[empId][dateStr].check_out = res.data.check_out
         autologData.value[empId][dateStr].lembur = res.data.lembur
         autologData.value[empId][dateStr].lm = res.data.lm
+        autologData.value[empId][dateStr].lembur_count = res.data.lembur_count
+        autologData.value[empId][dateStr].lm_count = res.data.lm_count
         autologData.value[empId][dateStr].status = res.data.status
       }
       closeEdit()
