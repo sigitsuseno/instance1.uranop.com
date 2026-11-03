@@ -111,7 +111,7 @@
 
       <!-- Table Content -->
       <div class="overflow-auto max-h-[520px] relative">
-        <table class="w-full text-xs min-w-[960px]">
+        <table class="w-full text-xs min-w-[1050px]">
           <thead>
             <tr class="bg-(--bg-elevated) text-(--text-main) sticky top-0 z-10">
               <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-10">No</th>
@@ -121,6 +121,7 @@
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[100px]">Gaji Pokok</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-center font-semibold w-12">HK</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[90px]">Upah Lembur</th>
+              <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[90px]">Revisi</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[90px]">Premi Hadir</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold min-w-[100px]">Gaji Kotor</th>
               <th class="border border-(--border-soft) px-2.5 py-3 text-right font-semibold text-red-600 min-w-[90px]">Potongan</th>
@@ -130,7 +131,7 @@
           </thead>
           <tbody>
             <tr v-if="filteredRecords.length === 0">
-              <td colspan="12" class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
+              <td colspan="13" class="px-4 py-12 text-center text-(--text-muted) text-sm bg-(--bg-card)">
                 <div v-if="loading" class="flex items-center justify-center gap-2">
                   <svg class="animate-spin h-5 w-5 text-(--primary)" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -159,6 +160,7 @@
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.gaji_pokok) }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-center text-(--text-main) font-medium">{{ record.hari_kerja }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.upah_lembur) }}</td>
+              <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.revisi) }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-(--text-main)">{{ formatCurrency(record.premi_hadir) }}</td>
               <td class="border border-(--border-soft) px-2.5 py-2 text-right font-mono font-bold text-(--primary)">{{ formatCurrency(record.gaji_kotor) }}</td>
               <td class="border border-(--border-soft) px-2 py-2 text-right font-mono text-red-600">
@@ -186,6 +188,7 @@
               <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.gaji_pokok, true) }}</td>
               <td class="border border-(--border-soft) px-2 py-3.5 text-center">{{ totals.hari_kerja }}</td>
               <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.upah_lembur, true) }}</td>
+              <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.revisi, true) }}</td>
               <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono">{{ formatCurrency(totals.premi_hadir, true) }}</td>
               <td class="border border-(--border-soft) px-2.5 py-3.5 text-right font-mono font-bold">{{ formatCurrency(totals.gaji_kotor, true) }}</td>
               <td class="border border-(--border-soft) px-2 py-3.5 text-right font-mono text-red-600">{{ formatCurrency(totals.potongan, true) }}</td>
@@ -377,6 +380,7 @@ const totals = computed(() => {
     gaji_pokok: fSum('gaji_pokok'),
     hari_kerja: filteredRecords.value.reduce((acc, r) => acc + (parseInt(r.hari_kerja) || 0), 0),
     upah_lembur: fSum('upah_lembur'),
+    revisi: fSum('revisi'),
     premi_hadir: fSum('premi_hadir'),
     gaji_kotor: fSum('gaji_kotor'),
     potongan: filteredRecords.value.reduce((acc, r) =>

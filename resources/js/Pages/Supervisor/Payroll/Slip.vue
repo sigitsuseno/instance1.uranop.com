@@ -296,7 +296,8 @@ async function fetchPayslips() {
   if (!selectedPeriodId.value) { records.value = []; stats.value = {}; return }
   loading.value = true
   try {
-    let url = `/api/v1/supervisor/payroll/payslips?period_id=${selectedPeriodId.value}`
+    // all=1 → seluruh karyawan periode, tidak dibatasi 50 seperti pagination default.
+    let url = `/api/v1/supervisor/payroll/payslips?period_id=${selectedPeriodId.value}&all=1`
     if (activeSegment.value) url += `&segment=${activeSegment.value}`
     if (searchQuery.value) url += `&search=${encodeURIComponent(searchQuery.value)}`
     const res = await get(url)

@@ -4,6 +4,8 @@
 - [New] Export Excel & Print PDF `/supervisor/payroll`: menambahkan kolom **Revisi** di antara **GAJI** dan **Tunjangan**, baik pada baris data maupun **GRAND TOTAL**. Nilai negatif tampil dengan tanda minus (mis. `-500.000`); nilai 0 tampil `-` di PDF. Jumlah kolom Excel menjadi 26 (A–Z)
 - [Fix] Print PDF `/supervisor/payroll`: kertas diganti ke **F4 / Folio landscape (215 × 330 mm)** karena A4 landscape memotong kolom kanan setelah kolom Revisi ditambahkan. DomPDF tidak punya preset F4, ukurannya di-set lewat array point
 - [New] Slip Gaji `/supervisor/payroll/slip`: tabel **Daftar Slip Gaji** kini menampilkan kolom **Revisi** (antara Upah Lembur dan Premi Hadir) beserta totalnya di footer. Datanya sudah tersedia dari endpoint `payslips`, hanya belum ditampilkan
+- [Fix] Slip Gaji `/supervisor/payroll/slip`: tabel tidak lagi berhenti di 50 karyawan — daftar memakai `all=1` sehingga seluruh karyawan periode tampil (pagination bawaan endpoint tetap tersedia bila dibutuhkan)
+- [New] Slip Gaji `/admin/payroll/slip`: tabel **Daftar Slip Gaji** kini menampilkan kolom **Revisi** (antara Upah Lembur dan Premi Hadir) beserta totalnya di footer. Backend `PayslipController` sudah mengirim `revisi`
 
 ## 2026-10-27
 - [New] Simulasi Deteksi: halaman baru di menu **Settings → Simulasi Deteksi** (`/admin/settings/detection-simulation`) untuk menguji pencocokan `att_raw_logs` terhadap window shift sebelum dipakai proses kehadiran
