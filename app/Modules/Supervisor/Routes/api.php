@@ -47,6 +47,8 @@ Route::prefix('v1/supervisor')
             Route::post('roster/holiday', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'updateHoliday'])->middleware('role:superadmin');
             Route::post('roster/update-schedule', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'updateSchedule'])->middleware('role:superadmin');
             Route::post('roster/random-second', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'randomSecond'])->middleware('role:superadmin');
+            Route::get('consecutive-notifications', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceConsecutiveNotificationController::class, 'index'])->name('supervisor.attendance.consecutive-notifications');
+
             Route::get('absensi/export', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'export']);
             Route::get('absensi/export-by-date', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'exportByDate']);
             Route::get('absensi/employees', [\App\Modules\Supervisor\Attendance\Controllers\AttendanceAutologController::class, 'employees']);
