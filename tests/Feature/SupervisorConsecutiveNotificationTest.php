@@ -66,7 +66,7 @@ class SupervisorConsecutiveNotificationTest extends TestCase
             ->assertJsonPath('count', 1)
             ->assertJsonPath('notifications.0.employee_code', 'EMP-001')
             ->assertJsonPath('notifications.0.employee_name', 'BUDI')
-            ->assertJsonPath('notifications.0.message', 'Karyawan BUDI - EMP-001 mendapat consecutif day full 6 hari');
+            ->assertJsonPath('notifications.0.message', 'Karyawan BUDI - EMP-001 sudah masuk selama 6 hari');
     }
 
     public function test_karyawan_dengan_satu_hari_cuti_tidak_muncul_di_notifikasi(): void

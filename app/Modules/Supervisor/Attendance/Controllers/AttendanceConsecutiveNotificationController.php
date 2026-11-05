@@ -50,7 +50,7 @@ class AttendanceConsecutiveNotificationController extends Controller
                 'employee_id' => $employee->id,
                 'employee_code' => $employee->employee_code,
                 'employee_name' => $employee->name,
-                'message' => "Karyawan {$employee->name} - {$employee->employee_code} mendapat consecutif day full 6 hari",
+                'message' => "Karyawan {$employee->name} - {$employee->employee_code} sudah masuk selama 6 hari",
             ])
             ->values();
 
