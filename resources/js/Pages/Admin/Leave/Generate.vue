@@ -63,6 +63,30 @@
       </div>
     </BaseCard>
 
+    <!-- Peringatan: karyawan sudah genap 1 tahun tapi belum menerima kuota -->
+    <div
+      v-if="showCandidatesBanner"
+      class="mb-6 flex flex-col gap-3 rounded-md border border-(--warning)/40 bg-(--warning)/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div class="flex items-start gap-3">
+        <i class="bx bx-error-circle text-xl text-(--warning)"></i>
+        <div class="text-sm">
+          <p class="font-semibold text-(--text-main)">
+            {{ candidates.length }} karyawan sudah genap 1 tahun tetapi belum menerima kuota cuti
+          </p>
+          <p class="mt-1 text-xs text-(--text-muted)">
+            Tambahkan ke daftar penerima untuk periode {{ selectedPeriodName }}.
+          </p>
+        </div>
+      </div>
+      <BaseButton size="sm" variant="primary" @click="missingModal = true">
+        <template #icon-left>
+          <i class="bx bx-list-plus text-base"></i>
+        </template>
+        Lihat &amp; Tambahkan
+      </BaseButton>
+    </div>
+
     <!-- Periode Card -->
     <BaseCard>
       <template #title>Daftar Periode Cuti</template>
@@ -186,11 +210,69 @@
       @confirm="executeGenerate"
       @cancel="showConfirmGenerate = false"
     />
+    <!-- Modal: karyawan sudah genap 1 tahun tapi belum menerima kuota -->
+    <BaseModal
+      :show="missingModal"
+      title="Karyawan Belum Menerima Kuota Cuti"
+      size="lg"
+      @close="missingModal = false"
+    >
+      <div class="space-y-4">
+        <p class="text-sm text-(--text-main)">
+          Karyawan berikut sudah memenuhi masa kerja <strong>≥ 1 tahun</strong> pada periode
+          <strong>{{ selectedPeriodName }}</strong>, tetapi belum ada di daftar penerima kuota
+          <strong>{{ selectedPolicyName }}</strong>.
+        </p>
+        <p class="text-xs text-(--text-muted)">
+          Setiap karyawan yang ditambahkan akan langsung menerima
+          <strong>{{ policyEntitlementDays }} hari</strong> cuti untuk periode ini.
+        </p>
+
+        <DataTable
+          :headers="candidateHeaders"
+          :items="candidates"
+          :loading="loadingCandidates"
+          emptyText="Semua karyawan yang memenuhi syarat sudah menerima kuota cuti."
+        >
+          <template #item.masa_kerja="{ item }">
+            <span class="font-medium text-(--text-main)">{{ item.masa_kerja }}</span>
+            <span class="block text-xs text-(--text-muted)">Sejak {{ item.join_date_label }}</span>
+          </template>
+          <template #item.actions="{ item }">
+            <BaseButton
+              size="sm"
+              variant="primary"
+              :loading="addingId === item.employee_id"
+              :disabled="addingId !== null || addingAll || auth.isManajemen"
+              :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+              @click="addCandidate(item)"
+            >
+              <template #icon-left>
+                <i class="bx bx-plus text-base"></i>
+              </template>
+              Tambahkan
+            </BaseButton>
+          </template>
+        </DataTable>
+      </div>
+      <template #footer>
+        <BaseButton variant="ghost" @click="missingModal = false">Tutup</BaseButton>
+        <BaseButton
+          variant="primary"
+          :loading="addingAll"
+          :disabled="addingAll || addingId !== null || candidates.length === 0 || auth.isManajemen"
+          :class="auth.isManajemen ? 'opacity-50 cursor-not-allowed' : ''"
+          @click="addAllCandidates"
+        >
+          Tambahkan Semua ({{ candidates.length }})
+        </BaseButton>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import BaseCard from '../../../Components/BaseCard.vue'
 import BaseButton from '../../../Components/BaseButton.vue'
 import BaseModal from '../../../Components/BaseModal.vue'
@@ -219,6 +301,14 @@ const submittingPeriod = ref(false)
 const showPeriodModal = ref(false)
 const showConfirmGenerate = ref(false)
 const isEditingPeriod = ref(false)
+
+// --- State: karyawan sudah 1 tahun tapi belum menerima kuota ---
+const candidates = ref([])
+const missingModal = ref(false)
+const loadingCandidates = ref(false)
+const addingId = ref(null)
+const addingAll = ref(false)
+const pageReady = ref(false)
 
 const periodForm = reactive({
   id: null,
@@ -249,6 +339,35 @@ const selectedPeriodName = computed(() => {
   const p = periods.value.find((x) => x.id === selectedPeriodId.value)
   return p ? p.name : '-'
 })
+
+const selectedPeriod = computed(() =>
+  periods.value.find((x) => x.id === selectedPeriodId.value) || null
+)
+
+const selectedPolicy = computed(() =>
+  policies.value.find((x) => x.id === selectedPolicyId.value) || null
+)
+
+const selectedPolicyName = computed(() => selectedPolicy.value?.name || '-')
+
+const policyEntitlementDays = computed(() => Number(selectedPolicy.value?.entitlement_days || 0))
+
+// Tampilkan daftar hanya jika periode SUDAH pernah digenerate — kalau belum,
+// tindakan yang benar adalah "Proses Generate Kuota". Juga hanya untuk kebijakan
+// yang mensyaratkan 1 tahun masa kerja & punya jatah hari.
+const showCandidatesBanner = computed(
+  () =>
+    candidates.value.length > 0 &&
+    !!selectedPeriod.value?.is_generated &&
+    !!selectedPolicy.value?.requires_one_year_service &&
+    policyEntitlementDays.value > 0
+)
+
+const candidateHeaders = [
+  { key: 'name', label: 'Nama', sortable: false },
+  { key: 'masa_kerja', label: 'Masa Kerja', sortable: false },
+  { key: 'actions', label: 'Aksi', sortable: false },
+]
 
 const periodHeaders = [
   { key: 'name', label: 'Nama Periode' },
@@ -367,11 +486,101 @@ async function executeGenerate() {
     })
     notify.success(res.message || 'Kuota cuti berhasil digenerate.')
     await fetchPeriods()
+    await loadCandidates()
   } catch (err) {
     notify.error(err.message || 'Gagal generate kuota cuti.')
   } finally {
     generating.value = false
   }
+}
+
+// --- Karyawan sudah 1 tahun tapi belum menerima kuota ---
+// Pasangan periode+kebijakan yang terakhir dimuat (mencegah request ganda)
+const lastLoaded = { period: null, policy: null }
+
+async function loadCandidates({ autoOpen = false } = {}) {
+  if (!selectedPeriodId.value || !selectedPolicyId.value) {
+    candidates.value = []
+    return
+  }
+
+  lastLoaded.period = selectedPeriodId.value
+  lastLoaded.policy = selectedPolicyId.value
+  loadingCandidates.value = true
+  try {
+    const query =
+      `?leave_period_id=${encodeURIComponent(selectedPeriodId.value)}` +
+      `&leave_policy_id=${encodeURIComponent(selectedPolicyId.value)}`
+    const res = await api.get(`/api/v1/leave/generate-candidates${query}`)
+    candidates.value = (res.data || []).map((c) => ({ ...c, id: c.employee_id }))
+
+    if (autoOpen && showCandidatesBanner.value) {
+      missingModal.value = true
+    }
+  } catch (err) {
+    // Tidak punya akses / periode belum siap — sembunyikan daftar
+    candidates.value = []
+  } finally {
+    loadingCandidates.value = false
+  }
+}
+
+async function addCandidate(item) {
+  if (auth.isManajemen) return
+
+  addingId.value = item.employee_id
+  try {
+    const res = await api.post('/api/v1/leave/generate-quota-employee', {
+      employee_id: item.employee_id,
+      leave_period_id: selectedPeriodId.value,
+      leave_policy_id: selectedPolicyId.value,
+    })
+    notify.success(res.message || `${item.name} berhasil ditambahkan.`)
+    candidates.value = candidates.value.filter((c) => c.employee_id !== item.employee_id)
+    if (candidates.value.length === 0) {
+      missingModal.value = false
+    }
+    await fetchPeriods()
+  } catch (err) {
+    notify.error(err.message || 'Gagal menambahkan kuota cuti.')
+  } finally {
+    addingId.value = null
+  }
+}
+
+async function addAllCandidates() {
+  if (auth.isManajemen || candidates.value.length === 0 || addingAll.value) return
+
+  addingAll.value = true
+  const targets = [...candidates.value]
+  let success = 0
+  const failed = []
+
+  for (const item of targets) {
+    try {
+      await api.post('/api/v1/leave/generate-quota-employee', {
+        employee_id: item.employee_id,
+        leave_period_id: selectedPeriodId.value,
+        leave_policy_id: selectedPolicyId.value,
+      })
+      success++
+      candidates.value = candidates.value.filter((c) => c.employee_id !== item.employee_id)
+    } catch (err) {
+      failed.push(item.name)
+    }
+  }
+
+  addingAll.value = false
+  if (success > 0) {
+    notify.success(`${success} karyawan berhasil ditambahkan sebagai penerima kuota cuti.`)
+  }
+  if (failed.length > 0) {
+    notify.error(`Gagal menambahkan: ${failed.join(', ')}`)
+  }
+  if (candidates.value.length === 0) {
+    missingModal.value = false
+  }
+  await fetchPeriods()
 }
 
 // --- Helpers ---
@@ -384,5 +593,25 @@ function periodBadgeVariant(status) {
 onMounted(async () => {
   await fetchPeriods()
   await fetchPolicies()
+
+  // Default-kan kebijakan cuti tahunan supaya generate & tambah kuota bisa langsung dipakai
+  if (!selectedPolicyId.value && policies.value.length > 0) {
+    const annualPolicy =
+      policies.value.find((p) => (p.leaveType?.code || p.leave_type?.code) === 'CT') ||
+      policies.value.find((p) => p.requires_one_year_service)
+    if (annualPolicy) {
+      selectedPolicyId.value = annualPolicy.id
+    }
+  }
+
+  pageReady.value = true
+  await loadCandidates({ autoOpen: true })
+})
+
+// Muat ulang daftar calon penerima saat periode / kebijakan diganti
+watch([selectedPeriodId, selectedPolicyId], () => {
+  if (!pageReady.value) return
+  if (selectedPeriodId.value === lastLoaded.period && selectedPolicyId.value === lastLoaded.policy) return
+  loadCandidates()
 })
 </script>

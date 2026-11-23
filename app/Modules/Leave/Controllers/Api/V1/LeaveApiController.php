@@ -649,6 +649,195 @@ class LeaveApiController extends Controller
     }
 
     /**
+     * Daftar karyawan yang sudah genap ≥ 1 tahun masa kerja tetapi BELUM menerima
+     * kuota pada periode + kebijakan yang dipilih. Dipakai modal "Tambahkan" di
+     * halaman Generate Cuti Tahunan.
+     * GET /api/v1/leave/generate-candidates
+     */
+    public function generateCandidates(Request $request)
+    {
+        if (!$this->isHrUser()) {
+            return response()->json(['message' => 'Anda tidak memiliki akses untuk melihat calon penerima kuota cuti.'], 403);
+        }
+
+        $validated = $request->validate([
+            'leave_period_id' => 'required|exists:leave_periods,id',
+            'leave_policy_id' => 'required|exists:leave_policies,id',
+        ]);
+
+        $policy = LeavePolicy::findOrFail($validated['leave_policy_id']);
+        $period = LeavePeriod::findOrFail($validated['leave_period_id']);
+
+        // Karyawan yang sudah punya baris kuota (increment) untuk tipe cuti ini
+        $received = EmployeeLeave::where('leave_period_id', $period->id)
+            ->where('leave_type_id', $policy->leave_type_id)
+            ->where('transaction_type', 'increment')
+            ->pluck('employee_id')
+            ->flip();
+
+        $data = Employee::query()
+            ->where('is_active', true)
+            ->whereNotNull('join_date')
+            ->when($policy->requires_one_year_service, function ($query) {
+                $query->whereDate('join_date', '<=', now()->subYear()->toDateString());
+            })
+            ->orderBy('join_date')
+            ->orderBy('name')
+            ->get()
+            ->reject(fn ($employee) => $received->has($employee->id))
+            ->map(function ($employee) {
+                $join = \Carbon\Carbon::parse($employee->join_date);
+                $months = (int) $join->diffInMonths(now());
+
+                return [
+                    'employee_id'       => $employee->id,
+                    'name'              => $employee->name,
+                    'join_date'         => $join->format('Y-m-d'),
+                    'join_date_label'   => $this->formatDateId($join),
+                    'months_of_service' => $months,
+                    'masa_kerja'        => $this->formatYearsOfService($months),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'total'                => $data->count(),
+                'period'               => ['id' => $period->id, 'name' => $period->name],
+                'policy'               => [
+                    'id'               => $policy->id,
+                    'name'             => $policy->name,
+                    'leave_type_id'    => (int) $policy->leave_type_id,
+                    'entitlement_days' => (int) $policy->entitlement_days,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Tambahkan SATU karyawan ke daftar penerima kuota cuti pada periode tertentu.
+     * POST /api/v1/leave/generate-quota-employee
+     */
+    public function generateQuotaEmployee(Request $request)
+    {
+        if (!$this->isHrUser()) {
+            return response()->json(['message' => 'Anda tidak memiliki akses untuk menambahkan penerima kuota cuti.'], 403);
+        }
+
+        $validated = $request->validate([
+            'employee_id'     => 'required|exists:employees,id',
+            'leave_period_id' => 'required|exists:leave_periods,id',
+            'leave_policy_id' => 'required|exists:leave_policies,id',
+        ]);
+
+        $policy = LeavePolicy::findOrFail($validated['leave_policy_id']);
+        $period = LeavePeriod::findOrFail($validated['leave_period_id']);
+        $employee = Employee::findOrFail($validated['employee_id']);
+
+        if (!$employee->is_active) {
+            return response()->json(['message' => "{$employee->name} sudah tidak aktif, kuota tidak bisa ditambahkan."], 422);
+        }
+
+        if ($policy->requires_one_year_service) {
+            $years = $employee->join_date
+                ? \Carbon\Carbon::parse($employee->join_date)->diffInYears(now())
+                : 0;
+            if ($years < 1) {
+                return response()->json(['message' => "Masa kerja {$employee->name} belum mencapai 1 tahun."], 422);
+            }
+        }
+
+        if ((int) $policy->entitlement_days <= 0) {
+            return response()->json(['message' => "Kebijakan '{$policy->name}' tidak memiliki jatah cuti (0 hari)."], 422);
+        }
+
+        $alreadyReceived = EmployeeLeave::where('employee_id', $employee->id)
+            ->where('leave_type_id', $policy->leave_type_id)
+            ->where('leave_period_id', $period->id)
+            ->where('transaction_type', 'increment')
+            ->exists();
+
+        if ($alreadyReceived) {
+            return response()->json(['message' => "{$employee->name} sudah menerima kuota pada periode ini."], 422);
+        }
+
+        try {
+            $record = EmployeeLeave::create([
+                'employee_id'      => $employee->id,
+                'leave_type_id'    => $policy->leave_type_id,
+                'leave_period_id'  => $period->id,
+                'reference_id'     => 0,
+                'transaction_type' => 'increment',
+                'amount'           => $policy->entitlement_days,
+                'description'      => 'Generate Kuota ' . $policy->name,
+                'created_by'       => Auth::id(),
+                'updated_by'       => Auth::id(),
+            ]);
+        } catch (\Illuminate\Database\UniqueConstraintViolationException $e) {
+            return response()->json(['message' => "{$employee->name} sudah menerima kuota pada periode ini."], 422);
+        }
+
+        return response()->json([
+            'message' => "Kuota {$policy->entitlement_days} hari berhasil ditambahkan untuk {$employee->name}.",
+            'data'    => [
+                'employee_id'     => $employee->id,
+                'employee_name'   => $employee->name,
+                'amount'          => (float) $record->amount,
+                'leave_period_id' => $period->id,
+                'leave_type_id'   => (int) $policy->leave_type_id,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Cek apakah user yang login berhak mengelola kuota cuti (HR/Admin).
+     */
+    private function isHrUser(): bool
+    {
+        $user = Auth::user();
+        if (!$user) {
+            return false;
+        }
+
+        $roles = $user->roles->pluck('name')->toArray();
+
+        return !empty(array_intersect($roles, ['superadmin', 'hrmanager', 'hr_manager', 'hr', 'hrbranch']));
+    }
+
+    /**
+     * Format masa kerja dari jumlah bulan menjadi "X tahun Y bulan".
+     */
+    private function formatYearsOfService(int $months): string
+    {
+        $years = intdiv($months, 12);
+        $rest  = $months % 12;
+        $parts = [];
+
+        if ($years > 0) {
+            $parts[] = $years . ' tahun';
+        }
+        if ($rest > 0) {
+            $parts[] = $rest . ' bulan';
+        }
+
+        return $parts ? implode(' ', $parts) : '< 1 bulan';
+    }
+
+    /**
+     * Format tanggal ke gaya Indonesia tanpa bergantung locale aplikasi (en).
+     */
+    private function formatDateId(\Carbon\Carbon $date): string
+    {
+        $months = [
+            1 => 'Jan', 2 => 'Feb', 3 => 'Mar', 4 => 'Apr', 5 => 'Mei', 6 => 'Jun',
+            7 => 'Jul', 8 => 'Agu', 9 => 'Sep', 10 => 'Okt', 11 => 'Nov', 12 => 'Des',
+        ];
+
+        return $date->format('d') . ' ' . $months[(int) $date->format('n')] . ' ' . $date->format('Y');
+    }
+
+    /**
      * Recapitulate and close period
      */
     public function recapPeriod(Request $request)

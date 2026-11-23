@@ -46,6 +46,8 @@ Route::prefix('v1/leave')->middleware(['auth:sanctum'])->group(function () {
     Route::get('balances', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'balances']);
     Route::get('employee-balance', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'employeeBalance']);
     Route::post('generate-quota', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'generateQuota']);
+    Route::get('generate-candidates', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'generateCandidates']);
+    Route::post('generate-quota-employee', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'generateQuotaEmployee']);
     Route::post('recap-period', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'recapPeriod']);
     Route::post('calibrate', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'calibrate']);
     Route::post('normalize-period', [\App\Modules\Leave\Controllers\Api\V1\LeaveApiController::class, 'normalizePeriod']);

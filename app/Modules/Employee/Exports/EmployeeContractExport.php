@@ -19,19 +19,20 @@ use PhpOffice\PhpSpreadsheet\Cell\DefaultValueBinder;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 
 /**
- * Export daftar pekerja kontrak (format tabel laporan).
+ * Export daftar kontrak kerja.
  *
- * Header bertingkat (multi-row):
- *   Baris 1 : NO | NAMA PEKERJA | NIK | ALAMAT | L/P | BAGIAN JABATAN | UPAH/BULAN |
- *             WAKTU (merge H1:I1) | MASA PKWT
- *             → kolom A..G dan J di-merge vertikal dengan baris 2
- *   Baris 2 : MULAI (H2) | AKHIR (I2) — payung dari WAKTU
- *   Baris 3 : penomoran kolom 1..10
- *   Baris 4+: data kontrak
+ * Layout ringkas satu baris judul:
+ *   Baris 1 : NIP | NAMA | TIPE KONTRAK | START DATE | END DATE | DURASI
+ *   Baris 2+: data kontrak
+ *
+ * Dulu berkas ini berupa tabel laporan 10 kolom dengan header bertingkat
+ * (NO/NAMA/NIK/ALAMAT/L-P/BAGIAN JABATAN/UPAH/WAKTU/MASA PKWT). Sejak
+ * 9 Nov 2026 kolomnya disamakan dengan export di kusmajalengka2.
  */
 class EmployeeContractExport implements
     FromQuery,
@@ -43,19 +44,15 @@ class EmployeeContractExport implements
     WithCustomValueBinder,
     WithEvents
 {
-    private const LAST_COL = 'J';
-    private const COL_COUNT = 10;
+    private const LAST_COL = 'F';
 
     /**
-     * NIK disimpan sebagai teks supaya Excel tidak mengubahnya menjadi angka
-     * (presisi double Excel hanya 15 digit, sehingga digit terakhir bisa hilang).
+     * NIP ditulis sebagai teks supaya Excel tidak mengubahnya menjadi angka
+     * (nol di depan hilang dan presisi double hanya 15 digit).
      */
-    private const TEXT_COLUMNS = ['C'];
+    private const TEXT_COLUMNS = ['A'];
 
     protected array $filters;
-
-    /** Nomor urut baris data (kolom NO). */
-    protected int $rowNumber = 0;
 
     public function __construct(array $filters = [])
     {
@@ -68,11 +65,11 @@ class EmployeeContractExport implements
     }
 
     /**
-     * Paksa kolom NIK tetap bertipe string saat ditulis.
+     * Paksa kolom NIP tetap bertipe string saat ditulis.
      *
      * Tanggal (start_date/end_date) ditulis sebagai serial number Excel, bukan
      * string "Y-m-d H:i:s" seperti perilaku DefaultValueBinder. Dengan begitu
-     * format kolom H/I (DD/MM/YYYY) benar-benar dipakai Excel sehingga tanggal
+     * format kolom D/E (DD/MM/YYYY) benar-benar dipakai Excel sehingga tanggal
      * tampil tanpa jam.
      */
     public function bindValue(Cell $cell, $value)
@@ -95,28 +92,22 @@ class EmployeeContractExport implements
     public function columnFormats(): array
     {
         return [
-            'C' => NumberFormat::FORMAT_TEXT,
-            // Upah bulanan: 2940088 → tampil 2.940.088,00 pada Excel locale Indonesia.
-            'G' => '#,##0.00',
-            'H' => NumberFormat::FORMAT_DATE_DDMMYYYY,
-            'I' => NumberFormat::FORMAT_DATE_DDMMYYYY,
-            'J' => '0',
+            'A' => NumberFormat::FORMAT_TEXT,
+            'D' => NumberFormat::FORMAT_DATE_DDMMYYYY,
+            'E' => NumberFormat::FORMAT_DATE_DDMMYYYY,
+            'F' => '0',
         ];
     }
 
     public function columnWidths(): array
     {
         return [
-            'A' => 5,
+            'A' => 16,
             'B' => 30,
-            'C' => 22,
-            'D' => 46,
-            'E' => 5,
-            'F' => 15,
-            'G' => 16,
-            'H' => 12,
-            'I' => 12,
-            'J' => 10,
+            'C' => 18,
+            'D' => 14,
+            'E' => 14,
+            'F' => 12,
         ];
     }
 
@@ -199,16 +190,12 @@ class EmployeeContractExport implements
     public function headings(): array
     {
         return [
-            'NO',
-            "NAMA\nPEKERJA",
-            'NIK',
-            'ALAMAT',
-            'L/P',
-            "BAGIAN\nJABATAN",
-            "UPAH/\nBULAN",
-            'WAKTU',
-            null,
-            "MASA\nPKWT",
+            'NIP',
+            'NAMA',
+            'TIPE KONTRAK',
+            'START DATE',
+            'END DATE',
+            'DURASI',
         ];
     }
 
@@ -217,15 +204,9 @@ class EmployeeContractExport implements
         $employee = $contract->employee;
 
         return [
-            ++$this->rowNumber,
+            $employee?->nip ?? '-',
             $employee?->name ?? '-',
-            $employee?->nik ?? '-',
-            $employee?->address ?? '-',
-            $employee?->gender ?? '-',
-            // Bagian/jabatan: ambil nama jabatan (mis. FINISHING, SUBLIM, AUTOPRINT).
-            $employee?->position?->name ?? $employee?->department?->name ?? '-',
-            // Upah per bulan (gaji pokok aktif; fallback kolom employees.base_salary)
-            $employee ? (float) $employee->gaji_pokok() : 0,
+            $contract->contract_type_label ?? '-',
             $contract->start_date,
             $contract->end_date,
             (int) ($contract->duration_months ?? 0),
@@ -238,26 +219,17 @@ class EmployeeContractExport implements
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                // Sisipkan baris 2 (sub-judul WAKTU) dan baris 3 (penomoran kolom).
-                $sheet->insertNewRowBefore(2, 2);
-                $sheet->fromArray([null, null, null, null, null, null, null, 'MULAI', 'AKHIR', null], null, 'A2');
-                $sheet->fromArray([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], null, 'A3');
+                $lastRow = max($sheet->getHighestRow(), 1);
 
-                // Tanpa data, tabel hanya berisi 3 baris judul.
-                $lastRow   = max($sheet->getHighestRow(), 3);
-                $firstData = 4;
-
-                // Judul kolom di-merge vertikal dengan baris 2,
-                // sedangkan WAKTU menaungi MULAI & AKHIR secara horizontal.
-                foreach (['A', 'B', 'C', 'D', 'E', 'F', 'G', 'J'] as $column) {
-                    $sheet->mergeCells("{$column}1:{$column}2");
-                }
-
-                $sheet->mergeCells('H1:I1');
-
-                $sheet->getStyle('A1:' . self::LAST_COL . '3')->applyFromArray([
+                $sheet->getStyle('A1:' . self::LAST_COL . '1')->applyFromArray([
                     'font' => [
-                        'size' => 10,
+                        'size'     => 10,
+                        'bold'     => true,
+                        'color'    => ['rgb' => 'FFFFFF'],
+                    ],
+                    'fill' => [
+                        'fillType'   => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => '4472C4'],
                     ],
                     'alignment' => [
                         'horizontal' => Alignment::HORIZONTAL_CENTER,
@@ -267,8 +239,6 @@ class EmployeeContractExport implements
                 ]);
 
                 $sheet->getRowDimension(1)->setRowHeight(20);
-                $sheet->getRowDimension(2)->setRowHeight(16);
-                $sheet->getRowDimension(3)->setRowHeight(16);
 
                 // Border tipis untuk seluruh tabel.
                 $sheet->getStyle('A1:' . self::LAST_COL . $lastRow)->applyFromArray([
@@ -283,30 +253,23 @@ class EmployeeContractExport implements
                     ],
                 ]);
 
-                if ($lastRow >= $firstData) {
-                    $sheet->getStyle("A{$firstData}:" . self::LAST_COL . "{$lastRow}")
+                if ($lastRow >= 2) {
+                    $sheet->getStyle('A2:' . self::LAST_COL . $lastRow)
                         ->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
 
                     $alignments = [
-                        'A' => Alignment::HORIZONTAL_CENTER,
+                        'A' => Alignment::HORIZONTAL_LEFT,
                         'B' => Alignment::HORIZONTAL_LEFT,
-                        'C' => Alignment::HORIZONTAL_LEFT,
-                        'D' => Alignment::HORIZONTAL_LEFT,
+                        'C' => Alignment::HORIZONTAL_CENTER,
+                        'D' => Alignment::HORIZONTAL_CENTER,
                         'E' => Alignment::HORIZONTAL_CENTER,
                         'F' => Alignment::HORIZONTAL_CENTER,
-                        'G' => Alignment::HORIZONTAL_RIGHT,
-                        'H' => Alignment::HORIZONTAL_CENTER,
-                        'I' => Alignment::HORIZONTAL_CENTER,
-                        'J' => Alignment::HORIZONTAL_CENTER,
                     ];
 
                     foreach ($alignments as $column => $horizontal) {
-                        $sheet->getStyle("{$column}{$firstData}:{$column}{$lastRow}")
+                        $sheet->getStyle("{$column}2:{$column}{$lastRow}")
                             ->getAlignment()->setHorizontal($horizontal);
                     }
-
-                    // Alamat panjang dibiarkan wrap agar tinggi baris menyesuaikan.
-                    $sheet->getStyle("D{$firstData}:D{$lastRow}")->getAlignment()->setWrapText(true);
                 }
 
                 // Siap cetak: landscape folio, judul kolom berulang di tiap halaman.
@@ -318,9 +281,9 @@ class EmployeeContractExport implements
                 $sheet->getPageSetup()->setFitToPage(true);
                 $sheet->getPageMargins()->setTop(0.5)->setRight(0.3)->setBottom(0.5)->setLeft(0.3);
 
-                // Judul kolom (baris 1-3) diulang di setiap halaman saat dicetak.
-                $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, 3);
-                $sheet->freezePane('A4');
+                // Judul kolom (baris 1) diulang di setiap halaman saat dicetak.
+                $sheet->getPageSetup()->setRowsToRepeatAtTopByStartAndEnd(1, 1);
+                $sheet->freezePane('A2');
             },
         ];
     }
