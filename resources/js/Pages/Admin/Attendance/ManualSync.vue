@@ -624,8 +624,10 @@ const groupTabs = computed(() => [
   ...groups.value.map(g => ({ code: g.code, label: `${g.code} · ${g.name}` })),
 ])
 
-function selectGroup(code) {
+async function selectGroup(code) {
   if (activeGroup.value === code) return
+  // Sama seperti paging: jangan buang pilihan jam scan yang belum disimpan.
+  if (!(await confirmDiscardUnsaved('Pindah tab'))) return
   activeGroup.value = code
   if (!hasLoaded.value) return
   currentPage.value = 1

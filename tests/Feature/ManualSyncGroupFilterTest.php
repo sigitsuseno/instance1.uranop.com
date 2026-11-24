@@ -94,15 +94,20 @@ class ManualSyncGroupFilterTest extends TestCase
         return collect($response->json('data'))->pluck('employee.name')->unique()->sort()->values()->all();
     }
 
-    private function url(array $query = []): string
+    private function params(array $query = []): array
     {
-        return self::URL . '?' . http_build_query(array_merge([
+        return array_merge([
             'period_id' => $this->period->id,
             'start_date' => '2026-10-12',
             'end_date' => '2026-10-18',
             'mode' => 'display',
             'per_page' => 10,
-        ], $query));
+        ], $query);
+    }
+
+    private function url(array $query = []): string
+    {
+        return self::URL . '?' . http_build_query($this->params($query));
     }
 
     public function test_semua_tanpa_group_codes_memuat_karyawan_tanpa_group(): void
@@ -136,8 +141,12 @@ class ManualSyncGroupFilterTest extends TestCase
 
     public function test_group_codes_kosong_sama_dengan_semua(): void
     {
+        // http_build_query() membuang array kosong, jadi parameter dikirim lewat
+        // call() supaya `group_codes` benar-benar hadir sebagai array kosong —
+        // bukan hilang dari query seperti pada test "tanpa group_codes".
         $response = $this->actingAs($this->user, 'sanctum')
-            ->getJson($this->url(['group_codes' => []]));
+            ->withHeaders(['Accept' => 'application/json'])
+            ->call('GET', self::URL, $this->params(['group_codes' => []]));
 
         $response->assertOk();
         $response->assertJsonPath('pagination.total', 3);
