@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Modules\Attendance\Models\AttendancePrepare;
 use App\Modules\Auth\Models\User;
 use App\Modules\Employee\Models\Employee;
 use App\Modules\Schedule\Models\EmployeeShiftRoster;
@@ -18,6 +19,8 @@ class OvertimeCalculateFilterTest extends TestCase
     private const START = '2026-10-12';
 
     private const END = '2026-10-18';
+
+    private const HITUNG_URL = '/api/v1/attendance/prepare/hitung-lembur';
 
     private User $user;
 
@@ -125,5 +128,78 @@ class OvertimeCalculateFilterTest extends TestCase
         $this->actingAs($this->user, 'sanctum')
             ->getJson($this->url('2026-10-18', '2026-10-12'))
             ->assertStatus(422);
+    }
+
+    private function prepare(Employee $employee, string $date): AttendancePrepare
+    {
+        return AttendancePrepare::create([
+            'employee_id'   => $employee->id,
+            'date'          => $date,
+            'periode_start' => '2026-10-01',
+            'periode_end'   => '2026-10-31',
+            'check_in'      => $date . ' 08:00:00',
+            'check_out'     => $date . ' 17:30:00',
+            'status'        => 'hadir',
+            'is_locked'     => false,
+            'lm'            => 999,
+            'lm_count'      => 999,
+            'overtime'      => 999,
+            'overtime_count' => 999,
+        ]);
+    }
+
+    public function test_hitung_hanya_karyawan_terpilih(): void
+    {
+        $budiPrepare = $this->prepare($this->budi, '2026-10-14');
+        $sitiPrepare = $this->prepare($this->siti, '2026-10-15');
+
+        $response = $this->actingAs($this->user, 'sanctum')->postJson(self::HITUNG_URL, [
+            'start_date'   => self::START,
+            'end_date'     => self::END,
+            'employee_ids' => [$this->budi->id],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('data.updated', 1);
+        $this->assertNotSame(999, $budiPrepare->fresh()->lm);
+        $this->assertSame(999, $sitiPrepare->fresh()->lm);
+    }
+
+    public function test_tanpa_employee_ids_semua_dihitung(): void
+    {
+        $budiPrepare = $this->prepare($this->budi, '2026-10-14');
+        $sitiPrepare = $this->prepare($this->siti, '2026-10-15');
+
+        $response = $this->actingAs($this->user, 'sanctum')->postJson(self::HITUNG_URL, [
+            'start_date' => self::START,
+            'end_date'   => self::END,
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('data.updated', 2);
+        $this->assertNotSame(999, $budiPrepare->fresh()->lm);
+        $this->assertNotSame(999, $sitiPrepare->fresh()->lm);
+    }
+
+    public function test_employee_ids_kosong_ditolak_422(): void
+    {
+        $budiPrepare = $this->prepare($this->budi, '2026-10-14');
+
+        $this->actingAs($this->user, 'sanctum')->postJson(self::HITUNG_URL, [
+            'start_date'   => self::START,
+            'end_date'     => self::END,
+            'employee_ids' => [],
+        ])->assertStatus(422);
+
+        $this->assertSame(999, $budiPrepare->fresh()->lm);
+    }
+
+    public function test_employee_ids_bukan_array_ditolak_422(): void
+    {
+        $this->actingAs($this->user, 'sanctum')->postJson(self::HITUNG_URL, [
+            'start_date'   => self::START,
+            'end_date'     => self::END,
+            'employee_ids' => 'A001',
+        ])->assertStatus(422);
     }
 }

@@ -524,13 +524,15 @@ class AttendanceService
      * Record libur/off/cuti/izin/sakit tanpa scan akan diskip otomatis
      * karena tidak punya check_in & check_out.
      */
-    public function bulkHitungLembur(string $startDate, string $endDate, AttendanceCalculatorService $calculator): array
+    public function bulkHitungLembur(string $startDate, string $endDate, AttendanceCalculatorService $calculator, ?array $employeeIds = null): array
     {
-        // Ambil semua record unlocked yang punya data scan lengkap
+        // Ambil semua record unlocked yang punya data scan lengkap.
+        // $employeeIds null/kosong = seluruh karyawan (perilaku lama).
         $prepares = AttendancePrepare::whereBetween('date', [$startDate, $endDate])
             ->where('is_locked', false)
             ->whereNotNull('check_in')
             ->whereNotNull('check_out')
+            ->when(! empty($employeeIds), fn ($q) => $q->whereIn('employee_id', $employeeIds))
             ->get();
 
         $updated = 0;

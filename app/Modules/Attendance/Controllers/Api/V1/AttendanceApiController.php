@@ -390,8 +390,10 @@ class AttendanceApiController extends Controller
     public function prepareHitungLembur(Request $request): JsonResponse
     {
         $request->validate([
-            'start_date' => 'required|date',
-            'end_date'   => 'required|date|after_or_equal:start_date',
+            'start_date'     => 'required|date',
+            'end_date'       => 'required|date|after_or_equal:start_date',
+            'employee_ids'   => 'nullable|array|min:1',
+            'employee_ids.*' => 'integer',
         ]);
 
         $calculator = new AttendanceCalculatorService();
@@ -399,7 +401,8 @@ class AttendanceApiController extends Controller
         $result     = $service->bulkHitungLembur(
             $request->start_date,
             $request->end_date,
-            $calculator
+            $calculator,
+            $request->input('employee_ids')
         );
 
         return response()->json([
