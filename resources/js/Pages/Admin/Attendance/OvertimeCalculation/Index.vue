@@ -1,5 +1,5 @@
 <template>
-  <div class="p-4 sm:p-6 lg:p-8">
+  <div class="p-4 sm:p-6">
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
       <div>
@@ -19,7 +19,7 @@
       <div class="flex items-center gap-2">
         <button 
           @click="openSettings"
-          class="h-10 px-3 text-sm rounded-lg border border-(--border-soft) bg-(--bg-card) hover:bg-(--bg-elevated) flex items-center gap-1.5 transition-colors"
+          class="h-10 px-3 text-sm rounded-md border border-(--border-soft) bg-(--bg-card) hover:bg-(--bg-elevated) flex items-center gap-1.5 transition-colors"
           title="Pengaturan Lembur"
         >
           <i class="bx bx-cog text-lg text-(--text-muted)"></i>
@@ -40,37 +40,41 @@
           Calculate Overtime
         </BaseButton>
 
-        <button 
+        <BaseButton
+          variant="success"
+          :loading="isExporting"
           @click="handleExport"
-          :disabled="isExporting"
-          class="h-10 px-4 text-sm font-medium rounded-lg bg-green-600 text-white hover:bg-green-700 flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+          class="shadow-sm"
         >
-          <i class="bx bx-file text-lg" v-if="!isExporting"></i>
-          <i class="bx bx-loader-alt bx-spin text-lg" v-else></i>
+          <template #icon-left>
+            <i class="bx bx-file text-lg"></i>
+          </template>
           <span class="hidden sm:inline">Export Excel</span>
-        </button>
+        </BaseButton>
 
-        <button 
+        <BaseButton
+          variant="secondary"
+          :loading="isExportingRoster"
           @click="handleExportRoster"
-          :disabled="isExportingRoster"
-          class="h-10 px-4 text-sm font-medium rounded-lg bg-teal-600 text-white hover:bg-teal-700 flex items-center gap-2 transition-colors shadow-sm disabled:opacity-50"
+          class="shadow-sm"
         >
-          <i class="bx bx-table text-lg" v-if="!isExportingRoster"></i>
-          <i class="bx bx-loader-alt bx-spin text-lg" v-else></i>
+          <template #icon-left>
+            <i class="bx bx-table text-lg"></i>
+          </template>
           <span class="hidden sm:inline">Export Roster</span>
-        </button>
+        </BaseButton>
       </div>
     </div>
 
     <!-- Status Banner -->
-    <div v-if="calculateResult" class="mb-4 p-3 rounded-lg text-sm font-medium"
-      :class="calculateResult.success ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'">
+    <div v-if="calculateResult" class="mb-4 p-3 rounded-md text-sm font-medium border"
+      :class="calculateResult.success ? 'bg-(--success)/10 border-(--success)/30 text-(--success)' : 'bg-(--danger)/10 border-(--danger)/30 text-(--danger)'">
       {{ calculateResult.message }}
       <button class="ml-2 underline text-xs" @click="calculateResult = null">Tutup</button>
     </div>
 
     <!-- Period Selection Card -->
-    <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
+    <div class="bg-(--bg-card) border border-(--border-soft) rounded-md shadow-sm p-4 mb-6">
       <div class="flex flex-col sm:flex-row gap-3">
         <div v-if="periods.length > 0">
           <label class="block text-xs font-medium text-(--text-muted) mb-1">
@@ -80,7 +84,7 @@
           <select
             v-model="selectedPeriodId"
             @change="onPeriodChange"
-            class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+            class="h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
           >
             <option :value="null" disabled>Pilih periode</option>
             <option v-for="period in periods" :key="period.id" :value="period.id">
@@ -98,7 +102,7 @@
             v-model="startDate"
             :min="selectedPeriod?.start_date"
             :max="selectedPeriod?.end_date"
-            class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+            class="h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
           />
         </div>
         <div>
@@ -111,7 +115,7 @@
             v-model="endDate"
             :min="selectedPeriod?.start_date"
             :max="selectedPeriod?.end_date"
-            class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+            class="h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
           />
         </div>
         <div class="flex items-end gap-2">
@@ -138,7 +142,7 @@
             v-model="searchQuery"
             type="text"
             placeholder="Cari karyawan..."
-            class="w-full pl-9 pr-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+            class="w-full h-10 pl-9 pr-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
             @keyup.enter="submitFilter"
           />
         </div>
@@ -146,7 +150,7 @@
         <button 
           v-if="searchQuery"
           @click="resetFilter"
-          class="p-2 rounded-lg border border-(--border-soft) hover:bg-(--bg-elevated) transition"
+          class="h-10 w-10 inline-flex items-center justify-center rounded-md border border-(--border-soft) hover:bg-(--bg-elevated) transition"
         >
           <i class="bx bx-x text-lg text-(--text-muted)"></i>
         </button>
@@ -163,7 +167,7 @@
     </div>
 
     <!-- Table -->
-    <div class="overflow-x-auto bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm">
+    <div class="overflow-x-auto bg-(--bg-card) border border-(--border-soft) rounded-md shadow-sm">
       <table class="w-full text-sm text-left">
         <thead class="bg-(--bg-elevated) border-b border-(--border-soft)">
           <tr>
@@ -195,13 +199,13 @@
             <td class="px-4 py-3 text-center text-(--text-main)">
               {{ formatMinutes(employee.lm) }}
             </td>
-            <td class="px-4 py-3 text-center text-orange-600 dark:text-orange-400">
+            <td class="px-4 py-3 text-center text-(--warning)">
               {{ formatMinutes(employee.total_lm) }}
             </td>
             <td class="px-4 py-3 text-center text-(--text-main)">
               {{ formatMinutes(employee.lembur_hb) }}
             </td>
-            <td class="px-4 py-3 text-center text-orange-600 dark:text-orange-400">
+            <td class="px-4 py-3 text-center text-(--warning)">
               {{ formatMinutes(employee.total_lhb) }}
             </td>
             <td class="px-4 py-3 text-center font-semibold text-(--primary)">
@@ -210,7 +214,7 @@
             <td class="px-4 py-3 text-center">
               <router-link 
                 :to="`/admin/attendance/overtime-calculation/${employee.id}?start_date=${startDate}&end_date=${endDate}`"
-                class="inline-flex items-center gap-1 px-3 py-1.5 bg-(--bg-elevated) hover:bg-gray-200 dark:hover:bg-gray-700 text-(--text-main) rounded-lg transition text-xs font-medium border border-(--border-soft)"
+                class="inline-flex items-center gap-1 h-8 px-3 bg-(--bg-card) hover:bg-(--bg-elevated) text-(--text-main) rounded-md transition text-xs font-medium border border-(--border-soft)"
               >
                 <i class="bx bx-list-ul"></i> Detail
               </router-link>
@@ -218,7 +222,7 @@
           </tr>
           
           <tr v-if="!isLoading && employees.length === 0">
-            <td colspan="8" class="px-4 py-8 text-center text-(--text-muted)">
+            <td colspan="8" class="px-4 py-6 text-center text-(--text-muted)">
               <i class="bx bx-folder-open text-3xl mb-2 block text-(--text-soft)"></i>
               Tidak ada data karyawan ditemukan.
             </td>
@@ -236,14 +240,14 @@
         <button 
           :disabled="!pagination.links?.prev"
           @click="fetchData(pagination.current_page - 1)"
-          class="px-3 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-(--bg-elevated) transition inline-flex items-center gap-1 text-sm bg-(--bg-card) disabled:opacity-50"
+          class="h-10 px-3 border border-(--border-soft) rounded-md text-(--text-muted) hover:bg-(--bg-elevated) transition inline-flex items-center gap-1 text-sm bg-(--bg-card) disabled:opacity-50"
         >
           <i class="bx bx-chevron-left"></i> Sebelumnya
         </button>
         <button 
           :disabled="!pagination.links?.next"
           @click="fetchData(pagination.current_page + 1)"
-          class="px-3 py-2 border border-(--border-soft) rounded-lg text-(--text-muted) hover:bg-(--bg-elevated) transition inline-flex items-center gap-1 text-sm bg-(--bg-card) disabled:opacity-50"
+          class="h-10 px-3 border border-(--border-soft) rounded-md text-(--text-muted) hover:bg-(--bg-elevated) transition inline-flex items-center gap-1 text-sm bg-(--bg-card) disabled:opacity-50"
         >
           Selanjutnya <i class="bx bx-chevron-right"></i>
         </button>
@@ -256,25 +260,25 @@
         
         <div>
           <label class="block text-sm font-semibold text-(--text-main) mb-1">Pemilihan Rumus Lembur</label>
-          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-md border border-(--border-soft)">
             <div class="flex flex-col sm:flex-row gap-3">
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">Pola FIXED</label>
-                <select v-model="settingForm.formula_fixed" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <select v-model="settingForm.formula_fixed" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
                   <option value="rumus_1">Rumus 1 (Scan In - Out)</option>
                   <option value="rumus_2">Rumus 2 (Schedule Out - Out)</option>
                 </select>
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT (Kode S)</label>
-                <select v-model="settingForm.formula_flex_s" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <select v-model="settingForm.formula_flex_s" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
                   <option value="rumus_1">Rumus 1 (Scan In - Out)</option>
                   <option value="rumus_2">Rumus 2 (Schedule Out - Out)</option>
                 </select>
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT (Kode P)</label>
-                <select v-model="settingForm.formula_flex_p" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <select v-model="settingForm.formula_flex_p" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
                   <option value="rumus_1">Rumus 1 (Scan In - Out)</option>
                   <option value="rumus_2">Rumus 2 (Schedule Out - Out)</option>
                 </select>
@@ -285,39 +289,39 @@
 
         <div>
           <label class="block text-sm font-semibold text-(--text-main) mb-1">Karyawan Khusus</label>
-          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-md border border-(--border-soft)">
             <div class="flex flex-col sm:flex-row gap-3">
               <div class="flex-[2]">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">ID Karyawan</label>
-                <input v-model="settingForm.special_ids" type="text" placeholder="Misal: 102, 105" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.special_ids" type="text" placeholder="Misal: 102, 105" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">Pilih Rumus</label>
-                <select v-model="settingForm.special_formula" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <select v-model="settingForm.special_formula" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
                   <option value="rumus_1">Rumus 1</option>
                   <option value="rumus_2">Rumus 2</option>
                 </select>
               </div>
             </div>
-            <p class="text-[11px] text-(--text-muted) mt-1">Karyawan dengan ID di atas akan mengabaikan pola kerja dan dipaksa menggunakan rumus yang dipilih.</p>
+            <p class="text-xs text-(--text-muted) mt-1">Karyawan dengan ID di atas akan mengabaikan pola kerja dan dipaksa menggunakan rumus yang dipilih.</p>
           </div>
         </div>
 
         <div>
           <label class="block text-sm font-semibold text-(--text-main) mb-1">Aturan Teknisi Khusus (KRY-TKN)</label>
-          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-md border border-(--border-soft)">
             <div>
               <label class="block text-xs font-medium text-(--text-muted) mb-1">ID Karyawan Teknisi</label>
-              <input v-model="settingForm.technician_ids" type="text" placeholder="Misal: 31, 115, 174" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              <input v-model="settingForm.technician_ids" type="text" placeholder="Misal: 31, 115, 174" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
             </div>
             <div class="flex gap-3">
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">Berlaku Sejak</label>
-                <input v-model="settingForm.technician_start_date" type="date" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.technician_start_date" type="date" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">Maks Lembur Libur (Menit)</label>
-                <input v-model="settingForm.technician_max_minutes" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.technician_max_minutes" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
             </div>
           </div>
@@ -325,35 +329,35 @@
 
         <div>
           <label class="block text-sm font-semibold text-(--text-main) mb-1">Jam Kerja Default (Menit)</label>
-          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-lg border border-(--border-soft)">
+          <div class="space-y-3 p-3 bg-(--bg-elevated) rounded-md border border-(--border-soft)">
             <div class="flex gap-3">
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FIXED - Weekday</label>
-                <input v-model="settingForm.hours_fixed_wd" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.hours_fixed_wd" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FIXED - Sabtu</label>
-                <input v-model="settingForm.hours_fixed_sat" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.hours_fixed_sat" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
             </div>
             <div class="flex gap-3 mt-2">
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - Weekday</label>
-                <input v-model="settingForm.hours_flex_wd" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.hours_flex_wd" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - Sabtu</label>
-                <input v-model="settingForm.hours_flex_sat" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.hours_flex_sat" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
             </div>
             <div class="flex gap-3 mt-2">
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - PL (8 Jam)</label>
-                <input v-model="settingForm.hours_flex_pl" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.hours_flex_pl" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
               <div class="flex-1">
                 <label class="block text-xs font-medium text-(--text-muted) mb-1">FLEX-SHIFT - PL2 (9 Jam)</label>
-                <input v-model="settingForm.hours_flex_pl2" type="number" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+                <input v-model="settingForm.hours_flex_pl2" type="number" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
               </div>
             </div>
           </div>
@@ -362,7 +366,7 @@
         <div>
           <label class="block text-sm font-semibold text-(--text-main) mb-1">Kode Shift Tanpa Telat</label>
           <p class="text-xs text-(--text-muted) mb-2">Kode `external_code` shift yang `late_minutes` diabaikan (selalu 0). Pisahkan koma.</p>
-          <input v-model="settingForm.zero_late_codes" type="text" placeholder="Misal: S, P" class="w-full px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+          <input v-model="settingForm.zero_late_codes" type="text" placeholder="Misal: S, P" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
         </div>
 
         <div>
@@ -371,11 +375,11 @@
           <div class="flex gap-3">
             <div class="flex-1">
               <label class="block text-xs font-medium text-(--text-muted) mb-1">Interval (menit)</label>
-              <input v-model.number="settingForm.rounding_interval" type="number" min="1" max="60" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              <input v-model.number="settingForm.rounding_interval" type="number" min="1" max="60" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
             </div>
             <div class="flex-1">
               <label class="block text-xs font-medium text-(--text-muted) mb-1">Toleransi (menit)</label>
-              <input v-model.number="settingForm.rounding_threshold" type="number" min="0" max="30" class="w-full px-3 py-2 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
+              <input v-model.number="settingForm.rounding_threshold" type="number" min="0" max="30" class="w-full h-10 px-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)">
             </div>
           </div>
         </div>
@@ -385,7 +389,7 @@
           <BaseButton variant="primary" :loading="savingConfig" @click="saveConfig">Simpan Pengaturan</BaseButton>
         </div>
       </div>
-      <div v-else class="py-8 text-center text-sm text-(--text-muted)">
+      <div v-else class="py-6 text-center text-sm text-(--text-muted)">
         Memuat pengaturan...
       </div>
     </BaseModal>

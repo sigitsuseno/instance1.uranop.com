@@ -11,7 +11,7 @@
           v-model="search"
           type="text"
           placeholder="Cari kode atau nama karyawan..."
-          class="w-full pl-9 pr-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+          class="w-full h-10 pl-9 pr-3 border border-(--border-soft) rounded-md bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
         />
       </div>
 
@@ -20,9 +20,9 @@
         <button type="button" class="underline whitespace-nowrap" @click="emit('retry')">Coba lagi</button>
       </div>
 
-      <div v-if="loading" class="py-8 text-center text-sm text-(--text-muted)">Memuat karyawan...</div>
+      <div v-if="loading" class="py-6 text-center text-sm text-(--text-muted)">Memuat karyawan...</div>
 
-      <div v-else-if="employees.length === 0 && !error" class="py-8 text-center text-sm text-(--text-muted)">
+      <div v-else-if="employees.length === 0 && !error" class="py-6 text-center text-sm text-(--text-muted)">
         Tidak ada karyawan yang punya roster pada rentang ini.
       </div>
 
@@ -32,7 +32,7 @@
           Pilih semua ({{ filteredEmployees.length }} tampil)
         </label>
 
-        <div class="max-h-72 overflow-y-auto divide-y divide-(--border-soft) border border-(--border-soft) rounded-lg">
+        <div class="max-h-72 overflow-y-auto divide-y divide-(--border-soft) border border-(--border-soft) rounded-md">
           <label
             v-for="employee in filteredEmployees"
             :key="employee.id"
