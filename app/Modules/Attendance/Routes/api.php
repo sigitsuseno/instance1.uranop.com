@@ -49,6 +49,8 @@ Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
             ->name('attendance.prepare.list');
         Route::get('/stats', [AttendanceApiController::class, 'prepareStats'])
             ->name('attendance.prepare.stats');
+        Route::get('overtime-employees', [AttendanceApiController::class, 'prepareOvertimeEmployees'])
+            ->name('attendance.prepare.overtime-employees');
         Route::get('overtime-summary', [AttendanceApiController::class, 'prepareOvertimeSummary'])->name('attendance.prepare.overtime-summary');
         Route::get('overtime-summary/export', [AttendanceApiController::class, 'prepareOvertimeSummaryExport'])->name('attendance.prepare.overtime-summary.export');
         Route::get('overtime-navigation', [AttendanceApiController::class, 'prepareOvertimeNavigation'])->name('attendance.prepare.overtime-navigation');

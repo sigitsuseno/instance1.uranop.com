@@ -490,6 +490,41 @@ class AttendanceApiController extends Controller
     }
 
     /**
+     * GET /api/v1/attendance/prepare/overtime-employees
+     * Karyawan pemilik roster dalam rentang tanggal (kandidat Calculate Overtime).
+     * Kriterianya roster, bukan is_active: karyawan nonaktif yang masih punya
+     * baris roster di periode tetap ikut.
+     */
+    public function prepareOvertimeEmployees(Request $request): JsonResponse
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $employeeIds = \App\Modules\Schedule\Models\EmployeeShiftRoster::whereBetween('date', [
+                $request->input('start_date'),
+                $request->input('end_date'),
+            ])
+            ->distinct()
+            ->pluck('employee_id');
+
+        $employees = \App\Modules\Employee\Models\Employee::with('department:id,name')
+            ->whereIn('id', $employeeIds)
+            ->orderBy('employee_code')
+            ->get(['id', 'employee_code', 'name', 'department_id']);
+
+        return response()->json([
+            'data' => $employees->map(fn ($employee) => [
+                'id'            => $employee->id,
+                'employee_code' => $employee->employee_code,
+                'name'          => $employee->name,
+                'department'    => $employee->department?->name,
+            ]),
+        ]);
+    }
+
+    /**
      * GET /api/v1/attendance/prepare/overtime-summary
      * List employees with aggregated overtime values
      */
