@@ -72,14 +72,32 @@
     <!-- Period Selection Card -->
     <div class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-4 mb-6">
       <div class="flex flex-col sm:flex-row gap-3">
+        <div v-if="periods.length > 0">
+          <label class="block text-xs font-medium text-(--text-muted) mb-1">
+            <i class="bx bx-calendar-check mr-1"></i>
+            Periode
+          </label>
+          <select
+            v-model="selectedPeriodId"
+            @change="onPeriodChange"
+            class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
+          >
+            <option :value="null" disabled>Pilih periode</option>
+            <option v-for="period in periods" :key="period.id" :value="period.id">
+              {{ period.name }} ({{ period.start_date }} — {{ period.end_date }})
+            </option>
+          </select>
+        </div>
         <div>
           <label class="block text-xs font-medium text-(--text-muted) mb-1">
             <i class="bx bx-calendar mr-1"></i>
             Tanggal Mulai
           </label>
-          <input 
+          <input
             type="date"
             v-model="startDate"
+            :min="selectedPeriod?.start_date"
+            :max="selectedPeriod?.end_date"
             class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
           />
         </div>
@@ -88,9 +106,11 @@
             <i class="bx bx-calendar mr-1"></i>
             Tanggal Akhir
           </label>
-          <input 
+          <input
             type="date"
             v-model="endDate"
+            :min="selectedPeriod?.start_date"
+            :max="selectedPeriod?.end_date"
             class="px-3 py-2 border border-(--border-soft) rounded-lg bg-(--bg-card) text-(--text-main) text-sm focus:outline-none focus:ring-2 focus:ring-(--primary)"
           />
         </div>
@@ -373,7 +393,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
@@ -397,6 +417,12 @@ const calculateResult = ref(null)
 const startDate = ref(route.query.start_date || new Date().toISOString().split('T')[0].slice(0, 8) + '01')
 const endDate = ref(route.query.end_date || new Date().toISOString().split('T')[0])
 const searchQuery = ref(route.query.search || '')
+
+const periods = ref([])
+const selectedPeriodId = ref(null)
+const selectedPeriod = computed(
+  () => periods.value.find(p => p.id === selectedPeriodId.value) || null
+)
 
 const employees = ref([])
 const pagination = ref({
@@ -462,15 +488,80 @@ async function fetchData(page = 1) {
   }
 }
 
+async function fetchPeriods() {
+  try {
+    const res = await get('/api/v1/settings/employee-data/pay-periods')
+    // Periode tanpa tanggal tidak bisa membatasi rentang — jangan ditawarkan.
+    periods.value = (res.data || []).filter(p => p.start_date && p.end_date)
+  } catch (e) {
+    console.error('Gagal fetch periode:', e)
+    periods.value = []
+  }
+}
+
+function resolveInitialPeriod() {
+  const today = new Date().toISOString().slice(0, 10)
+  const queryPeriodId = Number(route.query.period_id) || null
+
+  let period = queryPeriodId
+    ? periods.value.find(p => p.id === queryPeriodId)
+    : null
+
+  if (!period && route.query.start_date) {
+    period = periods.value.find(
+      p => p.start_date <= route.query.start_date && p.end_date >= route.query.start_date
+    )
+  }
+  if (!period) {
+    period = periods.value.find(p => p.start_date <= today && p.end_date >= today)
+  }
+  if (!period && periods.value.length) {
+    period = periods.value[0] // endpoint urut terbaru dulu
+  }
+  if (!period) return
+
+  selectedPeriodId.value = period.id
+
+  if (!route.query.start_date || !route.query.end_date) {
+    startDate.value = period.start_date
+    endDate.value = period.end_date
+  } else {
+    clampDates() // URL lama / dari halaman Detail: pertahankan, tarik ke batas
+  }
+}
+
+function clampDates() {
+  const period = selectedPeriod.value
+  if (!period) return
+  if (!startDate.value || startDate.value < period.start_date) {
+    startDate.value = period.start_date
+  }
+  if (!endDate.value || endDate.value > period.end_date) {
+    endDate.value = period.end_date
+  }
+  if (startDate.value > endDate.value) {
+    endDate.value = startDate.value
+  }
+}
+
+function onPeriodChange() {
+  const period = selectedPeriod.value
+  if (!period) return
+  startDate.value = period.start_date
+  endDate.value = period.end_date
+  applyPeriod()
+}
+
 function applyPeriod() {
-  router.push({
-    query: {
-      ...route.query,
-      start_date: startDate.value,
-      end_date: endDate.value,
-      search: searchQuery.value
-    }
-  })
+  clampDates()
+  const query = {
+    ...route.query,
+    start_date: startDate.value,
+    end_date: endDate.value,
+    search: searchQuery.value,
+  }
+  if (selectedPeriodId.value) query.period_id = selectedPeriodId.value
+  router.push({ query })
   fetchData(1)
 }
 
@@ -689,7 +780,9 @@ async function saveConfig() {
 }
 
 // ── Init ──
-onMounted(() => {
+onMounted(async () => {
+  await fetchPeriods()
+  resolveInitialPeriod()
   fetchData()
 })
 </script>
