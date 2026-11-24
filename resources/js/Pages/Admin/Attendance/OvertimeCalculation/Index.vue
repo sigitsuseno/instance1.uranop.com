@@ -28,7 +28,7 @@
 
         <BaseButton 
           variant="primary"
-          @click="auth.isManajemen ? null : handleCalculate()"
+          @click="auth.isManajemen ? null : openPicker()"
           :disabled="auth.isManajemen"
           :loading="isCalculating"
           class="shadow-sm flex items-center gap-2"
@@ -389,6 +389,19 @@
         Memuat pengaturan...
       </div>
     </BaseModal>
+
+    <EmployeePickerModal
+      :show="showPicker"
+      :period-label="selectedPeriod?.name || ''"
+      :start-date="startDate"
+      :end-date="endDate"
+      :employees="pickerEmployees"
+      :loading="pickerLoading"
+      :submitting="isCalculating"
+      :error="pickerError"
+      @close="showPicker = false"
+      @confirm="confirmPicker"
+    />
   </div>
 </template>
 
@@ -397,6 +410,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '@/Components/BaseButton.vue'
 import BaseModal from '@/Components/BaseModal.vue'
+import EmployeePickerModal from './EmployeePickerModal.vue'
 import { useApi } from '../../../../composables/useApi'
 import { useAuth } from '../../../../composables/useAuth'
 import { useNotificationStore } from '../../../../Stores/notification'
@@ -413,6 +427,11 @@ const isLoading = ref(true)
 const isExporting = ref(false)
 const isExportingRoster = ref(false)
 const calculateResult = ref(null)
+
+const showPicker = ref(false)
+const pickerEmployees = ref([])
+const pickerLoading = ref(false)
+const pickerError = ref('')
 
 const startDate = ref(route.query.start_date || new Date().toISOString().split('T')[0].slice(0, 8) + '01')
 const endDate = ref(route.query.end_date || new Date().toISOString().split('T')[0])
@@ -574,37 +593,49 @@ function resetFilter() {
   applyPeriod()
 }
 
-async function handleCalculate() {
+async function openPicker() {
   if (!startDate.value || !endDate.value) {
-    alert('Silakan pilih rentang tanggal terlebih dahulu.')
+    calculateResult.value = { success: false, message: 'Silakan pilih rentang tanggal terlebih dahulu.' }
     return
   }
-  
-  if (!confirm('Kalkulasi ulang multiplier overtime untuk semua data pending di periode ini?')) return
-  
-  isCalculating.value = true
-  calculateResult.value = null
+  showPicker.value = true
+  pickerError.value = ''
+  await loadPickerEmployees()
+}
 
+async function loadPickerEmployees() {
+  pickerLoading.value = true
+  try {
+    const res = await get(`/api/v1/attendance/prepare/overtime-employees?start_date=${startDate.value}&end_date=${endDate.value}`)
+    pickerEmployees.value = res.data || []
+  } catch (error) {
+    pickerEmployees.value = []
+    pickerError.value = error.message || 'Gagal memuat daftar karyawan.'
+  } finally {
+    pickerLoading.value = false
+  }
+}
+
+async function confirmPicker(employeeIds) {
+  if (!employeeIds.length) return
+  isCalculating.value = true
+  pickerError.value = ''
+  calculateResult.value = null
   try {
     const res = await post('/api/v1/attendance/prepare/hitung-lembur', {
       start_date: startDate.value,
       end_date: endDate.value,
+      employee_ids: employeeIds,
     })
-    
     calculateResult.value = {
-      success: res.success || true,
-      message: res.message || 'Hitung lembur selesai.'
+      success: res.success !== false,
+      message: res.message || 'Hitung lembur selesai.',
     }
-    
-    if (res.success !== false) {
-      fetchData(pagination.value.current_page)
-    }
+    showPicker.value = false
+    fetchData(pagination.value.current_page)
   } catch (error) {
-    const msg = error.response?.data?.message || error.message || 'Unknown error'
-    calculateResult.value = {
-      success: false,
-      message: 'Gagal mengalkulasi: ' + msg
-    }
+    // Modal tetap terbuka agar pilihan tidak hilang.
+    pickerError.value = error.response?.data?.message || error.message || 'Gagal mengalkulasi.'
   } finally {
     isCalculating.value = false
   }
