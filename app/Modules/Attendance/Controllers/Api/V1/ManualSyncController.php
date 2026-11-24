@@ -57,6 +57,8 @@ class ManualSyncController extends Controller
             'per_page'    => 'nullable|integer|min:1|max:500',
             'employee_id' => 'nullable|integer|exists:employees,id',
             'search'      => 'nullable|string|max:100',
+            'group_codes'   => 'nullable|array|max:100',
+            'group_codes.*' => 'nullable|string|max:50',
         ]);
 
         $period    = PayPeriod::findOrFail($validated['period_id']);
@@ -515,6 +517,15 @@ class ManualSyncController extends Controller
                 $q->where('name', 'like', "%{$search}%")
                   ->orWhere('nip', 'like', "%{$search}%")
                   ->orWhere('employee_code', 'like', "%{$search}%");
+            });
+        }
+
+        // Urutan baku: group adalah saringan isi halaman. Keanggotaan group tidak
+        // punya dimensi waktu, jadi dibaca apa adanya.
+        $groupCodes = array_values(array_filter((array) ($filters['group_codes'] ?? [])));
+        if (!empty($groupCodes)) {
+            $empQuery->whereHas('employee.groups', function ($q) use ($groupCodes) {
+                $q->whereIn('reference_code', $groupCodes);
             });
         }
 
