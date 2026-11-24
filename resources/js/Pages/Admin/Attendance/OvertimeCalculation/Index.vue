@@ -401,6 +401,7 @@
       :error="pickerError"
       @close="showPicker = false"
       @confirm="confirmPicker"
+      @retry="loadPickerEmployees"
     />
   </div>
 </template>
@@ -509,7 +510,9 @@ async function fetchData(page = 1) {
 
 async function fetchPeriods() {
   try {
-    const res = await get('/api/v1/settings/employee-data/pay-periods')
+    // Sumber null-safe (payroll) — endpoint settings memformat tanggal tanpa
+    // penjaga null sehingga satu periode tanpa tanggal membuat 500.
+    const res = await get('/api/v1/payroll/periods')
     // Periode tanpa tanggal tidak bisa membatasi rentang — jangan ditawarkan.
     periods.value = (res.data || []).filter(p => p.start_date && p.end_date)
   } catch (e) {
@@ -552,10 +555,17 @@ function resolveInitialPeriod() {
 function clampDates() {
   const period = selectedPeriod.value
   if (!period) return
+  // Tarik kedua ujung ke batas periode lebih dulu, baru rapikan urutannya.
   if (!startDate.value || startDate.value < period.start_date) {
     startDate.value = period.start_date
   }
-  if (!endDate.value || endDate.value > period.end_date) {
+  if (startDate.value > period.end_date) {
+    startDate.value = period.end_date
+  }
+  if (!endDate.value || endDate.value < period.start_date) {
+    endDate.value = period.start_date
+  }
+  if (endDate.value > period.end_date) {
     endDate.value = period.end_date
   }
   if (startDate.value > endDate.value) {
@@ -598,8 +608,11 @@ async function openPicker() {
     calculateResult.value = { success: false, message: 'Silakan pilih rentang tanggal terlebih dahulu.' }
     return
   }
+  clampDates()
   showPicker.value = true
   pickerError.value = ''
+  // Kosongkan dulu supaya pilihan lama tidak bisa dikirim sebelum daftar baru tiba.
+  pickerEmployees.value = []
   await loadPickerEmployees()
 }
 

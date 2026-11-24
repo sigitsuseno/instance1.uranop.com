@@ -15,13 +15,18 @@
         />
       </div>
 
+      <div v-if="error" class="flex items-center gap-2 text-sm text-(--danger)">
+        <span>{{ error }}</span>
+        <button type="button" class="underline whitespace-nowrap" @click="emit('retry')">Coba lagi</button>
+      </div>
+
       <div v-if="loading" class="py-8 text-center text-sm text-(--text-muted)">Memuat karyawan...</div>
 
-      <div v-else-if="employees.length === 0" class="py-8 text-center text-sm text-(--text-muted)">
+      <div v-else-if="employees.length === 0 && !error" class="py-8 text-center text-sm text-(--text-muted)">
         Tidak ada karyawan yang punya roster pada rentang ini.
       </div>
 
-      <template v-else>
+      <template v-else-if="employees.length > 0">
         <label class="flex items-center gap-2 px-1 text-sm font-medium text-(--text-main)">
           <input type="checkbox" :checked="allFilteredSelected" @change="toggleSelectAll" />
           Pilih semua ({{ filteredEmployees.length }} tampil)
@@ -38,8 +43,6 @@
             <span class="text-xs text-(--text-muted) ml-auto">{{ employee.department || '-' }}</span>
           </label>
         </div>
-
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       </template>
     </div>
 
@@ -79,7 +82,7 @@ const props = defineProps({
   submitting: { type: Boolean, default: false },
   error: { type: String, default: '' },
 })
-const emit = defineEmits(['close', 'confirm'])
+const emit = defineEmits(['close', 'confirm', 'retry'])
 
 const search = ref('')
 const selectedIds = ref([])

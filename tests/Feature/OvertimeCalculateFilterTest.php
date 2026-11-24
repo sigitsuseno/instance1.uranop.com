@@ -97,7 +97,32 @@ class OvertimeCalculateFilterTest extends TestCase
     {
         $response = $this->actingAs($this->user, 'sanctum')->getJson($this->url());
 
+        $response->assertOk();
         $this->assertNotContains('A004', $this->codes($response));
+    }
+
+    /**
+     * Sumber dropdown periode (payroll) harus tahan periode tanpa tanggal:
+     * satu baris NULL tidak boleh menjatuhkan seluruh daftar (500).
+     */
+    public function test_periode_tanpa_tanggal_tidak_merusak_daftar_periode(): void
+    {
+        \App\Modules\Payroll\Models\PayPeriod::create([
+            'name'         => 'Tanpa Tanggal',
+            'period_year'  => 2027,
+            'period_month' => 1,
+            'status'       => 'inactive',
+            'start_date'   => null,
+            'end_date'     => null,
+        ]);
+
+        $response = $this->getJson('/api/v1/payroll/periods');
+
+        $response->assertOk();
+        $this->assertContains(
+            'Tanpa Tanggal',
+            collect($response->json('data'))->pluck('name')->all()
+        );
     }
 
     public function test_karyawan_nonaktif_dengan_roster_tetap_muncul(): void
