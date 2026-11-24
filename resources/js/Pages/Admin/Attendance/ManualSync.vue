@@ -125,6 +125,25 @@
       </div>
     </div>
 
+    <!-- Pita tab group: menyaring karyawan; isi tabel tidak berubah. -->
+    <div v-if="groups.length > 0" class="border-b border-(--border-soft) mb-4">
+      <nav class="flex gap-0 -mb-px overflow-x-auto">
+        <button
+          v-for="tab in groupTabs"
+          :key="tab.code ?? 'all'"
+          @click="selectGroup(tab.code)"
+          :class="[
+            'px-4 py-2.5 text-sm font-medium transition-colors border-b-2 rounded-t-md whitespace-nowrap',
+            activeGroup === tab.code
+              ? 'text-(--primary) border-(--primary)'
+              : 'text-(--text-muted) border-transparent hover:text-(--text-main) hover:border-(--border-soft)',
+          ]"
+        >
+          {{ tab.label }}
+        </button>
+      </nav>
+    </div>
+
     <!-- Table -->
     <div v-if="syncData.length > 0" class="bg-(--bg-card) border border-(--border-soft) rounded-xl shadow-sm p-6">
       <div class="flex items-center justify-between mb-4">
@@ -386,6 +405,8 @@ const selectedEmployee = ref(null)
 const showEmployeeDropdown = ref(false)
 const payPeriods = ref([])
 const syncData = ref([])
+const groups = ref([])
+const activeGroup = ref(null)
 
 // ── Pagination State ──
 const currentPage = ref(1)
@@ -555,6 +576,7 @@ function onWindowClick(e) {
 
 onMounted(() => {
   window.addEventListener('click', onWindowClick)
+  fetchGroups()
 })
 onUnmounted(() => {
   window.removeEventListener('click', onWindowClick)
@@ -579,6 +601,35 @@ async function fetchPayPeriods() {
   } catch (e) {
     console.error('Gagal fetch pay periods:', e)
   }
+}
+
+async function fetchGroups() {
+  try {
+    const res = await get('/api/v1/settings/employee-data/groups')
+    const all = res.data || []
+    groups.value = all
+      .filter(g => g.group_label === 'Imported Shift/Group' && g.is_active !== false && g.is_active !== 0)
+      .map(g => ({ code: g.code, name: g.name }))
+      .filter(g => g.code)
+      .sort((a, b) => String(a.code).localeCompare(String(b.code)))
+  } catch (e) {
+    console.error('Gagal fetch groups:', e)
+    groups.value = []
+  }
+}
+
+// Tab penyaring: `null` = Semua (tanpa saringan group).
+const groupTabs = computed(() => [
+  { code: null, label: 'Semua' },
+  ...groups.value.map(g => ({ code: g.code, label: `${g.code} · ${g.name}` })),
+])
+
+function selectGroup(code) {
+  if (activeGroup.value === code) return
+  activeGroup.value = code
+  if (!hasLoaded.value) return
+  currentPage.value = 1
+  loadDataInternal('display', 1)
 }
 
 async function loadDataInternal(mode, page = 1) {
@@ -608,6 +659,11 @@ async function loadDataInternal(mode, page = 1) {
     // Tambahkan search filter jika ada employee terpilih
     if (selectedEmployee.value) {
       params.set('employee_id', String(selectedEmployee.value.id))
+    }
+
+    // Tab group aktif — server menyaring sebelum paginasi per karyawan.
+    if (activeGroup.value) {
+      params.append('group_codes[]', activeGroup.value)
     }
 
     const res = await get(`/api/v1/attendance/manual-sync/data?${params}`)
