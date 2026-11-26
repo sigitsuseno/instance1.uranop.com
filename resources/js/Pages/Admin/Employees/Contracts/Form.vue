@@ -14,6 +14,10 @@ const props = defineProps({
   employee: {
     type: Object,
     required: true
+  },
+  defaultStartDate: {
+    type: String,
+    default: null
   }
 })
 
@@ -63,7 +67,7 @@ function initForm() {
     const rand = Math.random().toString(36).substring(2, 6).toUpperCase()
     form.contract_number = `${prefix}-${rand}`
     form.contract_type = 'pkwt'
-    form.start_date = ''
+    form.start_date = props.defaultStartDate || ''
     form.end_date = ''
     form.notes = ''
     form.status = 'active'
