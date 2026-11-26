@@ -7,11 +7,15 @@ import BaseButton from '../../../../Components/BaseButton.vue'
 import BaseCard from '../../../../Components/BaseCard.vue'
 import Badge from '../../../../Components/Badge.vue'
 import { IconChevronLeft, IconPencil, IconRefresh } from '../../../../Components/Icons/index.js'
+import BaseModal from '../../../../Components/BaseModal.vue'
+import ContractForm from '../Contracts/Form.vue'
+import { usePermissionStore } from '../../../../Stores/permission'
 
 const router = useRouter()
 const route = useRoute()
 const { get } = useApi()
 const notification = useNotificationStore()
+const permission = usePermissionStore()
 
 const employeeId = computed(() => Number(route.params.id))
 
@@ -20,6 +24,21 @@ const employee = ref(null)
 const salaryComponents = ref([])
 
 const activeTab = ref('kontrak')
+
+const showContractModal = ref(false)
+
+const suggestedStartDate = computed(() => {
+  const contracts = employee.value?.contracts || []
+  const latest = contracts.find(c => c.is_latest) || contracts[0]
+  if (!latest?.end_date) return null
+
+  const [y, m, d] = String(latest.end_date).split('T')[0].split('-').map(Number)
+  if (!y || !m || !d) return null
+
+  const next = new Date(y, m - 1, d + 1)
+  const pad = n => String(n).padStart(2, '0')
+  return `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`
+})
 
 const tabs = [
   { key: 'kontrak', label: 'Kontrak' },
@@ -46,6 +65,11 @@ async function fetchSalaryComponents() {
   } catch (e) {
     //
   }
+}
+
+async function handleContractSuccess() {
+  showContractModal.value = false
+  await fetchEmployee()
 }
 
 function formatRupiah(amount) {
@@ -238,6 +262,19 @@ onMounted(async () => {
 
         <div class="p-6 overflow-x-auto">
           <div v-if="activeTab === 'kontrak'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-semibold text-(--text-main)">Riwayat Kontrak</h3>
+              <BaseButton
+                v-if="permission.can('create employees')"
+                variant="primary"
+                @click="showContractModal = true"
+              >
+                <template #icon-left>
+                  <i class="bx bx-plus"></i>
+                </template>
+                Tambah Kontrak
+              </BaseButton>
+            </div>
             <table class="w-full border-collapse min-w-[600px]">
               <thead>
                 <tr class="bg-(--bg-elevated)">
@@ -392,6 +429,20 @@ onMounted(async () => {
           </div>
         </div>
       </BaseCard>
+
+      <BaseModal
+        :show="showContractModal"
+        title="Tambah Kontrak"
+        size="lg"
+        @close="showContractModal = false"
+      >
+        <ContractForm
+          :employee="employee"
+          :default-start-date="suggestedStartDate"
+          @success="handleContractSuccess"
+          @cancel="showContractModal = false"
+        />
+      </BaseModal>
     </template>
   </div>
 </template>
