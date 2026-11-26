@@ -289,9 +289,13 @@ class RekapPphKompensasiController extends Controller
             ->where(function ($q) use ($startDate, $endDate) {
                 // Karyawan permanent tidak punya baris kontrak → selalu ikut.
                 $q->whereDoesntHave('contracts')
-                  // PKWT: ikut selama kontraknya belum berakhir saat periode mulai.
+                  // Kontrak: ikut selama kontraknya masih berjalan di periode ini.
+                  // Kontrak tanpa end_date (PKWTT/open-ended) dianggap tidak berakhir.
                   ->orWhereHas('contracts', function ($c) use ($startDate, $endDate) {
-                      $c->where('end_date', '>=', $startDate)
+                      $c->where(function ($q) use ($startDate) {
+                            $q->whereNull('end_date')
+                              ->orWhere('end_date', '>=', $startDate);
+                        })
                         ->where('start_date', '<=', $endDate);
                   });
             })
